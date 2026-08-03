@@ -1,0 +1,22 @@
+# EAS upload excludes
+node_modules/
+.expo/
+dist/
+web-build/
+.cursor/
+**/.cursor/**
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.DS_Store
+.env*.local
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+admin-login-qr.png
+expo-go-qr.png
+expo-go-qr-latest.png
+app-login-qr.png
+open-app.html

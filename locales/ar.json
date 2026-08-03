@@ -1,0 +1,9 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "Seellie",
+    "CFBundleName": "Seellie"
+  },
+  "android": {
+    "app_name": "Seellie"
+  }
+}

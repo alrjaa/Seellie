@@ -1,0 +1,124 @@
+import 'react-native-get-random-values';
+import 'react-native-gesture-handler';
+// تفعيل RTL للتطبيق العربي قبل أي واجهة
+import '@/theme/rtl-setup';
+import { useEffect } from 'react';
+import { Platform, StatusBar as RNStatusBar, View } from 'react-native';
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AppProviders } from '@/providers/AppProviders';
+import { useAppTheme } from '@/providers/ThemeProvider';
+import { useTranslation } from '@/providers/LanguageProvider';
+import { OfflineBanner } from '@/components/feedback/OfflineBanner';
+import { FloatingActionMenu } from '@/components/layout/FloatingActionMenu';
+import {
+  applyGlobalCairoFonts,
+  cairoFontMap,
+} from '@/theme/fonts';
+import { transparentHeaderOptions } from '@/theme/navigation';
+import { layoutDirectionStyle } from '@/theme/direction';
+
+SplashScreen.preventAutoHideAsync().catch(() => undefined);
+
+function RootNavigator() {
+  const theme = useAppTheme();
+  const { isRTL } = useTranslation();
+  const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      RNStatusBar.setTranslucent(true);
+      RNStatusBar.setBackgroundColor('transparent');
+    }
+  }, []);
+
+  const header = transparentHeaderOptions(theme, insets.top);
+
+  return (
+    <View
+      style={[
+        layoutDirectionStyle(isRTL),
+        { backgroundColor: theme.colors.background },
+      ]}
+    >
+      <OfflineBanner />
+      <StatusBar style={theme.isDark ? 'light' : 'dark'} translucent />
+      <View style={layoutDirectionStyle(isRTL)}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: theme.colors.background },
+            animation: 'fade',
+            ...header,
+          }}
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="admin" options={{ headerShown: false }} />
+          <Stack.Screen name="(follower)" />
+          <Stack.Screen name="(organizer)" />
+          <Stack.Screen name="(freelancer)" />
+          <Stack.Screen name="(superadmin)" />
+          <Stack.Screen
+            name="forums"
+            options={{
+              headerShown: false,
+              title: '',
+              ...header,
+            }}
+          />
+          <Stack.Screen
+            name="search"
+            options={{
+              headerShown: false,
+              title: '',
+              ...header,
+            }}
+          />
+          <Stack.Screen
+            name="shares"
+            options={{
+              headerShown: false,
+              title: '',
+              ...header,
+            }}
+          />
+          <Stack.Screen
+            name="unique"
+            options={{
+              headerShown: false,
+              title: '',
+              ...header,
+            }}
+          />
+        </Stack>
+      </View>
+      <FloatingActionMenu />
+    </View>
+  );
+}
+
+export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts(cairoFontMap);
+
+  if (fontsLoaded) {
+    applyGlobalCairoFonts();
+  }
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync().catch(() => undefined);
+    }
+  }, [fontsLoaded, fontError]);
+
+  if (!fontsLoaded && !fontError) return null;
+
+  return (
+    <AppProviders>
+      <RootNavigator />
+    </AppProviders>
+  );
+}
