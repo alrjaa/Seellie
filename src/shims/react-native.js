@@ -4,13 +4,16 @@
  * App-level react-native shim:
  * - خط Cairo فقط
  * - محاذاة النص حسب اتجاه التطبيق (يمين للعربية / يسار للإنجليزية)
- *   لا نفرض textAlign:'left' — ذلك كان يكسر RTL عندما I18nManager غير متزامن
+ *   left/right في ستايلات الشاشات = بداية/نهاية السطر (logical)
  *
  * Uses a Proxy so FlatList/StyleSheet keep working.
  */
 const React = require('react');
 const RN = require('react-native');
-const { getAppRTL } = require('../theme/app-direction');
+const {
+  getAppRTL,
+  subscribeAppRTL,
+} = require('../theme/app-direction');
 
 const OriginalText = RN.Text;
 const OriginalTextInput = RN.TextInput;
@@ -40,10 +43,8 @@ function isCairoFamily(family) {
 }
 
 /**
- * في هذه القاعدة: left/right في الستايلات تعني بداية/نهاية السطر (start/end)،
- * لأن أغلب الشاشات كُتبت كذلك. المحاذاة الفيزيائية تُحسب من اتجاه التطبيق.
- * AppText يمرّر محاذاة فيزيائية صحيحة — نحترمها عبر props.physicalAlign
- * أو عندما يمرّر المكوّن rtl/ltr صراحة.
+ * left/right في الستايلات تعني بداية/نهاية السطر.
+ * AppText يمرّر physicalAlign عندما المحاذاة فيزيائية صريحة.
  */
 function resolveTextAlign(flatAlign, forceLtr, physicalAlign) {
   if (forceLtr) return flatAlign || 'left';
@@ -89,7 +90,13 @@ function withAppTextStyle(style, props) {
   ];
 }
 
+function useAppRtlTick() {
+  const [, setTick] = React.useState(0);
+  React.useEffect(() => subscribeAppRTL(() => setTick((n) => n + 1)), []);
+}
+
 function Text(props) {
+  useAppRtlTick();
   const { ltr, rtl, physicalAlign, style, ...rest } = props;
   return React.createElement(OriginalText, {
     ...rest,
@@ -99,6 +106,7 @@ function Text(props) {
 Text.displayName = 'Text';
 
 const TextInput = React.forwardRef(function AppTextInput(props, ref) {
+  useAppRtlTick();
   const { ltr, rtl, physicalAlign, style, ...rest } = props;
   return React.createElement(OriginalTextInput, {
     ...rest,

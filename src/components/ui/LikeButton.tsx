@@ -50,7 +50,7 @@ function LikeButtonComponent({
         styles.row,
         {
           flexDirection: isRTL ? 'row-reverse' : 'row',
-          alignSelf: isRTL ? 'flex-start' : 'flex-end',
+          alignSelf: 'center',
           opacity: pressed ? 0.7 : disabled || !onPress ? 0.55 : 1,
         },
       ]}

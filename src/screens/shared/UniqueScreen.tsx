@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Redirect } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTournament } from '@/providers/TournamentProvider';
@@ -181,6 +181,7 @@ export default function UniqueScreen() {
   const theme = useAppTheme();
   const { t } = useTranslation();
   const { toast } = useToast();
+  const router = useRouter();
   const { tablet } = useResponsive();
   const insets = useSafeAreaInsets();
   const topPad = stackTopChromePad(insets.top);

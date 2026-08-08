@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
@@ -74,6 +75,7 @@ const MediaRow = memo(function MediaRow({
 export default function HighlightsScreen() {
   const { competitions, currentUser, toggleMediaLike } = useTournament();
   const { t } = useTranslation();
+  const router = useRouter();
   const { tablet } = useResponsive();
   const listChrome = useListChrome();
 

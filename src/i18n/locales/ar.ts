@@ -1255,6 +1255,9 @@ export const ar = {
   ui: {
     likeA11y: 'إعجاب',
     unlikeA11y: 'إلغاء الإعجاب',
+    comment: 'تعليق',
+    commentA11y: 'تعليق',
+    profileA11y: 'الملف الشخصي',
     likesCount: '%{count} إعجاب',
   },
   superadmin: {

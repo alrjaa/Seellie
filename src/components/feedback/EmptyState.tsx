@@ -23,7 +23,6 @@ function EmptyStateComponent({
 }: Props) {
   const theme = useAppTheme();
   const { isRTL } = useLanguage();
-  const align = isRTL ? 'right' : 'left';
   const edge = isRTL ? 'flex-end' : 'flex-start';
 
   return (
@@ -59,7 +58,7 @@ function EmptyStateComponent({
           {
             color: theme.colors.text,
             fontSize: theme.fontSize.md + 1,
-            textAlign: align,
+            textAlign: 'left',
             writingDirection: isRTL ? 'rtl' : 'ltr',
           },
         ]}
@@ -74,7 +73,7 @@ function EmptyStateComponent({
             {
               color: theme.colors.textMuted,
               fontSize: theme.fontSize.sm,
-              textAlign: align,
+              textAlign: 'left',
               writingDirection: isRTL ? 'rtl' : 'ltr',
             },
           ]}

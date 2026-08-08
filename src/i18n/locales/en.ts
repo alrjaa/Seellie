@@ -1747,6 +1747,9 @@ export const en: TranslationTree = {
   ui: {
     likeA11y: 'Like',
     unlikeA11y: 'Unlike',
+    comment: 'Comment',
+    commentA11y: 'Comment',
+    profileA11y: 'Profile',
     likesCount: '%{count} likes',
   },
 };

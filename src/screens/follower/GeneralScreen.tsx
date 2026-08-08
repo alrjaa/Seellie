@@ -104,8 +104,14 @@ const FeedCard = memo(function FeedCard({
   onPressHandle?: () => void;
 }) {
   const theme = useAppTheme();
-  const { t } = useTranslation();
+  const { t, isRTL } = useTranslation();
   const handleLabel = item.authorHandle;
+  // textAlign:'left' هنا = بداية السطر؛ الـ shim يحوّله فيزيائياً حسب اللغة
+  const textDir = {
+    width: '100%' as const,
+    textAlign: 'left' as const,
+    writingDirection: (isRTL ? 'rtl' : 'ltr') as 'rtl' | 'ltr',
+  };
 
   return (
     <Pressable onPress={onPress} disabled={!onPress}>
@@ -118,13 +124,13 @@ const FeedCard = memo(function FeedCard({
             accessibilityRole="button"
             accessibilityLabel={t('screens.openHandle', { handle: handleLabel })}
           >
-            <Text style={[styles.handle, { color: theme.colors.accent }]}>
+            <Text style={[styles.handle, textDir, { color: theme.colors.accent }]}>
               {handleLabel}
             </Text>
           </Pressable>
         ) : null}
 
-        <Muted>
+        <Muted style={textDir}>
           {t(TYPE_LABEL_KEYS[item.type])}
           {item.subtitle ? ` · ${item.subtitle}` : ''}
           {' · '}
@@ -132,13 +138,13 @@ const FeedCard = memo(function FeedCard({
         </Muted>
 
         {item.title ? (
-          <Text style={[styles.title, { color: theme.colors.text }]}>
+          <Text style={[styles.title, textDir, { color: theme.colors.text }]}>
             {item.title}
           </Text>
         ) : null}
 
         {item.text ? (
-          <Text style={[styles.body, { color: theme.colors.text }]}>
+          <Text style={[styles.body, textDir, { color: theme.colors.text }]}>
             {item.text}
           </Text>
         ) : null}
@@ -885,14 +891,12 @@ const styles = StyleSheet.create({
   handle: {
     fontWeight: '900',
     fontSize: 13,
-    textAlign: 'left',
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  author: { fontWeight: '800', textAlign: 'left' },
-  title: { fontWeight: '800', fontSize: 16, textAlign: 'left' },
+  author: { fontWeight: '800' },
+  title: { fontWeight: '800', fontSize: 16 },
   body: {
     lineHeight: 22,
-    textAlign: 'left',
   },
   media: {
     width: '100%',

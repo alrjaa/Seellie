@@ -29,14 +29,15 @@ export const Input = memo(
       <View style={styles.wrap}>
         {label ? (
           <Text
+            {...(forceLtr ? ({ ltr: true } as object) : null)}
             style={[
               styles.label,
               cairoText('semiBold'),
               {
                 color: theme.colors.textMuted,
                 fontSize: theme.fontSize.xs,
-                writingDirection: forceLtr ? 'ltr' : 'rtl',
-                textAlign: forceLtr ? 'left' : 'right',
+                // بداية منطقية — الـ shim يحوّل حسب اللغة ما لم يُمرَّر ltr
+                textAlign: 'left',
               },
             ]}
             accessibilityRole="text"
@@ -50,6 +51,7 @@ export const Input = memo(
           accessibilityLabel={label || props.placeholder || 'input'}
           multiline={multiline}
           textAlignVertical={multiline ? 'top' : 'center'}
+          {...(forceLtr ? ({ ltr: true } as object) : null)}
           {...props}
           style={[
             styles.input,
@@ -63,8 +65,7 @@ export const Input = memo(
               paddingVertical: multiline ? theme.spacing.sm : 10,
               minHeight: multiline ? 88 : 44,
               fontSize: theme.fontSize.sm + 1,
-              textAlign: forceLtr ? 'left' : 'right',
-              writingDirection: forceLtr ? 'ltr' : 'rtl',
+              textAlign: 'left',
               direction: forceLtr ? 'ltr' : 'rtl',
             },
             style,
@@ -73,14 +74,14 @@ export const Input = memo(
         {error ? (
           <Text
             accessibilityLiveRegion="polite"
+            {...(forceLtr ? ({ ltr: true } as object) : null)}
             style={[
               styles.error,
               cairoText('regular'),
               {
                 color: theme.colors.danger,
                 fontSize: theme.fontSize.xs,
-                writingDirection: forceLtr ? 'ltr' : 'rtl',
-                textAlign: forceLtr ? 'left' : 'right',
+                textAlign: 'left',
               },
             ]}
           >
@@ -94,10 +95,10 @@ export const Input = memo(
 
 const styles = StyleSheet.create({
   wrap: { gap: 6, width: '100%' },
-  label: {},
+  label: { width: '100%' },
   input: {
     borderWidth: 1,
     width: '100%',
   },
-  error: {},
+  error: { width: '100%' },
 });

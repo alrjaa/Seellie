@@ -6,6 +6,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useAppTheme } from '@/providers/ThemeProvider';
+import { useLanguage } from '@/providers/LanguageProvider';
 
 type Props = {
   children: ReactNode;
@@ -15,6 +16,7 @@ type Props = {
 
 function CardComponent({ children, style, padded = true }: Props) {
   const theme = useAppTheme();
+  const { isRTL } = useLanguage();
   return (
     <View
       style={[
@@ -24,6 +26,7 @@ function CardComponent({ children, style, padded = true }: Props) {
           borderColor: theme.colors.border,
           borderRadius: theme.radius.lg,
           padding: padded ? theme.spacing.md : 0,
+          direction: isRTL ? 'rtl' : 'ltr',
         },
         style,
       ]}

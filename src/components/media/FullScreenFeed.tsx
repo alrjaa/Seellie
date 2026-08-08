@@ -11,6 +11,7 @@ import {
   Animated,
   AppState,
   FlatList,
+  I18nManager,
   Platform,
   Pressable,
   StyleSheet,
@@ -96,6 +97,12 @@ const Slide = memo(function Slide({
       : item.authorName
         ? `@${item.authorName.replace(/\s+/g, '').slice(0, 16)}`
         : undefined);
+  const bottomPad = Math.max(insets.bottom, 6) + 4;
+  // right/left تنعكس مع RTL+swap — نحسب الحافة اليمنى فيزيائياً
+  const dockSide =
+    I18nManager.isRTL && I18nManager.doLeftAndRightSwapInRTL
+      ? ({ left: 14 } as const)
+      : ({ right: 14 } as const);
 
   return (
     <View style={[styles.slide, { height, backgroundColor: '#000' }]}>
@@ -177,38 +184,54 @@ const Slide = memo(function Slide({
         pointerEvents="none"
       />
 
+      {item.kind !== 'text' && item.text ? (
+        <Text
+          style={[styles.caption, { bottom: bottomPad + 44 }]}
+          numberOfLines={3}
+        >
+          {item.text}
+        </Text>
+      ) : null}
+
+      {/*
+        رصيف ثابت على الحافة اليمنى فيزيائياً.
+        حاوية direction:'ltr' حتى لا يعكس I18nManager/RTL موضع flex-end.
+      */}
       <View
+        pointerEvents="box-none"
         style={[
-          styles.bottomMeta,
-          { paddingBottom: Math.max(insets.bottom, 6) + 4 },
+          styles.actionsDock,
+          dockSide,
+          {
+            bottom: bottomPad,
+            direction: 'ltr',
+          },
         ]}
       >
-        {item.kind !== 'text' && item.text ? (
-          <Text style={styles.caption} numberOfLines={3}>
-            {item.text}
-          </Text>
-        ) : null}
-
-        <View style={styles.bottomBar}>
-          <LikeButton
-            count={item.likes.length}
-            liked={item.liked}
-            onPress={onLike}
-            tone="light"
-            size="sm"
-          />
-          <Pressable
-            style={styles.handlePress}
-            onPress={onPressAuthor}
-            disabled={!onPressAuthor}
-          >
-            {handleLabel ? (
-              <Text style={styles.handleOnly} numberOfLines={1}>
-                {handleLabel}
-              </Text>
-            ) : null}
-          </Pressable>
-        </View>
+        <LikeButton
+          count={item.likes.length}
+          liked={item.liked}
+          onPress={onLike}
+          tone="light"
+          size="sm"
+        />
+        <Pressable
+          style={styles.handlePress}
+          onPress={onPressAuthor}
+          disabled={!onPressAuthor}
+          accessibilityRole="button"
+          accessibilityLabel={handleLabel || t('ui.profileA11y')}
+        >
+          {handleLabel ? (
+            <Text
+              style={styles.handleOnly}
+              numberOfLines={1}
+              {...({ ltr: true } as object)}
+            >
+              {handleLabel}
+            </Text>
+          ) : null}
+        </Pressable>
       </View>
     </View>
   );
@@ -441,34 +464,41 @@ const styles = StyleSheet.create({
     lineHeight: 30,
     fontWeight: '600',
   },
-  bottomMeta: {
+  /**
+   * رصيف الإجراءات على يمين الشاشة فيزيائياً.
+   * direction:'ltr' + right يمنع انعكاس RTL لـ flex/I18nManager.
+   */
+  actionsDock: {
     position: 'absolute',
-    left: 14,
-    right: 14,
-    bottom: 0,
-    gap: 8,
-    alignItems: 'stretch',
-  },
-  bottomBar: {
+    zIndex: 6,
+    elevation: 6,
     flexDirection: 'row',
-    justifyContent: 'flex-end',
     alignItems: 'center',
-    gap: Platform.OS === 'android' ? 8 : 10,
-    width: '100%',
+    justifyContent: 'flex-end',
+    gap: Platform.OS === 'android' ? 10 : 12,
+    maxWidth: '78%',
   },
   handlePress: {
-    maxWidth: '70%',
+    maxWidth: 160,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
   },
   handleOnly: {
     color: '#fff',
-    fontWeight: '700',
-    fontSize: Platform.OS === 'android' ? 10 : 11,
+    fontWeight: '800',
+    fontSize: Platform.OS === 'android' ? 11 : 12,
+    textAlign: 'left',
   },
   caption: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    zIndex: 5,
     color: '#fff',
     fontSize: Platform.OS === 'android' ? 13 : 14,
     lineHeight: Platform.OS === 'android' ? 18 : 20,
     fontWeight: '600',
+    textAlign: 'right',
   },
   overlay: {
     position: 'absolute',

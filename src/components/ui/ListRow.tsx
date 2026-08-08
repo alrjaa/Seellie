@@ -16,7 +16,7 @@ type Props = {
 };
 
 /**
- * صف قائمة — يتبع اتجاه اللغة (عربي من اليمين).
+ * صف قائمة — النص يمين في العربية، والسهم في الطرف الآخر.
  */
 function ListRowComponent({
   title,
@@ -42,10 +42,37 @@ function ListRowComponent({
           paddingVertical: theme.spacing.sm + 6,
           paddingHorizontal: theme.spacing.sm + 6,
           gap: theme.spacing.sm + 4,
-          flexDirection: isRTL ? 'row-reverse' : 'row',
+          direction: isRTL ? 'rtl' : 'ltr',
+          flexDirection: 'row',
         },
       ]}
     >
+      <View
+        style={[
+          styles.textCol,
+          { alignItems: isRTL ? 'flex-end' : 'flex-start' },
+        ]}
+      >
+        <AppText
+          style={[
+            styles.title,
+            {
+              color: theme.colors.text,
+              fontSize: theme.fontSize.sm,
+              width: '100%',
+            },
+          ]}
+          numberOfLines={2}
+        >
+          {title}
+        </AppText>
+        {subtitle ? (
+          <Muted style={[styles.subtitle, { width: '100%' }]} numberOfLines={3}>
+            {subtitle}
+          </Muted>
+        ) : null}
+      </View>
+      {right}
       {onPress ? (
         <View style={styles.iconWrap}>
           <Ionicons name={resolvedIcon} size={20} color={theme.colors.textMuted} />
@@ -66,26 +93,6 @@ function ListRowComponent({
           ) : null}
         </View>
       ) : null}
-      {right}
-      <View style={styles.textCol}>
-        <AppText
-          style={[
-            styles.title,
-            {
-              color: theme.colors.text,
-              fontSize: theme.fontSize.sm,
-            },
-          ]}
-          numberOfLines={2}
-        >
-          {title}
-        </AppText>
-        {subtitle ? (
-          <Muted style={styles.subtitle} numberOfLines={3}>
-            {subtitle}
-          </Muted>
-        ) : null}
-      </View>
     </View>
   );
 

@@ -5,6 +5,14 @@
  */
 import { I18nManager } from 'react-native';
 import Constants from 'expo-constants';
+import { setAppRTL } from '@/theme/app-direction';
+
+// افتراضي العربية — قبل أول رسم للنصوص
+try {
+  setAppRTL(true);
+} catch {
+  // ignore
+}
 
 try {
   I18nManager.allowRTL(true);

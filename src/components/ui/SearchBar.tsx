@@ -27,7 +27,7 @@ function SearchBarComponent({
         {
           backgroundColor: theme.colors.inputBg,
           borderColor: theme.colors.border,
-          // لا نعكس الصف يدوياً — I18nManager RTL يعكس row تلقائياً
+          direction: isRTL ? 'rtl' : 'ltr',
           flexDirection: 'row',
         },
       ]}
@@ -43,7 +43,7 @@ function SearchBarComponent({
           cairoText('regular'),
           {
             color: theme.colors.text,
-            textAlign: isRTL ? 'right' : 'left',
+            textAlign: 'left',
             writingDirection: isRTL ? 'rtl' : 'ltr',
           },
         ]}
