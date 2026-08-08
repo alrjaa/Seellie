@@ -176,8 +176,12 @@ export async function addPrivateFriend(
   if (canUseCloud(userId) && isUuid(friendId)) {
     const sb = getSupabase();
     if (sb) {
+      // صداقة ثنائية حتى يظهر الطرفان بعضهما
       const { error } = await sb.from('private_friends').upsert(
-        { owner_id: userId, friend_id: friendId },
+        [
+          { owner_id: userId, friend_id: friendId },
+          { owner_id: friendId, friend_id: userId },
+        ],
         { onConflict: 'owner_id,friend_id' }
       );
       if (!error) return loadPrivateSpace(userId);
@@ -226,18 +230,28 @@ export async function sendPrivateChatMessage(
   if (canUseCloud(userId) && isUuid(friendId)) {
     const sb = getSupabase();
     if (sb) {
-      await sb
-        .from('private_friends')
-        .upsert(
+      // صداقة ثنائية + نسختان من الرسالة (مرسل + مستلم)
+      await sb.from('private_friends').upsert(
+        [
           { owner_id: userId, friend_id: friendId },
-          { onConflict: 'owner_id,friend_id' }
-        );
-      const { error } = await sb.from('private_messages').insert({
-        owner_id: userId,
-        friend_id: friendId,
-        sender_id: userId,
-        body: trimmed,
-      });
+          { owner_id: friendId, friend_id: userId },
+        ],
+        { onConflict: 'owner_id,friend_id' }
+      );
+      const { error } = await sb.from('private_messages').insert([
+        {
+          owner_id: userId,
+          friend_id: friendId,
+          sender_id: userId,
+          body: trimmed,
+        },
+        {
+          owner_id: friendId,
+          friend_id: userId,
+          sender_id: userId,
+          body: trimmed,
+        },
+      ]);
       if (!error) return loadPrivateSpace(userId);
       console.warn('[private-space] send message', error.message);
     }

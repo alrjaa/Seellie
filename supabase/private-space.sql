@@ -47,18 +47,51 @@ alter table public.private_messages enable row level security;
 alter table public.private_saved enable row level security;
 
 drop policy if exists "private_friends_own" on public.private_friends;
-create policy "private_friends_own"
-  on public.private_friends for all
+drop policy if exists "private_friends_select_own" on public.private_friends;
+create policy "private_friends_select_own"
+  on public.private_friends for select
   to authenticated
-  using (auth.uid() = owner_id)
-  with check (auth.uid() = owner_id);
+  using (auth.uid() = owner_id);
+
+drop policy if exists "private_friends_insert_pair" on public.private_friends;
+create policy "private_friends_insert_pair"
+  on public.private_friends for insert
+  to authenticated
+  with check (
+    auth.uid() = owner_id
+    or auth.uid() = friend_id
+  );
+
+drop policy if exists "private_friends_delete_own" on public.private_friends;
+create policy "private_friends_delete_own"
+  on public.private_friends for delete
+  to authenticated
+  using (auth.uid() = owner_id);
 
 drop policy if exists "private_messages_own" on public.private_messages;
-create policy "private_messages_own"
-  on public.private_messages for all
+drop policy if exists "private_messages_select_own" on public.private_messages;
+create policy "private_messages_select_own"
+  on public.private_messages for select
   to authenticated
-  using (auth.uid() = owner_id)
-  with check (auth.uid() = owner_id);
+  using (auth.uid() = owner_id);
+
+drop policy if exists "private_messages_insert_thread" on public.private_messages;
+create policy "private_messages_insert_thread"
+  on public.private_messages for insert
+  to authenticated
+  with check (
+    auth.uid() = sender_id
+    and (
+      owner_id = auth.uid()
+      or friend_id = auth.uid()
+    )
+  );
+
+drop policy if exists "private_messages_delete_own" on public.private_messages;
+create policy "private_messages_delete_own"
+  on public.private_messages for delete
+  to authenticated
+  using (auth.uid() = owner_id);
 
 drop policy if exists "private_saved_own" on public.private_saved;
 create policy "private_saved_own"
@@ -66,3 +99,4 @@ create policy "private_saved_own"
   to authenticated
   using (auth.uid() = owner_id)
   with check (auth.uid() = owner_id);
+

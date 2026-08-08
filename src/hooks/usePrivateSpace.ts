@@ -37,6 +37,15 @@ export function usePrivateSpace(userId: string | undefined) {
     void reload();
   }, [reload]);
 
+  // مزامنة دورية حتى تظهر رسائل الطرف الآخر بدون إعادة تشغيل التطبيق
+  useEffect(() => {
+    if (!userId) return;
+    const timer = setInterval(() => {
+      void reload();
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [userId, reload]);
+
   // عند الرجوع لتبويب الخاصة أعد التحميل (بعد الحفظ من خلاصة أخرى)
   useFocusEffect(
     useCallback(() => {
