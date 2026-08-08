@@ -68,6 +68,13 @@ import {
   mergeMessagesById,
   subscribeMessagesForUser,
 } from '@/services/supabase-messages';
+import {
+  fetchForumComments,
+  insertForumComment,
+  mergeCommentsById,
+  subscribeForumComments,
+  toggleForumCommentLikeRemote,
+} from '@/services/supabase-forum-comments';
 import { generateAnalystAccessCode } from '@/utils/analyst';
 import {
   initialComments,
@@ -378,6 +385,7 @@ export interface TournamentContextType {
   }) => Promise<boolean>;
   mergeRemoteMessages: (remote: Message[]) => void;
   refreshCloudMessages: () => Promise<void>;
+  refreshCloudForumComments: () => Promise<void>;
   sendShareCard: (input: {
     kind: ShareCardKind;
     recipientId: string;
@@ -1066,7 +1074,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
 
       // 2) حسابات تجريبية محلية (fallback للتطبيق فقط — ليس للمشرف)
-      if (portal === 'admin' || isLegacyLocalDemoAdmin({ email: normalized })) {
+      if (isLegacyLocalDemoAdmin({ email: normalized })) {
         toast({
           variant: 'destructive',
           title: 'حساب غير مسموح',
@@ -1093,16 +1101,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         const normalizedUser = ensureSocialLists(normalizeUserRoles(withHashed));
         const isAdmin = normalizedUser.role === 'superadmin';
 
-        if (portal === 'admin' && !isAdmin) {
-          toast({
-            variant: 'destructive',
-            title: t('auth.adminPortalOnlyTitle'),
-            description: t('auth.adminPortalOnlyDesc'),
-          });
-          return false;
-        }
-
-        if (portal === 'app' && isAdmin) {
+        if (isAdmin) {
           toast({
             variant: 'destructive',
             title: t('auth.useAdminLoginTitle'),
@@ -1706,6 +1705,44 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     };
   }, [currentUser?.id, refreshCloudMessages, notifyIncomingMessages]);
 
+  const refreshCloudForumComments = useCallback(async () => {
+    if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
+      return;
+    }
+    const remote = await fetchForumComments();
+    if (remote.error === 'no_session') return;
+    if (remote.error && !remote.comments.length) {
+      // غالباً الجدول غير منشأ بعد
+      console.warn('[forum] refresh', remote.error);
+      return;
+    }
+    if (!remote.comments.length) return;
+    setComments((prev) => mergeCommentsById(remote.comments, prev));
+  }, [currentUser]);
+
+  // مزامنة الساحات بين الأجهزة + بث فوري
+  useEffect(() => {
+    if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
+      return;
+    }
+    const stop = subscribeForumComments((comment) => {
+      setComments((prev) => {
+        if (prev.some((c) => c.id === comment.id)) {
+          return mergeCommentsById([comment], prev);
+        }
+        return mergeCommentsById([comment], prev);
+      });
+    });
+    void refreshCloudForumComments();
+    const timer = setInterval(() => {
+      void refreshCloudForumComments();
+    }, 20000);
+    return () => {
+      stop?.();
+      clearInterval(timer);
+    };
+  }, [currentUser?.id, refreshCloudForumComments]);
+
   const sendMessage = useCallback(
     async (payload: {
       recipientId: string;
@@ -1861,6 +1898,80 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      const publishLocal = (comment: Comment) => {
+        if (target?.type === 'match') {
+          setCompetitions((prev) =>
+            prev.map((c) => {
+              if (c.id !== target.competitionId) return c;
+              return {
+                ...c,
+                matches: c.matches.map((m) =>
+                  m.id === target.matchId
+                    ? { ...m, comments: [comment, ...m.comments] }
+                    : m
+                ),
+              };
+            })
+          );
+          toast({ title: t('toasts.t019_7b77aa') });
+          return;
+        }
+        setComments((prev) => mergeCommentsById([comment], prev));
+        toast({
+          title: videoUrl
+            ? t('toasts.postedForumVideo')
+            : t('toasts.postedForum'),
+        });
+      };
+
+      // مساهمات الساحة العامة → سحابة إن أمكن
+      if (
+        (!target || target.type === 'general') &&
+        isSupabaseConfigured() &&
+        isUuid(currentUser.id)
+      ) {
+        void (async () => {
+          const remote = await insertForumComment({
+            authorId: currentUser.id,
+            authorName: currentUser.name,
+            authorAvatar: currentUser.avatar,
+            text: trimmed,
+            videoUrl,
+            videoDurationSec: extras?.videoDurationSec,
+          });
+          if (remote.comment) {
+            publishLocal(remote.comment);
+            return;
+          }
+          // فشل السحابة → محلي مؤقتاً مع تنبيه
+          const local: Comment = {
+            id: createId(),
+            text: trimmed,
+            authorId: currentUser.id,
+            authorName: currentUser.name,
+            authorAvatar: currentUser.avatar || '',
+            timestamp: new Date(),
+            likes: [],
+            replies: [],
+            ...(videoUrl
+              ? {
+                  videoUrl,
+                  videoDurationSec: extras?.videoDurationSec,
+                }
+              : null),
+          };
+          publishLocal(local);
+          if (remote.error && remote.error !== 'no_session') {
+            toast({
+              variant: 'destructive',
+              title: t('forums.cloudSyncFailed'),
+              description: remote.error,
+            });
+          }
+        })();
+        return;
+      }
+
       const comment: Comment = {
         id: createId(),
         text: trimmed,
@@ -1877,31 +1988,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             }
           : null),
       };
-
-      if (target?.type === 'match') {
-        setCompetitions((prev) =>
-          prev.map((c) => {
-            if (c.id !== target.competitionId) return c;
-            return {
-              ...c,
-              matches: c.matches.map((m) =>
-                m.id === target.matchId
-                  ? { ...m, comments: [comment, ...m.comments] }
-                  : m
-              ),
-            };
-          })
-        );
-        toast({ title: t('toasts.t019_7b77aa') });
-        return;
-      }
-
-      setComments((prev) => [comment, ...prev]);
-      toast({
-        title: videoUrl ? t('toasts.postedForumVideo') : t('toasts.postedForum'),
-      });
+      publishLocal(comment);
     },
-    [currentUser, toast]
+    [currentUser, toast, t]
   );
 
   const toggleCommentLike = useCallback(
@@ -1938,6 +2027,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           })),
         }))
       );
+      if (isUuid(commentId) && isUuid(userId) && isSupabaseConfigured()) {
+        void toggleForumCommentLikeRemote(commentId, userId).then((remote) => {
+          if (remote.error) return;
+          setComments((prev) =>
+            prev.map((c) =>
+              c.id === commentId ? { ...c, likes: remote.likes } : c
+            )
+          );
+        });
+      }
     },
     [currentUser]
   );
@@ -4372,6 +4471,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       sendMessage,
       mergeRemoteMessages,
       refreshCloudMessages,
+      refreshCloudForumComments,
       sendShareCard,
       updateShareCardStatus,
       markShareCardRead,
@@ -4463,6 +4563,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       sendMessage,
       mergeRemoteMessages,
       refreshCloudMessages,
+      refreshCloudForumComments,
       sendShareCard,
       updateShareCardStatus,
       markShareCardRead,

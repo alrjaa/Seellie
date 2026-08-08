@@ -270,6 +270,7 @@ export const en: TranslationTree = {
     videoAttached: 'Video attached',
     durationApprox: 'Duration ≈ %{sec} seconds',
     maxDuration: 'Maximum %{sec} seconds',
+    cloudSyncFailed: 'Cloud publish failed — shown locally on this device only',
   },
   media: {
     permissionDenied: 'Permission denied',

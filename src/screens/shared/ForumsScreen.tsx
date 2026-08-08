@@ -6,7 +6,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Redirect } from 'expo-router';
+import { Redirect, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { ResizeMode, Video } from 'expo-av';
@@ -112,6 +112,7 @@ export default function ForumsScreen() {
     loading,
     addComment,
     toggleCommentLike,
+    refreshCloudForumComments,
   } = useTournament();
   const theme = useAppTheme();
   const { t } = useTranslation();
@@ -125,6 +126,12 @@ export default function ForumsScreen() {
   const [picking, setPicking] = useState(false);
   const [sharePayload, setSharePayload] = useState<ContentSharePayload | null>(
     null
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshCloudForumComments();
+    }, [refreshCloudForumComments])
   );
   const discussions = useMemo(() => {
     const byId = new Map<string, Comment>();

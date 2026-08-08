@@ -272,6 +272,7 @@ export const ar = {
     videoAttached: 'تم إرفاق الفيديو',
     durationApprox: 'المدة ≈ %{sec} ثانية',
     maxDuration: 'الحد الأقصى %{sec} ثانية',
+    cloudSyncFailed: 'تعذّر النشر السحابي — ظهر محلياً فقط على هذا الجهاز',
   },
   media: {
     permissionDenied: 'الإذن مرفوض',
