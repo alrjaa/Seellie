@@ -45,7 +45,7 @@ export default function SettingsScreen() {
         variant: 'destructive',
         title: 'حساب تجريبي محلي',
         description:
-          'لا يمكن تحويل super.admin@test.com إلى إيميل حقيقي من هنا. اخرج وادخل من /admin بـ alrjaa.ns@gmail.com بعد تشغيل set-admin-password.sql (كلمة المرور: SeellieAdmin2026!).',
+          'حسابك محلي وليست له صلاحية مشرف سحابية. اخرج وادخل من /admin بحساب Supabase مرقّى (promote-admin.sql أو set-admin-password.sql).',
       });
       return;
     }

@@ -61,7 +61,8 @@ export const ar = {
     adminLogin: 'دخول المشرف',
     appLogin: 'دخول التطبيق',
     adminTagline: 'لوحة إدارة المنصة',
-    adminDemoHint: 'تجريبي: super.admin@test.com / superadmin123',
+    adminDemoHint:
+      'المشرف سحابي فقط: Sign up ثم promote-admin.sql، أو set-admin-password.sql',
     adminPortalOnlyTitle: 'دخول المشرف فقط',
     adminPortalOnlyDesc: 'هذه الشاشة مخصصة لحساب المشرف.',
     useAdminLoginTitle: 'استخدم بوابة المشرف',

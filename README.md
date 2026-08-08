@@ -50,7 +50,9 @@ cp .env.example .env
 | متابع | follower@test.com | password123 | `/(auth)/login` |
 | منظم | organizer1@test.com | password123 | `/(auth)/login` |
 | لاعب حر | freelancer@test.com | password123 | `/(auth)/login` |
-| مشرف | super.admin@test.com | superadmin123 | **`/admin`** فقط |
+| مشرف | حساب Supabase مرقّى | عبر SQL | **`/admin`** فقط |
+
+> المشرف سحابي فقط (لا حساب تجريبي محلي). رقِّ الحساب بـ `supabase/promote-admin.sql` أو عيّن كلمة المرور بـ `set-admin-password.sql`.
 
 > دخول المشرف منفصل: افتح المسار `/admin` (لا يعمل من شاشة دخول التطبيق).
 

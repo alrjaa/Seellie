@@ -178,7 +178,7 @@ export default function AdminLoginScreen() {
                     setLoginEmail(v);
                     setEmailError('');
                   }}
-                  placeholder="super.admin@test.com"
+                  placeholder="alrjaa.ns@gmail.com"
                   autoCapitalize="none"
                   keyboardType="email-address"
                   ltr
@@ -202,9 +202,8 @@ export default function AdminLoginScreen() {
                   </Text>
                 </Pressable>
                 <Muted>
-                  ادخل بالإيميل السحابي (مثل alrjaa.ns@gmail.com) بعد SQL.
-                  الحساب التجريبي super.admin@test.com محلي على هذا المتصفح فقط
-                  ويُمسح تلقائياً من /admin حتى لا يختلط مع السحابة.
+                  دخول المشرف سحابي فقط. أنشئ حساباً من Sign up ثم رقِّه بـ
+                  promote-admin.sql، أو استخدم set-admin-password.sql للحساب الحالي.
                 </Muted>
                 <Muted>{t('auth.adminDemoHint')}</Muted>
                 <Button

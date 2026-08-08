@@ -1,15 +1,10 @@
--- ============================================================
--- تعيين كلمة مرور الأدمن فوراً (بدون إيميل)
--- نفّذ في: Supabase → SQL Editor → Run
--- ثم ادخل من: https://seellie.com/admin
--- ============================================================
--- البريد: alrjaa.ns@gmail.com
--- كلمة المرور: SeellieAdmin2026!
--- ============================================================
+/* Admin password reset — run in Supabase SQL Editor
+   email: alrjaa.ns@gmail.com
+   password: SeellieAdmin2026!
+*/
 
 create extension if not exists pgcrypto;
 
--- أ) كلمة المرور في auth (هذا يكفي للدخول)
 update auth.users
 set
   encrypted_password = crypt('SeellieAdmin2026!', gen_salt('bf')),
@@ -17,8 +12,6 @@ set
   updated_at = now()
 where lower(email) = lower('alrjaa.ns@gmail.com');
 
--- ب) إصلاح الـ profile مع تجاوز حماية الترقية مؤقتاً
--- (الـ trigger يرفض أي صف فيه role=superadmin إن لم تكن جلسة مشرف)
 do $$
 begin
   begin
@@ -58,7 +51,6 @@ begin
   end;
 end $$;
 
--- ج) تحقق
 select
   u.email,
   u.email_confirmed_at is not null as email_ok,

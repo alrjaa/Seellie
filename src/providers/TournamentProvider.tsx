@@ -144,8 +144,20 @@ const USER_CREDENTIAL_OVERRIDES_KEY = 'seellie.userCredentialOverrides.v1';
 const REFEREES_STORAGE_KEY = 'seellie.referees';
 const SHARE_CARDS_STORAGE_KEY = 'seellie.shareCards';
 const MESSAGES_STORAGE_KEY = 'seellie.messages';
-/** الحساب التجريبي المحلي فقط — أي إيميل آخر للمشرف يجب أن يكون سحابياً */
-const LOCAL_DEMO_ADMIN_EMAIL = 'super.admin@test.com';
+/** حسابات المشرف التجريبية القديمة — تُحذف ولا يُسمح بدخولها */
+const LOCAL_DEMO_ADMIN_IDS = new Set(['superadmin-1']);
+const LOCAL_DEMO_ADMIN_EMAILS = new Set(['super.admin@test.com']);
+
+function isLegacyLocalDemoAdmin(
+  user: { id?: string; email?: string } | null | undefined
+) {
+  if (!user) return false;
+  if (user.id && LOCAL_DEMO_ADMIN_IDS.has(user.id)) return true;
+  if (user.email && LOCAL_DEMO_ADMIN_EMAILS.has(normalizeEmail(user.email))) {
+    return true;
+  }
+  return false;
+}
 
 type UserCredentialOverride = {
   email?: string;
@@ -603,7 +615,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             }))
           );
         }
-        if (stored && stored.email && stored.role) {
+        if (stored && isLegacyLocalDemoAdmin(stored)) {
+          void removeJson(USER_STORAGE_KEY);
+          setCurrentUser(null);
+        } else if (stored && stored.email && stored.role) {
           try {
             const match =
               initialUsers.find(
@@ -1017,18 +1032,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           return false;
         }
 
-        // بوابة المشرف: لا تسقط للحساب المحلي إلا لإيميل التجربة فقط
-        // (سابقاً كان تعديل إيميل المشرف المحلي يوهم أنه حساب حقيقي)
-        if (
-          portal === 'admin' &&
-          normalized !== LOCAL_DEMO_ADMIN_EMAIL
-        ) {
+        // بوابة المشرف: سحابة فقط — لا حساب محلي تجريبي
+        if (portal === 'admin') {
           const err = (supabaseAuthError || '').toLowerCase();
           let hint =
-            'تأكد من إيميل/كلمة مرور Sign up في Authentication → Users.';
+            'أنشئ حساباً عبر Sign up ثم رقِّه بملف promote-admin.sql، أو استخدم set-admin-password.sql.';
           if (/invalid login|invalid credentials|wrong/i.test(err)) {
             hint =
-              'كلمة المرور السحابية غير صحيحة لهذا الإيميل. الحساب التجريبي المحلي (super.admin@test.com) منفصل ولا يعمل بين الأجهزة. عيّن كلمة المرور من SQL: set-admin-password.sql ثم ادخل بـ SeellieAdmin2026!';
+              'كلمة المرور غير صحيحة. نفّذ set-admin-password.sql ثم ادخل بنفس الإيميل وكلمة SeellieAdmin2026!';
           } else if (/confirm|confirmation|verify/i.test(err)) {
             hint =
               'البريد غير مؤكد. عطّل Confirm email أو أكّد المستخدم من Authentication → Users.';
@@ -1044,19 +1055,23 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           });
           return false;
         }
-      }
-
-      // 2) حسابات تجريبية محلية (fallback)
-      // للمشرف: مسموح فقط لـ super.admin@test.com
-      if (
-        portal === 'admin' &&
-        normalized !== LOCAL_DEMO_ADMIN_EMAIL
-      ) {
+      } else if (portal === 'admin') {
         toast({
           variant: 'destructive',
-          title: 'حساب محلي غير مسموح',
+          title: 'Supabase غير مهيأ',
           description:
-            'للإرسال بين الجوالات ادخل بإيميل Sign up السحابي بعد ترقيته مشرفاً.',
+            'دخول المشرف سحابي فقط. اضبط EXPO_PUBLIC_SUPABASE_URL و ANON_KEY.',
+        });
+        return false;
+      }
+
+      // 2) حسابات تجريبية محلية (fallback للتطبيق فقط — ليس للمشرف)
+      if (portal === 'admin' || isLegacyLocalDemoAdmin({ email: normalized })) {
+        toast({
+          variant: 'destructive',
+          title: 'حساب غير مسموح',
+          description:
+            'حساب المشرف التجريبي حُذف. ادخل من /admin بحساب سحابي مرقّى superadmin.',
         });
         return false;
       }

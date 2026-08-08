@@ -59,7 +59,8 @@ export const en: TranslationTree = {
     adminLogin: 'Admin sign in',
     appLogin: 'App sign in',
     adminTagline: 'Platform admin console',
-    adminDemoHint: 'Demo: super.admin@test.com / superadmin123',
+    adminDemoHint:
+      'Cloud admin only: Sign up then promote-admin.sql, or set-admin-password.sql',
     adminPortalOnlyTitle: 'Admin only',
     adminPortalOnlyDesc: 'This screen is for the admin account only.',
     useAdminLoginTitle: 'Use the admin portal',

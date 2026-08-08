@@ -90,7 +90,6 @@ export function seedSocialRelations(users: User[]): User[] {
   follow('organizer-2', 'organizer-1');
   follow('freelancer-1', 'organizer-1');
   follow('freelancer-1', 'follower-1');
-  follow('superadmin-1', 'organizer-1');
 
   return Array.from(map.values());
 }
