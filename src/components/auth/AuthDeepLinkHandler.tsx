@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import * as Linking from 'expo-linking';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import {
   isPasswordRecoveryUrl,
   setPendingAuthUrl,
@@ -13,11 +13,11 @@ function currentWebUrl(): string | null {
 }
 
 /**
- * يستقبل رابط استعادة كلمة المرور ويفتح شاشة التعيين.
- * Magic link لا يُوجَّه هنا — يُستهلك كجلسة دخول عادية.
+ * يفتح شاشة التعيين فقط عند وجود رموز استعادة في الرابط.
  */
 export function AuthDeepLinkHandler() {
   const router = useRouter();
+  const pathname = usePathname();
   const handled = useRef<string | null>(null);
 
   useEffect(() => {
@@ -26,14 +26,15 @@ export function AuthDeepLinkHandler() {
       if (handled.current === url) return;
       handled.current = url;
       setPendingAuthUrl(url);
-      router.push('/(auth)/reset-password' as any);
+      if (pathname?.includes('reset-password')) return;
+      router.replace('/(auth)/reset-password' as any);
     };
 
     openReset(currentWebUrl());
     void Linking.getInitialURL().then(openReset);
     const sub = Linking.addEventListener('url', ({ url }) => openReset(url));
     return () => sub.remove();
-  }, [router]);
+  }, [router, pathname]);
 
   return null;
 }

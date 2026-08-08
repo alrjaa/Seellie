@@ -334,24 +334,30 @@ export async function supabaseSignOut(): Promise<void> {
   await sb.auth.signOut();
 }
 
+/** رابط ثابت لبريد الاستعادة على الويب المنشور */
+export const WEB_PASSWORD_RESET_URL =
+  'https://www.seellie.com/reset-password';
+
 /**
  * رابط بعد التحقق من البريد.
- * - ويب (seellie.com) → https://…/reset-password
+ * - ويب منشور → https://www.seellie.com/reset-password
  * - Expo Go → exp://IP:PORT/--/reset-password
  * - تطبيق مستقل → seellie://reset-password
- * لا نستخدم localhost (يفتح متصفحاً فارغاً).
  */
 export function passwordResetRedirectUrl(): string {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    const origin = window.location.origin.replace(/\/$/, '');
-    // تجنب localhost في بريد حقيقي — استخدم الدومين المنشور
-    if (
-      origin.includes('localhost') ||
-      origin.includes('127.0.0.1')
-    ) {
-      return 'https://seellie.com/reset-password';
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined') {
+      const origin = window.location.origin.replace(/\/$/, '');
+      if (
+        origin.includes('localhost') ||
+        origin.includes('127.0.0.1')
+      ) {
+        return WEB_PASSWORD_RESET_URL;
+      }
+      // vercel.app أو seellie.com / www — نفس المسار
+      return `${origin}/reset-password`;
     }
-    return `${origin}/reset-password`;
+    return WEB_PASSWORD_RESET_URL;
   }
 
   const url = Linking.createURL('reset-password');
@@ -375,7 +381,11 @@ export async function supabaseRequestPasswordReset(
     return { ok: false, error: 'not_configured' };
   }
   const sb = getSupabase()!;
-  const redirectTo = passwordResetRedirectUrl();
+  // على الويب المنشور ثبّت الوجهة لتطابق Redirect URLs في Supabase
+  const redirectTo =
+    Platform.OS === 'web'
+      ? WEB_PASSWORD_RESET_URL
+      : passwordResetRedirectUrl();
   const { error } = await sb.auth.resetPasswordForEmail(
     email.trim().toLowerCase(),
     { redirectTo }
