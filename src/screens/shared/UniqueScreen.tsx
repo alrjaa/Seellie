@@ -264,6 +264,7 @@ export default function UniqueScreen() {
         text: hasVideo
           ? [item.title, body].filter(Boolean).join('\n')
           : body || item.title,
+        authorId: item.authorId,
         authorName: item.authorName,
         authorAvatar: item.authorAvatar,
         authorHandle: item.authorHandle,

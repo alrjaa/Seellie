@@ -19,7 +19,7 @@ export function useSaveToPrivateSpace() {
         mediaUrl: item.mediaUrl,
         title: item.title,
         text: item.text,
-        authorId: undefined,
+        authorId: item.authorId,
         authorName: item.authorName,
         authorHandle: item.authorHandle,
         sourceId: item.id,

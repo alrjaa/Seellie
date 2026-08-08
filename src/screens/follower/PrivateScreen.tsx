@@ -28,8 +28,33 @@ import { usePrivateSpace } from '@/hooks/usePrivateSpace';
 import { ensureSocialLists } from '@/utils/social-stats';
 import { formatArabicDate } from '@/utils';
 import type { PrivateContentItem } from '@/services/private-space';
+import type { User } from '@/providers/TournamentProvider';
 
 type Section = 'friends' | 'chat' | 'saved';
+
+function resolveAuthorId(
+  item: PrivateContentItem,
+  users: User[]
+): string | undefined {
+  if (item.authorId) {
+    const byId = users.find((u) => u.id === item.authorId);
+    if (byId) return byId.id;
+  }
+  if (item.authorHandle) {
+    const handle = item.authorHandle.replace(/^@/, '').toLowerCase();
+    const byHandle = users.find(
+      (u) => (u.handle || '').replace(/^@/, '').toLowerCase() === handle
+    );
+    if (byHandle) return byHandle.id;
+  }
+  if (item.authorName) {
+    const byName = users.find(
+      (u) => u.name.trim().toLowerCase() === item.authorName.trim().toLowerCase()
+    );
+    if (byName) return byName.id;
+  }
+  return undefined;
+}
 
 const SECTIONS: { key: Section; labelKey: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: 'friends', labelKey: 'privateSpace.friends', icon: 'people-outline' },
@@ -39,10 +64,16 @@ const SECTIONS: { key: Section; labelKey: string; icon: keyof typeof Ionicons.gl
 
 const SavedCard = memo(function SavedCard({
   item,
+  canAddFriend,
+  isFriend,
   onRemove,
+  onAddFriend,
 }: {
   item: PrivateContentItem;
+  canAddFriend: boolean;
+  isFriend: boolean;
   onRemove: () => void;
+  onAddFriend?: () => void;
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
@@ -79,7 +110,30 @@ const SavedCard = memo(function SavedCard({
           {item.text}
         </Text>
       ) : null}
-      <Muted>{formatArabicDate(new Date(item.savedAt))}</Muted>
+      <View style={styles.savedFooter}>
+        <Muted>{formatArabicDate(new Date(item.savedAt))}</Muted>
+        {isFriend ? (
+          <Muted>{t('privateSpace.alreadyFriend')}</Muted>
+        ) : canAddFriend && onAddFriend ? (
+          <Pressable
+            onPress={onAddFriend}
+            accessibilityRole="button"
+            accessibilityLabel={t('privateSpace.addAuthorFriend')}
+            style={({ pressed }) => [
+              styles.addFriendBtn,
+              {
+                borderColor: theme.colors.accent,
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <Ionicons name="person-add-outline" size={14} color={theme.colors.accent} />
+            <Text style={{ color: theme.colors.accent, fontSize: 12, fontWeight: '700' }}>
+              {t('privateSpace.addAuthorFriend')}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
     </Card>
   );
 });
@@ -115,13 +169,34 @@ export default function PrivateScreen() {
   const candidates = useMemo(() => {
     if (!me) return [];
     const following = new Set(me.following || []);
-    return users.filter(
+    const fromFollowing = users.filter(
       (u) =>
         u.id !== me.id &&
         following.has(u.id) &&
         !space.friendIds.includes(u.id)
     );
-  }, [me, users, space.friendIds]);
+    // أيضاً أصحاب المحتوى المحفوظ (حتى لو لم تتابعهم)
+    const fromSavedIds = new Set(
+      space.items
+        .map((item) => resolveAuthorId(item, users))
+        .filter((id): id is string => !!id && id !== me.id)
+    );
+    const fromSaved = users.filter(
+      (u) => fromSavedIds.has(u.id) && !space.friendIds.includes(u.id)
+    );
+    const byId = new Map<string, (typeof users)[number]>();
+    [...fromFollowing, ...fromSaved].forEach((u) => byId.set(u.id, u));
+    return [...byId.values()];
+  }, [me, users, space.friendIds, space.items]);
+
+  const resolveSavedAuthor = useCallback(
+    (item: PrivateContentItem) => {
+      const id = resolveAuthorId(item, users);
+      if (!id || id === currentUser?.id) return null;
+      return users.find((u) => u.id === id) || null;
+    },
+    [users, currentUser?.id]
+  );
 
   const activeFriend = useMemo(
     () => friends.find((f) => f && f.id === activeFriendId) || friends[0] || null,
@@ -222,7 +297,7 @@ export default function PrivateScreen() {
           />
           {pickOpen ? (
             <Card style={styles.pickCard}>
-              <Muted>{t('privateSpace.pickFromFollowing')}</Muted>
+              <Muted>{t('privateSpace.pickFromFollowingOrSaved')}</Muted>
               {candidates.length === 0 ? (
                 <Muted>{t('privateSpace.noCandidates')}</Muted>
               ) : (
@@ -419,12 +494,25 @@ export default function PrivateScreen() {
               icon="bookmark-outline"
             />
           }
-          renderItem={({ item }) => (
-            <SavedCard
-              item={item}
-              onRemove={() => void space.removeContent(item.id)}
-            />
-          )}
+          renderItem={({ item }) => {
+            const author = resolveSavedAuthor(item);
+            const isFriend = !!(
+              author && space.friendIds.includes(author.id)
+            );
+            return (
+              <SavedCard
+                item={item}
+                canAddFriend={!!author && !isFriend}
+                isFriend={isFriend}
+                onRemove={() => void space.removeContent(item.id)}
+                onAddFriend={
+                  author
+                    ? () => void onAddFriend(author.id)
+                    : undefined
+                }
+              />
+            );
+          }}
         />
       ) : null}
     </Screen>
@@ -496,4 +584,20 @@ const styles = StyleSheet.create({
   },
   savedTitle: { fontWeight: '800', fontSize: 15 },
   savedBody: { lineHeight: 20 },
+  savedFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  addFriendBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
 });

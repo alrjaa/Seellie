@@ -311,6 +311,7 @@ export default function ForumsScreen() {
         mediaUrl: item.videoUrl,
         text: item.text,
         title: item.authorName,
+        authorId: item.authorId,
         authorName: item.authorName,
         likes: item.likes,
         liked: currentUser ? item.likes.includes(currentUser.id) : false,

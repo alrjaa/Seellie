@@ -48,6 +48,7 @@ export type FullScreenContent = {
   posterUrl?: string;
   title?: string;
   text?: string;
+  authorId?: string;
   authorName: string;
   authorHandle?: string;
   authorAvatar?: string;

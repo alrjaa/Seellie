@@ -490,16 +490,21 @@ export const en: TranslationTree = {
     saved: 'Saved',
     addFriend: 'Add friend',
     pickFromFollowing: 'Pick from accounts you follow',
+    pickFromFollowingOrSaved:
+      'From people you follow or authors of content you saved',
     noCandidates: 'No followed accounts to add, or you already added them all.',
     noFriends: 'No friends yet',
-    noFriendsDesc: 'Add friends from your following list for private chat.',
+    noFriendsDesc: 'Add friends from following or from saved content authors.',
     friendAdded: 'Friend added',
     friendRemoved: 'Friend removed',
+    addAuthorFriend: 'Add as friend',
+    alreadyFriend: 'Already a friend',
     chatNeedFriend: 'Add a friend first to start a private chat.',
     privateWith: 'Private chat with %{name}',
     noMessages: 'No messages yet — write the first one.',
     messagePlaceholder: 'Private message…',
-    savedHint: 'Content you saved with a double-tap from feeds or from Forums.',
+    savedHint:
+      'Content you saved with a double-tap — you can add the author as a friend here.',
     noSaved: 'No saved content',
     noSavedDesc:
       'Double-tap any photo/video/post, or tap the bookmark in Forums.',

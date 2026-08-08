@@ -358,6 +358,7 @@ export default function SharesScreen() {
             : 'text',
         mediaUrl: item.mediaUrl,
         text: item.text,
+        authorId: item.authorId,
         authorName: item.authorName,
         authorAvatar: item.authorAvatar,
         subtitle: `${

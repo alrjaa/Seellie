@@ -194,7 +194,9 @@ export default function PersonalityScreen() {
         id: item.id,
         kind: item.kind,
         mediaUrl: item.url,
+        authorId: item.authorId,
         authorName: item.authorName,
+        authorHandle: item.handle,
         authorAvatar: item.authorAvatar,
         subtitle: `${item.handle || t('home.freelancerPlayer')} · ${
           item.kind === 'photo' ? t('common.photo') : t('common.video')
