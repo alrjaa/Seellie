@@ -1,10 +1,9 @@
--- Seellie · Fix private friends persistence (run once in SQL Editor)
--- Ensures adding a friend is saved in the cloud for both sides.
+/* Fix private friends persistence - run once in SQL Editor */
 
--- سياسات واضحة + تحديث لـ upsert
 drop policy if exists "private_friends_own" on public.private_friends;
 drop policy if exists "private_friends_select_own" on public.private_friends;
 drop policy if exists "private_friends_insert_pair" on public.private_friends;
+drop policy if exists "private_friends_insert_own" on public.private_friends;
 drop policy if exists "private_friends_update_own" on public.private_friends;
 drop policy if exists "private_friends_delete_own" on public.private_friends;
 
@@ -29,7 +28,6 @@ create policy "private_friends_delete_own"
   to authenticated
   using (auth.uid() = owner_id);
 
--- دالة آمنة: تضيف الصداقة للطرفين حتى لو سياسات الإدراج العادية تمنع الصف المعاكس
 create or replace function public.add_private_friend(p_friend_id uuid)
 returns json
 language plpgsql
