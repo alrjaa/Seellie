@@ -18,18 +18,28 @@ export function peekPendingAuthUrl(): string | null {
   return pendingAuthUrl;
 }
 
+/** رابط استعادة كلمة المرور (وليس magic link العادي) */
 export function isPasswordRecoveryUrl(url: string | null | undefined): boolean {
   if (!url) return false;
   const u = url.toLowerCase();
-  // لوحة Supabase ترسل غالباً إلى Site URL (الجذر) بـ ?code= أو #access_token
   return (
-    u.includes('reset-password') ||
+    u.includes('/reset-password') ||
     u.includes('type=recovery') ||
-    u.includes('type%3drecovery') ||
+    u.includes('type%3drecovery')
+  );
+}
+
+/** أي رجوع من بريد Supabase (استعادة أو magic link) وفيه رموز */
+export function isAuthCallbackUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  const u = url.toLowerCase();
+  return (
+    isPasswordRecoveryUrl(u) ||
     u.includes('access_token=') ||
     u.includes('refresh_token=') ||
     u.includes('token_hash=') ||
-    // PKCE: أي صفحة فيها code= بعد رابط الاستعادة
+    u.includes('type=magiclink') ||
+    u.includes('type%3dmagiclink') ||
     /[?&#]code=/.test(u)
   );
 }

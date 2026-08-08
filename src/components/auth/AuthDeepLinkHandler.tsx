@@ -13,8 +13,8 @@ function currentWebUrl(): string | null {
 }
 
 /**
- * يستقبل رابط استعادة كلمة المرور ويفتح شاشة التعيين
- * (ويب: https://seellie.com/reset-password — موبايل: deep link).
+ * يستقبل رابط استعادة كلمة المرور ويفتح شاشة التعيين.
+ * Magic link لا يُوجَّه هنا — يُستهلك كجلسة دخول عادية.
  */
 export function AuthDeepLinkHandler() {
   const router = useRouter();

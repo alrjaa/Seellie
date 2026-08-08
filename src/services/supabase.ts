@@ -39,8 +39,9 @@ export function getSupabase(): SupabaseClient | null {
         // على الويب فقط: قراءة ?code= / #access_token من رابط الاستعادة
         // على الموبايل نستهلك الرابط يدوياً عبر AuthDeepLinkHandler
         detectSessionInUrl: Platform.OS === 'web',
-        // PKCE يضع ?code= في الرابط — يبقى على Android (الـ hash غالباً يُفقد)
-        flowType: 'pkce',
+        // الويب: implicit حتى تعمل روابط «Send password recovery» من لوحة Supabase
+        // (بدون code_verifier). الموبايل يبقى PKCE.
+        flowType: Platform.OS === 'web' ? 'implicit' : 'pkce',
       },
     });
   }
