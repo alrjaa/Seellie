@@ -230,7 +230,7 @@ export interface TournamentContextType {
     options?: { portal?: 'app' | 'admin' }
   ) => Promise<boolean>;
   /** to: 'admin' يخرج من المتابع/المنظم ويفتح بوابة المشرف */
-  logout: (options?: { to?: 'login' | 'admin' }) => void;
+  logout: (options?: { to?: 'login' | 'admin'; silent?: boolean }) => void;
   signUp: (
     userData: Pick<User, 'name' | 'email'>,
     password: string
@@ -1028,12 +1028,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             'تأكد من إيميل/كلمة مرور Sign up في Authentication → Users.';
           if (/invalid login|invalid credentials|wrong/i.test(err)) {
             hint =
-              'كلمة المرور غير صحيحة. من Supabase: Authentication → Users → alrjaa.ns@gmail.com → Reset password (أو Send password recovery).';
+              'كلمة المرور السحابية غير صحيحة لهذا الإيميل. الحساب التجريبي المحلي (super.admin@test.com) منفصل ولا يعمل بين الأجهزة. عيّن كلمة المرور من SQL: set-admin-password.sql ثم ادخل بـ SeellieAdmin2026!';
           } else if (/confirm|confirmation|verify/i.test(err)) {
             hint =
               'البريد غير مؤكد. عطّل Confirm email أو أكّد المستخدم من Authentication → Users.';
           } else if (/network|fetch|failed to fetch/i.test(err)) {
-            hint = 'مشكلة شبكة/اتصال بـ Supabase. تأكد أن الجوال على الإنترنت.';
+            hint = 'مشكلة شبكة/اتصال بـ Supabase. تأكد أن الجهاز على الإنترنت.';
           }
           toast({
             variant: 'destructive',
@@ -1372,7 +1372,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(
-    (options?: { to?: 'login' | 'admin' }) => {
+    (options?: { to?: 'login' | 'admin'; silent?: boolean }) => {
+      setCurrentUser(null);
+      void removeJson(USER_STORAGE_KEY);
+      void supabaseSignOut();
+      if (options?.silent) return;
+
       const wasAdmin = currentUser?.role === 'superadmin';
       const dest =
         options?.to === 'admin'
@@ -1382,9 +1387,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             : wasAdmin
               ? '/admin'
               : '/(auth)/login';
-      setCurrentUser(null);
-      void removeJson(USER_STORAGE_KEY);
-      void supabaseSignOut();
       router.replace(dest as any);
       toast({ title: t('toasts.t012_fbdcd1') });
     },

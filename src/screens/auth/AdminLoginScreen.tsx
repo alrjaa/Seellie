@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -20,6 +20,7 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
 import { useResponsive } from '@/hooks/useResponsive';
 import { isValidEmail } from '@/utils';
+import { isUuid } from '@/services/supabase-messages';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
 import { DEFAULT_LOGO, DEFAULT_LOGO_MODULE } from '@/theme/brand';
@@ -27,8 +28,15 @@ import { cairoText } from '@/theme/fonts';
 
 /** دخول لوحة المشرف فقط — منفصل عن شاشة دخول التطبيق */
 export default function AdminLoginScreen() {
-  const { login, appLogo, appName, currentUser, loading, routeForRole } =
-    useTournament();
+  const {
+    login,
+    logout,
+    appLogo,
+    appName,
+    currentUser,
+    loading,
+    routeForRole,
+  } = useTournament();
   const theme = useAppTheme();
   const { t } = useTranslation();
   const router = useRouter();
@@ -39,6 +47,14 @@ export default function AdminLoginScreen() {
   const [loginPassword, setLoginPassword] = useState('');
   const [emailError, setEmailError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // www.seellie.com قد يحتفظ بجلسة super.admin@test.com المحلية — امسحها لعرض دخول السحابة
+  useEffect(() => {
+    if (loading) return;
+    if (currentUser && !isUuid(currentUser.id)) {
+      logout({ silent: true });
+    }
+  }, [loading, currentUser, logout]);
 
   const handleLogin = useCallback(async () => {
     if (!isValidEmail(loginEmail)) {
@@ -63,7 +79,15 @@ export default function AdminLoginScreen() {
   );
 
   if (loading) return <LoadingState />;
-  if (currentUser) {
+
+  // إعادة توجيه فقط للمشرف السحابي (UUID) — ليس الحساب التجريبي المحلي
+  const isCloudAdmin =
+    !!currentUser &&
+    isUuid(currentUser.id) &&
+    (currentUser.role === 'superadmin' ||
+      currentUser.activeRole === 'superadmin');
+
+  if (isCloudAdmin) {
     return (
       <Redirect
         href={
@@ -71,6 +95,10 @@ export default function AdminLoginScreen() {
         }
       />
     );
+  }
+
+  if (currentUser && !isUuid(currentUser.id)) {
+    return <LoadingState />;
   }
 
   return (
@@ -174,8 +202,9 @@ export default function AdminLoginScreen() {
                   </Text>
                 </Pressable>
                 <Muted>
-                  للرسائل بين الجوالات: ادخل بإيميل Sign up بعد ترقيته
-                  superadmin في Supabase — وليس بتعديل إيميل الحساب التجريبي.
+                  ادخل بالإيميل السحابي (مثل alrjaa.ns@gmail.com) بعد SQL.
+                  الحساب التجريبي super.admin@test.com محلي على هذا المتصفح فقط
+                  ويُمسح تلقائياً من /admin حتى لا يختلط مع السحابة.
                 </Muted>
                 <Muted>{t('auth.adminDemoHint')}</Muted>
                 <Button

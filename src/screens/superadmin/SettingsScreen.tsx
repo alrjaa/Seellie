@@ -35,8 +35,21 @@ export default function SettingsScreen() {
   const [accountEmail, setAccountEmail] = useState(currentUser?.email || '');
   const [accountPassword, setAccountPassword] = useState('');
 
+  const isLocalDemoAdmin = !!currentUser && !isUuid(currentUser.id);
+
   const saveAdminAccount = () => {
     if (!currentUser) return;
+
+    if (isLocalDemoAdmin) {
+      toast({
+        variant: 'destructive',
+        title: 'حساب تجريبي محلي',
+        description:
+          'لا يمكن تحويل super.admin@test.com إلى إيميل حقيقي من هنا. اخرج وادخل من /admin بـ alrjaa.ns@gmail.com بعد تشغيل set-admin-password.sql (كلمة المرور: SeellieAdmin2026!).',
+      });
+      return;
+    }
+
     const email = normalizeEmail(accountEmail);
     if (!isValidEmail(email)) {
       toast({
@@ -90,8 +103,8 @@ export default function SettingsScreen() {
         <Muted>{t('superadmin.settings.editAccountHint')}</Muted>
         {!isUuid(currentUser?.id) ? (
           <Muted>
-            حسابك الآن محلي. لتفعيل السحابة: اخرج → ادخل من /admin بإيميل Sign
-            up بعد ترقية SQL. تعديل الإيميل هنا لا يحوّله لحساب سحابي.
+            حساب تجريبي محلي فقط (لا يعمل بين الأجهزة). لا تغيّر الإيميل هنا.
+            للمشرف الحقيقي: اخرج → /admin → alrjaa.ns@gmail.com بعد SQL.
           </Muted>
         ) : (
           <Muted>حساب سحابي ✓ {currentUser?.email}</Muted>
@@ -114,6 +127,7 @@ export default function SettingsScreen() {
           autoCapitalize="none"
           keyboardType="email-address"
           ltr
+          editable={!isLocalDemoAdmin}
         />
         <Input
           label={t('superadmin.settings.newPassword')}
@@ -122,10 +136,12 @@ export default function SettingsScreen() {
           secureTextEntry
           placeholder={t('superadmin.settings.newPasswordHint')}
           ltr
+          editable={!isLocalDemoAdmin}
         />
         <Button
           label={t('superadmin.settings.saveAccount')}
           onPress={saveAdminAccount}
+          disabled={isLocalDemoAdmin}
         />
         <Button
           label="خروج ثم دخول سحابي"
