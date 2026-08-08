@@ -6,7 +6,7 @@ import { cairoText } from '@/theme/fonts';
 
 type Props = TextProps & {
   children: ReactNode;
-  tone?: 'default' | 'muted' | 'primary' | 'danger';
+  tone?: 'default' | 'muted' | 'primary' | 'accent' | 'danger';
   /**
    * - 'start' = بداية السطر (يتبع اتجاه الحاوية)
    * - 'end' / 'right' = نهاية السطر
@@ -38,8 +38,8 @@ function AppTextComponent({
   const color =
     tone === 'muted'
       ? theme.colors.textMuted
-      : tone === 'primary'
-        ? theme.colors.primary
+      : tone === 'primary' || tone === 'accent'
+        ? theme.colors.accent
         : tone === 'danger'
           ? theme.colors.danger
           : theme.colors.text;
@@ -47,16 +47,19 @@ function AppTextComponent({
   return (
     <Text
       {...rest}
+      // محاذاة فيزيائية صريحة — يستهلكها Text shim (انظر src/shims/react-native.js)
+      {...({ physicalAlign: true } as object)}
       style={[
         styles.base,
         cairoText('regular'),
         {
           color,
-          textAlign: resolveAlign(align, isRTL),
           writingDirection: isRTL ? 'rtl' : 'ltr',
           fontSize: theme.fontSize.sm + 1,
         },
         style,
+        // دائماً آخراً حتى لا تُلغى بمحاذاة left ثابتة في style
+        { textAlign: resolveAlign(align, isRTL) },
       ]}
     >
       {children}
@@ -72,7 +75,7 @@ export const Title = memo(function Title(props: Omit<Props, 'tone'>) {
     <AppText
       {...props}
       style={[
-        { fontSize: theme.fontSize.xl },
+        { fontSize: theme.fontSize.lg },
         cairoText('extraBold'),
         props.style,
       ]}
@@ -86,7 +89,7 @@ export const Subtitle = memo(function Subtitle(props: Omit<Props, 'tone'>) {
     <AppText
       {...props}
       style={[
-        { fontSize: theme.fontSize.md },
+        { fontSize: theme.fontSize.sm },
         cairoText('bold'),
         props.style,
       ]}

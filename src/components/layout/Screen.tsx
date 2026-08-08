@@ -14,8 +14,9 @@ import {
 } from 'react-native-safe-area-context';
 import { HeaderHeightContext } from '@react-navigation/elements';
 import { useAppTheme } from '@/providers/ThemeProvider';
+import { useLanguage } from '@/providers/LanguageProvider';
 import { useResponsive } from '@/hooks/useResponsive';
-import { useFloatingChrome } from '@/providers/FloatingChromeProvider';
+import { useFloatingChromeScroll } from '@/providers/FloatingChromeProvider';
 import { screenContentBottomPadding } from '@/theme/navigation';
 
 type Props = {
@@ -26,6 +27,11 @@ type Props = {
   centered?: boolean;
   /** Edge-to-edge content (no gutters / max width). Ideal for full-screen mobile feeds. */
   bleed?: boolean;
+  /**
+   * كثافة العرض على سطح المكتب فقط:
+   * default = content · feed = قراءة · wide/dashboard = لوحات
+   */
+  density?: 'default' | 'feed' | 'wide' | 'dashboard' | 'form';
   /** Defaults to left/right only (good under stack/tab headers). */
   edges?: Edge[];
   /** لف المحتوى بـ KeyboardAvoidingView (نماذج) */
@@ -49,45 +55,63 @@ function ScreenComponent({
   contentStyle,
   centered,
   bleed,
+  density = 'default',
   edges = ['left', 'right'],
   keyboard = false,
   fabClearance,
   hasTabBar = true,
 }: Props) {
   const theme = useAppTheme();
+  const { isRTL } = useLanguage();
   const insets = useSafeAreaInsets();
-  const { contentWidth, gutter } = useResponsive();
+  const { contentWidth, feedWidth, dashboardWidth, formWidth, gutter, desktop } =
+    useResponsive();
   const {
     onScroll,
     onScrollBeginDrag,
     onScrollEndDrag,
+    onMomentumScrollBegin,
     onMomentumScrollEnd,
-  } = useFloatingChrome();
+  } = useFloatingChromeScroll();
+  // headerHeight يُستخدم فقط لتعويض لوحة المفاتيح، لا لإزاحة المحتوى
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
 
   const clearFab = fabClearance ?? !bleed;
   const bottomPad = bleed
     ? 0
     : screenContentBottomPadding({
-        bottomInset: insets.bottom,
-        hasTabBar,
-        fabClearance: clearFab,
+        bottomInset: desktop ? 16 : insets.bottom,
+        hasTabBar: desktop ? false : hasTabBar,
+        fabClearance: desktop ? false : clearFab,
       });
+
+  const maxWidth = desktop
+    ? density === 'dashboard' || density === 'wide'
+      ? dashboardWidth
+      : density === 'feed'
+        ? feedWidth
+        : density === 'form'
+          ? formWidth
+          : contentWidth
+    : contentWidth;
 
   const body = (
     <View
       style={[
         scroll ? styles.innerScroll : styles.innerFill,
+        {
+          direction: isRTL ? 'rtl' : 'ltr',
+          width: '100%',
+        },
         bleed
-          ? { width: '100%', flex: 1 }
+          ? { flex: 1 }
           : {
-              width: '100%',
-              maxWidth: contentWidth + gutter * 2,
+              maxWidth: maxWidth + gutter * 2,
               alignSelf: 'center',
               paddingHorizontal: gutter,
-              paddingTop: headerHeight > 0 ? headerHeight : undefined,
+              paddingTop: desktop ? 8 : 0,
             },
-        !scroll && !bleed ? { paddingBottom: Math.min(bottomPad, 32) } : null,
+        !scroll && !bleed ? { paddingBottom: bottomPad } : null,
         centered && styles.centered,
         contentStyle,
       ]}
@@ -106,8 +130,14 @@ function ScreenComponent({
       onScroll={onScroll}
       onScrollBeginDrag={onScrollBeginDrag}
       onScrollEndDrag={onScrollEndDrag}
+      onMomentumScrollBegin={onMomentumScrollBegin}
       onMomentumScrollEnd={onMomentumScrollEnd}
-      scrollEventThrottle={16}
+      scrollEventThrottle={48}
+      removeClippedSubviews={false}
+      decelerationRate={Platform.OS === 'ios' ? 'normal' : 0.985}
+      overScrollMode="never"
+      bounces
+      alwaysBounceVertical={false}
     >
       {body}
     </ScrollView>

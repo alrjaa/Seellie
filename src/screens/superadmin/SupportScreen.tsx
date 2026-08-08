@@ -1,14 +1,55 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useTournament, type SupportLevel } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
-import { Button, Card, Chip, Input, Muted, Subtitle, Title } from '@/components/ui';
+import { Button, Card, Chip, Input, Muted, SearchBar, Subtitle, Title } from '@/components/ui';
+import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
+import { createId } from '@/utils/id';
+import { matchesSearchQuery } from '@/utils/search';
+import { useResponsive } from '@/hooks/useResponsive';
+import {
+  certificateImageSource,
+  certificateImageUri,
+} from '@/theme/certificates';
 
 type Tab = 'levels' | 'beneficiaries' | 'freelancers' | 'distribution';
+
+async function persistCertificateImage(localUri: string): Promise<string> {
+  const base = FileSystem.documentDirectory;
+  if (!base) return localUri;
+  const dir = `${base}certificates/`;
+  const info = await FileSystem.getInfoAsync(dir);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+  }
+  const ext = localUri.toLowerCase().includes('.png') ? 'png' : 'jpg';
+  const dest = `${dir}${createId('cert')}.${ext}`;
+  await FileSystem.copyAsync({ from: localUri, to: dest });
+  return dest;
+}
+
+function levelPreviewSource(level: SupportLevel) {
+  const url = level.imageUrl?.trim() || '';
+  if (/^(file:|data:|https?:|content:|ph:|assets-library:)/i.test(url)) {
+    return { uri: url };
+  }
+  return certificateImageSource(level.name) ?? (url ? { uri: url } : undefined);
+}
 
 export default function SupportScreen() {
   const { supportLevels, supporters, users, giftTransactions, updateSupportLevels } =
@@ -16,8 +57,11 @@ export default function SupportScreen() {
   const theme = useAppTheme();
   const { toast } = useToast();
   const { t } = useTranslation();
+  const { desktop } = useResponsive();
   const [tab, setTab] = useState<Tab>('levels');
   const [levels, setLevels] = useState<SupportLevel[]>(supportLevels);
+  const [pickingId, setPickingId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   const tabs = useMemo(
     (): { key: Tab; label: string }[] => [
@@ -38,8 +82,75 @@ export default function SupportScreen() {
     [users]
   );
 
+  const filteredLevels = useMemo(
+    () =>
+      levels.filter((l) =>
+        matchesSearchQuery(query, l.name, l.description, l.price, l.id)
+      ),
+    [levels, query]
+  );
+
+  const filteredSupporters = useMemo(
+    () =>
+      supporters.filter((s) =>
+        matchesSearchQuery(query, s.name, s.level, s.accountNumber, s.id)
+      ),
+    [supporters, query]
+  );
+
+  const filteredFreelancers = useMemo(
+    () =>
+      freelancers.filter((f) =>
+        matchesSearchQuery(query, f.name, f.email, f.handle, f.visibleId, f.bio, f.mobile)
+      ),
+    [freelancers, query]
+  );
+
+  const filteredGifts = useMemo(
+    () =>
+      giftTransactions.filter((g) =>
+        matchesSearchQuery(
+          query,
+          g.certificateType,
+          g.recipientName,
+          g.gifterName,
+          g.amountPaid,
+          g.id,
+          g.competitionName
+        )
+      ),
+    [giftTransactions, query]
+  );
+
   const saveLevels = () => {
-    updateSupportLevels(levels);
+    const cleaned = levels
+      .map((l) => ({
+        ...l,
+        name: l.name.trim(),
+        description: l.description.trim(),
+        price: Number(l.price) || 0,
+        imageUrl: l.imageUrl || certificateImageUri(l.name) || '',
+      }))
+      .filter((l) => l.name.length > 0);
+
+    if (cleaned.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: t('superadmin.support.needOneLevel'),
+      });
+      return;
+    }
+
+    const names = cleaned.map((l) => l.name);
+    if (new Set(names).size !== names.length) {
+      toast({
+        variant: 'destructive',
+        title: t('superadmin.support.duplicateNames'),
+      });
+      return;
+    }
+
+    updateSupportLevels(cleaned);
     toast({
       variant: 'success',
       title: t('superadmin.support.savedTitle'),
@@ -48,54 +159,234 @@ export default function SupportScreen() {
   };
 
   const updateLevel = (
-    index: number,
+    id: string,
     field: keyof SupportLevel,
     value: string | number
   ) => {
     setLevels((prev) =>
-      prev.map((l, i) => (i === index ? { ...l, [field]: value } : l))
+      prev.map((l) => (l.id === id ? { ...l, [field]: value } : l))
     );
   };
 
+  const addLevel = () => {
+    const nextIndex = levels.length + 1;
+    setLevels((prev) => [
+      ...prev,
+      {
+        id: createId('level'),
+        name: t('superadmin.support.newLevelName', { n: nextIndex }),
+        price: 0,
+        description: '',
+        imageUrl: '',
+      },
+    ]);
+  };
+
+  const removeLevel = (id: string) => {
+    const target = levels.find((l) => l.id === id);
+    Alert.alert(
+      t('superadmin.support.deleteTitle'),
+      t('superadmin.support.deleteConfirm', {
+        name: target?.name || '',
+      }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.confirm'),
+          style: 'destructive',
+          onPress: () =>
+            setLevels((prev) => prev.filter((l) => l.id !== id)),
+        },
+      ]
+    );
+  };
+
+  const pickImage = useCallback(
+    async (id: string) => {
+      try {
+        setPickingId(id);
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          toast({
+            variant: 'destructive',
+            title: t('superadmin.support.permissionTitle'),
+            description: t('superadmin.support.permissionDesc'),
+          });
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          quality: 0.85,
+          allowsEditing: false,
+        });
+        if (result.canceled || !result.assets?.[0]?.uri) return;
+        const saved = await persistCertificateImage(result.assets[0].uri);
+        updateLevel(id, 'imageUrl', saved);
+        toast({
+          variant: 'success',
+          title: t('superadmin.support.imageUpdated'),
+        });
+      } catch {
+        toast({
+          variant: 'destructive',
+          title: t('superadmin.support.imageFailed'),
+        });
+      } finally {
+        setPickingId(null);
+      }
+    },
+    [t, toast]
+  );
+
+  const restoreBundledImage = (id: string, name: string) => {
+    const bundled = certificateImageUri(name);
+    if (!bundled) {
+      toast({
+        variant: 'destructive',
+        title: t('superadmin.support.noBundledImage'),
+      });
+      return;
+    }
+    updateLevel(id, 'imageUrl', bundled);
+  };
+
   const renderLevels = () => (
-    <View style={{ gap: 10 }}>
-      {levels.length === 0 ? (
-        <EmptyState title={t('superadmin.support.noLevels')} icon="ribbon-outline" />
+    <View style={{ gap: 12 }}>
+      {filteredLevels.length === 0 ? (
+        <EmptyState
+          title={
+            query.trim()
+              ? t('superadmin.noSearchResults')
+              : t('superadmin.support.noLevels')
+          }
+          icon="ribbon-outline"
+        />
       ) : (
-        levels.map((level, index) => (
-          <Card key={level.name} style={styles.card}>
-            <Subtitle>{level.name}</Subtitle>
-            <Input
-              label={t('superadmin.support.priceLabel')}
-              value={String(level.price)}
-              onChangeText={(v) =>
-                updateLevel(index, 'price', Number(v) || 0)
-              }
-              keyboardType="numeric"
-            />
-            <Input
-              label={t('superadmin.support.descriptionLabel')}
-              value={level.description}
-              onChangeText={(v) => updateLevel(index, 'description', v)}
-              multiline
-            />
-          </Card>
-        ))
+        <View style={[styles.levelsGrid, desktop && styles.levelsGridDesktop]}>
+          {filteredLevels.map((level) => {
+          const preview = levelPreviewSource(level);
+          return (
+            <Card
+              key={level.id}
+              style={[styles.card, desktop && styles.cardDesktop]}
+            >
+              <View style={styles.cardHeader}>
+                <Subtitle style={{ flex: 1 }}>{level.name || '—'}</Subtitle>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('superadmin.support.deleteLevel')}
+                  hitSlop={8}
+                  onPress={() => removeLevel(level.id)}
+                >
+                  <Ionicons
+                    name="trash-outline"
+                    size={18}
+                    color={theme.colors.danger}
+                  />
+                </Pressable>
+              </View>
+
+              <View
+                style={[
+                  styles.previewWrap,
+                  { backgroundColor: theme.colors.surfaceElevated },
+                ]}
+              >
+                {preview ? (
+                  <Image
+                    source={preview}
+                    style={styles.preview}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <View style={styles.previewEmpty}>
+                    <Ionicons
+                      name="image-outline"
+                      size={28}
+                      color={theme.colors.textMuted}
+                    />
+                    <Muted>{t('superadmin.support.noImage')}</Muted>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.imageActions}>
+                <Button
+                  label={
+                    pickingId === level.id
+                      ? t('superadmin.support.pickingImage')
+                      : t('superadmin.support.changeImage')
+                  }
+                  variant="secondary"
+                  onPress={() => void pickImage(level.id)}
+                  disabled={pickingId === level.id}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  label={t('superadmin.support.resetImage')}
+                  variant="outline"
+                  onPress={() => restoreBundledImage(level.id, level.name)}
+                  style={{ flex: 1 }}
+                />
+              </View>
+              <MediaUploadSpecs
+                kind="certificate"
+                title={t('media.specs.certificateTitle')}
+                compact
+              />
+
+              <Input
+                label={t('superadmin.support.nameLabel')}
+                value={level.name}
+                onChangeText={(v) => updateLevel(level.id, 'name', v)}
+              />
+              <Input
+                label={t('superadmin.support.priceLabel')}
+                value={String(level.price)}
+                onChangeText={(v) =>
+                  updateLevel(level.id, 'price', Number(v) || 0)
+                }
+                keyboardType="numeric"
+              />
+              <Input
+                label={t('superadmin.support.descriptionLabel')}
+                value={level.description}
+                onChangeText={(v) => updateLevel(level.id, 'description', v)}
+                multiline
+              />
+            </Card>
+          );
+        })}
+        </View>
       )}
+
+      <Button
+        label={t('superadmin.support.addLevel')}
+        variant="secondary"
+        onPress={addLevel}
+      />
       <Button label={t('superadmin.support.saveLevels')} onPress={saveLevels} />
     </View>
   );
 
   const renderBeneficiaries = () => (
     <View style={{ gap: 8 }}>
-      {supporters.length === 0 ? (
+      {filteredSupporters.length === 0 ? (
         <EmptyState
-          title={t('superadmin.support.noBeneficiaries')}
-          description={t('superadmin.support.noBeneficiariesDesc')}
+          title={
+            query.trim()
+              ? t('superadmin.noSearchResults')
+              : t('superadmin.support.noBeneficiaries')
+          }
+          description={
+            query.trim()
+              ? undefined
+              : t('superadmin.support.noBeneficiariesDesc')
+          }
           icon="people-outline"
         />
       ) : (
-        supporters.map((s) => (
+        filteredSupporters.map((s) => (
           <Card key={s.id} style={styles.card}>
             <Text style={[styles.name, { color: theme.colors.text }]}>
               {s.name}
@@ -111,10 +402,17 @@ export default function SupportScreen() {
 
   const renderFreelancers = () => (
     <View style={{ gap: 8 }}>
-      {freelancers.length === 0 ? (
-        <EmptyState title={t('superadmin.support.noFreelancers')} icon="person-outline" />
+      {filteredFreelancers.length === 0 ? (
+        <EmptyState
+          title={
+            query.trim()
+              ? t('superadmin.noSearchResults')
+              : t('superadmin.support.noFreelancers')
+          }
+          icon="person-outline"
+        />
       ) : (
-        freelancers.map((f) => (
+        filteredFreelancers.map((f) => (
           <Card key={f.id} style={styles.card}>
             <Text style={[styles.name, { color: theme.colors.text }]}>
               {f.name}
@@ -129,14 +427,22 @@ export default function SupportScreen() {
 
   const renderDistribution = () => (
     <View style={{ gap: 8 }}>
-      {giftTransactions.length === 0 ? (
+      {filteredGifts.length === 0 ? (
         <EmptyState
-          title={t('superadmin.support.noDistribution')}
-          description={t('superadmin.support.noDistributionDesc')}
+          title={
+            query.trim()
+              ? t('superadmin.noSearchResults')
+              : t('superadmin.support.noDistribution')
+          }
+          description={
+            query.trim()
+              ? undefined
+              : t('superadmin.support.noDistributionDesc')
+          }
           icon="gift-outline"
         />
       ) : (
-        giftTransactions.map((g) => (
+        filteredGifts.map((g) => (
           <Card key={g.id} style={styles.card}>
             <Text style={[styles.name, { color: theme.colors.text }]}>
               {t('superadmin.support.distributionLine', {
@@ -157,11 +463,12 @@ export default function SupportScreen() {
   );
 
   return (
-    <Screen>
+    <Screen density="dashboard">
       <FlatList
         data={[{ key: 'content' }]}
         keyExtractor={(item) => item.key}
         contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={{ gap: 12, marginBottom: 8 }}>
             <Title>{t('superadmin.modules.support.title')}</Title>
@@ -170,17 +477,30 @@ export default function SupportScreen() {
               {tabs.map((tabItem) => (
                 <Pressable
                   key={tabItem.key}
-                  onPress={() => setTab(tabItem.key)}
-                  style={{ flex: 1 }}
+                  onPress={() => {
+                    setTab(tabItem.key);
+                    setQuery('');
+                  }}
+                  style={{ flexGrow: 1, flexBasis: '45%' }}
                 >
                   <Chip
                     label={tabItem.label}
                     active={tab === tabItem.key}
-                    onPress={() => setTab(tabItem.key)}
+                    onPress={() => {
+                      setTab(tabItem.key);
+                      setQuery('');
+                    }}
                   />
                 </Pressable>
               ))}
             </View>
+            <SearchBar
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t('superadmin.searchPlaceholder')}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
           </View>
         }
         renderItem={() => (
@@ -199,6 +519,39 @@ export default function SupportScreen() {
 const styles = StyleSheet.create({
   list: { paddingTop: 8, gap: 10, paddingBottom: 40 },
   tabs: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  card: { gap: 6 },
+  levelsGrid: { gap: 12 },
+  levelsGridDesktop: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  card: { gap: 10 },
+  cardDesktop: {
+    width: '48%',
+    flexGrow: 1,
+    minWidth: 340,
+    maxWidth: '48%',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  previewWrap: {
+    width: '100%',
+    aspectRatio: 900 / 674,
+    borderRadius: 12,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  preview: { width: '100%', height: '100%' },
+  previewEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: 16,
+  },
+  imageActions: { flexDirection: 'row', gap: 8 },
   name: { fontWeight: '800', textAlign: 'left' },
 });

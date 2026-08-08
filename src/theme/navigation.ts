@@ -3,17 +3,21 @@ import type { AppTheme } from '@/theme';
 import { cairoHeaderTitleStyle } from '@/theme/fonts';
 
 /** مسافة إضافية واضحة تحت أيقونات الشبكة/البطارية/الساعة */
-export const HEADER_BELOW_STATUS_GAP = 20;
+export const HEADER_BELOW_STATUS_GAP = 12;
 
 /**
  * إزاحة أعلى الشاشة تحت منطقة الحالة بالكامل (iPhone + Android).
+ * على الويب لا نفرض ارتفاع شريط حالة وهمي.
  */
 export function headerSafeTop(topInset: number) {
+  if (Platform.OS === 'web') {
+    return Math.max(topInset, 0);
+  }
   const androidStatus = StatusBar.currentHeight ?? 0;
   const base =
     Platform.OS === 'android'
-      ? Math.max(topInset, androidStatus, 32)
-      : Math.max(topInset, 54);
+      ? Math.max(topInset, androidStatus, 24)
+      : Math.max(topInset, 44);
   return base + HEADER_BELOW_STATUS_GAP;
 }
 
@@ -22,7 +26,15 @@ export function transparentHeaderOptions(
   theme: AppTheme,
   topInset = 0
 ) {
-  const top = headerSafeTop(topInset);
+  // ارتفاع شريط الحالة فقط — ليس ارتفاع الرأس كاملاً ولا فجوة مضاعفة
+  const statusBarHeight =
+    Platform.OS === 'web'
+      ? 0
+      : Platform.OS === 'android'
+        ? Math.max(topInset, StatusBar.currentHeight ?? 0) +
+          HEADER_BELOW_STATUS_GAP
+        : Math.max(topInset, 0) + HEADER_BELOW_STATUS_GAP;
+
   return {
     // خلفية غير شفافة أضمن مع edge-to-edge على Android/iOS
     headerTransparent: false,
@@ -38,10 +50,12 @@ export function transparentHeaderOptions(
     headerTitleStyle: {
       ...cairoHeaderTitleStyle,
       color: theme.colors.text,
-      textAlign: 'left' as const,
     },
-    headerStatusBarHeight: top,
-    headerTopInsetEnabled: true,
+    // منع ظهور اسم الملف مثل «index» بجانب سهم الرجوع على iOS
+    headerBackTitle: '',
+    headerBackButtonDisplayMode: 'minimal' as const,
+    headerStatusBarHeight: statusBarHeight,
+    headerTopInsetEnabled: Platform.OS !== 'web',
     ...(Platform.OS === 'android'
       ? {
           statusBarTranslucent: true,

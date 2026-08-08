@@ -3,13 +3,14 @@
 /**
  * App-level react-native shim:
  * - خط Cairo فقط
- * - textAlign:'left' = بداية السطر في وضع RTL (اليمين في العربية)
- *   وفق وثائق Expo Localization — ليس محاذاة يمين ثابتة عبر الخط
+ * - محاذاة النص حسب اتجاه التطبيق (يمين للعربية / يسار للإنجليزية)
+ *   لا نفرض textAlign:'left' — ذلك كان يكسر RTL عندما I18nManager غير متزامن
  *
  * Uses a Proxy so FlatList/StyleSheet keep working.
  */
 const React = require('react');
 const RN = require('react-native');
+const { getAppRTL } = require('../theme/app-direction');
 
 const OriginalText = RN.Text;
 const OriginalTextInput = RN.TextInput;
@@ -38,6 +39,29 @@ function isCairoFamily(family) {
   return typeof family === 'string' && family.startsWith('Cairo_');
 }
 
+/**
+ * في هذه القاعدة: left/right في الستايلات تعني بداية/نهاية السطر (start/end)،
+ * لأن أغلب الشاشات كُتبت كذلك. المحاذاة الفيزيائية تُحسب من اتجاه التطبيق.
+ * AppText يمرّر محاذاة فيزيائية صحيحة — نحترمها عبر props.physicalAlign
+ * أو عندما يمرّر المكوّن rtl/ltr صراحة.
+ */
+function resolveTextAlign(flatAlign, forceLtr, physicalAlign) {
+  if (forceLtr) return flatAlign || 'left';
+  if (flatAlign === 'center') return 'center';
+  if (flatAlign === 'justify') return 'justify';
+
+  const isRTL = getAppRTL();
+
+  if (physicalAlign) {
+    if (flatAlign === 'left' || flatAlign === 'right') return flatAlign;
+    return isRTL ? 'right' : 'left';
+  }
+
+  // left / auto / undefined = بداية السطر · right = نهايته
+  if (flatAlign === 'right') return isRTL ? 'left' : 'right';
+  return isRTL ? 'right' : 'left';
+}
+
 function withAppTextStyle(style, props) {
   const flat = StyleSheet.flatten(style) || {};
   const family = isCairoFamily(flat.fontFamily)
@@ -45,7 +69,9 @@ function withAppTextStyle(style, props) {
     : cairoForWeight(flat.fontWeight);
 
   const forceLtr = props?.ltr === true || props?.rtl === false;
-  const keepCenter = flat.textAlign === 'center';
+  const physicalAlign = props?.physicalAlign === true;
+  const isRTL = forceLtr ? false : getAppRTL();
+  const textAlign = resolveTextAlign(flat.textAlign, forceLtr, physicalAlign);
 
   return [
     style,
@@ -56,32 +82,28 @@ function withAppTextStyle(style, props) {
         ? { includeFontPadding: false }
         : null),
     },
-    forceLtr
-      ? { textAlign: flat.textAlign || 'left' }
-      : keepCenter
-        ? { textAlign: 'center' }
-        : {
-            // في RTL: 'left' = بداية السطر = اليمين
-            textAlign: 'left',
-          },
+    {
+      textAlign,
+      writingDirection: isRTL ? 'rtl' : 'ltr',
+    },
   ];
 }
 
 function Text(props) {
-  const { ltr, rtl, style, ...rest } = props;
+  const { ltr, rtl, physicalAlign, style, ...rest } = props;
   return React.createElement(OriginalText, {
     ...rest,
-    style: withAppTextStyle(style, { ltr, rtl }),
+    style: withAppTextStyle(style, { ltr, rtl, physicalAlign }),
   });
 }
 Text.displayName = 'Text';
 
 const TextInput = React.forwardRef(function AppTextInput(props, ref) {
-  const { ltr, rtl, style, ...rest } = props;
+  const { ltr, rtl, physicalAlign, style, ...rest } = props;
   return React.createElement(OriginalTextInput, {
     ...rest,
     ref,
-    style: withAppTextStyle(style, { ltr, rtl }),
+    style: withAppTextStyle(style, { ltr, rtl, physicalAlign }),
   });
 });
 TextInput.displayName = 'TextInput';

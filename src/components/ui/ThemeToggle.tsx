@@ -20,7 +20,7 @@ function ThemeToggleComponent() {
       style={[
         styles.btn,
         {
-          backgroundColor: theme.colors.primarySoft,
+          backgroundColor: theme.colors.accentSoft,
           borderColor: theme.colors.border,
         },
       ]}
@@ -28,7 +28,7 @@ function ThemeToggleComponent() {
       <Ionicons
         name={theme.isDark ? 'sunny-outline' : 'moon-outline'}
         size={18}
-        color={theme.colors.primary}
+        color={theme.colors.accent}
       />
     </Pressable>
   );

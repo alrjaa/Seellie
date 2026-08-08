@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Redirect } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
@@ -17,11 +17,13 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { Button, Input, Muted } from '@/components/ui';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
 import { useResponsive } from '@/hooks/useResponsive';
 import { isValidEmail } from '@/utils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
-import { DEFAULT_LOGO_MODULE } from '@/theme/brand';
+import { DEFAULT_LOGO, DEFAULT_LOGO_MODULE } from '@/theme/brand';
+import { cairoText } from '@/theme/fonts';
 
 export default function LoginScreen() {
   const {
@@ -34,10 +36,12 @@ export default function LoginScreen() {
     routeForRole,
   } = useTournament();
   const theme = useAppTheme();
-  const { t } = useTranslation();
-  const { formWidth } = useResponsive();
+  const { t, isRTL } = useTranslation();
+  const router = useRouter();
+  const { formWidth, desktop } = useResponsive();
 
   const [isSigningUp, setIsSigningUp] = useState(false);
+  const [forgotPassword, setForgotPassword] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [signUpName, setSignUpName] = useState('');
@@ -46,33 +50,39 @@ export default function LoginScreen() {
   const [emailError, setEmailError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const handleLogin = useCallback(() => {
+  const handleLogin = useCallback(async () => {
     if (!isValidEmail(loginEmail)) {
       setEmailError(t('auth.invalidEmail'));
       return;
     }
     setEmailError('');
     setBusy(true);
-    login(loginEmail, loginPassword, { portal: 'app' });
-    setBusy(false);
+    try {
+      await login(loginEmail, loginPassword, { portal: 'app' });
+    } finally {
+      setBusy(false);
+    }
   }, [login, loginEmail, loginPassword, t]);
 
-  const handleSignUp = useCallback(() => {
+  const handleSignUp = useCallback(async () => {
     if (!isValidEmail(signUpEmail)) {
       setEmailError(t('auth.invalidEmail'));
       return;
     }
     setEmailError('');
     setBusy(true);
-    signUp({ name: signUpName, email: signUpEmail }, signUpPassword);
-    setBusy(false);
+    try {
+      await signUp({ name: signUpName, email: signUpEmail }, signUpPassword);
+    } finally {
+      setBusy(false);
+    }
   }, [signUp, signUpName, signUpEmail, signUpPassword, t]);
 
   const gradientColors = useMemo(
     () =>
       theme.isDark
-        ? (['#0B1F17', '#143528', '#0B1F17'] as const)
-        : (['#E8F5EE', '#F3F7F5', '#DCEEE4'] as const),
+        ? (['#0d1a26', '#132433', '#0d1a26'] as const)
+        : (['#F3F6F9', '#FFFFFF', '#E8FBFA'] as const),
     [theme.isDark]
   );
 
@@ -107,118 +117,340 @@ export default function LoginScreen() {
         style={styles.flex}
       >
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[
+            styles.scroll,
+            desktop && styles.scrollDesktop,
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View
-            style={[
-              styles.panel,
-              {
-                width: formWidth,
-                backgroundColor: theme.colors.card,
-                borderColor: theme.colors.border,
-              },
-            ]}
-          >
-            <View style={styles.brand}>
-              <Image
-                source={
-                  appLogo ? { uri: appLogo } : DEFAULT_LOGO_MODULE
-                }
-                style={styles.logo}
-                resizeMode="contain"
-                accessibilityLabel={t('auth.logoA11y')}
-              />
-              <Text style={[styles.brandEn, { color: theme.colors.primary }]}>
-                {appName || 'Seellie'}
-              </Text>
-              <Text style={[styles.tagline, { color: theme.colors.textMuted }]}>
-                {t('auth.tagline')}
-              </Text>
-            </View>
-
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              {isSigningUp ? t('auth.signUp') : t('auth.login')}
-            </Text>
-
-            {isSigningUp ? (
-              <View style={styles.form}>
-                <Input
-                  label={t('auth.fullName')}
-                  value={signUpName}
-                  onChangeText={setSignUpName}
-                  placeholder={t('auth.enterName')}
-                />
-                <Input
-                  label={t('auth.email')}
-                  value={signUpEmail}
-                  onChangeText={(v) => {
-                    setSignUpEmail(v);
-                    setEmailError('');
-                  }}
-                  placeholder="email@example.com"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  ltr
-                  error={emailError}
-                />
-                <Input
-                  label={t('auth.password')}
-                  value={signUpPassword}
-                  onChangeText={setSignUpPassword}
-                  placeholder="••••••••"
-                  secureTextEntry
-                  ltr
-                />
-                <Muted>{t('auth.signUpHint')}</Muted>
-                <Button
-                  label={t('auth.createFollower')}
-                  onPress={handleSignUp}
-                  loading={busy}
-                />
-              </View>
-            ) : (
-              <View style={styles.form}>
-                <Input
-                  label={t('auth.email')}
-                  value={loginEmail}
-                  onChangeText={(v) => {
-                    setLoginEmail(v);
-                    setEmailError('');
-                  }}
-                  placeholder="email@example.com"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  ltr
-                  error={emailError}
-                />
-                <Input
-                  label={t('auth.password')}
-                  value={loginPassword}
-                  onChangeText={setLoginPassword}
-                  placeholder="••••••••"
-                  secureTextEntry
-                  ltr
-                />
-                <Button label={t('auth.login')} onPress={handleLogin} loading={busy} />
-              </View>
-            )}
-
-            <View style={styles.footer}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  setIsSigningUp((v) => !v);
-                  setEmailError('');
-                }}
+          {desktop ? (
+            <View
+              style={[
+                styles.desktopStage,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.desktopHero,
+                  { backgroundColor: theme.isDark ? '#071018' : '#0d1a26' },
+                ]}
               >
-                <Text style={[styles.link, { color: theme.colors.primary }]}>
-                  {isSigningUp ? t('auth.haveAccount') : t('auth.newAccount')}
+                <Image
+                  source={
+                    appLogo && appLogo !== DEFAULT_LOGO
+                      ? { uri: appLogo }
+                      : DEFAULT_LOGO_MODULE
+                  }
+                  style={styles.desktopHeroLogo}
+                  resizeMode="contain"
+                  accessibilityLabel={t('auth.logoA11y')}
+                />
+                <Text style={[styles.desktopHeroTitle, { color: theme.colors.accent }]}>
+                  {appName || 'Seellie'}
                 </Text>
-              </Pressable>
+                <Text style={[styles.desktopHeroTag, { color: 'rgba(255,255,255,0.72)' }]}>
+                  {t('auth.tagline')}
+                </Text>
+              </View>
+              <View style={styles.desktopFormCol}>
+                <View
+                  style={[
+                    styles.panel,
+                    styles.desktopPanel,
+                    {
+                      width: formWidth,
+                      backgroundColor: theme.colors.card,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                    {forgotPassword
+                      ? t('auth.forgotPasswordTitle')
+                      : isSigningUp
+                        ? t('auth.signUp')
+                        : t('auth.login')}
+                  </Text>
+
+                  {forgotPassword ? (
+                    <ForgotPasswordForm
+                      initialEmail={loginEmail}
+                      onBack={() => setForgotPassword(false)}
+                    />
+                  ) : isSigningUp ? (
+                    <View style={styles.form}>
+                      <Input
+                        label={t('auth.fullName')}
+                        value={signUpName}
+                        onChangeText={setSignUpName}
+                        placeholder={t('auth.enterName')}
+                      />
+                      <Input
+                        label={t('auth.email')}
+                        value={signUpEmail}
+                        onChangeText={(v) => {
+                          setSignUpEmail(v);
+                          setEmailError('');
+                        }}
+                        placeholder="email@example.com"
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                        ltr
+                        error={emailError}
+                      />
+                      <Input
+                        label={t('auth.password')}
+                        value={signUpPassword}
+                        onChangeText={setSignUpPassword}
+                        placeholder="••••••••"
+                        secureTextEntry
+                        ltr
+                      />
+                      <Muted>{t('auth.signUpHint')}</Muted>
+                      <Button
+                        label={t('auth.createFollower')}
+                        onPress={handleSignUp}
+                        loading={busy}
+                        size="md"
+                      />
+                    </View>
+                  ) : (
+                    <View style={styles.form}>
+                      <Input
+                        label={t('auth.email')}
+                        value={loginEmail}
+                        onChangeText={(v) => {
+                          setLoginEmail(v);
+                          setEmailError('');
+                        }}
+                        placeholder="email@example.com"
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                        ltr
+                        error={emailError}
+                      />
+                      <Input
+                        label={t('auth.password')}
+                        value={loginPassword}
+                        onChangeText={setLoginPassword}
+                        placeholder="••••••••"
+                        secureTextEntry
+                        ltr
+                      />
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => setForgotPassword(true)}
+                        style={[
+                          styles.forgotWrap,
+                          { alignSelf: isRTL ? 'flex-end' : 'flex-start' },
+                        ]}
+                      >
+                        <Text
+                          style={[styles.linkMuted, { color: theme.colors.accent }]}
+                        >
+                          {t('auth.forgotPassword')}
+                        </Text>
+                      </Pressable>
+                      <Button
+                        label={t('auth.login')}
+                        onPress={handleLogin}
+                        loading={busy}
+                        size="md"
+                      />
+                    </View>
+                  )}
+
+                  {!forgotPassword ? (
+                    <View style={styles.footer}>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => {
+                          setIsSigningUp((v) => !v);
+                          setEmailError('');
+                        }}
+                      >
+                        <Text style={[styles.link, { color: theme.colors.accent }]}>
+                          {isSigningUp ? t('auth.haveAccount') : t('auth.newAccount')}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={t('auth.adminLogin')}
+                        onPress={() => router.push('/admin' as any)}
+                      >
+                        <Text
+                          style={[
+                            styles.linkMuted,
+                            { color: theme.colors.textMuted },
+                          ]}
+                        >
+                          {t('auth.adminLogin')}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
             </View>
-          </View>
+          ) : (
+            <View
+              style={[
+                styles.panel,
+                {
+                  width: formWidth,
+                  backgroundColor: theme.colors.card,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <View style={styles.brand}>
+                <Image
+                  source={
+                    appLogo && appLogo !== DEFAULT_LOGO
+                      ? { uri: appLogo }
+                      : DEFAULT_LOGO_MODULE
+                  }
+                  style={styles.logo}
+                  resizeMode="contain"
+                  accessibilityLabel={t('auth.logoA11y')}
+                />
+                <Text style={[styles.brandEn, { color: theme.colors.accent }]}>
+                  {appName || 'Seellie'}
+                </Text>
+                <Text style={[styles.tagline, { color: theme.colors.textMuted }]}>
+                  {t('auth.tagline')}
+                </Text>
+              </View>
+
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                {forgotPassword
+                  ? t('auth.forgotPasswordTitle')
+                  : isSigningUp
+                    ? t('auth.signUp')
+                    : t('auth.login')}
+              </Text>
+
+              {forgotPassword ? (
+                <ForgotPasswordForm
+                  initialEmail={loginEmail}
+                  onBack={() => setForgotPassword(false)}
+                />
+              ) : isSigningUp ? (
+                <View style={styles.form}>
+                  <Input
+                    label={t('auth.fullName')}
+                    value={signUpName}
+                    onChangeText={setSignUpName}
+                    placeholder={t('auth.enterName')}
+                  />
+                  <Input
+                    label={t('auth.email')}
+                    value={signUpEmail}
+                    onChangeText={(v) => {
+                      setSignUpEmail(v);
+                      setEmailError('');
+                    }}
+                    placeholder="email@example.com"
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    ltr
+                    error={emailError}
+                  />
+                  <Input
+                    label={t('auth.password')}
+                    value={signUpPassword}
+                    onChangeText={setSignUpPassword}
+                    placeholder="••••••••"
+                    secureTextEntry
+                    ltr
+                  />
+                  <Muted>{t('auth.signUpHint')}</Muted>
+                  <Button
+                    label={t('auth.createFollower')}
+                    onPress={handleSignUp}
+                    loading={busy}
+                    size="md"
+                  />
+                </View>
+              ) : (
+                <View style={styles.form}>
+                  <Input
+                    label={t('auth.email')}
+                    value={loginEmail}
+                    onChangeText={(v) => {
+                      setLoginEmail(v);
+                      setEmailError('');
+                    }}
+                    placeholder="email@example.com"
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    ltr
+                    error={emailError}
+                  />
+                  <Input
+                    label={t('auth.password')}
+                    value={loginPassword}
+                    onChangeText={setLoginPassword}
+                    placeholder="••••••••"
+                    secureTextEntry
+                    ltr
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setForgotPassword(true)}
+                    style={[
+                      styles.forgotWrap,
+                      { alignSelf: isRTL ? 'flex-end' : 'flex-start' },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.linkMuted, { color: theme.colors.accent }]}
+                    >
+                      {t('auth.forgotPassword')}
+                    </Text>
+                  </Pressable>
+                  <Button
+                    label={t('auth.login')}
+                    onPress={handleLogin}
+                    loading={busy}
+                    size="md"
+                  />
+                </View>
+              )}
+
+              {!forgotPassword ? (
+                <View style={styles.footer}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setIsSigningUp((v) => !v);
+                      setEmailError('');
+                    }}
+                  >
+                    <Text style={[styles.link, { color: theme.colors.accent }]}>
+                      {isSigningUp ? t('auth.haveAccount') : t('auth.newAccount')}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('auth.adminLogin')}
+                    onPress={() => router.push('/admin' as any)}
+                  >
+                    <Text
+                      style={[styles.linkMuted, { color: theme.colors.textMuted }]}
+                    >
+                      {t('auth.adminLogin')}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -247,6 +479,59 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 48,
   },
+  scrollDesktop: {
+    paddingVertical: 28,
+    paddingHorizontal: 28,
+  },
+  desktopStage: {
+    width: '100%',
+    maxWidth: 1080,
+    minHeight: 620,
+    flexDirection: 'row',
+    borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  desktopHero: {
+    flex: 1.05,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 36,
+    gap: 10,
+  },
+  desktopHeroLogo: {
+    width: 168,
+    height: 168,
+    borderRadius: 28,
+    marginBottom: 8,
+  },
+  desktopHeroTitle: {
+    ...cairoText('extraBold'),
+    fontSize: 34,
+    letterSpacing: 0.6,
+    textAlign: 'center',
+  },
+  desktopHeroTag: {
+    ...cairoText('regular'),
+    fontSize: 14,
+    textAlign: 'center',
+    maxWidth: 320,
+    lineHeight: 22,
+  },
+  desktopFormCol: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 36,
+    paddingHorizontal: 28,
+  },
+  desktopPanel: {
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 8,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
   panel: {
     width: '100%',
     maxWidth: '100%',
@@ -254,38 +539,43 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 22,
     paddingTop: 28,
-    paddingBottom: 20,
+    paddingBottom: 24,
+    gap: 16,
   },
-  brand: { alignItems: 'center', marginBottom: 22 },
-  logo: { width: 120, height: 120, marginBottom: 10, borderRadius: 16 },
+  brand: { alignItems: 'center', marginBottom: 8, gap: 4 },
+  logo: { width: 132, height: 132, marginBottom: 10, borderRadius: 20 },
   brandEn: {
+    ...cairoText('extraBold'),
     fontSize: 22,
-    fontWeight: '800',
     letterSpacing: 0.5,
     textAlign: 'center',
   },
-  tagline: { fontSize: 12, marginTop: 8, textAlign: 'center' },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+  tagline: {
+    ...cairoText('regular'),
+    fontSize: 12,
+    marginTop: 4,
     textAlign: 'center',
-    marginBottom: 16,
+  },
+  sectionTitle: {
+    ...cairoText('bold'),
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 4,
   },
   form: { gap: 12 },
+  forgotWrap: { marginTop: -4 },
   fieldLabel: {
+    ...cairoText('semiBold'),
     fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'left',
-    writingDirection: 'ltr',
   },
   roles: { flexDirection: 'row', gap: 8 },
   footer: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 18,
+    gap: 12,
+    marginTop: 8,
   },
-  link: { fontSize: 13, fontWeight: '700' },
-  linkMuted: { fontSize: 13, fontWeight: '600' },
+  link: { ...cairoText('bold'), fontSize: 13 },
+  linkMuted: { ...cairoText('semiBold'), fontSize: 13 },
 });

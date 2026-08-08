@@ -10,6 +10,7 @@ import React, {
 import { useRouter } from 'expo-router';
 import { createId } from '@/utils/id';
 import { useToast } from '@/providers/ToastProvider';
+import { useNotifications } from '@/providers/NotificationsProvider';
 import { getJson, removeJson, setJson } from '@/services/storage';
 import {
   loadCompetitionRequests,
@@ -21,6 +22,52 @@ import {
   subscribeCompetitions,
 } from '@/services/competition-sync';
 import { isValidEmail, normalizeEmail, allocateUniqueHandle, ensureAccountIdentity, nextRegistrationId, formatArabicDate } from '@/utils';
+import {
+  ensurePasswordHashed,
+  hashPassword,
+  verifyPassword,
+} from '@/utils/password';
+import { isSupabaseConfigured } from '@/services/supabase';
+import {
+  fetchAllProfiles,
+  mergeUsersPreferCloud,
+  restoreSupabaseSession,
+  supabaseSignIn,
+  supabaseSignOut,
+  supabaseSignUp,
+  updateProfileRolesCloud,
+  updateProfileAdminCloud,
+} from '@/services/supabase-auth';
+import {
+  deleteCompetitionRequestCloud,
+  fetchCompetitionRequestsCloud,
+  mergeCompetitionRequestsById,
+  reconcileCompetitionRequestsWithCloud,
+  subscribeCompetitionRequestsCloud,
+  upsertCompetitionRequestCloud,
+  updateCompetitionRequestCloud,
+} from '@/services/supabase-competition-requests';
+import {
+  deleteCompetitionCloud,
+  fetchCompetitionsCloud,
+  mergeCloudCompetitions,
+  reconcileCompetitionsWithCloud,
+  subscribeCompetitionsCloud,
+  upsertCompetitionCloud,
+} from '@/services/supabase-competitions';
+import {
+  fetchShareCardsForUser,
+  insertShareCard,
+  updateShareCardRemote,
+} from '@/services/supabase-share';
+import {
+  fetchMessagesForUser,
+  insertMessage,
+  isUuid,
+  markMessageReadRemote,
+  mergeMessagesById,
+  subscribeMessagesForUser,
+} from '@/services/supabase-messages';
 import { generateAnalystAccessCode } from '@/utils/analyst';
 import {
   initialComments,
@@ -46,6 +93,9 @@ import {
   type Supporter,
   type SupportLevel,
   type User,
+  type ShareCard,
+  type ShareCardKind,
+  type ShareCardStatus,
 } from '@/data/initial-data';
 import { i18n, t } from '@/i18n';
 import { localizeContentTree } from '@/i18n/localize-content';
@@ -57,6 +107,10 @@ import {
   userHasRole,
   type SecondaryRole,
 } from '@/utils/roles';
+import {
+  ensureSocialLists,
+  seedSocialRelations,
+} from '@/utils/social-stats';
 import {
   MIN_COMPETITION_TEAMS,
   buildCompetitionVenueAddress,
@@ -75,6 +129,7 @@ export type {
   Offer,
   Player,
   Referee,
+  ShareCard,
   Supporter,
   SupportLevel,
   Team,
@@ -82,10 +137,73 @@ export type {
 } from '@/data/initial-data';
 
 import { DEFAULT_LOGO, APP_DISPLAY_NAME } from '@/theme/brand';
+import { certificateImageUri } from '@/theme/certificates';
 
 const USER_STORAGE_KEY = 'tajjd.secure.currentUser';
-const APP_LOGO_KEY = 'seellie.appLogo';
+const USER_CREDENTIAL_OVERRIDES_KEY = 'seellie.userCredentialOverrides.v1';
+const REFEREES_STORAGE_KEY = 'seellie.referees';
+const SHARE_CARDS_STORAGE_KEY = 'seellie.shareCards';
+const MESSAGES_STORAGE_KEY = 'seellie.messages';
+/** الحساب التجريبي المحلي فقط — أي إيميل آخر للمشرف يجب أن يكون سحابياً */
+const LOCAL_DEMO_ADMIN_EMAIL = 'super.admin@test.com';
+
+type UserCredentialOverride = {
+  email?: string;
+  passwordHash?: string;
+  name?: string;
+};
+
+function applyCredentialOverrides(
+  list: User[],
+  overrides: Record<string, UserCredentialOverride> | null | undefined
+): User[] {
+  if (!overrides || !Object.keys(overrides).length) return list;
+  return list.map((u) => {
+    const patch = overrides[u.id];
+    if (!patch) return u;
+    return {
+      ...u,
+      ...(patch.email ? { email: normalizeEmail(patch.email) } : null),
+      ...(patch.passwordHash
+        ? { passwordHash: ensurePasswordHashed(patch.passwordHash) }
+        : null),
+      ...(patch.name ? { name: patch.name } : null),
+    };
+  });
+}
+
+function mergeRefereesById(base: Referee[], stored: Referee[]): Referee[] {
+  const map = new Map<string, Referee>();
+  for (const ref of base) map.set(ref.id, ref);
+  for (const ref of stored) map.set(ref.id, { ...map.get(ref.id), ...ref });
+  return Array.from(map.values());
+}
+
+async function saveReferees(items: Referee[]) {
+  await setJson(REFEREES_STORAGE_KEY, items);
+}
+const APP_LOGO_KEY = 'seellie.appLogo.v3';
 const APP_NAME_KEY = 'seellie.appName';
+const SUPPORT_LEVELS_KEY = 'seellie.supportLevels.v1';
+
+function normalizeSupportLevels(levels: SupportLevel[]): SupportLevel[] {
+  return levels
+    .filter((l) => (l.name as string) !== 'محلل')
+    .map((level, index) => {
+      const bundled = certificateImageUri(level.name);
+      return {
+        id: level.id || `level-${index + 1}-${level.name}`,
+        name: String(level.name || '').trim() || `مستوى ${index + 1}`,
+        price: Number(level.price) || 0,
+        description: String(level.description || ''),
+        imageUrl: level.imageUrl || bundled || '',
+      };
+    });
+}
+
+async function saveSupportLevels(levels: SupportLevel[]) {
+  await setJson(SUPPORT_LEVELS_KEY, levels);
+}
 
 export interface TournamentContextType {
   loading: boolean;
@@ -101,6 +219,7 @@ export interface TournamentContextType {
   messages: Message[];
   referees: Referee[];
   offers: Offer[];
+  shareCards: ShareCard[];
   supporters: Supporter[];
   supportLevels: SupportLevel[];
   giftTransactions: GiftTransaction[];
@@ -109,26 +228,45 @@ export interface TournamentContextType {
     email: string,
     password: string,
     options?: { portal?: 'app' | 'admin' }
-  ) => boolean;
-  logout: () => void;
+  ) => Promise<boolean>;
+  /** to: 'admin' يخرج من المتابع/المنظم ويفتح بوابة المشرف */
+  logout: (options?: { to?: 'login' | 'admin' }) => void;
   signUp: (
     userData: Pick<User, 'name' | 'email'>,
     password: string
-  ) => boolean;
+  ) => Promise<boolean>;
   /** تفعيل مسار ثانٍ واحد: منظم أو لاعب حر (مع المتابع) */
   enableSecondaryRole: (
     role: SecondaryRole,
     termsAccepted: boolean
-  ) => boolean;
+  ) => Promise<boolean>;
   /** التبديل بين المتابع والمسار الثانوي */
   switchActiveRole: (role: UserRole) => boolean;
   setAppName: (name: string) => void;
   setAppLogo: (logo: string) => void;
   updateUser: (user: User, successMessage?: string) => void;
+  /** مزامنة كل حسابات profiles من Supabase إلى قائمة إدارة المستخدمين */
+  syncCloudUsers: () => Promise<number>;
+  /** جلب طلبات تنظيم المسابقات من السحابة */
+  refreshCloudCompetitionRequests: () => Promise<number>;
   /** تثبيت/إلغاء تثبيت بطولة في الرئيسية الشخصية */
   togglePinnedCompetition: (competitionId: string) => void;
   deleteUser: (userId: string, successMessage?: string) => void;
-  addReferee: (data: Omit<Referee, 'id'>, successMessage?: string) => void;
+  addReferee: (
+    data: Omit<Referee, 'id'>,
+    successMessage?: string
+  ) => string | null;
+  /** تسجيل حكم جديد وربطه مباشرة بمسابقة المنظم */
+  registerRefereeForCompetition: (
+    competitionId: string,
+    data: {
+      name: string;
+      role: Referee['role'];
+      mobile?: string;
+      city?: string;
+    },
+    successMessage?: string
+  ) => boolean;
   updateReferee: (referee: Referee, successMessage?: string) => void;
   deleteReferee: (refereeId: string, successMessage?: string) => void;
   markMessageAsRead: (messageId: string) => void;
@@ -154,7 +292,7 @@ export interface TournamentContextType {
   updateSupportLevels: (levels: SupportLevel[]) => void;
   /** شراء شهادة دعم وتوجيهها للاعب أو منظم */
   purchaseSupportGift: (payload: {
-    certificateType: SupportLevel['name'];
+    certificateType: string;
     recipientId: string;
     recipientName: string;
     recipientType: GiftTransaction['recipientType'];
@@ -169,6 +307,12 @@ export interface TournamentContextType {
     status: Competition['status'],
     options?: { reason?: string; successMessage?: string }
   ) => void;
+  /** إيقاف أو تفعيل جدول المباريات مع سبب عند الإيقاف */
+  setCompetitionFixturesSuspended: (
+    competitionId: string,
+    suspended: boolean,
+    options?: { reason?: string; successMessage?: string }
+  ) => boolean;
   updatePlayerStatus: (
     competitionId: string,
     teamId: string,
@@ -190,9 +334,9 @@ export interface TournamentContextType {
     minTeamsPledge: boolean;
     firstAidPledge: boolean;
     orderPledge: boolean;
-  }) => boolean;
-  approveCompetitionRequest: (requestId: string) => boolean;
-  rejectCompetitionRequest: (requestId: string, reason?: string) => boolean;
+  }) => Promise<boolean>;
+  approveCompetitionRequest: (requestId: string) => Promise<boolean>;
+  rejectCompetitionRequest: (requestId: string, reason?: string) => Promise<boolean>;
   updateMatchResult: (
     competitionId: string,
     matchId: string,
@@ -219,7 +363,30 @@ export interface TournamentContextType {
     recipientId: string;
     subject: string;
     body: string;
-  }) => boolean;
+  }) => Promise<boolean>;
+  mergeRemoteMessages: (remote: Message[]) => void;
+  refreshCloudMessages: () => Promise<void>;
+  sendShareCard: (input: {
+    kind: ShareCardKind;
+    recipientId: string;
+    recipientName: string;
+    recipientKind?: 'user' | 'referee';
+    title?: string;
+    body?: string;
+    mediaUrl?: string;
+    mediaKind?: 'photo' | 'video' | 'text' | 'link';
+    competitionId?: string;
+    competitionName?: string;
+    teamId?: string;
+    teamName?: string;
+    position?: string;
+  }) => Promise<boolean>;
+
+  updateShareCardStatus: (
+    cardId: string,
+    status: ShareCardStatus
+  ) => boolean;
+  markShareCardRead: (cardId: string) => void;
   addTeam: (
     competitionId: string,
     teamData: { name: string; logo?: string },
@@ -233,7 +400,12 @@ export interface TournamentContextType {
   deleteCompetition: (
     competitionId: string,
     successMessage?: string
-  ) => boolean;
+  ) => Promise<boolean>;
+  /** حذف طلب تنظيم مسابقة (المنظم لطلباته / المشرف لأي طلب) */
+  deleteCompetitionRequest: (
+    requestId: string,
+    successMessage?: string
+  ) => Promise<boolean>;
   renameTeam: (
     competitionId: string,
     teamId: string,
@@ -310,7 +482,15 @@ export interface TournamentContextType {
     mediaId: string,
     successMessage?: string
   ) => boolean;
+  addCompetitionMedia: (
+    competitionId: string,
+    type: 'photos' | 'videos',
+    url: string,
+    successMessage?: string
+  ) => boolean;
   setUserAvatar: (url: string, successMessage?: string) => boolean;
+  /** متابعة / إلغاء متابعة حساب آخر */
+  toggleFollowUser: (targetUserId: string) => boolean;
   routeForRole: (role: UserRole) => string;
 }
 
@@ -333,7 +513,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
   );
   const [users, setUsers] = useState<User[]>(() =>
-    withLocalizedSeed(initialUsers).map((u) => normalizeUserRoles(u))
+    seedSocialRelations(
+      withLocalizedSeed(initialUsers).map((u) =>
+        ensureSocialLists(
+          normalizeUserRoles({
+            ...u,
+            passwordHash: ensurePasswordHashed(u.passwordHash),
+          })
+        )
+      )
+    )
   );
   const [competitions, setCompetitions] = useState<Competition[]>(() =>
     withLocalizedSeed(initialCompetitions)
@@ -356,11 +545,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const [offers, setOffers] = useState<Offer[]>(() =>
     withLocalizedSeed(initialOffers)
   );
+  const [shareCards, setShareCards] = useState<ShareCard[]>([]);
   const [supporters] = useState<Supporter[]>(() =>
     withLocalizedSeed(initialSupporters)
   );
   const [supportLevels, setSupportLevels] = useState<SupportLevel[]>(() =>
-    withLocalizedSeed(initialSupportLevels)
+    normalizeSupportLevels(withLocalizedSeed(initialSupportLevels))
   );
   const [giftTransactions, setGiftTransactions] = useState<GiftTransaction[]>(
     () => withLocalizedSeed(initialGiftTransactions)
@@ -368,6 +558,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const router = useRouter();
   const { toast } = useToast();
+  const { addNotification } = useNotifications();
 
   useEffect(() => {
     let active = true;
@@ -379,27 +570,55 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           storedName,
           storedRequests,
           storedCompetitions,
+          storedReferees,
+          storedSupportLevels,
+          storedShareCards,
+          storedMessages,
+          storedCredentialOverrides,
         ] = await Promise.all([
           getJson<User>(USER_STORAGE_KEY),
           getJson<string>(APP_LOGO_KEY),
           getJson<string>(APP_NAME_KEY),
           loadCompetitionRequests(),
           loadStoredCompetitions(),
+          getJson<Referee[]>(REFEREES_STORAGE_KEY),
+          getJson<SupportLevel[]>(SUPPORT_LEVELS_KEY),
+          getJson<ShareCard[]>(SHARE_CARDS_STORAGE_KEY),
+          getJson<Message[]>(MESSAGES_STORAGE_KEY),
+          getJson<Record<string, UserCredentialOverride>>(
+            USER_CREDENTIAL_OVERRIDES_KEY
+          ),
         ]);
         if (!active) return;
+        if (storedCredentialOverrides) {
+          setUsers((prev) =>
+            applyCredentialOverrides(prev, storedCredentialOverrides)
+          );
+        }
+        if (Array.isArray(storedMessages) && storedMessages.length) {
+          setMessages(
+            storedMessages.map((m) => ({
+              ...m,
+              timestamp: new Date(m.timestamp),
+            }))
+          );
+        }
         if (stored && stored.email && stored.role) {
           try {
-            const match = initialUsers.find(
-              (u) => normalizeEmail(u.email) === normalizeEmail(stored.email)
-            );
+            const match =
+              initialUsers.find(
+                (u) => normalizeEmail(u.email) === normalizeEmail(stored.email)
+              ) || initialUsers.find((u) => u.id === stored.id);
             const base = match
               ? {
                   ...match,
                   ...stored,
-                  // هوية الحساب من البذرة دائماً
+                  // ثبّت المعرف والدور من البذرة، واسمح بتعديل الإيميل/كلمة المرور المحفوظة
                   id: match.id,
-                  email: match.email,
-                  passwordHash: match.passwordHash,
+                  email: stored.email || match.email,
+                  passwordHash: ensurePasswordHashed(
+                    stored.passwordHash || match.passwordHash
+                  ),
                   handle: match.handle || stored.handle,
                   visibleId: match.visibleId || stored.visibleId,
                   role: match.role,
@@ -419,10 +638,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
                     stored.activeRole ?? match.activeRole ?? match.role,
                   avatar: stored.avatar || match.avatar,
                   permissions: stored.permissions || match.permissions,
+                  followers: stored.followers?.length
+                    ? stored.followers
+                    : match.followers,
+                  following: stored.following?.length
+                    ? stored.following
+                    : match.following,
                 }
               : stored;
-            const mergedRaw = normalizeUserRoles(
-              ensureAccountIdentity(base, initialUsers)
+            const mergedRaw = ensureSocialLists(
+              normalizeUserRoles(ensureAccountIdentity(base, initialUsers))
             );
             const merged =
               i18n.locale === 'en'
@@ -454,6 +679,87 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             mergeCompetitionsById(prev, storedCompetitions)
           );
         }
+        if (storedReferees && storedReferees.length > 0) {
+          setReferees((prev) => mergeRefereesById(prev, storedReferees));
+        }
+        if (storedSupportLevels && storedSupportLevels.length > 0) {
+          setSupportLevels(normalizeSupportLevels(storedSupportLevels));
+        }
+        if (storedShareCards && storedShareCards.length > 0) {
+          setShareCards(
+            storedShareCards.map((c) => ({
+              ...c,
+              timestamp: new Date(c.timestamp),
+            }))
+          );
+        }
+
+        // استعادة جلسة Supabase إن وُجدت (لها أولوية على الجلسة المحلية التجريبية)
+        if (isSupabaseConfigured()) {
+          const remoteUser = await restoreSupabaseSession();
+          if (remoteUser) {
+            const normalizedUser = ensureSocialLists(
+              normalizeUserRoles(remoteUser)
+            );
+            setCurrentUser(normalizedUser);
+            setUsers((prev) => {
+              if (prev.some((u) => u.id === normalizedUser.id)) {
+                return prev.map((u) =>
+                  u.id === normalizedUser.id
+                    ? { ...u, ...normalizedUser }
+                    : u
+                );
+              }
+              return [...prev, normalizedUser];
+            });
+            void setJson(USER_STORAGE_KEY, normalizedUser);
+            const [
+              cards,
+              remoteMessagesResult,
+              cloudProfiles,
+              cloudRequests,
+              cloudCompetitions,
+            ] = await Promise.all([
+              fetchShareCardsForUser(normalizedUser.id),
+              fetchMessagesForUser(normalizedUser.id),
+              fetchAllProfiles(),
+              fetchCompetitionRequestsCloud(),
+              fetchCompetitionsCloud(),
+            ]);
+            if (cloudProfiles.length) {
+              setUsers((prev) =>
+                mergeUsersPreferCloud(prev, cloudProfiles)
+              );
+            }
+            setCompetitionRequests((prev) => {
+              const merged = reconcileCompetitionRequestsWithCloud(
+                prev,
+                cloudRequests.items
+              );
+              void saveCompetitionRequests(merged);
+              return merged;
+            });
+            setCompetitions((prev) => {
+              const merged = reconcileCompetitionsWithCloud(
+                prev,
+                cloudCompetitions.items
+              );
+              void saveCompetitions(merged, { fromCloud: true });
+              return merged;
+            });
+            if (cards.length) {
+              setShareCards((prev) => {
+                const ids = new Set(cards.map((c) => c.id));
+                return [...cards, ...prev.filter((c) => !ids.has(c.id))];
+              });
+            }
+            if (remoteMessagesResult.messages.length) {
+              setMessages((prev) =>
+                mergeMessagesById(remoteMessagesResult.messages, prev)
+              );
+            }
+          }
+        }
       } catch (error) {
         console.warn('bootstrap failed', error);
       } finally {
@@ -466,16 +772,79 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const unsubRequests = subscribeCompetitionRequests((items) => {
-      setCompetitionRequests(items);
+    if (loading) return;
+    void setJson(SHARE_CARDS_STORAGE_KEY, shareCards);
+  }, [shareCards, loading]);
+
+  useEffect(() => {
+    if (loading) return;
+    void setJson(MESSAGES_STORAGE_KEY, messages);
+  }, [messages, loading]);
+
+  useEffect(() => {
+    const unsubRequests = isSupabaseConfigured()
+      ? null
+      : subscribeCompetitionRequests((items) => {
+          setCompetitionRequests((prev) =>
+            mergeCompetitionRequestsById(prev, items)
+          );
+        });
+    const unsubCloudRequests = subscribeCompetitionRequestsCloud((items) => {
+      setCompetitionRequests((prev) => {
+        const merged = reconcileCompetitionRequestsWithCloud(prev, items);
+        void saveCompetitionRequests(merged);
+        return merged;
+      });
     });
-    const unsubCompetitions = subscribeCompetitions((items) => {
-      setCompetitions((prev) => mergeCompetitionsById(prev, items));
+    const unsubCompetitions = isSupabaseConfigured()
+      ? null
+      : subscribeCompetitions((items) => {
+          setCompetitions((prev) => mergeCompetitionsById(prev, items));
+        });
+    const unsubCloudCompetitions = subscribeCompetitionsCloud((items) => {
+      setCompetitions((prev) => {
+        const merged = reconcileCompetitionsWithCloud(prev, items);
+        void saveCompetitions(merged, { fromCloud: true });
+        return merged;
+      });
     });
     return () => {
       unsubRequests?.();
+      unsubCloudRequests?.();
       unsubCompetitions?.();
+      unsubCloudCompetitions?.();
     };
+  }, []);
+
+  const syncCloudUsers = useCallback(async () => {
+    if (!isSupabaseConfigured()) return 0;
+    const cloudProfiles = await fetchAllProfiles();
+    if (!cloudProfiles.length) return 0;
+    setUsers((prev) => mergeUsersPreferCloud(prev, cloudProfiles));
+    return cloudProfiles.length;
+  }, []);
+
+  const refreshCloudCompetitionRequests = useCallback(async () => {
+    if (!isSupabaseConfigured()) return 0;
+    const [cloud, comps] = await Promise.all([
+      fetchCompetitionRequestsCloud(),
+      fetchCompetitionsCloud(),
+    ]);
+    if (cloud.error === 'no_session') return 0;
+    if (!cloud.items.length && cloud.error) {
+      console.warn('[competition-requests]', cloud.error);
+    }
+    setCompetitionRequests((prev) => {
+      const merged = reconcileCompetitionRequestsWithCloud(prev, cloud.items);
+      void saveCompetitionRequests(merged);
+      return merged;
+    });
+    setCompetitions((prev) => {
+      const merged = reconcileCompetitionsWithCloud(prev, comps.items);
+      void saveCompetitions(merged, { fromCloud: true });
+      return merged;
+    });
+    return cloud.items.length;
   }, []);
 
   const routeForRole = useCallback((role: UserRole) => {
@@ -508,7 +877,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(
-    (email: string, password: string, options?: { portal?: 'app' | 'admin' }) => {
+    async (
+      email: string,
+      password: string,
+      options?: { portal?: 'app' | 'admin' }
+    ) => {
       const portal = options?.portal ?? 'app';
       const normalized = normalizeEmail(email);
       if (!isValidEmail(normalized) || !password.trim()) {
@@ -520,9 +893,177 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
+      // 1) Supabase Auth عند التهيئة (التطبيق وبوابة المشرف)
+      let supabaseAuthError: string | undefined;
+      if (isSupabaseConfigured()) {
+        const remote = await supabaseSignIn(normalized, password);
+        if (remote.user) {
+          if (
+            remote.user.status === 'suspended' ||
+            remote.user.status === 'blocked'
+          ) {
+            toast({
+              variant: 'destructive',
+              title: t('toasts.t001_1a486b'),
+              description: t('toasts.t074_7ca6a2'),
+            });
+            await supabaseSignOut();
+            return false;
+          }
+          const normalizedUser = ensureSocialLists(
+            normalizeUserRoles(remote.user)
+          );
+          const isAdmin = normalizedUser.role === 'superadmin';
+
+          if (portal === 'admin' && !isAdmin) {
+            await supabaseSignOut();
+            toast({
+              variant: 'destructive',
+              title: t('auth.adminPortalOnlyTitle'),
+              description: `الحساب سحابي لكن دوره «${normalizedUser.role}» وليس مشرفاً. في SQL Editor نفّذ:\nupdate public.profiles set role='superadmin', roles=array['superadmin']::text[], active_role='superadmin' where lower(email)=lower('${normalized}');`,
+            });
+            return false;
+          }
+
+          if (portal === 'app' && isAdmin) {
+            await supabaseSignOut();
+            toast({
+              variant: 'destructive',
+              title: t('auth.useAdminLoginTitle'),
+              description: t('auth.useAdminLoginDesc'),
+            });
+            return false;
+          }
+
+          setCurrentUser(normalizedUser);
+          setUsers((prev) => {
+            if (prev.some((u) => u.id === normalizedUser.id)) {
+              return prev.map((u) =>
+                u.id === normalizedUser.id ? { ...u, ...normalizedUser } : u
+              );
+            }
+            return [...prev, normalizedUser];
+          });
+          void setJson(USER_STORAGE_KEY, normalizedUser);
+          const [
+            cards,
+            remoteMessagesResult,
+            cloudProfiles,
+            cloudRequests,
+            cloudCompetitions,
+          ] = await Promise.all([
+            fetchShareCardsForUser(normalizedUser.id),
+            fetchMessagesForUser(normalizedUser.id),
+            fetchAllProfiles(),
+            fetchCompetitionRequestsCloud(),
+            fetchCompetitionsCloud(),
+          ]);
+          if (cloudProfiles.length) {
+            setUsers((prev) =>
+              mergeUsersPreferCloud(prev, cloudProfiles)
+            );
+          }
+          setCompetitionRequests((prev) => {
+            const merged = reconcileCompetitionRequestsWithCloud(
+              prev,
+              cloudRequests.items
+            );
+            void saveCompetitionRequests(merged);
+            return merged;
+          });
+          setCompetitions((prev) => {
+            const merged = reconcileCompetitionsWithCloud(
+              prev,
+              cloudCompetitions.items
+            );
+            void saveCompetitions(merged, { fromCloud: true });
+            return merged;
+          });
+          if (cards.length) {
+            setShareCards((prev) => {
+              const ids = new Set(cards.map((c) => c.id));
+              return [...cards, ...prev.filter((c) => !ids.has(c.id))];
+            });
+          }
+          if (remoteMessagesResult.messages.length) {
+            setMessages((prev) =>
+              mergeMessagesById(remoteMessagesResult.messages, prev)
+            );
+          }
+          toast({
+            variant: 'success',
+            title: t('toasts.t002_202a45'),
+            description: isAdmin
+              ? `مشرف سحابي ✓ ${normalizedUser.email}`
+              : t('toasts.welcomeBack', {
+                  name: normalizedUser.name,
+                }),
+          });
+          router.replace(
+            routeForRole(
+              normalizedUser.activeRole || normalizedUser.role
+            ) as any
+          );
+          return true;
+        }
+        supabaseAuthError = remote.error;
+        if (/confirm|confirmation|verify/i.test(remote.error || '')) {
+          toast({
+            variant: 'destructive',
+            title: t('toasts.t003_7a384c'),
+            description:
+              'البريد غير مؤكد. عطّل Confirm email في Supabase أثناء الاختبار.',
+          });
+          return false;
+        }
+
+        // بوابة المشرف: لا تسقط للحساب المحلي إلا لإيميل التجربة فقط
+        // (سابقاً كان تعديل إيميل المشرف المحلي يوهم أنه حساب حقيقي)
+        if (
+          portal === 'admin' &&
+          normalized !== LOCAL_DEMO_ADMIN_EMAIL
+        ) {
+          const err = (supabaseAuthError || '').toLowerCase();
+          let hint =
+            'تأكد من إيميل/كلمة مرور Sign up في Authentication → Users.';
+          if (/invalid login|invalid credentials|wrong/i.test(err)) {
+            hint =
+              'كلمة المرور غير صحيحة. من Supabase: Authentication → Users → alrjaa.ns@gmail.com → Reset password (أو Send password recovery).';
+          } else if (/confirm|confirmation|verify/i.test(err)) {
+            hint =
+              'البريد غير مؤكد. عطّل Confirm email أو أكّد المستخدم من Authentication → Users.';
+          } else if (/network|fetch|failed to fetch/i.test(err)) {
+            hint = 'مشكلة شبكة/اتصال بـ Supabase. تأكد أن الجوال على الإنترنت.';
+          }
+          toast({
+            variant: 'destructive',
+            title: 'تعذّر الدخول السحابي',
+            description: `${hint}${
+              supabaseAuthError ? `\n(${supabaseAuthError})` : ''
+            }`,
+          });
+          return false;
+        }
+      }
+
+      // 2) حسابات تجريبية محلية (fallback)
+      // للمشرف: مسموح فقط لـ super.admin@test.com
+      if (
+        portal === 'admin' &&
+        normalized !== LOCAL_DEMO_ADMIN_EMAIL
+      ) {
+        toast({
+          variant: 'destructive',
+          title: 'حساب محلي غير مسموح',
+          description:
+            'للإرسال بين الجوالات ادخل بإيميل Sign up السحابي بعد ترقيته مشرفاً.',
+        });
+        return false;
+      }
+
       const user = users.find((u) => normalizeEmail(u.email) === normalized);
-      if (user && user.passwordHash === password) {
-        if (user.status === 'suspended') {
+      if (user && verifyPassword(password, user.passwordHash)) {
+        if (user.status === 'suspended' || user.status === 'blocked') {
           toast({
             variant: 'destructive',
             title: t('toasts.t001_1a486b'),
@@ -530,7 +1071,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           });
           return false;
         }
-        const normalizedUser = normalizeUserRoles(user);
+        const withHashed = {
+          ...user,
+          passwordHash: ensurePasswordHashed(user.passwordHash),
+        };
+        const normalizedUser = ensureSocialLists(normalizeUserRoles(withHashed));
         const isAdmin = normalizedUser.role === 'superadmin';
 
         if (portal === 'admin' && !isAdmin) {
@@ -552,6 +1097,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         }
 
         setCurrentUser(normalizedUser);
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === normalizedUser.id
+              ? { ...u, passwordHash: normalizedUser.passwordHash }
+              : u
+          )
+        );
         void setJson(USER_STORAGE_KEY, normalizedUser);
         toast({
           variant: 'success',
@@ -567,7 +1119,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       toast({
         variant: 'destructive',
         title: t('toasts.t003_7a384c'),
-        description: t('toasts.t075_ac9b07'),
+        description:
+          supabaseAuthError &&
+          /sending confirmation email|email/i.test(supabaseAuthError)
+            ? 'تعذّر تأكيد البريد من Supabase. عطّل Confirm email أو استخدم حساباً تجريبياً محلياً.'
+            : supabaseAuthError &&
+                !/invalid login credentials/i.test(supabaseAuthError)
+              ? supabaseAuthError
+              : t('toasts.t075_ac9b07'),
       });
       return false;
     },
@@ -575,13 +1134,53 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const signUp = useCallback(
-    (userData: Pick<User, 'name' | 'email'>, password: string) => {
+    async (userData: Pick<User, 'name' | 'email'>, password: string) => {
       const email = normalizeEmail(userData.email);
       if (!userData.name.trim() || !isValidEmail(email) || password.length < 6) {
         toast({
           variant: 'destructive',
           title: t('toasts.t004_8fdbe1'),
           description: t('toasts.t076_91bef0'),
+        });
+        return false;
+      }
+
+      if (isSupabaseConfigured()) {
+        const remote = await supabaseSignUp({
+          name: userData.name.trim(),
+          email,
+          password,
+        });
+        if (remote.user) {
+          const newUser = ensureSocialLists(normalizeUserRoles(remote.user));
+          setUsers((prev) =>
+            prev.some((u) => u.id === newUser.id)
+              ? prev.map((u) => (u.id === newUser.id ? newUser : u))
+              : [...prev, newUser]
+          );
+          setCurrentUser(newUser);
+          void setJson(USER_STORAGE_KEY, newUser);
+          toast({
+            variant: 'success',
+            title: t('toasts.t006_e4142f'),
+            description: t('toasts.t078_462ce2'),
+          });
+          router.replace(routeForRole('follower') as any);
+          return true;
+        }
+        const rateLimited = /rate limit|too many/i.test(remote.error || '');
+        const alreadyExists = /already|exists|registered/i.test(
+          remote.error || ''
+        );
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t004_8fdbe1'),
+          description: rateLimited
+            ? 'تم تجاوز حد إيميلات Supabase. انتظر بضع دقائق ثم أنشئ حساباً جديداً.'
+            : alreadyExists
+              ? 'هذا البريد مسجّل مسبقاً في السحابة. استخدم تسجيل الدخول.'
+              : remote.error ||
+                'تعذّر إنشاء الحساب في السحابة. تأكد أن Confirm email معطّل ثم أعد المحاولة.',
         });
         return false;
       }
@@ -602,7 +1201,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         roles: ['follower'],
         activeRole: 'follower',
         id: createId(),
-        passwordHash: password,
+        passwordHash: hashPassword(password),
         status: 'active',
         permissions: {
           canComment: true,
@@ -635,7 +1234,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       router.replace(routeForRole('follower') as any);
       return true;
     },
-    [users, toast, router, routeForRole]
+    [users, toast, router, routeForRole, t]
   );
 
   const switchActiveRole = useCallback(
@@ -679,7 +1278,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const enableSecondaryRole = useCallback(
-    (role: SecondaryRole, termsAccepted: boolean) => {
+    async (role: SecondaryRole, termsAccepted: boolean) => {
       if (!currentUser || currentUser.role === 'superadmin') {
         toast({
           variant: 'destructive',
@@ -720,6 +1319,35 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         activeRole: role,
         role,
       });
+      if (isSupabaseConfigured()) {
+        if (!isUuid(updated.id)) {
+          toast({
+            variant: 'destructive',
+            title: 'حساب محلي غير مدعوم',
+            description:
+              'فعّل مسار المنظم من حساب Sign up سحابي حتى تصل الطلبات للمشرف.',
+          });
+          return false;
+        }
+        const okCloud = await updateProfileRolesCloud({
+          id: updated.id,
+          email: updated.email,
+          name: updated.name,
+          handle: updated.handle,
+          visibleId: updated.visibleId,
+          role: updated.role,
+          roles: updated.roles || [updated.role],
+          activeRole: updated.activeRole || updated.role,
+        });
+        if (!okCloud) {
+          toast({
+            variant: 'destructive',
+            title: 'تعذّر حفظ الدور في السحابة',
+            description: 'تحقق من الاتصال وأعد المحاولة.',
+          });
+          return false;
+        }
+      }
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
       setCurrentUser(updated);
       void setJson(USER_STORAGE_KEY, updated);
@@ -743,13 +1371,25 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     [currentUser, toast, router, routeForRole, switchActiveRole]
   );
 
-  const logout = useCallback(() => {
-    const wasAdmin = currentUser?.role === 'superadmin';
-    setCurrentUser(null);
-    void removeJson(USER_STORAGE_KEY);
-    router.replace(wasAdmin ? '/admin' : '/(auth)/login');
-    toast({ title: t('toasts.t012_fbdcd1') });
-  }, [currentUser, router, toast, t]);
+  const logout = useCallback(
+    (options?: { to?: 'login' | 'admin' }) => {
+      const wasAdmin = currentUser?.role === 'superadmin';
+      const dest =
+        options?.to === 'admin'
+          ? '/admin'
+          : options?.to === 'login'
+            ? '/(auth)/login'
+            : wasAdmin
+              ? '/admin'
+              : '/(auth)/login';
+      setCurrentUser(null);
+      void removeJson(USER_STORAGE_KEY);
+      void supabaseSignOut();
+      router.replace(dest as any);
+      toast({ title: t('toasts.t012_fbdcd1') });
+    },
+    [currentUser, router, toast, t]
+  );
 
   const updateUser = useCallback(
     (updatedUser: User, successMessage?: string) => {
@@ -762,11 +1402,41 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         void setJson(USER_STORAGE_KEY, normalized);
         return normalized;
       });
+      // احتفظ بإيميل/كلمة مرور الحسابات التجريبية بعد إعادة التشغيل وتسجيل الخروج
+      void (async () => {
+        const prev =
+          (await getJson<Record<string, UserCredentialOverride>>(
+            USER_CREDENTIAL_OVERRIDES_KEY
+          )) || {};
+        const next = {
+          ...prev,
+          [normalized.id]: {
+            email: normalizeEmail(normalized.email),
+            passwordHash: ensurePasswordHashed(normalized.passwordHash),
+            name: normalized.name,
+          },
+        };
+        await setJson(USER_CREDENTIAL_OVERRIDES_KEY, next);
+      })();
+      // مزامنة الملف السحابي (حالة/أدوار) دون تعطيل الحسابات المحلية
+      if (isSupabaseConfigured() && isUuid(normalized.id)) {
+        void updateProfileAdminCloud({
+          id: normalized.id,
+          email: normalized.email,
+          name: normalized.name,
+          handle: normalized.handle,
+          visibleId: normalized.visibleId,
+          role: normalized.role,
+          roles: normalized.roles || [normalized.role],
+          activeRole: normalized.activeRole || normalized.role,
+          status: normalized.status || 'active',
+        });
+      }
       if (successMessage) {
         toast({ variant: 'success', title: t('toasts.t013_5a42a9'), description: successMessage });
       }
     },
-    [toast]
+    [toast, t]
   );
 
   const togglePinnedCompetition = useCallback(
@@ -788,52 +1458,333 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const deleteUser = useCallback(
     (userId: string, successMessage?: string) => {
       setUsers((prev) => prev.filter((u) => u.id !== userId));
+      if (isSupabaseConfigured() && isUuid(userId)) {
+        // حظر سحابي بدل حذف Auth (يتطلب service role) — يمنع الدخول عبر فحص status
+        void updateProfileAdminCloud({
+          id: userId,
+          status: 'blocked',
+        });
+      }
       if (successMessage) {
         toast({ title: t('toasts.t014_3569a8'), description: successMessage });
       }
     },
-    [toast]
+    [toast, t]
   );
 
   const addReferee = useCallback(
     (data: Omit<Referee, 'id'>, successMessage?: string) => {
       const referee: Referee = { ...data, id: createId() };
-      setReferees((prev) => [...prev, referee]);
+      setReferees((prev) => {
+        const next = [...prev, referee];
+        void saveReferees(next);
+        return next;
+      });
       if (successMessage) {
-        toast({ variant: 'success', title: t('toasts.t015_937bdd'), description: successMessage });
+        toast({
+          variant: 'success',
+          title: t('toasts.t015_937bdd'),
+          description: successMessage,
+        });
       }
+      return referee.id;
     },
-    [toast]
+    [toast, t]
+  );
+
+  const registerRefereeForCompetition = useCallback(
+    (
+      competitionId: string,
+      data: {
+        name: string;
+        role: Referee['role'];
+        mobile?: string;
+        city?: string;
+      },
+      successMessage?: string
+    ) => {
+      const name = data.name.trim();
+      if (!name) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t045_e1da8e'),
+          description: t('toasts.refereeFieldsRequired'),
+        });
+        return false;
+      }
+      let found = false;
+      const referee: Referee = {
+        id: createId(),
+        name,
+        role: data.role,
+        mobile: data.mobile?.trim() || undefined,
+        city: data.city?.trim() || undefined,
+        rating: 5,
+        status: 'active',
+      };
+      setReferees((prev) => {
+        const next = [...prev, referee];
+        void saveReferees(next);
+        return next;
+      });
+      setCompetitions((prev) => {
+        const next = prev.map((c) => {
+          if (c.id !== competitionId) return c;
+          found = true;
+          return {
+            ...c,
+            refereeIds: [...new Set([...c.refereeIds, referee.id])],
+          };
+        });
+        if (found) void saveCompetitions(next);
+        return next;
+      });
+      if (!found) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t045_e1da8e'),
+          description: t('toasts.refereeRegisterFailed'),
+        });
+        return false;
+      }
+      toast({
+        variant: 'success',
+        title: t('toasts.t015_937bdd'),
+        description:
+          successMessage ||
+          t('organizer.competitionManage.refereeRegistered', { name }),
+      });
+      return true;
+    },
+    [toast, t]
   );
 
   const updateReferee = useCallback(
     (referee: Referee, successMessage?: string) => {
-      setReferees((prev) =>
-        prev.map((r) => (r.id === referee.id ? referee : r))
-      );
+      setReferees((prev) => {
+        const next = prev.map((r) => (r.id === referee.id ? referee : r));
+        void saveReferees(next);
+        return next;
+      });
       if (successMessage) {
-        toast({ variant: 'success', title: t('toasts.t016_71326f'), description: successMessage });
+        toast({
+          variant: 'success',
+          title: t('toasts.t016_71326f'),
+          description: successMessage,
+        });
       }
     },
-    [toast]
+    [toast, t]
   );
 
   const deleteReferee = useCallback(
     (refereeId: string, successMessage?: string) => {
-      setReferees((prev) => prev.filter((r) => r.id !== refereeId));
+      setReferees((prev) => {
+        const next = prev.filter((r) => r.id !== refereeId);
+        void saveReferees(next);
+        return next;
+      });
       if (successMessage) {
         toast({ title: t('toasts.t014_3569a8'), description: successMessage });
       }
     },
-    [toast]
+    [toast, t]
   );
 
   const markMessageAsRead = useCallback((messageId: string) => {
     setMessages((prev) =>
       prev.map((m) => (m.id === messageId ? { ...m, read: true } : m))
     );
+    if (isUuid(messageId)) {
+      void markMessageReadRemote(messageId);
+    }
   }, []);
 
+  const mergeRemoteMessages = useCallback((remote: Message[]) => {
+    if (!remote.length) return;
+    setMessages((prev) => mergeMessagesById(remote, prev));
+  }, []);
+
+  const notifyIncomingMessages = useCallback(
+    (arrived: Message[], opts?: { toastOnArrive?: boolean }) => {
+      if (!currentUser || !arrived.length) return;
+      const mine = arrived.filter(
+        (m) => m.recipientId === currentUser.id && !m.read
+      );
+      if (!mine.length) return;
+      for (const msg of mine) {
+        const isOrganizerPath =
+          (currentUser.activeRole || currentUser.role) === 'organizer';
+        addNotification({
+          id: `msg-${msg.id}`,
+          kind: 'message',
+          recipientId: currentUser.id,
+          title: msg.subject.startsWith('[نظام]')
+            ? 'إشعار النظام'
+            : t('home.messages'),
+          body: `${msg.senderName}: ${msg.subject}`,
+          href: isOrganizerPath
+            ? '/(organizer)/messages'
+            : '/(follower)/messages',
+        });
+      }
+      if (opts?.toastOnArrive) {
+        if (mine.length === 1) {
+          toast({
+            variant: 'success',
+            title: 'رسالة جديدة',
+            description: `${mine[0].senderName}: ${mine[0].subject}`,
+          });
+        } else {
+          toast({
+            variant: 'success',
+            title: 'رسائل جديدة',
+            description: `لديك ${mine.length} رسائل غير مقروءة`,
+          });
+        }
+      }
+    },
+    [currentUser, addNotification, t, toast]
+  );
+
+  const refreshCloudMessages = useCallback(async () => {
+    if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
+      return;
+    }
+    const remote = await fetchMessagesForUser(currentUser.id);
+    if (remote.error === 'no_session') {
+      console.warn('[messages] refresh: no cloud session');
+      return;
+    }
+    let arrived: Message[] = [];
+    setMessages((prev) => {
+      const existingIds = new Set(prev.map((m) => m.id));
+      arrived = remote.messages.filter(
+        (m) =>
+          !existingIds.has(m.id) && m.recipientId === currentUser.id
+      );
+      if (!remote.messages.length) return prev;
+      return mergeMessagesById(remote.messages, prev);
+    });
+    if (arrived.length) {
+      notifyIncomingMessages(arrived, { toastOnArrive: true });
+    }
+  }, [currentUser, notifyIncomingMessages]);
+
+  // استقبال فوري للرسائل السحابية على جهاز المستلم + إشعار محلي
+  useEffect(() => {
+    if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
+      return;
+    }
+    const stop = subscribeMessagesForUser(currentUser.id, (msg) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return mergeMessagesById([msg], prev);
+      });
+      notifyIncomingMessages([msg], { toastOnArrive: true });
+    });
+    void refreshCloudMessages();
+    return () => {
+      stop?.();
+    };
+  }, [currentUser?.id, refreshCloudMessages, notifyIncomingMessages]);
+
+  const sendMessage = useCallback(
+    async (payload: {
+      recipientId: string;
+      subject: string;
+      body: string;
+    }) => {
+      if (!currentUser) return false;
+      if (!payload.subject.trim() || !payload.body.trim()) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t036_3a814a'),
+          description: t('toasts.t093_9edd72'),
+        });
+        return false;
+      }
+
+      const subject = payload.subject.trim();
+      const body = payload.body.trim();
+      const canCloud =
+        isSupabaseConfigured() &&
+        isUuid(currentUser.id) &&
+        isUuid(payload.recipientId);
+
+      if (canCloud) {
+        const remote = await insertMessage({
+          senderId: currentUser.id,
+          senderName: currentUser.name,
+          senderAvatar: currentUser.avatar,
+          recipientId: payload.recipientId,
+          subject,
+          body,
+        });
+        if (remote.message) {
+          setMessages((prev) => mergeMessagesById([remote.message!], prev));
+          // الإشعار يُنشأ على جهاز المستلم عند الاستلام (realtime/refresh)
+          toast({ variant: 'success', title: t('toasts.t037_fc3f2d') });
+          return true;
+        }
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t036_3a814a'),
+          description:
+            remote.error ||
+            'تعذّر إرسال الرسالة عبر السحابة. نفّذ supabase/messages.sql',
+        });
+        return false;
+      }
+
+      if (
+        isSupabaseConfigured() &&
+        isUuid(payload.recipientId) &&
+        !isUuid(currentUser.id)
+      ) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t036_3a814a'),
+          description:
+            'حسابك محلي وليس سحابياً. اخرج وسجّل عبر Sign up، وإن كنت مشرفاً رقِّه بـ promote-admin.sql ثم ادخل من /admin.',
+        });
+        return false;
+      }
+
+      if (!isUuid(currentUser.id) || !isUuid(payload.recipientId)) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t036_3a814a'),
+          description:
+            'للإرسال بين جوالَين يجب أن يكون المرسل والمستلم حسابَي Sign up (سحابة)، وليس حساباً تجريبياً.',
+        });
+        return false;
+      }
+
+      const msg: Message = {
+        id: createId(),
+        senderId: currentUser.id,
+        senderName: currentUser.name,
+        senderAvatar: currentUser.avatar || '',
+        recipientId: payload.recipientId,
+        subject,
+        body,
+        timestamp: new Date(),
+        read: false,
+      };
+      setMessages((prev) => [msg, ...prev]);
+      addNotification({
+        kind: 'message',
+        recipientId: payload.recipientId,
+        title: t('home.messages'),
+        body: `${currentUser.name}: ${msg.subject}`,
+        href: '/(follower)/messages',
+      });
+      toast({ variant: 'success', title: t('toasts.t037_fc3f2d') });
+      return true;
+    },
+    [currentUser, toast, addNotification, t]
+  );
   const deleteQuickComment = useCallback(
     (commentId: string, successMessage?: string) => {
       setQuickComments((prev) => prev.filter((c) => c.id !== commentId));
@@ -1047,12 +1998,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const updateSupportLevels = useCallback((levels: SupportLevel[]) => {
-    setSupportLevels(levels.filter((l) => (l.name as string) !== 'محلل'));
+    const next = normalizeSupportLevels(levels);
+    setSupportLevels(next);
+    void saveSupportLevels(next);
   }, []);
 
   const purchaseSupportGift = useCallback(
     (payload: {
-      certificateType: SupportLevel['name'];
+      certificateType: string;
       recipientId: string;
       recipientName: string;
       recipientType: GiftTransaction['recipientType'];
@@ -1100,17 +2053,21 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         certificateType: level.name,
         amountPaid: level.price,
         timestamp: new Date(),
-        status: 'paid',
+        // محلي تجريبي — لا بوابة دفع بعد
+        status: 'pending_demo',
       };
 
       setGiftTransactions((prev) => [gift, ...prev]);
       toast({
-        title: t('toasts.t025_e9f0dd'),
-        description: t('toasts.certificateLine', { number: certificateNumber, name: payload.recipientName }),
+        title: t('toasts.giftDemoPendingTitle'),
+        description: t('toasts.giftDemoPendingDesc', {
+          number: certificateNumber,
+          name: payload.recipientName,
+        }),
       });
       return gift;
     },
-    [currentUser, supportLevels, toast]
+    [currentUser, supportLevels, toast, t]
   );
 
   const updateCompetition = useCallback(
@@ -1166,20 +2123,41 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const deleteCompetition = useCallback(
-    (competitionId: string, successMessage?: string) => {
-      let found = false;
-      setCompetitions((prev) => {
-        const next = prev.filter((c) => {
-          if (c.id === competitionId) {
-            found = true;
+    async (competitionId: string, successMessage?: string) => {
+      const existing = competitions.find((c) => c.id === competitionId);
+      if (!existing) return false;
+
+      const isOwner = currentUser?.id === existing.organizerId;
+      const isAdmin = currentUser?.role === 'superadmin';
+      if (!isOwner && !isAdmin) {
+        toast({
+          variant: 'destructive',
+          title: 'غير مسموح',
+          description: 'يمكنك حذف مسابقاتك فقط.',
+        });
+        return false;
+      }
+
+      if (isSupabaseConfigured()) {
+        // البذرة المحلية فقط تُحذف محلياً بدون سحابة
+        if (!/^comp-\d+$/i.test(competitionId)) {
+          const cloud = await deleteCompetitionCloud(competitionId);
+          if (!cloud.ok && cloud.error !== 'not_configured') {
+            toast({
+              variant: 'destructive',
+              title: 'تعذّر حذف المسابقة من السحابة',
+              description: cloud.error,
+            });
             return false;
           }
-          return true;
-        });
-        if (found) void saveCompetitions(next);
+        }
+      }
+
+      setCompetitions((prev) => {
+        const next = prev.filter((c) => c.id !== competitionId);
+        void saveCompetitions(next);
         return next;
       });
-      if (!found) return false;
       toast({
         variant: 'success',
         title: t('toasts.t014_3569a8'),
@@ -1187,7 +2165,54 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [toast]
+    [competitions, currentUser, toast, t]
+  );
+
+  const deleteCompetitionRequest = useCallback(
+    async (requestId: string, successMessage?: string) => {
+      const existing = competitionRequests.find((r) => r.id === requestId);
+      if (!existing) return false;
+
+      const isOwner = currentUser?.id === existing.organizerId;
+      const isAdmin = currentUser?.role === 'superadmin';
+      if (!isOwner && !isAdmin) {
+        toast({
+          variant: 'destructive',
+          title: 'غير مسموح',
+          description: 'يمكنك حذف طلباتك فقط.',
+        });
+        return false;
+      }
+
+      if (isSupabaseConfigured() && String(requestId).startsWith('creq_')) {
+        const cloud = await deleteCompetitionRequestCloud(requestId);
+        if (!cloud.ok) {
+          toast({
+            variant: 'destructive',
+            title: 'تعذّر حذف الطلب من السحابة',
+            description:
+              (cloud.error || '').includes('policy') ||
+              (cloud.error || '').includes('forbidden')
+                ? 'نفّذ competition-requests-delete-policy.sql ثم أعد المحاولة.'
+                : cloud.error,
+          });
+          return false;
+        }
+      }
+
+      setCompetitionRequests((prev) => {
+        const next = prev.filter((r) => r.id !== requestId);
+        void saveCompetitionRequests(next);
+        return next;
+      });
+      toast({
+        variant: 'success',
+        title: t('toasts.t014_3569a8'),
+        description: successMessage || 'تم حذف طلب التنظيم',
+      });
+      return true;
+    },
+    [competitionRequests, currentUser, toast, t]
   );
 
   const updateCompetitionStatus = useCallback(
@@ -1227,7 +2252,55 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [toast]
+    [toast, t]
+  );
+
+  const setCompetitionFixturesSuspended = useCallback(
+    (
+      competitionId: string,
+      suspended: boolean,
+      options?: { reason?: string; successMessage?: string }
+    ) => {
+      if (suspended && (!options?.reason || options.reason.trim().length < 3)) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t020_7da332'),
+          description: t('toasts.fixturesSuspendReasonRequired'),
+        });
+        return false;
+      }
+
+      let found = false;
+      setCompetitions((prev) => {
+        const next = prev.map((c) => {
+          if (c.id !== competitionId) return c;
+          found = true;
+          return {
+            ...c,
+            fixturesSuspended: suspended,
+            fixturesSuspendReason: suspended
+              ? options?.reason?.trim()
+              : undefined,
+          };
+        });
+        if (found) void saveCompetitions(next);
+        return next;
+      });
+
+      if (!found) return false;
+
+      toast({
+        variant: suspended ? 'destructive' : 'success',
+        title: t('toasts.t026_5e74e6'),
+        description:
+          options?.successMessage ||
+          (suspended
+            ? t('toasts.fixturesSuspended')
+            : t('toasts.fixturesResumed')),
+      });
+      return true;
+    },
+    [toast, t]
   );
 
   const updatePlayerStatus = useCallback(
@@ -1315,6 +2388,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
         return false;
       }
+      if (competition.fixturesSuspended) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t030_216321'),
+          description: t('toasts.fixturesSuspendedBlocked'),
+        });
+        return false;
+      }
 
       const fixtures = buildRoundRobinFixtures(
         competitionId,
@@ -1345,6 +2426,15 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       team1Score: number,
       team2Score: number
     ) => {
+      const competition = competitions.find((c) => c.id === competitionId);
+      if (competition?.fixturesSuspended) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t030_216321'),
+          description: t('toasts.fixturesSuspendedBlocked'),
+        });
+        return;
+      }
       setCompetitions((prev) => {
         const next = prev.map((c) =>
           c.id !== competitionId
@@ -1362,7 +2452,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return next;
       });
     },
-    []
+    [competitions, toast, t]
   );
 
   const assignRefereeToCompetition = useCallback(
@@ -1466,33 +2556,243 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     [currentUser, competitions, toast]
   );
 
-  const sendMessage = useCallback(
-    (payload: { recipientId: string; subject: string; body: string }) => {
+  const sendShareCard = useCallback(
+    async (input: {
+      kind: ShareCardKind;
+      recipientId: string;
+      recipientName: string;
+      recipientKind?: 'user' | 'referee';
+      title?: string;
+      body?: string;
+      mediaUrl?: string;
+      mediaKind?: 'photo' | 'video' | 'text' | 'link';
+      competitionId?: string;
+      competitionName?: string;
+      teamId?: string;
+      teamName?: string;
+      position?: string;
+    }) => {
       if (!currentUser) return false;
-      if (!payload.subject.trim() || !payload.body.trim()) {
+      if (!input.recipientId || currentUser.id === input.recipientId) {
         toast({
           variant: 'destructive',
-          title: t('toasts.t036_3a814a'),
-          description: t('toasts.t093_9edd72'),
+          title: t('shareCards.needRecipient'),
         });
         return false;
       }
-      const msg: Message = {
-        id: createId(),
+      if (input.kind === 'join_request') {
+        if (!input.competitionName?.trim() || !input.teamName?.trim()) {
+          toast({
+            variant: 'destructive',
+            title: t('shareCards.needJoinFields'),
+          });
+          return false;
+        }
+      } else {
+        const hasContent =
+          !!input.body?.trim() ||
+          !!input.mediaUrl?.trim() ||
+          !!input.title?.trim();
+        if (!hasContent) {
+          toast({
+            variant: 'destructive',
+            title: t('shareCards.needContent'),
+          });
+          return false;
+        }
+      }
+
+      let card: ShareCard = {
+        id: createId('share'),
+        kind: input.kind,
+        status: 'pending',
         senderId: currentUser.id,
         senderName: currentUser.name,
-        senderAvatar: currentUser.avatar || '',
-        recipientId: payload.recipientId,
-        subject: payload.subject.trim(),
-        body: payload.body.trim(),
+        senderAvatar: currentUser.avatar,
+        senderHandle: currentUser.handle,
+        senderRole: currentUser.role,
+        recipientId: input.recipientId,
+        recipientName: input.recipientName,
+        recipientKind: input.recipientKind || 'user',
+        title: input.title?.trim(),
+        body: input.body?.trim(),
+        mediaUrl: input.mediaUrl?.trim(),
+        mediaKind: input.mediaKind,
+        competitionId: input.competitionId,
+        competitionName: input.competitionName?.trim(),
+        teamId: input.teamId,
+        teamName: input.teamName?.trim(),
+        position: input.position?.trim(),
         timestamp: new Date(),
         read: false,
       };
-      setMessages((prev) => [msg, ...prev]);
-      toast({ variant: 'success', title: t('toasts.t037_fc3f2d') });
+
+      // مزامنة سحابية عندما يكون المستلم حساب Supabase (UUID)
+      if (isSupabaseConfigured() && isUuid(input.recipientId)) {
+        const remote = await insertShareCard({
+          kind: input.kind,
+          senderId: currentUser.id,
+          senderName: currentUser.name,
+          senderAvatar: currentUser.avatar,
+          senderHandle: currentUser.handle,
+          senderRole: currentUser.role,
+          recipientId: input.recipientId,
+          recipientName: input.recipientName,
+          recipientKind: input.recipientKind,
+          title: input.title?.trim(),
+          body: input.body?.trim(),
+          mediaUrl: input.mediaUrl?.trim(),
+          mediaKind: input.mediaKind,
+          competitionId: input.competitionId,
+          competitionName: input.competitionName?.trim(),
+          teamId: input.teamId,
+          teamName: input.teamName?.trim(),
+          position: input.position?.trim(),
+        });
+        if (remote) {
+          card = remote;
+        } else {
+          toast({
+            variant: 'destructive',
+            title: t('shareCards.cloudSendFailed'),
+          });
+        }
+      }
+
+      setShareCards((prev) => [card, ...prev]);
+      addNotification({
+        kind: 'system',
+        recipientId: input.recipientId,
+        title:
+          input.kind === 'join_request'
+            ? t('shareCards.notifJoinTitle')
+            : t('shareCards.notifContentTitle'),
+        body: t('shareCards.notifBody', { name: currentUser.name }),
+        href: '/share-cards',
+      });
+      toast({
+        variant: 'success',
+        title: t('shareCards.sent'),
+      });
       return true;
     },
-    [currentUser, toast]
+    [currentUser, toast, addNotification, t]
+  );
+
+  const updateShareCardStatus = useCallback(
+    (cardId: string, status: ShareCardStatus) => {
+      if (!currentUser) return false;
+      const card = shareCards.find(
+        (c) => c.id === cardId && c.recipientId === currentUser.id
+      );
+      if (!card) return false;
+
+      setShareCards((prev) =>
+        prev.map((c) =>
+          c.id === cardId && c.recipientId === currentUser.id
+            ? { ...c, status, read: true }
+            : c
+        )
+      );
+      void updateShareCardRemote(cardId, { status, read: true });
+
+      // قبول طلب انضمام → إضافة اللاعب للفريق فعلياً
+      if (
+        status === 'accepted' &&
+        card.kind === 'join_request' &&
+        card.competitionId &&
+        card.teamId
+      ) {
+        const position = (card.position || 'وسط') as Player['position'];
+        const validPositions: Player['position'][] = [
+          'حارس مرمى',
+          'دفاع',
+          'وسط',
+          'هجوم',
+        ];
+        const safePosition = validPositions.includes(position)
+          ? position
+          : 'وسط';
+        setCompetitions((prev) => {
+          const next = prev.map((c) => {
+            if (c.id !== card.competitionId) return c;
+            return {
+              ...c,
+              teams: c.teams.map((team) => {
+                if (team.id !== card.teamId) return team;
+                if (
+                  team.players.some(
+                    (p) =>
+                      p.id === currentUser.id ||
+                      p.name.trim().toLowerCase() ===
+                        currentUser.name.trim().toLowerCase()
+                  )
+                ) {
+                  return team;
+                }
+                const used = new Set(team.players.map((p) => p.jerseyNumber));
+                let jersey = 99;
+                for (let n = 1; n <= 99; n++) {
+                  if (!used.has(n)) {
+                    jersey = n;
+                    break;
+                  }
+                }
+                return {
+                  ...team,
+                  players: [
+                    ...team.players,
+                    {
+                      id: currentUser.id,
+                      visibleId:
+                        currentUser.visibleId ||
+                        `P${Math.floor(1000 + Math.random() * 9000)}`,
+                      name: currentUser.name,
+                      jerseyNumber: jersey,
+                      position: safePosition,
+                      teamId: team.id,
+                      status: 'active' as const,
+                      avatar: currentUser.avatar,
+                      email: currentUser.email,
+                      media: { photos: [], videos: [] },
+                      comments: [],
+                    },
+                  ],
+                };
+              }),
+            };
+          });
+          void saveCompetitions(next);
+          return next;
+        });
+      }
+
+      toast({
+        variant: 'success',
+        title:
+          status === 'accepted'
+            ? t('shareCards.accepted')
+            : status === 'declined'
+              ? t('shareCards.declined')
+              : t('shareCards.updated'),
+      });
+      return true;
+    },
+    [currentUser, shareCards, toast, t]
+  );
+
+  const markShareCardRead = useCallback(
+    (cardId: string) => {
+      if (!currentUser) return;
+      setShareCards((prev) =>
+        prev.map((c) =>
+          c.id === cardId && c.recipientId === currentUser.id
+            ? { ...c, read: true }
+            : c
+        )
+      );
+    },
+    [currentUser]
   );
 
   const addTeam = useCallback(
@@ -1878,7 +3178,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const applyForCompetition = useCallback(
-    (payload: {
+    async (payload: {
       name: string;
       region: string;
       city: string;
@@ -1944,7 +3244,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
 
       const request: CompetitionRequest = {
-        id: createId(),
+        id: createId('creq'),
         organizerId: currentUser.id,
         name,
         region,
@@ -1960,8 +3260,38 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         status: 'pending',
         requestedAt: new Date(),
       };
+
+      if (isSupabaseConfigured()) {
+        if (!isUuid(currentUser.id)) {
+          toast({
+            variant: 'destructive',
+            title: 'تعذّر إرسال الطلب للسحابة',
+            description:
+              'ادخل بحساب Sign up سحابي (ليس حساباً تجريبياً محلياً).',
+          });
+          return false;
+        }
+        const cloud = await upsertCompetitionRequestCloud(request);
+        if (!cloud.ok) {
+          toast({
+            variant: 'destructive',
+            title: 'تعذّر إرسال الطلب للسحابة',
+            description:
+              cloud.error === 'no_session'
+                ? 'أعد تسجيل الدخول بحساب Sign up.'
+                : (cloud.error || '').includes('competition_requests') ||
+                    (cloud.error || '').includes('schema cache') ||
+                    (cloud.error || '').includes('does not exist') ||
+                    (cloud.error || '').includes('relation')
+                  ? 'نفّذ ملف FIX-CLOUD-SYNC.sql في Supabase SQL Editor ثم أعد المحاولة.'
+                  : cloud.error || 'تحقق من الاتصال',
+          });
+          return false;
+        }
+      }
+
       setCompetitionRequests((prev) => {
-        const next = [request, ...prev];
+        const next = mergeCompetitionRequestsById([request], prev);
         void saveCompetitionRequests(next);
         return next;
       });
@@ -1972,11 +3302,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [currentUser, competitionRequests, toast]
+    [currentUser, competitionRequests, toast, t]
   );
 
   const approveCompetitionRequest = useCallback(
-    (requestId: string) => {
+    async (requestId: string) => {
       const request = competitionRequests.find((r) => r.id === requestId);
       if (!request || request.status !== 'pending') {
         toast({
@@ -1986,7 +3316,20 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      const competitionId = createId();
+      if (
+        isSupabaseConfigured() &&
+        (!isUuid(currentUser?.id) || currentUser?.role !== 'superadmin')
+      ) {
+        toast({
+          variant: 'destructive',
+          title: 'يلزم مشرف سحابي',
+          description:
+            'اقبل الطلب بعد الدخول من /admin بحساب Sign up المرقّى superadmin — وليس الحساب التجريبي.',
+        });
+        return false;
+      }
+
+      const competitionId = createId('comp');
       const fullAddress = buildCompetitionVenueAddress({
         venueName: request.venueName,
         neighborhood: request.neighborhood,
@@ -2014,37 +3357,94 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         refereeIds: [],
       };
 
+      const approvedRequest: CompetitionRequest = {
+        ...request,
+        status: 'approved',
+        reviewedAt: new Date(),
+        competitionId,
+      };
+
+      if (isSupabaseConfigured()) {
+        const cloud = await updateCompetitionRequestCloud(approvedRequest);
+        if (!cloud.ok) {
+          toast({
+            variant: 'destructive',
+            title: 'تعذّر تحديث الطلب في السحابة',
+            description: cloud.error,
+          });
+          return false;
+        }
+        const upComp = await upsertCompetitionCloud(competition);
+        if (!upComp.ok) {
+          // أعد الطلب معلّقاً حتى لا يبقى approved بلا مسابقة
+          await updateCompetitionRequestCloud({
+            ...request,
+            status: 'pending',
+            reviewedAt: undefined,
+            competitionId: undefined,
+            rejectionReason: undefined,
+          });
+          toast({
+            variant: 'destructive',
+            title: 'تعذّر حفظ المسابقة في السحابة',
+            description:
+              (upComp.error || '').includes('app_competitions') ||
+              (upComp.error || '').includes('does not exist') ||
+              (upComp.error || '').includes('schema cache')
+                ? 'نفّذ FIX-CLOUD-SYNC.sql في Supabase ثم أعد القبول.'
+                : upComp.error,
+          });
+          return false;
+        }
+      }
+
       setCompetitions((prev) => {
-        const next = [competition, ...prev];
+        const next = mergeCloudCompetitions([competition], prev);
         void saveCompetitions(next);
         return next;
       });
       setCompetitionRequests((prev) => {
         const next = prev.map((r) =>
-          r.id === requestId
-            ? {
-                ...r,
-                status: 'approved' as const,
-                reviewedAt: new Date(),
-                competitionId,
-              }
-            : r
+          r.id === requestId ? approvedRequest : r
         );
         void saveCompetitionRequests(next);
         return next;
       });
+
+      // إشعار المنظم عبر رسالة سحابية (تظهر على جهازه كإشعار + رسائل)
+      if (
+        isSupabaseConfigured() &&
+        isUuid(currentUser?.id) &&
+        isUuid(request.organizerId)
+      ) {
+        const notify = await insertMessage({
+          senderId: currentUser!.id,
+          senderName: currentUser!.name || 'المشرف',
+          senderAvatar: currentUser!.avatar,
+          recipientId: request.organizerId,
+          subject: `[نظام] تم قبول طلب تنظيم «${request.name}»`,
+          body: `تمت الموافقة على طلبك لإنشاء مسابقة «${request.name}». يمكنك الآن إدارتها من شاشة المسابقات وإضافة الفرق (الحد الأدنى ${MIN_COMPETITION_TEAMS}).`,
+        });
+        if (notify.message) {
+          setMessages((prev) => mergeMessagesById([notify.message!], prev));
+        }
+      }
+
       toast({
         variant: 'success',
         title: t('toasts.t050_d1ff71'),
-        description: t('toasts.competitionCreatedForOrganizer', { name: request.name, count: MIN_COMPETITION_TEAMS }),
+        description: t('toasts.competitionCreatedForOrganizer', {
+          name: request.name,
+          count: MIN_COMPETITION_TEAMS,
+        }),
       });
       return true;
     },
-    [competitionRequests, competitions, toast]
+    [competitionRequests, competitions, toast, t, currentUser]
   );
 
   const rejectCompetitionRequest = useCallback(
-    (requestId: string, reason?: string) => {
+    async (requestId: string, reason?: string) => {
       const request = competitionRequests.find((r) => r.id === requestId);
       if (!request || request.status !== 'pending') {
         toast({
@@ -2053,20 +3453,62 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
         return false;
       }
+      if (
+        isSupabaseConfigured() &&
+        (!isUuid(currentUser?.id) || currentUser?.role !== 'superadmin')
+      ) {
+        toast({
+          variant: 'destructive',
+          title: 'يلزم مشرف سحابي',
+          description: 'ارفض الطلب من حساب مشرف سحابي عبر /admin.',
+        });
+        return false;
+      }
+      const rejectedRequest: CompetitionRequest = {
+        ...request,
+        status: 'rejected',
+        reviewedAt: new Date(),
+        rejectionReason: reason?.trim() || t('toasts.requirementsNotMet'),
+      };
+      if (isSupabaseConfigured()) {
+        const cloud = await updateCompetitionRequestCloud(rejectedRequest);
+        if (!cloud.ok) {
+          toast({
+            variant: 'destructive',
+            title: 'تعذّر تحديث الطلب في السحابة',
+            description: cloud.error,
+          });
+          return false;
+        }
+      }
       setCompetitionRequests((prev) => {
         const next = prev.map((r) =>
-          r.id === requestId
-            ? {
-                ...r,
-                status: 'rejected' as const,
-                reviewedAt: new Date(),
-                rejectionReason: reason?.trim() || t('toasts.requirementsNotMet'),
-              }
-            : r
+          r.id === requestId ? rejectedRequest : r
         );
         void saveCompetitionRequests(next);
         return next;
       });
+
+      if (
+        isSupabaseConfigured() &&
+        isUuid(currentUser?.id) &&
+        isUuid(request.organizerId)
+      ) {
+        const reasonText =
+          rejectedRequest.rejectionReason || t('toasts.requirementsNotMet');
+        const notify = await insertMessage({
+          senderId: currentUser!.id,
+          senderName: currentUser!.name || 'المشرف',
+          senderAvatar: currentUser!.avatar,
+          recipientId: request.organizerId,
+          subject: `[نظام] تم رفض طلب تنظيم «${request.name}»`,
+          body: `تم رفض طلبك لإنشاء مسابقة «${request.name}». السبب: ${reasonText}`,
+        });
+        if (notify.message) {
+          setMessages((prev) => mergeMessagesById([notify.message!], prev));
+        }
+      }
+
       toast({
         variant: 'success',
         title: t('toasts.t051_c3e138'),
@@ -2074,7 +3516,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [competitionRequests, toast]
+    [competitionRequests, toast, t, currentUser]
   );
 
   const approveAnalystApplication = useCallback(
@@ -2576,7 +4018,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const changePassword = useCallback(
     (currentPassword: string, nextPassword: string) => {
       if (!currentUser) return false;
-      if (currentUser.passwordHash !== currentPassword) {
+      if (!verifyPassword(currentPassword, currentUser.passwordHash)) {
         toast({
           variant: 'destructive',
           title: t('toasts.t068_1ed93e'),
@@ -2591,12 +4033,29 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
         return false;
       }
-      const updated = { ...currentUser, passwordHash: nextPassword };
+      const updated = {
+        ...currentUser,
+        passwordHash: hashPassword(nextPassword),
+      };
       setUsers((prev) =>
         prev.map((u) => (u.id === updated.id ? updated : u))
       );
       setCurrentUser(updated);
       void setJson(USER_STORAGE_KEY, updated);
+      void (async () => {
+        const prev =
+          (await getJson<Record<string, UserCredentialOverride>>(
+            USER_CREDENTIAL_OVERRIDES_KEY
+          )) || {};
+        await setJson(USER_CREDENTIAL_OVERRIDES_KEY, {
+          ...prev,
+          [updated.id]: {
+            email: normalizeEmail(updated.email),
+            passwordHash: updated.passwordHash,
+            name: updated.name,
+          },
+        });
+      })();
       toast({ variant: 'success', title: t('toasts.t070_104895') });
       return true;
     },
@@ -2675,6 +4134,65 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     [currentUser, persistCurrentUser, toast]
   );
 
+  const addCompetitionMedia = useCallback(
+    (
+      competitionId: string,
+      type: 'photos' | 'videos',
+      url: string,
+      successMessage?: string
+    ) => {
+      if (!currentUser) return false;
+      const trimmed = url.trim();
+      if (!trimmed) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t071_355b33'),
+          description: t('toasts.t110_d9551c'),
+        });
+        return false;
+      }
+      const owned = competitions.find(
+        (c) => c.id === competitionId && c.organizerId === currentUser.id
+      );
+      if (!owned) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t071_355b33'),
+        });
+        return false;
+      }
+      const item = {
+        id: createId(),
+        url: trimmed,
+        timestamp: new Date(),
+        likes: [] as string[],
+        comments: [] as Comment[],
+      };
+      setCompetitions((prev) => {
+        const next = prev.map((c) => {
+          if (c.id !== competitionId) return c;
+          const media = c.media || { photos: [], videos: [] };
+          return {
+            ...c,
+            media: {
+              ...media,
+              [type]: [item, ...(media[type] || [])],
+            },
+          };
+        });
+        void saveCompetitions(next);
+        return next;
+      });
+      toast({
+        variant: 'success',
+        title: type === 'photos' ? t('common.photoAdded') : t('common.videoAdded'),
+        description: successMessage,
+      });
+      return true;
+    },
+    [competitions, currentUser, toast, t]
+  );
+
   const setUserAvatar = useCallback(
     (url: string, successMessage?: string) => {
       if (!currentUser) return false;
@@ -2690,6 +4208,70 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       return true;
     },
     [currentUser, persistCurrentUser, toast]
+  );
+
+  const toggleFollowUser = useCallback(
+    (targetUserId: string) => {
+      if (!currentUser) return false;
+      if (currentUser.id === targetUserId) return false;
+      const me = ensureSocialLists(currentUser);
+      const isFollowing = (me.following || []).includes(targetUserId);
+
+      setUsers((prev) =>
+        prev.map((u) => {
+          const user = ensureSocialLists(u);
+          if (u.id === me.id) {
+            return {
+              ...user,
+              following: isFollowing
+                ? user.following!.filter((id) => id !== targetUserId)
+                : [...user.following!, targetUserId],
+            };
+          }
+          if (u.id === targetUserId) {
+            return {
+              ...user,
+              followers: isFollowing
+                ? user.followers!.filter((id) => id !== me.id)
+                : [...user.followers!, me.id],
+            };
+          }
+          return user;
+        })
+      );
+
+      const nextFollowing = isFollowing
+        ? (me.following || []).filter((id) => id !== targetUserId)
+        : [...(me.following || []), targetUserId];
+      const updated: User = {
+        ...me,
+        following: nextFollowing,
+      };
+      // تحديث followers على الهدف في currentUser غير مطلوب؛ نحدّث فقط following
+      setCurrentUser(updated);
+      void setJson(USER_STORAGE_KEY, updated);
+
+      toast({
+        variant: 'success',
+        title: isFollowing
+          ? t('account.stats.unfollowed')
+          : t('account.stats.followed'),
+      });
+
+      if (!isFollowing) {
+        addNotification({
+          kind: 'follow',
+          recipientId: targetUserId,
+          title: t('notifications.followTitle'),
+          body: t('notifications.followBody', {
+            name: me.name || me.handle,
+          }),
+          href: `/profile/${me.id}`,
+        });
+      }
+      return true;
+    },
+    [currentUser, toast, addNotification, t]
   );
 
   const scopedCompetitions = useMemo(() => {
@@ -2728,6 +4310,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       messages,
       referees,
       offers: scopedOffers,
+      shareCards,
       supporters,
       supportLevels,
       giftTransactions: scopedGiftTransactions,
@@ -2740,9 +4323,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setAppName,
       setAppLogo,
       updateUser,
+      syncCloudUsers,
+      refreshCloudCompetitionRequests,
       togglePinnedCompetition,
       deleteUser,
       addReferee,
+      registerRefereeForCompetition,
       updateReferee,
       deleteReferee,
       markMessageAsRead,
@@ -2755,6 +4341,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       purchaseSupportGift,
       updateCompetition,
       updateCompetitionStatus,
+      setCompetitionFixturesSuspended,
       updatePlayerStatus,
       generateFixturesForCompetition,
       applyForCompetition,
@@ -2766,9 +4353,15 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       updateOfferStatus,
       sendOffer,
       sendMessage,
+      mergeRemoteMessages,
+      refreshCloudMessages,
+      sendShareCard,
+      updateShareCardStatus,
+      markShareCardRead,
       addTeam,
       renameCompetition,
       deleteCompetition,
+      deleteCompetitionRequest,
       renameTeam,
       deleteTeam,
       addPlayerToTeam,
@@ -2789,7 +4382,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       changePassword,
       addUserMedia,
       removeUserMedia,
+      addCompetitionMedia,
       setUserAvatar,
+      toggleFollowUser,
       routeForRole,
     }),
     [
@@ -2806,6 +4401,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       messages,
       referees,
       scopedOffers,
+      shareCards,
       supporters,
       supportLevels,
       scopedGiftTransactions,
@@ -2818,9 +4414,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setAppName,
       setAppLogo,
       updateUser,
+      syncCloudUsers,
+      refreshCloudCompetitionRequests,
       togglePinnedCompetition,
       deleteUser,
       addReferee,
+      registerRefereeForCompetition,
       updateReferee,
       deleteReferee,
       markMessageAsRead,
@@ -2833,6 +4432,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       purchaseSupportGift,
       updateCompetition,
       updateCompetitionStatus,
+      setCompetitionFixturesSuspended,
       updatePlayerStatus,
       generateFixturesForCompetition,
       applyForCompetition,
@@ -2844,9 +4444,15 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       updateOfferStatus,
       sendOffer,
       sendMessage,
+      mergeRemoteMessages,
+      refreshCloudMessages,
+      sendShareCard,
+      updateShareCardStatus,
+      markShareCardRead,
       addTeam,
       renameCompetition,
       deleteCompetition,
+      deleteCompetitionRequest,
       renameTeam,
       deleteTeam,
       addPlayerToTeam,
@@ -2867,7 +4473,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       changePassword,
       addUserMedia,
       removeUserMedia,
+      addCompetitionMedia,
       setUserAvatar,
+      toggleFollowUser,
       routeForRole,
     ]
   );

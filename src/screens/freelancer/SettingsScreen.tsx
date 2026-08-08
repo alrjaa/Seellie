@@ -18,6 +18,9 @@ import {
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { RolePathCard } from '@/components/account/RolePathCard';
 import { LanguageCard } from '@/components/account/LanguageCard';
+import { AdminEntryButton } from '@/components/account/AdminEntryButton';
+import { AccountSocialStats } from '@/components/account/AccountSocialStats';
+import { AvatarPickerCard } from '@/components/account/AvatarPickerCard';
 import { useTranslation } from '@/providers/LanguageProvider';
 
 export default function SettingsScreen() {
@@ -57,6 +60,7 @@ export default function SettingsScreen() {
       <Muted>{t('settings.subtitle')}</Muted>
 
       <RolePathCard />
+      <AvatarPickerCard />
       <LanguageCard />
 
       <Card style={styles.card}>
@@ -185,6 +189,28 @@ export default function SettingsScreen() {
         />
       </Card>
 
+      <AdminEntryButton />
+      <Button
+        label={t('shareCards.menu')}
+        variant="outline"
+        onPress={() => router.push('/share-cards' as any)}
+      />
+      <Button
+        label={t('notifications.title')}
+        variant="outline"
+        onPress={() => router.push('/notifications' as any)}
+      />
+      <Button
+        label={t('legal.openPrivacy')}
+        variant="ghost"
+        onPress={() => router.push('/privacy' as any)}
+      />
+      <Button
+        label={t('legal.openTerms')}
+        variant="ghost"
+        onPress={() => router.push('/terms' as any)}
+      />
+      <AccountSocialStats user={currentUser} />
       <Button label={t('common.logout')} variant="outline" onPress={logout} />
     </Screen>
   );

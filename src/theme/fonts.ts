@@ -33,8 +33,7 @@ export const cairoFontMap = {
 export const cairoHeaderTitleStyle = {
   fontFamily: fontFamily.bold,
   fontWeight: 'normal' as const,
-  // بداية السطر في RTL = يمين
-  textAlign: 'left' as const,
+  fontSize: 14,
 };
 
 export const cairoTabLabelStyle = {

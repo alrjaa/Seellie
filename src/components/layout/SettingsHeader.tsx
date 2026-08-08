@@ -1,11 +1,12 @@
 import React, { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { AccountHeaderButton } from '@/components/layout/AccountHeaderButton';
+import { HeaderBackButton } from '@/components/layout/HeaderBackButton';
 import { fontFamily } from '@/theme/fonts';
-import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
+import { headerSafeTop } from '@/theme/navigation';
 
 type Props = {
   title?: string;
@@ -14,10 +15,14 @@ type Props = {
   titleSize?: number;
   accountHref?: string;
   settingsHref?: string;
+  /** إخفاء زر المعرف (مثلاً في وضع سطح المكتب) */
+  hideAccount?: boolean;
+  /** زر رجوع (مطلوب في شاشات مثل البريد) */
+  showBack?: boolean;
 };
 
 /**
- * رأس تحت شريط الحالة/الشبكة بالكامل ثم الأزرار.
+ * رأس تحت شريط الحالة/الشبكة/البطارية بالكامل ثم العنوان والمعرّف.
  */
 function SettingsHeaderComponent({
   title,
@@ -25,19 +30,22 @@ function SettingsHeaderComponent({
   titleSize = 14,
   accountHref = '/(follower)/settings/account',
   settingsHref = '/(follower)/settings',
+  hideAccount,
+  showBack,
 }: Props) {
   const theme = useAppTheme();
   const { t, isRTL } = useTranslation();
+  const insets = useSafeAreaInsets();
   const resolvedTitle = title ?? t('settings.title');
 
   return (
-    <SafeAreaView
-      edges={['top']}
+    <View
       style={[
         styles.wrap,
         {
           backgroundColor: theme.colors.background,
           borderBottomColor: theme.colors.border,
+          paddingTop: headerSafeTop(insets.top),
         },
       ]}
     >
@@ -46,10 +54,14 @@ function SettingsHeaderComponent({
           styles.row,
           {
             direction: isRTL ? 'rtl' : 'ltr',
-            paddingTop: HEADER_BELOW_STATUS_GAP,
           },
         ]}
       >
+        {showBack ? (
+          <View style={styles.backSlot}>
+            <HeaderBackButton />
+          </View>
+        ) : null}
         <Text
           style={[
             styles.title,
@@ -66,7 +78,14 @@ function SettingsHeaderComponent({
         </Text>
         {subtitle ? (
           <Text
-            style={[styles.subtitle, { color: theme.colors.textMuted }]}
+            style={[
+              styles.subtitle,
+              {
+                color: theme.colors.textMuted,
+                writingDirection: isRTL ? 'rtl' : 'ltr',
+                textAlign: 'center',
+              },
+            ]}
             numberOfLines={1}
           >
             {subtitle}
@@ -74,13 +93,17 @@ function SettingsHeaderComponent({
         ) : (
           <View style={styles.spacer} />
         )}
-        <AccountHeaderButton
-          accountHref={accountHref}
-          settingsHref={settingsHref}
-          compact
-        />
+        {!hideAccount ? (
+          <AccountHeaderButton
+            accountHref={accountHref}
+            settingsHref={settingsHref}
+            compact
+          />
+        ) : (
+          <View style={styles.accountPlaceholder} />
+        )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -100,11 +123,15 @@ const styles = StyleSheet.create({
     minHeight: 44,
     gap: 8,
   },
+  backSlot: {
+    flexShrink: 0,
+  },
   title: {
     fontFamily: fontFamily.bold,
     fontWeight: 'normal',
     flexShrink: 1,
     flexGrow: 0,
+    maxWidth: '42%',
   },
   subtitle: {
     flex: 1,
@@ -115,4 +142,5 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   spacer: { flex: 1 },
+  accountPlaceholder: { width: 72 },
 });

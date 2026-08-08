@@ -24,14 +24,33 @@ export function isTablet(width = SCREEN_WIDTH) {
   return width >= 768;
 }
 
+/** سطح مكتب الويب فقط — لا يؤثر على الجوال/التابلت الأصلي */
+export function isDesktopWeb(width = SCREEN_WIDTH) {
+  return Platform.OS === 'web' && width >= 1024;
+}
+
 export function contentMaxWidth(width: number) {
+  if (isDesktopWeb(width)) return 980;
   if (width >= 1024) return 760;
   if (width >= 768) return 600;
   // هواتف كبيرة (Plus / Pro Max) تستفيد من عرض أوسع دون الوصول لحواف الشاشة
   return Math.min(width - 32, Math.max(360, Math.min(width * 0.96, 480)));
 }
 
+/** لوحات الإدارة والداشبورد على سطح المكتب */
+export function dashboardMaxWidth(width: number) {
+  if (isDesktopWeb(width)) return 1280;
+  return contentMaxWidth(width);
+}
+
+/** خلاصات القراءة على سطح المكتب */
+export function feedMaxWidth(width: number) {
+  if (isDesktopWeb(width)) return 840;
+  return contentMaxWidth(width);
+}
+
 export function formMaxWidth(width: number) {
+  if (isDesktopWeb(width)) return 420;
   return Math.min(width - 40, isTablet(width) ? 400 : 340);
 }
 
@@ -63,10 +82,10 @@ export const radius = {
 
 export const fontSize = {
   xs: moderateScale(11),
-  sm: moderateScale(13),
-  md: moderateScale(15),
-  lg: moderateScale(17),
-  xl: moderateScale(22),
-  xxl: moderateScale(28),
-  display: moderateScale(34),
+  sm: moderateScale(12),
+  md: moderateScale(14),
+  lg: moderateScale(16),
+  xl: moderateScale(20),
+  xxl: moderateScale(26),
+  display: moderateScale(30),
 } as const;

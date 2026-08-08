@@ -106,7 +106,7 @@ export default function StatsScreen() {
                       <Text
                         style={[
                           styles.td,
-                          { color: theme.colors.primary, fontWeight: '900' },
+                          { color: theme.colors.accent, fontWeight: '900' },
                         ]}
                       >
                         {row.points}

@@ -1,6 +1,7 @@
-import React, { memo, type ReactNode } from 'react';
+import React, { memo } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { useAppTheme } from '@/providers/ThemeProvider';
+import { cairoText } from '@/theme/fonts';
 
 type Props = {
   label: string;
@@ -16,23 +17,26 @@ function ChipComponent({ label, active, onPress }: Props) {
       accessibilityState={{ selected: !!active }}
       accessibilityLabel={label}
       onPress={onPress}
-      style={[
+      style={({ pressed }) => [
         styles.chip,
         {
           backgroundColor: active
-            ? theme.colors.primary
+            ? theme.colors.accent
             : theme.colors.inputBg,
-          borderColor: active ? theme.colors.primary : theme.colors.border,
+          borderColor: active ? theme.colors.accent : theme.colors.border,
+          opacity: pressed ? 0.88 : 1,
         },
       ]}
     >
       <Text
         style={[
           styles.text,
+          cairoText('semiBold'),
           {
             color: active ? theme.colors.textInverse : theme.colors.textMuted,
           },
         ]}
+        numberOfLines={1}
       >
         {label}
       </Text>
@@ -44,16 +48,18 @@ export const Chip = memo(ChipComponent);
 
 const styles = StyleSheet.create({
   chip: {
-    flex: 1,
-    minHeight: 36,
-    borderRadius: 9,
-    borderWidth: 1,
+    flexGrow: 0,
+    flexShrink: 1,
+    minHeight: 32,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   text: {
     fontSize: 12,
-    fontWeight: '700',
+    textAlign: 'center',
   },
 });

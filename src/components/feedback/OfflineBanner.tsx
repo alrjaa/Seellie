@@ -2,6 +2,7 @@ import React, { memo, useEffect, useState } from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
+import { cairoText } from '@/theme/fonts';
 
 /** Lightweight offline banner (best-effort via fetch probe). */
 function OfflineBannerComponent() {
@@ -45,7 +46,8 @@ function OfflineBannerComponent() {
 
   return (
     <View style={[styles.banner, { backgroundColor: theme.colors.danger }]}>
-      <Text style={styles.text}>{t('offline.title')}</Text>
+      <Text style={[styles.text, cairoText('bold')]}>{t('offline.title')}</Text>
+      <Text style={[styles.hint, cairoText('regular')]}>{t('offline.hint')}</Text>
     </View>
   );
 }
@@ -56,11 +58,16 @@ const styles = StyleSheet.create({
   banner: {
     paddingHorizontal: 12,
     paddingVertical: 8,
+    gap: 2,
   },
   text: {
     color: '#fff',
-    fontWeight: '700',
     fontSize: 12,
+    textAlign: 'center',
+  },
+  hint: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 11,
     textAlign: 'center',
   },
 });

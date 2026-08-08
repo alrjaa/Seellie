@@ -1,12 +1,28 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useTournament, type User } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
+import { useToast } from '@/providers/ToastProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
-import { Avatar, Card, Chip, Muted, Subtitle } from '@/components/ui';
+import { Avatar, Card, Chip, Muted, SearchBar, Subtitle } from '@/components/ui';
+import { statusToneColor } from '@/utils/status-tone';
+import { matchesSearchQuery } from '@/utils/search';
+import { isSupabaseConfigured } from '@/services/supabase';
+
+function matchesUserQuery(user: User, rawQuery: string): boolean {
+  return matchesSearchQuery(
+    rawQuery,
+    user.name,
+    user.email,
+    user.handle,
+    user.visibleId,
+    user.mobile,
+    user.id
+  );
+}
 
 const UserRow = memo(function UserRow({
   user,
@@ -19,12 +35,7 @@ const UserRow = memo(function UserRow({
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
-  const statusColor =
-    user.status === 'active'
-      ? theme.colors.primary
-      : user.status === 'suspended'
-        ? theme.colors.danger
-        : theme.colors.warning;
+  const statusColor = statusToneColor(theme.colors, user.status);
 
   return (
     <Card style={styles.card}>
@@ -35,6 +46,7 @@ const UserRow = memo(function UserRow({
           <Muted>{user.handle}</Muted>
           <Muted>{t('superadmin.users.regIdLine', { id: user.visibleId })}</Muted>
           <Muted>{user.email}</Muted>
+          {user.mobile ? <Muted>{user.mobile}</Muted> : null}
           <View style={styles.badges}>
             <Text style={[styles.badge, { color: theme.colors.textMuted }]}>
               {t(`roles.${user.role}`)}
@@ -49,13 +61,13 @@ const UserRow = memo(function UserRow({
         <View style={styles.actions}>
           {user.role === 'organizer' && onEdit ? (
             <Pressable onPress={() => onEdit(user)}>
-              <Text style={{ color: theme.colors.primary, fontWeight: '800', fontSize: 12 }}>
+              <Text style={{ color: theme.colors.accent, fontWeight: '800', fontSize: 12 }}>
                 {t('superadmin.actions.edit')}
               </Text>
             </Pressable>
           ) : null}
           <Pressable onPress={() => onAction(user, 'active')}>
-            <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 12 }}>
+            <Text style={{ color: theme.colors.accent, fontWeight: '700', fontSize: 12 }}>
               {t('superadmin.actions.activate')}
             </Text>
           </Pressable>
@@ -81,15 +93,46 @@ const UserRow = memo(function UserRow({
 });
 
 export default function UsersScreen() {
-  const { users, updateUser, deleteUser } = useTournament();
+  const { users, updateUser, deleteUser, syncCloudUsers } = useTournament();
   const router = useRouter();
   const { t } = useTranslation();
+  const { toast } = useToast();
+  const theme = useAppTheme();
   const [filter, setFilter] = useState<'all' | User['role']>('all');
+  const [query, setQuery] = useState('');
+  const [syncing, setSyncing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isSupabaseConfigured()) return;
+      void syncCloudUsers();
+    }, [syncCloudUsers])
+  );
+
+  const onSync = useCallback(async () => {
+    setSyncing(true);
+    try {
+      const count = await syncCloudUsers();
+      toast({
+        variant: 'success',
+        title: 'تمت المزامنة',
+        description:
+          count > 0
+            ? `تم جلب ${count} حساباً من السحابة (بدون تكرار الإيميل).`
+            : 'لا توجد صفوف في profiles. نفّذ sync-profiles-from-auth.sql إن كان المستخدم في Auth فقط.',
+      });
+    } finally {
+      setSyncing(false);
+    }
+  }, [syncCloudUsers, toast]);
 
   const data = useMemo(
     () =>
-      users.filter((u) => (filter === 'all' ? true : u.role === filter)),
-    [users, filter]
+      users.filter((u) => {
+        if (filter !== 'all' && u.role !== filter) return false;
+        return matchesUserQuery(u, query);
+      }),
+    [users, filter, query]
   );
 
   const onAction = useCallback(
@@ -123,16 +166,40 @@ export default function UsersScreen() {
     [updateUser, deleteUser, t]
   );
 
+  const emptyTitle = query.trim()
+    ? t('superadmin.users.noSearchResults')
+    : t('superadmin.users.empty');
+
   return (
     <Screen>
       <FlatList
         data={data}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={{ gap: 10, marginBottom: 8 }}>
             <Subtitle>{t('nav.users')}</Subtitle>
             <Muted>{t('superadmin.users.subtitle')}</Muted>
+            {isSupabaseConfigured() ? (
+              <Pressable
+                onPress={() => void onSync()}
+                disabled={syncing}
+                style={styles.syncBtn}
+              >
+                <Text style={{ color: theme.colors.accent, fontWeight: '800' }}>
+                  {syncing ? 'جاري المزامنة…' : 'مزامنة من السحابة'}
+                </Text>
+              </Pressable>
+            ) : null}
+            <SearchBar
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t('superadmin.users.searchPlaceholder')}
+              autoCapitalize="none"
+              autoCorrect={false}
+              clearButtonMode="never"
+            />
             <View style={styles.filters}>
               {(
                 [
@@ -153,7 +220,7 @@ export default function UsersScreen() {
           </View>
         }
         ListEmptyComponent={
-          <EmptyState title={t('superadmin.users.empty')} icon="people-outline" />
+          <EmptyState title={emptyTitle} icon="people-outline" />
         }
         renderItem={({ item }) => (
           <UserRow
@@ -182,5 +249,6 @@ const styles = StyleSheet.create({
     gap: 14,
     flexWrap: 'wrap',
   },
-  filters: { flexDirection: 'row', gap: 8 },
+  filters: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  syncBtn: { alignSelf: 'flex-start', paddingVertical: 4 },
 });

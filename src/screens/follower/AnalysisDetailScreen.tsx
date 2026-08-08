@@ -81,7 +81,7 @@ export default function AnalysisDetailScreen() {
             { backgroundColor: theme.colors.surfaceElevated },
           ]}
         >
-          <Ionicons name="play-circle" size={56} color={theme.colors.primary} />
+          <Ionicons name="play-circle" size={56} color={theme.colors.accent} />
           <Muted>{t('media.analysisVideoTapPlay')}</Muted>
         </Pressable>
       ) : null}
@@ -108,7 +108,6 @@ const styles = StyleSheet.create({
   body: { gap: 8 },
   contentText: {
     textAlign: 'left',
-    writingDirection: 'ltr',
     lineHeight: 24,
     fontSize: 15,
   },

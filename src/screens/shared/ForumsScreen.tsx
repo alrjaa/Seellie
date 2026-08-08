@@ -22,6 +22,11 @@ import {
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import {
+  ShareTargetModal,
+  TinyShareButton,
+  type ContentSharePayload,
+} from '@/components/share/ShareTargetModal';
+import {
   Avatar,
   Button,
   Card,
@@ -32,21 +37,24 @@ import {
 } from '@/components/ui';
 import { formatArabicDate, formatArabicTime } from '@/utils';
 import { useListChrome } from '@/hooks/useListChrome';
+import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
 import {
   FORUM_VIDEO_MAX_SEC,
   isForumVideoWithinLimit,
   videoDurationSecFromPicker,
-} from '@/utils/forum-video';
+} from '@/utils/media-limits';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const CommentCard = memo(function CommentCard({
   item,
   liked,
   onLike,
+  onShare,
 }: {
   item: Comment;
   liked: boolean;
   onLike: () => void;
+  onShare: () => void;
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
@@ -69,6 +77,7 @@ const CommentCard = memo(function CommentCard({
               : ''}
           </Muted>
         </View>
+        {!item.videoUrl ? <TinyShareButton onPress={onShare} /> : null}
       </View>
       {item.text ? (
         <Text style={[styles.body, { color: theme.colors.text }]}>
@@ -76,13 +85,18 @@ const CommentCard = memo(function CommentCard({
         </Text>
       ) : null}
       {item.videoUrl ? (
-        <Video
-          source={{ uri: item.videoUrl }}
-          style={styles.video}
-          useNativeControls
-          resizeMode={ResizeMode.CONTAIN}
-          isLooping={false}
-        />
+        <View style={styles.mediaWrap}>
+          <Video
+            source={{ uri: item.videoUrl }}
+            style={styles.video}
+            useNativeControls
+            resizeMode={ResizeMode.CONTAIN}
+            isLooping={false}
+          />
+          <View style={styles.mediaShare}>
+            <TinyShareButton onPress={onShare} />
+          </View>
+        </View>
       ) : null}
       <LikeButton count={item.likes.length} liked={liked} onPress={onLike} />
     </Card>
@@ -93,6 +107,7 @@ const CommentCard = memo(function CommentCard({
 export default function ForumsScreen() {
   const {
     comments,
+    quickComments,
     currentUser,
     loading,
     addComment,
@@ -108,17 +123,20 @@ export default function ForumsScreen() {
   const [videoUri, setVideoUri] = useState<string | null>(null);
   const [videoDurationSec, setVideoDurationSec] = useState<number | null>(null);
   const [picking, setPicking] = useState(false);
-
-  const discussions = useMemo(
-    () =>
-      [...comments]
-        .filter((c) => c.status !== 'blocked' && c.status !== 'suspended')
-        .sort(
-          (a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        ),
-    [comments]
+  const [sharePayload, setSharePayload] = useState<ContentSharePayload | null>(
+    null
   );
+  const discussions = useMemo(() => {
+    const byId = new Map<string, Comment>();
+    [...comments, ...quickComments].forEach((c) => {
+      if (c.status === 'blocked' || c.status === 'suspended') return;
+      byId.set(c.id, c);
+    });
+    return [...byId.values()].sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+  }, [comments, quickComments]);
 
   const accountVideos = useMemo(
     () => currentUser?.media?.videos || [],
@@ -254,6 +272,15 @@ export default function ForumsScreen() {
           item={item}
           liked={liked}
           onLike={() => toggleCommentLike(item.id)}
+          onShare={() =>
+            setSharePayload({
+              kind: 'content',
+              title: item.authorName,
+              body: item.text,
+              mediaUrl: item.videoUrl,
+              mediaKind: item.videoUrl ? 'video' : 'text',
+            })
+          }
         />
       );
     },
@@ -297,6 +324,7 @@ export default function ForumsScreen() {
               <Muted>
                 {t('common.video')} ({FORUM_VIDEO_MAX_SEC}s)
               </Muted>
+              <MediaUploadSpecs kind="forumVideo" title={t('media.specs.videoTitle')} />
               <View style={styles.videoActions}>
                 <Button
                   label={picking ? '...' : t('forums.pickVideo')}
@@ -342,10 +370,10 @@ export default function ForumsScreen() {
                             styles.accountChip,
                             {
                               borderColor: selected
-                                ? theme.colors.primary
+                                ? theme.colors.accent
                                 : theme.colors.border,
                               backgroundColor: selected
-                                ? theme.colors.primarySoft
+                                ? theme.colors.accentSoft
                                 : theme.colors.surfaceElevated,
                             },
                           ]}
@@ -353,7 +381,7 @@ export default function ForumsScreen() {
                           <Ionicons
                             name="videocam"
                             size={16}
-                            color={theme.colors.primary}
+                            color={theme.colors.accent}
                           />
                           <Text
                             style={{
@@ -425,6 +453,11 @@ export default function ForumsScreen() {
         renderItem={renderItem}
       />
       </Screen>
+      <ShareTargetModal
+        visible={!!sharePayload}
+        payload={sharePayload}
+        onClose={() => setSharePayload(null)}
+      />
     </View>
   );
 }
@@ -439,8 +472,14 @@ const styles = StyleSheet.create({
   author: { fontWeight: '800', textAlign: 'left' },
   body: {
     textAlign: 'left',
-    writingDirection: 'ltr',
     lineHeight: 22,
+  },
+  mediaWrap: { position: 'relative' },
+  mediaShare: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 2,
   },
   video: {
     width: '100%',

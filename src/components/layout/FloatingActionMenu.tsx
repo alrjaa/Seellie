@@ -12,8 +12,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { floatingAboveTabOffset } from '@/theme/navigation';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
-import { useFloatingChrome } from '@/providers/FloatingChromeProvider';
+import { useFloatingChromeVisible } from '@/providers/FloatingChromeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
+import { cairoText } from '@/theme/fonts';
+import { useResponsive } from '@/hooks/useResponsive';
 
 type SideAction = {
   key: string;
@@ -48,6 +50,12 @@ const ACTIONS: SideAction[] = [
     icon: 'search-outline',
     href: '/search',
   },
+  {
+    key: 'notifications',
+    labelKey: 'notifications.title',
+    icon: 'notifications-outline',
+    href: '/notifications',
+  },
 ];
 
 /**
@@ -61,7 +69,8 @@ function FloatingActionMenuComponent() {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { visible } = useFloatingChrome();
+  const { visible } = useFloatingChromeVisible();
+  const { desktop } = useResponsive();
   const opacity = useRef(new Animated.Value(1)).current;
   const translateX = useRef(new Animated.Value(0)).current;
   const [pressedKey, setPressedKey] = useState<string | null>(null);
@@ -70,12 +79,12 @@ function FloatingActionMenuComponent() {
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: visible ? 1 : 0,
-        duration: 180,
+        duration: 140,
         useNativeDriver: true,
       }),
       Animated.timing(translateX, {
-        toValue: visible ? 0 : -56,
-        duration: 180,
+        toValue: visible ? 0 : -40,
+        duration: 140,
         useNativeDriver: true,
       }),
     ]).start();
@@ -83,13 +92,32 @@ function FloatingActionMenuComponent() {
 
   const actions = useMemo(() => {
     if (!currentUser) return [];
+    const active = currentUser.activeRole || currentUser.role;
+    if (active === 'superadmin' || currentUser.role === 'superadmin') {
+      return [];
+    }
+    // المنظم: بحث + إشعارات فقط (المشاركة من على المحتوى/اللاعبين)
+    if (active === 'organizer' || currentUser.role === 'organizer') {
+      return ACTIONS.filter((a) =>
+        ['search', 'notifications'].includes(a.key)
+      ).map((a) => ({ ...a, label: t(a.labelKey) }));
+    }
     return ACTIONS.filter(
-      (a) => !a.roles || a.roles.includes(currentUser.role)
+      (a) => !a.roles || a.roles.includes(currentUser.role as any)
     ).map((a) => ({ ...a, label: t(a.labelKey) }));
   }, [currentUser, t]);
 
   if (!currentUser || actions.length === 0) return null;
-  if (pathname?.includes('(auth)') || pathname === '/login' || pathname === '/admin') return null;
+  if (desktop) return null;
+  if (
+    pathname?.includes('(auth)') ||
+    pathname?.includes('(superadmin)') ||
+    pathname?.includes('/superadmin') ||
+    pathname === '/login' ||
+    pathname === '/admin'
+  ) {
+    return null;
+  }
 
   const isActive = (href: string) =>
     pathname === href || pathname?.endsWith(href);
@@ -113,7 +141,10 @@ function FloatingActionMenuComponent() {
           const active = isActive(action.href);
           const showLabel = pressedKey === action.key;
           return (
-            <View key={action.key} style={styles.item}>
+            <View
+              key={action.key}
+              style={[styles.item, showLabel ? styles.itemRaised : null]}
+            >
               {showLabel ? (
                 <View
                   pointerEvents="none"
@@ -126,8 +157,11 @@ function FloatingActionMenuComponent() {
                   ]}
                 >
                   <Text
-                    style={[styles.tooltipText, { color: theme.colors.text }]}
-                    numberOfLines={1}
+                    style={[
+                      styles.tooltipText,
+                      cairoText('semiBold'),
+                      { color: theme.colors.text },
+                    ]}
                   >
                     {action.label}
                   </Text>
@@ -137,17 +171,22 @@ function FloatingActionMenuComponent() {
                 accessibilityRole="button"
                 accessibilityLabel={action.label}
                 onPressIn={() => setPressedKey(action.key)}
-                onPressOut={() => setPressedKey(null)}
+                onPressOut={() => {
+                  // إبقاء الاسم لحظة قصيرة ليُقرأ كاملاً
+                  setTimeout(() => {
+                    setPressedKey((k) => (k === action.key ? null : k));
+                  }, 700);
+                }}
                 onPress={() => router.push(action.href as any)}
                 hitSlop={6}
                 style={[
                   styles.btn,
                   {
                     backgroundColor: active
-                      ? theme.colors.primary
+                      ? theme.colors.accent
                       : theme.colors.surfaceElevated,
                     borderColor: active
-                      ? theme.colors.primary
+                      ? theme.colors.accent
                       : theme.colors.border,
                   },
                 ]}
@@ -156,7 +195,7 @@ function FloatingActionMenuComponent() {
                   name={action.icon}
                   size={18}
                   color={
-                    active ? theme.colors.textInverse : theme.colors.primary
+                    active ? theme.colors.textInverse : theme.colors.text
                   }
                 />
               </Pressable>
@@ -177,18 +216,25 @@ const styles = StyleSheet.create({
     elevation: 40,
     // تثبيت المحاذاة الفيزيائية لليسار بغض النظر عن RTL/LTR
     direction: 'ltr',
+    overflow: 'visible',
   },
   wrap: {
     position: 'absolute',
     gap: 12,
     alignItems: 'flex-start',
     direction: 'ltr',
+    overflow: 'visible',
   },
   item: {
     position: 'relative',
     width: 44,
     height: 44,
     justifyContent: 'center',
+    overflow: 'visible',
+  },
+  itemRaised: {
+    zIndex: 8,
+    elevation: 8,
   },
   btn: {
     width: 44,
@@ -200,22 +246,21 @@ const styles = StyleSheet.create({
   },
   tooltip: {
     position: 'absolute',
-    left: 52,
-    top: 8,
-    zIndex: 2,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    left: 50,
+    top: 6,
+    zIndex: 10,
+    elevation: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    maxWidth: 140,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
+    // بدون قصّ — يظهر الاسم كاملاً
+    maxWidth: 200,
+    minWidth: 48,
   },
   tooltipText: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 10,
+    lineHeight: 13,
+    textAlign: 'left',
   },
 });

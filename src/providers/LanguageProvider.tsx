@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -22,6 +23,7 @@ import {
   layoutDirectionStyle,
   syncDocumentDirection,
 } from '@/theme/direction';
+import { setAppRTL } from '@/theme/app-direction';
 
 type LanguageContextValue = {
   language: AppLanguage;
@@ -136,6 +138,10 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const isRTL = shouldUseRTL(language);
+
+  useLayoutEffect(() => {
+    setAppRTL(isRTL);
+  }, [isRTL]);
 
   useEffect(() => {
     syncDocumentDirection(isRTL, language);

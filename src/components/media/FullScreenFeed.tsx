@@ -27,7 +27,10 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { LikeButton } from '@/components/ui';
-import { useFloatingChrome } from '@/providers/FloatingChromeProvider';
+import {
+  useFloatingChromeScroll,
+  useFloatingChromeVisible,
+} from '@/providers/FloatingChromeProvider';
 import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
 
 export type FullScreenContent = {
@@ -221,13 +224,14 @@ function FullScreenFeedComponent({
   const theme = useAppTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { visible } = useFloatingChromeVisible();
   const {
-    visible,
     onScroll,
     onScrollBeginDrag,
     onScrollEndDrag,
+    onMomentumScrollBegin,
     onMomentumScrollEnd,
-  } = useFloatingChrome();
+  } = useFloatingChromeScroll();
   const [height, setHeight] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(data[0]?.id ?? null);
   const overlayOpacity = useRef(new Animated.Value(1)).current;
@@ -244,12 +248,12 @@ function FullScreenFeedComponent({
     Animated.parallel([
       Animated.timing(overlayOpacity, {
         toValue: visible ? 1 : 0,
-        duration: 180,
+        duration: 120,
         useNativeDriver: true,
       }),
       Animated.timing(overlayTranslate, {
-        toValue: visible ? 0 : -24,
-        duration: 180,
+        toValue: visible ? 0 : -12,
+        duration: 120,
         useNativeDriver: true,
       }),
     ]).start();
@@ -312,18 +316,20 @@ function FullScreenFeedComponent({
           keyExtractor={(item, index) => `${item.id}__${index}`}
           renderItem={renderItem}
           pagingEnabled
+          disableIntervalMomentum
           decelerationRate="fast"
           showsVerticalScrollIndicator={false}
           getItemLayout={height > 0 ? getItemLayout : undefined}
           initialNumToRender={2}
           maxToRenderPerBatch={3}
           windowSize={5}
-          removeClippedSubviews
+          removeClippedSubviews={false}
           onScroll={onScroll}
           onScrollBeginDrag={onScrollBeginDrag}
           onScrollEndDrag={onScrollEndDrag}
+          onMomentumScrollBegin={onMomentumScrollBegin}
           onMomentumScrollEnd={onMomentumScrollEnd}
-          scrollEventThrottle={16}
+          scrollEventThrottle={48}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           ListEmptyComponent={
@@ -392,15 +398,11 @@ const styles = StyleSheet.create({
   textTitle: {
     fontSize: 22,
     fontWeight: '900',
-    textAlign: 'left',
-    writingDirection: 'ltr',
   },
   textBody: {
     fontSize: 18,
     lineHeight: 30,
     fontWeight: '600',
-    textAlign: 'left',
-    writingDirection: 'ltr',
   },
   bottomMeta: {
     position: 'absolute',
@@ -408,18 +410,14 @@ const styles = StyleSheet.create({
     right: 14,
     bottom: 0,
     gap: 8,
-    alignItems: 'flex-end',
-    // تثبيت المحاذاة لليمين الفعلي حتى مع RTL
-    direction: 'ltr',
+    alignItems: 'stretch',
   },
   bottomBar: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
     gap: Platform.OS === 'android' ? 8 : 10,
-    alignSelf: 'flex-end',
     width: '100%',
-    direction: 'ltr',
   },
   handlePress: {
     maxWidth: '70%',
@@ -428,15 +426,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: Platform.OS === 'android' ? 10 : 11,
-    textAlign: 'left',
   },
   caption: {
     color: '#fff',
     fontSize: Platform.OS === 'android' ? 13 : 14,
     lineHeight: Platform.OS === 'android' ? 18 : 20,
     fontWeight: '600',
-    textAlign: 'left',
-    writingDirection: 'ltr',
   },
   overlay: {
     position: 'absolute',

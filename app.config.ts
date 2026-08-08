@@ -4,7 +4,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Seellie',
   slug: 'seellie-native',
-  version: '1.0.0',
+  version: '1.0.3',
   orientation: 'default',
   icon: './assets/icon.png',
   scheme: 'seellie',
@@ -16,11 +16,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     fallbackToCacheTimeout: 0,
   },
   // ثابت — بدون expo-updates لاستخدام policy appVersion
-  runtimeVersion: '1.0.0',
+  runtimeVersion: '1.0.3',
   splash: {
     image: './assets/splash-icon.png',
     resizeMode: 'contain',
-    backgroundColor: '#0D0D0D',
+    backgroundColor: '#0d1a26',
   },
   ios: {
     supportsTablet: true,
@@ -35,14 +35,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     adaptiveIcon: {
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundImage: './assets/android-icon-background.png',
-      backgroundColor: '#0D0D0D',
+      backgroundColor: '#0d1a26',
     },
     package: 'com.seellie.app',
-    versionCode: 1,
+      versionCode: 4,
   },
   androidStatusBar: {
     translucent: true,
-    backgroundColor: '#0D0D0D',
+    backgroundColor: '#0d1a26',
     barStyle: 'light-content',
   },
   web: {
@@ -108,6 +108,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ?? '',
       messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? '',
       appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID ?? '',
+    },
+    supabase: {
+      url: process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
+      anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
     },
   },
 });

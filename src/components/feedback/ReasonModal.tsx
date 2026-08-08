@@ -10,6 +10,7 @@ import {
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Button } from '@/components/ui/Button';
+import { cairoText } from '@/theme/fonts';
 
 type Props = {
   visible: boolean;
@@ -35,7 +36,7 @@ export function ReasonModal({
   onConfirm,
 }: Props) {
   const theme = useAppTheme();
-  const { t } = useTranslation();
+  const { t, isRTL } = useTranslation();
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
 
@@ -63,22 +64,23 @@ export function ReasonModal({
             {
               backgroundColor: theme.colors.surface,
               borderColor: theme.colors.border,
+              direction: isRTL ? 'rtl' : 'ltr',
             },
           ]}
           onPress={(e) => e.stopPropagation()}
         >
-          <Text style={[styles.title, { color: theme.colors.text }]}>
+          <Text style={[styles.title, cairoText('extraBold'), { color: theme.colors.text }]}>
             {title}
           </Text>
           {description ? (
-            <Text style={[styles.desc, { color: theme.colors.textMuted }]}>
+            <Text style={[styles.desc, cairoText('regular'), { color: theme.colors.textMuted }]}>
               {description}
             </Text>
           ) : null}
 
           {requireReason ? (
             <View style={{ gap: 6 }}>
-              <Text style={[styles.label, { color: theme.colors.textMuted }]}>
+              <Text style={[styles.label, cairoText('semiBold'), { color: theme.colors.textMuted }]}>
                 {resolvedReasonLabel} *
               </Text>
               <TextInput
@@ -110,7 +112,12 @@ export function ReasonModal({
             </View>
           ) : null}
 
-          <View style={styles.actions}>
+          <View
+            style={[
+              styles.actions,
+              { flexDirection: isRTL ? 'row-reverse' : 'row' },
+            ]}
+          >
             <Button
               label={t('common.cancel')}
               variant="outline"
@@ -156,20 +163,15 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 17,
-    fontWeight: '800',
-    textAlign: 'left',
     width: '100%',
   },
   desc: {
     fontSize: 13,
     lineHeight: 20,
-    textAlign: 'left',
     width: '100%',
   },
   label: {
     fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'left',
     width: '100%',
   },
   input: {
@@ -178,7 +180,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
     fontSize: 14,
-    textAlign: 'left',
   },
-  actions: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  actions: { gap: 8, marginTop: 4 },
 });

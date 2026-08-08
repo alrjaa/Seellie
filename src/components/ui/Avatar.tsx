@@ -2,6 +2,7 @@ import React, { memo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useAppTheme } from '@/providers/ThemeProvider';
+import { cairoText } from '@/theme/fonts';
 import { initials } from '@/utils';
 
 type Props = {
@@ -24,6 +25,8 @@ function AvatarComponent({ uri, name, size = 48 }: Props) {
           height: size,
           borderRadius: size / 2,
           backgroundColor: theme.colors.surfaceElevated,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: theme.colors.border,
         }}
         contentFit="cover"
         transition={200}
@@ -41,12 +44,23 @@ function AvatarComponent({ uri, name, size = 48 }: Props) {
         width: size,
         height: size,
         borderRadius: size / 2,
-        backgroundColor: theme.colors.primaryMuted,
+        backgroundColor: theme.colors.accentSoft,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: theme.colors.accentMuted,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <Text style={[styles.initials, { fontSize: size * 0.32 }]}>
+      <Text
+        style={[
+          styles.initials,
+          cairoText('extraBold'),
+          {
+            fontSize: size * 0.32,
+            color: theme.colors.accent,
+          },
+        ]}
+      >
         {initials(name)}
       </Text>
     </View>
@@ -57,7 +71,6 @@ export const Avatar = memo(AvatarComponent);
 
 const styles = StyleSheet.create({
   initials: {
-    color: '#fff',
-    fontWeight: '800',
+    textAlign: 'center',
   },
 });

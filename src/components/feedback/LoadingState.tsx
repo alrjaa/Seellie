@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
+import { cairoText } from '@/theme/fonts';
 
 type Props = {
   label?: string;
@@ -34,8 +35,8 @@ function LoadingStateComponent({
         style,
       ]}
     >
-      <ActivityIndicator color={theme.colors.primary} size="large" />
-      <Text style={[styles.label, { color: theme.colors.textMuted }]}>
+      <ActivityIndicator color={theme.colors.accent} size="large" />
+      <Text style={[styles.label, cairoText('semiBold'), { color: theme.colors.textMuted }]}>
         {resolvedLabel}
       </Text>
     </View>
@@ -59,7 +60,6 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    fontWeight: '600',
     textAlign: 'center',
   },
 });

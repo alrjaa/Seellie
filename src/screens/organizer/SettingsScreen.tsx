@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Screen } from '@/components/layout/Screen';
@@ -7,12 +8,16 @@ import { Button, Card, Input, Muted, Subtitle, Title } from '@/components/ui';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { RolePathCard } from '@/components/account/RolePathCard';
 import { LanguageCard } from '@/components/account/LanguageCard';
+import { AdminEntryButton } from '@/components/account/AdminEntryButton';
+import { AccountSocialStats } from '@/components/account/AccountSocialStats';
+import { AvatarPickerCard } from '@/components/account/AvatarPickerCard';
 import { useTranslation } from '@/providers/LanguageProvider';
 
 export default function OrganizerSettingsScreen() {
   const { currentUser, updateUser, changePassword, logout } = useTournament();
   const { preference, setPreference } = useTheme();
   const { t } = useTranslation();
+  const router = useRouter();
   const [name, setName] = useState(currentUser?.name || '');
   const [bio, setBio] = useState(currentUser?.bio || '');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -32,6 +37,7 @@ export default function OrganizerSettingsScreen() {
       <Muted>{t('settings.subtitle')}</Muted>
 
       <RolePathCard />
+      <AvatarPickerCard />
       <LanguageCard />
 
       <Card style={styles.card}>
@@ -112,6 +118,28 @@ export default function OrganizerSettingsScreen() {
         />
       </Card>
 
+      <AdminEntryButton />
+      <Button
+        label={t('shareCards.menu')}
+        variant="outline"
+        onPress={() => router.push('/share-cards' as any)}
+      />
+      <Button
+        label={t('notifications.title')}
+        variant="outline"
+        onPress={() => router.push('/notifications' as any)}
+      />
+      <Button
+        label={t('legal.openPrivacy')}
+        variant="ghost"
+        onPress={() => router.push('/privacy' as any)}
+      />
+      <Button
+        label={t('legal.openTerms')}
+        variant="ghost"
+        onPress={() => router.push('/terms' as any)}
+      />
+      <AccountSocialStats user={currentUser} />
       <Button label={t('common.logout')} variant="danger" onPress={logout} />
     </Screen>
   );

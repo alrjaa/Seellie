@@ -2,20 +2,30 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import {
   useTournament,
   type Player,
+  type Referee,
   type Team,
 } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
+import { useToast } from '@/providers/ToastProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
+import {
+  ShareTargetModal,
+  TinyShareButton,
+  type ContentSharePayload,
+} from '@/components/share/ShareTargetModal';
 import {
   Avatar,
   Button,
@@ -29,6 +39,7 @@ import {
 import { formatVenueAddress } from '@/utils/competition';
 import { MIN_COMPETITION_TEAMS } from '@/utils/competition-request';
 import { formatArabicDate, formatArabicTime } from '@/utils';
+import { MEDIA_SPECS, validatePickerAsset } from '@/utils/media-limits';
 
 const POSITION_OPTIONS: {
   value: Player['position'];
@@ -40,6 +51,15 @@ const POSITION_OPTIONS: {
   { value: 'هجوم', key: 'attack' },
 ];
 
+const REFEREE_ROLE_OPTIONS: {
+  value: Referee['role'];
+  key: 'pitch' | 'assistant' | 'observer';
+}[] = [
+  { value: 'حكم ساحة', key: 'pitch' },
+  { value: 'رجل خط', key: 'assistant' },
+  { value: 'مراقب', key: 'observer' },
+];
+
 export default function CompetitionManageScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -48,6 +68,7 @@ export default function CompetitionManageScreen() {
   const {
     competitions,
     currentUser,
+    users,
     referees,
     addTeam,
     renameCompetition,
@@ -59,9 +80,16 @@ export default function CompetitionManageScreen() {
     removeStaffFromCompetition,
     generateFixturesForCompetition,
     updateMatchResult,
+    registerRefereeForCompetition,
     assignRefereeToCompetition,
     removeRefereeFromCompetition,
+    updateCompetition,
   } = useTournament();
+  const { toast } = useToast();
+  const [pickingLogo, setPickingLogo] = useState(false);
+  const [sharePayload, setSharePayload] = useState<ContentSharePayload | null>(
+    null
+  );
 
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [teamName, setTeamName] = useState('');
@@ -73,6 +101,11 @@ export default function CompetitionManageScreen() {
   const [staffName, setStaffName] = useState('');
   const [staffRole, setStaffRole] = useState('');
   const [staffMobile, setStaffMobile] = useState('');
+  const [refereeName, setRefereeName] = useState('');
+  const [refereeRole, setRefereeRole] =
+    useState<Referee['role']>('حكم ساحة');
+  const [refereeMobile, setRefereeMobile] = useState('');
+  const [refereeCity, setRefereeCity] = useState('');
   const [scores, setScores] = useState<
     Record<string, { t1: number; t2: number }>
   >({});
@@ -159,9 +192,11 @@ export default function CompetitionManageScreen() {
           text: t('organizer.competitionManage.deleteCompetition'),
           style: 'destructive',
           onPress: () => {
-            if (deleteCompetition(competition.id)) {
-              router.replace('/(organizer)/competitions');
-            }
+            void (async () => {
+              if (await deleteCompetition(competition.id)) {
+                router.replace('/(organizer)/competitions');
+              }
+            })();
           },
         },
       ]
@@ -187,47 +222,110 @@ export default function CompetitionManageScreen() {
     );
   };
 
+  const openJoinShareForPlayer = (player: Player, team: Team) => {
+    if (!competition) return;
+    const matched =
+      users.find(
+        (u) =>
+          u.id === player.id ||
+          (player.email && u.email === player.email) ||
+          u.name.trim().toLowerCase() === player.name.trim().toLowerCase()
+      ) || null;
+    setSharePayload({
+      kind: 'join_request',
+      competitionId: competition.id,
+      competitionName: competition.name,
+      teamId: team.id,
+      teamName: team.name,
+      position: player.position,
+      presetRecipientId: matched?.id,
+      presetRecipientName: matched?.name || player.name,
+      presetRecipientKind: 'user',
+      body: t('shareCards.defaultJoinNote', {
+        name: matched?.name || player.name,
+      }),
+    });
+  };
+
   const renderTeam = (team: Team) => {
     const selected = selectedTeamId === team.id;
     return (
-      <Pressable
-        key={team.id}
-        onPress={() => setSelectedTeamId(team.id)}
-        style={[
-          styles.teamRow,
-          {
-            borderColor: selected ? theme.colors.primary : theme.colors.border,
-            backgroundColor: selected
-              ? theme.colors.primarySoft
-              : theme.colors.inputBg,
-          },
-        ]}
-      >
-        <Avatar uri={team.logo} name={team.name} size={36} />
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.value, { color: theme.colors.text }]}>
-            {team.name}
-          </Text>
-          <Muted>
-            {t('organizer.competitionManage.playersCount', {
-              count: team.players.length,
-            })}
-          </Muted>
-        </View>
+      <View key={team.id} style={{ gap: 6 }}>
         <Pressable
-          onPress={(e) => {
-            e.stopPropagation?.();
-            confirmDeleteTeam(team);
-          }}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('organizer.competitionManage.deleteTeam')}
+          onPress={() => setSelectedTeamId(team.id)}
+          style={[
+            styles.teamRow,
+            {
+              borderColor: selected ? theme.colors.accent : theme.colors.border,
+              backgroundColor: selected
+                ? theme.colors.accentSoft
+                : theme.colors.inputBg,
+            },
+          ]}
         >
-          <Text style={{ color: theme.colors.danger, fontWeight: '800', fontSize: 12 }}>
-            {t('organizer.competitionManage.deleteTeam')}
-          </Text>
+          <Avatar uri={team.logo} name={team.name} size={36} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.value, { color: theme.colors.text }]}>
+              {team.name}
+            </Text>
+            <Muted>
+              {t('organizer.competitionManage.playersCount', {
+                count: team.players.length,
+              })}
+            </Muted>
+          </View>
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation?.();
+              confirmDeleteTeam(team);
+            }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('organizer.competitionManage.deleteTeam')}
+          >
+            <Text
+              style={{
+                color: theme.colors.danger,
+                fontWeight: '800',
+                fontSize: 12,
+              }}
+            >
+              {t('organizer.competitionManage.deleteTeam')}
+            </Text>
+          </Pressable>
         </Pressable>
-      </Pressable>
+        {selected
+          ? team.players.map((player) => (
+              <View
+                key={player.id}
+                style={[
+                  styles.playerRow,
+                  {
+                    borderColor: theme.colors.border,
+                    backgroundColor: theme.colors.card,
+                  },
+                ]}
+              >
+                <Avatar uri={player.avatar} name={player.name} size={28} />
+                <View style={styles.playerNameRow}>
+                  <Text
+                    style={[styles.playerName, { color: theme.colors.text }]}
+                    numberOfLines={1}
+                  >
+                    {player.name}
+                  </Text>
+                  <TinyShareButton
+                    onPress={() => openJoinShareForPlayer(player, team)}
+                    accessibilityLabel={t('shareCards.sendJoinCard')}
+                  />
+                </View>
+                <Muted>
+                  #{player.jerseyNumber} · {player.position}
+                </Muted>
+              </View>
+            ))
+          : null}
+      </View>
     );
   };
 
@@ -240,6 +338,139 @@ export default function CompetitionManageScreen() {
           <Muted>{competition.visibleId}</Muted>
         </View>
       </View>
+
+      <Card style={styles.card}>
+        <Subtitle>{t('organizer.competitionManage.logoSection')}</Subtitle>
+        <MediaUploadSpecs
+          kind="logo"
+          title={t('media.specs.logoTitle')}
+          compact
+        />
+        <Button
+          label={
+            pickingLogo
+              ? t('media.picking')
+              : t('organizer.competitionManage.changeLogo')
+          }
+          variant="secondary"
+          loading={pickingLogo}
+          onPress={async () => {
+            try {
+              setPickingLogo(true);
+              const perm =
+                await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (!perm.granted) {
+                toast({
+                  variant: 'destructive',
+                  title: t('media.permissionDenied'),
+                  description: t('media.allowLibrary'),
+                });
+                return;
+              }
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                quality: 0.85,
+                allowsEditing: true,
+                aspect: [1, 1],
+              });
+              if (result.canceled || !result.assets?.[0]?.uri) return;
+              const asset = result.assets[0];
+              const check = validatePickerAsset('logo', {
+                uri: asset.uri,
+                width: asset.width,
+                height: asset.height,
+                fileSize: asset.fileSize,
+              });
+              if (!check.ok) {
+                toast({
+                  variant: 'destructive',
+                  title:
+                    check.reason === 'size'
+                      ? t('media.fileTooLarge')
+                      : t('media.imageTooSmall'),
+                  description:
+                    check.reason === 'size'
+                      ? t('media.fileTooLargeDesc', {
+                          mb: MEDIA_SPECS.logo.maxMb,
+                        })
+                      : t('media.imageTooSmallDesc', {
+                          w: (MEDIA_SPECS.logo as { width: number }).width,
+                        }),
+                });
+                return;
+              }
+              updateCompetition({
+                ...competition,
+                logo: asset.uri,
+              });
+              toast({
+                variant: 'success',
+                title: t('organizer.competitionManage.logoUpdated'),
+              });
+            } catch {
+              toast({
+                variant: 'destructive',
+                title: t('media.pickFailed'),
+              });
+            } finally {
+              setPickingLogo(false);
+            }
+          }}
+        />
+      </Card>
+
+      <Card style={styles.card}>
+        <Subtitle>
+          {t('organizer.competitionManage.registerRefereeSection')}
+        </Subtitle>
+        <Input
+          label={t('organizer.competitionManage.refereeName')}
+          value={refereeName}
+          onChangeText={setRefereeName}
+        />
+        <Muted>{t('organizer.competitionManage.refereeRole')}</Muted>
+        <View style={styles.chips}>
+          {REFEREE_ROLE_OPTIONS.map((option) => (
+            <Chip
+              key={option.key}
+              label={t(
+                `organizer.competitionManage.refereeRoles.${option.key}`
+              )}
+              active={refereeRole === option.value}
+              onPress={() => setRefereeRole(option.value)}
+            />
+          ))}
+        </View>
+        <Input
+          label={t('organizer.competitionManage.refereeMobile')}
+          value={refereeMobile}
+          onChangeText={setRefereeMobile}
+          keyboardType="phone-pad"
+        />
+        <Input
+          label={t('organizer.competitionManage.refereeCity')}
+          value={refereeCity}
+          onChangeText={setRefereeCity}
+        />
+        <Button
+          label={t('organizer.competitionManage.registerReferee')}
+          onPress={() => {
+            if (
+              registerRefereeForCompetition(competition.id, {
+                name: refereeName,
+                role: refereeRole,
+                mobile: refereeMobile,
+                city: refereeCity,
+              })
+            ) {
+              setRefereeName('');
+              setRefereeMobile('');
+              setRefereeCity('');
+              setRefereeRole('حكم ساحة');
+            }
+          }}
+        />
+      </Card>
 
       <Card style={styles.card}>
         <Subtitle>{t('organizer.competitionManage.editCompetitionName')}</Subtitle>
@@ -386,6 +617,20 @@ export default function CompetitionManageScreen() {
 
       <Card style={styles.card}>
         <Subtitle>{t('organizer.competitionManage.fixtures')}</Subtitle>
+        {competition.fixturesSuspended ? (
+          <>
+            <Text style={{ color: theme.colors.danger, fontWeight: '800' }}>
+              {t('superadmin.competitionDetail.fixturesSuspendedBadge')}
+            </Text>
+            {competition.fixturesSuspendReason ? (
+              <Muted>
+                {t('superadmin.competitionDetail.fixturesSuspendReasonLine', {
+                  reason: competition.fixturesSuspendReason,
+                })}
+              </Muted>
+            ) : null}
+          </>
+        ) : null}
         {competition.matches.length === 0 ? (
           <>
             <Muted>
@@ -399,113 +644,294 @@ export default function CompetitionManageScreen() {
             />
           </>
         ) : (
-          sortedMatches.map((match) => {
-            const s = getScore(match.id, match.team1Score, match.team2Score);
-            return (
-              <View
-                key={match.id}
-                style={[styles.matchRow, { borderTopColor: theme.colors.border }]}
-              >
-                <Text style={[styles.value, { color: theme.colors.text }]}>
-                  {teamNameById(match.team1Id)} vs {teamNameById(match.team2Id)}
-                </Text>
-                <Muted>
-                  {formatArabicDate(match.date)} · {formatArabicTime(match.date)}
-                </Muted>
-                <View style={styles.scoreRow}>
-                  <View style={styles.scoreSide}>
-                    <Pressable
-                      onPress={() =>
-                        adjustScore(
-                          match.id,
-                          match.team1Score,
-                          match.team2Score,
-                          't1',
-                          1
-                        )
-                      }
-                      style={[
-                        styles.scoreBtn,
-                        { backgroundColor: theme.colors.primarySoft },
-                      ]}
-                    >
-                      <Text style={{ color: theme.colors.primary, fontWeight: '900' }}>
-                        +
-                      </Text>
-                    </Pressable>
-                    <Text style={[styles.scoreNum, { color: theme.colors.text }]}>
-                      {s.t1}
-                    </Text>
-                    <Pressable
-                      onPress={() =>
-                        adjustScore(
-                          match.id,
-                          match.team1Score,
-                          match.team2Score,
-                          't1',
-                          -1
-                        )
-                      }
-                      style={[
-                        styles.scoreBtn,
-                        { backgroundColor: theme.colors.inputBg },
-                      ]}
-                    >
-                      <Text style={{ color: theme.colors.textMuted, fontWeight: '900' }}>
-                        −
-                      </Text>
-                    </Pressable>
-                  </View>
-                  <Text style={{ color: theme.colors.textMuted, fontWeight: '800' }}>
-                    -
+          <>
+            <Muted>{t('organizer.competitionManage.fixturesTableHint')}</Muted>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.tableScroll}
+            >
+              <View style={styles.table}>
+                <View
+                  style={[
+                    styles.tableHead,
+                    {
+                      backgroundColor: theme.colors.accentSoft,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.th,
+                      styles.colNum,
+                      { color: theme.colors.accent },
+                    ]}
+                  >
+                    {t('organizer.competitionManage.colNum')}
                   </Text>
-                  <View style={styles.scoreSide}>
-                    <Pressable
-                      onPress={() =>
-                        adjustScore(
-                          match.id,
-                          match.team1Score,
-                          match.team2Score,
-                          't2',
-                          1
-                        )
-                      }
-                      style={[
-                        styles.scoreBtn,
-                        { backgroundColor: theme.colors.primarySoft },
-                      ]}
-                    >
-                      <Text style={{ color: theme.colors.primary, fontWeight: '900' }}>
-                        +
-                      </Text>
-                    </Pressable>
-                    <Text style={[styles.scoreNum, { color: theme.colors.text }]}>
-                      {s.t2}
-                    </Text>
-                    <Pressable
-                      onPress={() =>
-                        adjustScore(
-                          match.id,
-                          match.team1Score,
-                          match.team2Score,
-                          't2',
-                          -1
-                        )
-                      }
-                      style={[
-                        styles.scoreBtn,
-                        { backgroundColor: theme.colors.inputBg },
-                      ]}
-                    >
-                      <Text style={{ color: theme.colors.textMuted, fontWeight: '900' }}>
-                        −
-                      </Text>
-                    </Pressable>
-                  </View>
+                  <Text
+                    style={[
+                      styles.th,
+                      styles.colDate,
+                      { color: theme.colors.accent },
+                    ]}
+                  >
+                    {t('organizer.competitionManage.colDate')}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.th,
+                      styles.colTime,
+                      { color: theme.colors.accent },
+                    ]}
+                  >
+                    {t('organizer.competitionManage.colTime')}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.th,
+                      styles.colTeam,
+                      { color: theme.colors.accent },
+                    ]}
+                  >
+                    {t('organizer.competitionManage.colHome')}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.th,
+                      styles.colScore,
+                      { color: theme.colors.accent },
+                    ]}
+                  >
+                    {t('organizer.competitionManage.colScore')}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.th,
+                      styles.colTeam,
+                      { color: theme.colors.accent },
+                    ]}
+                  >
+                    {t('organizer.competitionManage.colAway')}
+                  </Text>
                 </View>
+
+                {sortedMatches.map((match, index) => {
+                  const s = getScore(
+                    match.id,
+                    match.team1Score,
+                    match.team2Score
+                  );
+                  const zebra =
+                    index % 2 === 0
+                      ? theme.colors.card
+                      : theme.colors.inputBg;
+                  const locked = !!competition.fixturesSuspended;
+                  return (
+                    <View
+                      key={match.id}
+                      style={[
+                        styles.tableRow,
+                        {
+                          backgroundColor: zebra,
+                          borderColor: theme.colors.border,
+                          opacity: locked ? 0.7 : 1,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.td,
+                          styles.colNum,
+                          { color: theme.colors.textMuted },
+                        ]}
+                      >
+                        {index + 1}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.td,
+                          styles.colDate,
+                          { color: theme.colors.text },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {formatArabicDate(match.date)}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.td,
+                          styles.colTime,
+                          { color: theme.colors.textMuted },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {formatArabicTime(match.date)}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.td,
+                          styles.colTeam,
+                          styles.teamCell,
+                          { color: theme.colors.text },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {teamNameById(match.team1Id)}
+                      </Text>
+                      <View style={[styles.colScore, styles.scoreCell]}>
+                        <Pressable
+                          disabled={locked}
+                          onPress={() =>
+                            adjustScore(
+                              match.id,
+                              match.team1Score,
+                              match.team2Score,
+                              't1',
+                              1
+                            )
+                          }
+                          style={[
+                            styles.scoreBtnSm,
+                            { backgroundColor: theme.colors.accentSoft },
+                          ]}
+                          hitSlop={4}
+                        >
+                          <Text
+                            style={{
+                              color: theme.colors.accent,
+                              fontWeight: '900',
+                              fontSize: 11,
+                            }}
+                          >
+                            +
+                          </Text>
+                        </Pressable>
+                        <Text
+                          style={[
+                            styles.scoreValue,
+                            { color: theme.colors.text },
+                          ]}
+                        >
+                          {s.t1}
+                        </Text>
+                        <Pressable
+                          disabled={locked}
+                          onPress={() =>
+                            adjustScore(
+                              match.id,
+                              match.team1Score,
+                              match.team2Score,
+                              't1',
+                              -1
+                            )
+                          }
+                          style={[
+                            styles.scoreBtnSm,
+                            { backgroundColor: theme.colors.border },
+                          ]}
+                          hitSlop={4}
+                        >
+                          <Text
+                            style={{
+                              color: theme.colors.textMuted,
+                              fontWeight: '900',
+                              fontSize: 11,
+                            }}
+                          >
+                            −
+                          </Text>
+                        </Pressable>
+                        <Text
+                          style={{
+                            color: theme.colors.textMuted,
+                            fontWeight: '800',
+                            marginHorizontal: 2,
+                          }}
+                        >
+                          :
+                        </Text>
+                        <Pressable
+                          disabled={locked}
+                          onPress={() =>
+                            adjustScore(
+                              match.id,
+                              match.team1Score,
+                              match.team2Score,
+                              't2',
+                              1
+                            )
+                          }
+                          style={[
+                            styles.scoreBtnSm,
+                            { backgroundColor: theme.colors.accentSoft },
+                          ]}
+                          hitSlop={4}
+                        >
+                          <Text
+                            style={{
+                              color: theme.colors.accent,
+                              fontWeight: '900',
+                              fontSize: 11,
+                            }}
+                          >
+                            +
+                          </Text>
+                        </Pressable>
+                        <Text
+                          style={[
+                            styles.scoreValue,
+                            { color: theme.colors.text },
+                          ]}
+                        >
+                          {s.t2}
+                        </Text>
+                        <Pressable
+                          disabled={locked}
+                          onPress={() =>
+                            adjustScore(
+                              match.id,
+                              match.team1Score,
+                              match.team2Score,
+                              't2',
+                              -1
+                            )
+                          }
+                          style={[
+                            styles.scoreBtnSm,
+                            { backgroundColor: theme.colors.border },
+                          ]}
+                          hitSlop={4}
+                        >
+                          <Text
+                            style={{
+                              color: theme.colors.textMuted,
+                              fontWeight: '900',
+                              fontSize: 11,
+                            }}
+                          >
+                            −
+                          </Text>
+                        </Pressable>
+                      </View>
+                      <Text
+                        style={[
+                          styles.td,
+                          styles.colTeam,
+                          styles.teamCell,
+                          { color: theme.colors.text },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {teamNameById(match.team2Id)}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
-            );
-          })
+            </ScrollView>
+          </>
         )}
       </Card>
 
@@ -652,7 +1078,7 @@ export default function CompetitionManageScreen() {
                   )
                 }
               >
-                <Text style={{ color: theme.colors.primary, fontWeight: '800', fontSize: 12 }}>
+                <Text style={{ color: theme.colors.accent, fontWeight: '800', fontSize: 12 }}>
                   {t('superadmin.actions.add')}
                 </Text>
               </Pressable>
@@ -660,6 +1086,12 @@ export default function CompetitionManageScreen() {
           ))
         )}
       </Card>
+
+      <ShareTargetModal
+        visible={!!sharePayload}
+        payload={sharePayload}
+        onClose={() => setSharePayload(null)}
+      />
     </Screen>
   );
 }
@@ -677,27 +1109,89 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 10,
   },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  matchRow: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 10,
+  playerRow: {
+    marginLeft: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 4,
+  },
+  playerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
   },
-  scoreRow: {
+  playerName: {
+    flex: 1,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tableScroll: { paddingBottom: 4 },
+  table: {
+    minWidth: 640,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  tableHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: 52,
+  },
+  th: {
+    fontSize: 11,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  td: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  teamCell: {
+    fontWeight: '800',
+    textAlign: 'left',
+    paddingHorizontal: 4,
+  },
+  colNum: { width: 36 },
+  colDate: { width: 96 },
+  colTime: { width: 64 },
+  colTeam: { width: 120 },
+  colScore: { width: 148 },
+  scoreCell: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
+    gap: 2,
   },
-  scoreSide: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  scoreBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+  scoreBtnSm: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scoreNum: { fontSize: 22, fontWeight: '900', minWidth: 28, textAlign: 'center' },
+  scoreValue: {
+    fontSize: 14,
+    fontWeight: '900',
+    minWidth: 16,
+    textAlign: 'center',
+  },
   refRow: {
     flexDirection: 'row',
     gap: 10,

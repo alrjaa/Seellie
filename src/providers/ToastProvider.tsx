@@ -85,7 +85,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     payload?.variant === 'destructive'
       ? theme.colors.danger
       : payload?.variant === 'success'
-        ? theme.colors.primary
+        ? theme.colors.accent
         : theme.colors.surfaceElevated;
 
   return (
@@ -121,7 +121,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   color:
                     payload.variant === 'default'
                       ? theme.colors.text
-                      : theme.colors.textInverse,
+                      : payload.variant === 'success'
+                        ? theme.colors.textInverse
+                        : theme.colors.white,
                 },
               ]}
             >
@@ -135,7 +137,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                     color:
                       payload.variant === 'default'
                         ? theme.colors.textMuted
-                        : theme.colors.textInverse,
+                        : payload.variant === 'success'
+                          ? theme.colors.textInverse
+                          : theme.colors.white,
                   },
                 ]}
               >
@@ -179,14 +183,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 14,
     fontWeight: '800',
-    textAlign: 'left',
-    writingDirection: 'ltr',
   },
   desc: {
     marginTop: 4,
     fontSize: 12,
-    textAlign: 'left',
-    writingDirection: 'ltr',
     lineHeight: 18,
+    opacity: 0.92,
   },
 });

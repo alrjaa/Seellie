@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -25,11 +27,16 @@ import {
   formatVenueAddress,
 } from '@/utils/competition';
 import { formatArabicDate, formatArabicTime } from '@/utils';
+import { statusToneColor } from '@/utils/status-tone';
 
 type PendingAction =
   | {
       kind: 'competition';
       status: Competition['status'];
+    }
+  | {
+      kind: 'fixtures';
+      suspended: boolean;
     }
   | {
       kind: 'player';
@@ -54,6 +61,7 @@ export default function CompetitionDetailScreen() {
     users,
     referees,
     updateCompetitionStatus,
+    setCompetitionFixturesSuspended,
     updatePlayerStatus,
     updateReferee,
     generateFixturesForCompetition,
@@ -62,6 +70,7 @@ export default function CompetitionDetailScreen() {
     removeRefereeFromCompetition,
     addStaffToCompetition,
     removeStaffFromCompetition,
+    deleteCompetition,
   } = useTournament();
 
   const [tab, setTab] = useState<
@@ -124,12 +133,7 @@ export default function CompetitionDetailScreen() {
     );
   }
 
-  const statusColor =
-    competition.status === 'active'
-      ? theme.colors.primary
-      : competition.status === 'suspended'
-        ? theme.colors.danger
-        : theme.colors.warning;
+  const statusColor = statusToneColor(theme.colors, competition.status);
 
   const teamName = (teamId: string) =>
     competition.teams.find((t) => t.id === teamId)?.name || '?';
@@ -152,6 +156,19 @@ export default function CompetitionDetailScreen() {
               : t('superadmin.competitionDetail.modals.suspendedName', {
                   name: competition.name,
                 }),
+      });
+    }
+
+    if (pending.kind === 'fixtures') {
+      setCompetitionFixturesSuspended(competition.id, pending.suspended, {
+        reason,
+        successMessage: pending.suspended
+          ? t('superadmin.competitionDetail.modals.fixturesSuspendedMsg', {
+              name: competition.name,
+            })
+          : t('superadmin.competitionDetail.modals.fixturesResumedMsg', {
+              name: competition.name,
+            }),
       });
     }
 
@@ -239,6 +256,24 @@ export default function CompetitionDetailScreen() {
             : t('superadmin.competitionDetail.modals.suspendReason'),
       };
     }
+    if (pending.kind === 'fixtures') {
+      return {
+        title: pending.suspended
+          ? t('superadmin.competitionDetail.modals.suspendFixtures')
+          : t('superadmin.competitionDetail.modals.resumeFixtures'),
+        description: pending.suspended
+          ? t('superadmin.competitionDetail.modals.suspendFixturesDesc')
+          : t('superadmin.competitionDetail.modals.resumeFixturesDesc'),
+        requireReason: pending.suspended,
+        confirmLabel: pending.suspended
+          ? t('superadmin.competitionDetail.modals.confirmSuspendFixtures')
+          : t('superadmin.competitionDetail.modals.confirmResumeFixtures'),
+        destructive: pending.suspended,
+        reasonLabel: t(
+          'superadmin.competitionDetail.modals.fixturesSuspendReason'
+        ),
+      };
+    }
     if (pending.kind === 'player') {
       return {
         title:
@@ -320,12 +355,12 @@ export default function CompetitionDetailScreen() {
             style={[
               styles.smallBtn,
               {
-                backgroundColor: theme.colors.primarySoft,
+                backgroundColor: theme.colors.accentSoft,
                 borderColor: theme.colors.border,
               },
             ]}
           >
-            <Text style={{ color: theme.colors.primary, fontWeight: '800', fontSize: 11 }}>
+            <Text style={{ color: theme.colors.accent, fontWeight: '800', fontSize: 11 }}>
               {expanded
                 ? t('superadmin.actions.hidePlayers')
                 : t('superadmin.actions.showPlayers')}
@@ -336,12 +371,7 @@ export default function CompetitionDetailScreen() {
         {expanded ? (
           <View style={styles.playersBox}>
             {team.players.map((player) => {
-              const color =
-                player.status === 'active'
-                  ? theme.colors.primary
-                  : player.status === 'suspended'
-                    ? theme.colors.danger
-                    : theme.colors.warning;
+              const color = statusToneColor(theme.colors, player.status);
               return (
                 <View
                   key={player.id}
@@ -386,7 +416,7 @@ export default function CompetitionDetailScreen() {
                         })
                       }
                     >
-                      <Text style={{ color: theme.colors.primary, fontWeight: '800', fontSize: 11 }}>
+                      <Text style={{ color: theme.colors.accent, fontWeight: '800', fontSize: 11 }}>
                         {t('superadmin.actions.activate')}
                       </Text>
                     </Pressable>
@@ -455,13 +485,13 @@ export default function CompetitionDetailScreen() {
           label={t('superadmin.actions.activate')}
           variant={competition.status === 'active' ? 'primary' : 'outline'}
           onPress={() => setPending({ kind: 'competition', status: 'active' })}
-          style={{ flex: 1 }}
+          style={styles.actionBtn}
         />
         <Button
           label={t('superadmin.actions.warn')}
           variant={competition.status === 'warned' ? 'primary' : 'outline'}
           onPress={() => setPending({ kind: 'competition', status: 'warned' })}
-          style={{ flex: 1 }}
+          style={styles.actionBtn}
         />
         <Button
           label={t('superadmin.actions.suspend')}
@@ -469,7 +499,32 @@ export default function CompetitionDetailScreen() {
           onPress={() =>
             setPending({ kind: 'competition', status: 'suspended' })
           }
-          style={{ flex: 1 }}
+          style={styles.actionBtn}
+        />
+        <Button
+          label={t('organizer.competitionManage.deleteCompetition')}
+          variant="danger"
+          onPress={() => {
+            Alert.alert(
+              t('organizer.competitionManage.deleteCompetition'),
+              t('organizer.competitionManage.deleteCompetitionConfirm'),
+              [
+                { text: t('common.cancel'), style: 'cancel' },
+                {
+                  text: t('organizer.competitionManage.deleteCompetition'),
+                  style: 'destructive',
+                  onPress: () => {
+                    void (async () => {
+                      if (await deleteCompetition(competition.id)) {
+                        router.replace('/(superadmin)/competitions' as any);
+                      }
+                    })();
+                  },
+                },
+              ]
+            );
+          }}
+          style={styles.actionBtn}
         />
       </View>
 
@@ -489,7 +544,7 @@ export default function CompetitionDetailScreen() {
               styles.tab,
               {
                 backgroundColor:
-                  tab === key ? theme.colors.primary : theme.colors.inputBg,
+                  tab === key ? theme.colors.accent : theme.colors.inputBg,
                 borderColor: theme.colors.border,
               },
             ]}
@@ -658,14 +713,66 @@ export default function CompetitionDetailScreen() {
 
       {tab === 'fixtures' ? (
         <>
+          <Card style={styles.card}>
+            <Subtitle>
+              {t('superadmin.competitionDetail.fixturesTableTitle')}
+            </Subtitle>
+            <Muted>{t('superadmin.competitionDetail.fixturesTableHint')}</Muted>
+            <Text
+              style={[
+                styles.status,
+                {
+                  color: competition.fixturesSuspended
+                    ? theme.colors.danger
+                    : theme.colors.accent,
+                },
+              ]}
+            >
+              {competition.fixturesSuspended
+                ? t('superadmin.competitionDetail.fixturesSuspendedBadge')
+                : t('superadmin.competitionDetail.fixturesActive')}
+            </Text>
+            {competition.fixturesSuspended &&
+            competition.fixturesSuspendReason ? (
+              <Muted>
+                {t('superadmin.competitionDetail.fixturesSuspendReasonLine', {
+                  reason: competition.fixturesSuspendReason,
+                })}
+              </Muted>
+            ) : null}
+            <View style={styles.actions}>
+              {competition.fixturesSuspended ? (
+                <Button
+                  label={t('superadmin.competitionDetail.resumeFixtures')}
+                  onPress={() =>
+                    setPending({ kind: 'fixtures', suspended: false })
+                  }
+                  style={{ flex: 1 }}
+                />
+              ) : (
+                <Button
+                  label={t('superadmin.competitionDetail.suspendFixtures')}
+                  variant="danger"
+                  onPress={() =>
+                    setPending({ kind: 'fixtures', suspended: true })
+                  }
+                  style={{ flex: 1 }}
+                />
+              )}
+            </View>
+          </Card>
+
           {isNewCompetition ? (
             <Button
               label={t('superadmin.competitionDetail.createDraw')}
               onPress={() => generateFixturesForCompetition(competition.id)}
+              disabled={!!competition.fixturesSuspended}
             />
           ) : (
             <Card style={styles.card}>
-              <Subtitle>{t('superadmin.competitionDetail.drawUnavailable')}</Subtitle>
+              <Subtitle>
+                {t('superadmin.competitionDetail.drawUnavailable')}
+              </Subtitle>
               <Muted>
                 {t('superadmin.competitionDetail.drawUnavailableDesc', {
                   count: competition.matches.length,
@@ -681,86 +788,244 @@ export default function CompetitionDetailScreen() {
               icon="calendar-outline"
             />
           ) : (
-            sortedMatches.map((match) => {
-              const draft = editingScores[match.id] || {
-                t1: String(match.team1Score),
-                t2: String(match.team2Score),
-              };
-              return (
-                <Card key={match.id} style={styles.card}>
-                  <Text style={[styles.matchTitle, { color: theme.colors.text }]}>
-                    {teamName(match.team1Id)} vs {teamName(match.team2Id)}
-                  </Text>
-                  <Muted>{formatArabicDate(match.date)}</Muted>
-                  <Muted>{formatArabicTime(match.date)}</Muted>
-                  <View style={styles.scoreRow}>
-                    <TextInput
-                      value={draft.t1}
-                      keyboardType="number-pad"
-                      onChangeText={(v) =>
-                        setEditingScores((prev) => ({
-                          ...prev,
-                          [match.id]: {
-                            ...draft,
-                            t1: v.replace(/[^0-9]/g, ''),
-                          },
-                        }))
-                      }
+            <Card style={styles.card}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.fixturesScroll}
+              >
+                <View style={styles.fixturesTable}>
+                  <View
+                    style={[
+                      styles.fixturesHead,
+                      {
+                        backgroundColor: theme.colors.accentSoft,
+                        borderColor: theme.colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
                       style={[
-                        styles.scoreInput,
-                        {
-                          color: theme.colors.text,
-                          borderColor: theme.colors.border,
-                          backgroundColor: theme.colors.inputBg,
-                        },
+                        styles.fTh,
+                        styles.fColNum,
+                        { color: theme.colors.accent },
                       ]}
-                    />
-                    <Text style={{ color: theme.colors.textMuted, fontWeight: '800' }}>
-                      -
+                    >
+                      {t('superadmin.competitionDetail.colNum')}
                     </Text>
-                    <TextInput
-                      value={draft.t2}
-                      keyboardType="number-pad"
-                      onChangeText={(v) =>
-                        setEditingScores((prev) => ({
-                          ...prev,
-                          [match.id]: {
-                            ...draft,
-                            t2: v.replace(/[^0-9]/g, ''),
-                          },
-                        }))
-                      }
+                    <Text
                       style={[
-                        styles.scoreInput,
-                        {
-                          color: theme.colors.text,
-                          borderColor: theme.colors.border,
-                          backgroundColor: theme.colors.inputBg,
-                        },
+                        styles.fTh,
+                        styles.fColDate,
+                        { color: theme.colors.accent },
                       ]}
-                    />
-                    <Button
-                      label={t('common.save')}
-                      variant="secondary"
-                      onPress={() => {
-                        updateMatchResult(
-                          competition.id,
-                          match.id,
-                          Number(draft.t1 || 0),
-                          Number(draft.t2 || 0)
-                        );
-                        setEditingScores((prev) => {
-                          const next = { ...prev };
-                          delete next[match.id];
-                          return next;
-                        });
-                      }}
-                      style={{ minWidth: 72 }}
-                    />
+                    >
+                      {t('superadmin.competitionDetail.colDate')}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.fTh,
+                        styles.fColTime,
+                        { color: theme.colors.accent },
+                      ]}
+                    >
+                      {t('superadmin.competitionDetail.colTime')}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.fTh,
+                        styles.fColTeam,
+                        { color: theme.colors.accent },
+                      ]}
+                    >
+                      {t('superadmin.competitionDetail.colHome')}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.fTh,
+                        styles.fColScore,
+                        { color: theme.colors.accent },
+                      ]}
+                    >
+                      {t('superadmin.competitionDetail.colScore')}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.fTh,
+                        styles.fColTeam,
+                        { color: theme.colors.accent },
+                      ]}
+                    >
+                      {t('superadmin.competitionDetail.colAway')}
+                    </Text>
                   </View>
-                </Card>
-              );
-            })
+
+                  {sortedMatches.map((match, index) => {
+                    const draft = editingScores[match.id] || {
+                      t1: String(match.team1Score),
+                      t2: String(match.team2Score),
+                    };
+                    const zebra =
+                      index % 2 === 0
+                        ? theme.colors.card
+                        : theme.colors.inputBg;
+                    return (
+                      <View
+                        key={match.id}
+                        style={[
+                          styles.fixturesRow,
+                          {
+                            backgroundColor: zebra,
+                            borderColor: theme.colors.border,
+                            opacity: competition.fixturesSuspended ? 0.7 : 1,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.fTd,
+                            styles.fColNum,
+                            { color: theme.colors.textMuted },
+                          ]}
+                        >
+                          {index + 1}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.fTd,
+                            styles.fColDate,
+                            { color: theme.colors.text },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {formatArabicDate(match.date)}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.fTd,
+                            styles.fColTime,
+                            { color: theme.colors.textMuted },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {formatArabicTime(match.date)}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.fTd,
+                            styles.fColTeam,
+                            styles.fTeam,
+                            { color: theme.colors.text },
+                          ]}
+                          numberOfLines={2}
+                        >
+                          {teamName(match.team1Id)}
+                        </Text>
+                        <View style={[styles.fColScore, styles.fScoreCell]}>
+                          <TextInput
+                            value={draft.t1}
+                            editable={!competition.fixturesSuspended}
+                            keyboardType="number-pad"
+                            onChangeText={(v) =>
+                              setEditingScores((prev) => ({
+                                ...prev,
+                                [match.id]: {
+                                  ...draft,
+                                  t1: v.replace(/[^0-9]/g, ''),
+                                },
+                              }))
+                            }
+                            style={[
+                              styles.scoreInputSm,
+                              {
+                                color: theme.colors.text,
+                                borderColor: theme.colors.border,
+                                backgroundColor: theme.colors.inputBg,
+                              },
+                            ]}
+                          />
+                          <Text
+                            style={{
+                              color: theme.colors.textMuted,
+                              fontWeight: '800',
+                            }}
+                          >
+                            :
+                          </Text>
+                          <TextInput
+                            value={draft.t2}
+                            editable={!competition.fixturesSuspended}
+                            keyboardType="number-pad"
+                            onChangeText={(v) =>
+                              setEditingScores((prev) => ({
+                                ...prev,
+                                [match.id]: {
+                                  ...draft,
+                                  t2: v.replace(/[^0-9]/g, ''),
+                                },
+                              }))
+                            }
+                            style={[
+                              styles.scoreInputSm,
+                              {
+                                color: theme.colors.text,
+                                borderColor: theme.colors.border,
+                                backgroundColor: theme.colors.inputBg,
+                              },
+                            ]}
+                          />
+                          <Pressable
+                            disabled={!!competition.fixturesSuspended}
+                            onPress={() => {
+                              updateMatchResult(
+                                competition.id,
+                                match.id,
+                                Number(draft.t1 || 0),
+                                Number(draft.t2 || 0)
+                              );
+                              setEditingScores((prev) => {
+                                const next = { ...prev };
+                                delete next[match.id];
+                                return next;
+                              });
+                            }}
+                            style={[
+                              styles.saveScoreBtn,
+                              {
+                                backgroundColor: competition.fixturesSuspended
+                                  ? theme.colors.border
+                                  : theme.colors.accentSoft,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={{
+                                color: theme.colors.accent,
+                                fontWeight: '800',
+                                fontSize: 11,
+                              }}
+                            >
+                              {t('common.save')}
+                            </Text>
+                          </Pressable>
+                        </View>
+                        <Text
+                          style={[
+                            styles.fTd,
+                            styles.fColTeam,
+                            styles.fTeam,
+                            { color: theme.colors.text },
+                          ]}
+                          numberOfLines={2}
+                        >
+                          {teamName(match.team2Id)}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </Card>
           )}
         </>
       ) : null}
@@ -830,7 +1095,7 @@ export default function CompetitionDetailScreen() {
                 <Text
                   style={[
                     styles.td,
-                    { color: theme.colors.primary, fontWeight: '900' },
+                    { color: theme.colors.accent, fontWeight: '900' },
                   ]}
                 >
                   {row.points}
@@ -854,7 +1119,7 @@ export default function CompetitionDetailScreen() {
               assignedRefs.map((ref) => {
                 const color =
                   ref.status === 'active'
-                    ? theme.colors.primary
+                    ? theme.colors.accent
                     : ref.status === 'suspended'
                       ? theme.colors.danger
                       : theme.colors.warning;
@@ -897,7 +1162,7 @@ export default function CompetitionDetailScreen() {
                           })
                         }
                       >
-                        <Text style={{ color: theme.colors.primary, fontWeight: '800', fontSize: 11 }}>
+                        <Text style={{ color: theme.colors.accent, fontWeight: '800', fontSize: 11 }}>
                           {t('superadmin.actions.activate')}
                         </Text>
                       </Pressable>
@@ -982,7 +1247,7 @@ export default function CompetitionDetailScreen() {
                     >
                       <Text
                         style={{
-                          color: theme.colors.primary,
+                          color: theme.colors.accent,
                           fontWeight: '800',
                           fontSize: 12,
                         }}
@@ -1019,12 +1284,22 @@ const styles = StyleSheet.create({
   content: { paddingTop: 8, gap: 12, paddingBottom: 40 },
   header: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   status: { fontWeight: '800', textAlign: 'left' },
-  actions: { flexDirection: 'row', gap: 8 },
-  tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    alignItems: 'stretch',
+  },
+  actionBtn: {
+    flexGrow: 1,
+    flexBasis: '30%',
+    minWidth: 88,
+  },
+  tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tab: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
   },
   card: { gap: 8 },
@@ -1069,6 +1344,55 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     textAlign: 'center',
     fontWeight: '800',
+  },
+  fixturesScroll: { paddingBottom: 4 },
+  fixturesTable: { minWidth: 680 },
+  fixturesHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  fixturesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: 52,
+  },
+  fTh: { fontSize: 11, fontWeight: '800', textAlign: 'center' },
+  fTd: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  fTeam: { fontWeight: '800', textAlign: 'left', paddingHorizontal: 4 },
+  fColNum: { width: 36 },
+  fColDate: { width: 96 },
+  fColTime: { width: 64 },
+  fColTeam: { width: 120 },
+  fColScore: { width: 168 },
+  fScoreCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  scoreInputSm: {
+    width: 36,
+    height: 32,
+    borderWidth: 1,
+    borderRadius: 6,
+    textAlign: 'center',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  saveScoreBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
   },
   tableHead: {
     flexDirection: 'row',

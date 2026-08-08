@@ -1,13 +1,6 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
-import {
-  FlatList,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { useTournament, type Message, type User } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
@@ -15,6 +8,8 @@ import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Avatar, Button, Card, Input, Muted, Subtitle } from '@/components/ui';
 import { formatArabicDate } from '@/utils';
+import { isSupabaseConfigured } from '@/services/supabase';
+import { isUuid } from '@/services/supabase-messages';
 
 const MessageRow = memo(function MessageRow({
   item,
@@ -25,11 +20,11 @@ const MessageRow = memo(function MessageRow({
 }) {
   const theme = useAppTheme();
   return (
-    <Pressable onPress={onPress} accessibilityRole="button">
+    <Pressable onPress={onPress} accessibilityRole="button" hitSlop={6}>
       <Card
         style={
           !item.read
-            ? { ...styles.card, borderColor: theme.colors.primary }
+            ? { ...styles.card, borderColor: theme.colors.accent }
             : styles.card
         }
       >
@@ -50,7 +45,7 @@ const MessageRow = memo(function MessageRow({
           </View>
           {!item.read ? (
             <View
-              style={[styles.dot, { backgroundColor: theme.colors.primary }]}
+              style={[styles.dot, { backgroundColor: theme.colors.accent }]}
             />
           ) : null}
         </View>
@@ -60,8 +55,14 @@ const MessageRow = memo(function MessageRow({
 });
 
 export default function OrganizerMessagesScreen() {
-  const { messages, users, currentUser, markMessageAsRead, sendMessage } =
-    useTournament();
+  const {
+    messages,
+    users,
+    currentUser,
+    markMessageAsRead,
+    sendMessage,
+    refreshCloudMessages,
+  } = useTournament();
   const theme = useAppTheme();
   const { t } = useTranslation();
   const [composeOpen, setComposeOpen] = useState(false);
@@ -69,6 +70,16 @@ export default function OrganizerMessagesScreen() {
   const [recipientId, setRecipientId] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+
+  const cloudOk =
+    isSupabaseConfigured() && isUuid(currentUser?.id);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!cloudOk) return;
+      void refreshCloudMessages();
+    }, [cloudOk, refreshCloudMessages])
+  );
 
   const inbox = useMemo(
     () =>
@@ -193,11 +204,11 @@ export default function OrganizerMessagesScreen() {
                     {
                       borderColor:
                         recipientId === u.id
-                          ? theme.colors.primary
+                          ? theme.colors.accent
                           : theme.colors.border,
                       backgroundColor:
                         recipientId === u.id
-                          ? theme.colors.primarySoft
+                          ? theme.colors.accentSoft
                           : theme.colors.inputBg,
                     },
                   ]}
@@ -233,8 +244,11 @@ export default function OrganizerMessagesScreen() {
                   label={t('common.send')}
                   onPress={() => {
                     if (!recipientId) return;
-                    const ok = sendMessage({ recipientId, subject, body });
-                    if (ok) setComposeOpen(false);
+                    void sendMessage({ recipientId, subject, body }).then(
+                      (ok) => {
+                        if (ok) setComposeOpen(false);
+                      }
+                    );
                   }}
                   style={{ flex: 1 }}
                 />
@@ -252,7 +266,7 @@ const styles = StyleSheet.create({
   card: { gap: 6 },
   row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   subject: { fontWeight: '800', textAlign: 'left' },
-  body: { textAlign: 'left', writingDirection: 'ltr', lineHeight: 18, fontSize: 12 },
+  body: { textAlign: 'left', lineHeight: 18, fontSize: 12 },
   fullBody: { textAlign: 'left', lineHeight: 22, fontSize: 14 },
   dot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

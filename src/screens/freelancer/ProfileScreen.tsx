@@ -7,6 +7,7 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { Screen } from '@/components/layout/Screen';
 import { PlayerMediaSection } from '@/components/media/PlayerMediaSection';
+import { AccountSocialStats } from '@/components/account/AccountSocialStats';
 import {
   Avatar,
   Card,
@@ -95,6 +96,8 @@ export default function FreelancerProfileScreen() {
           toggleMediaLike(currentUser.id, id, 'video', 'user')
         }
       />
+
+      <AccountSocialStats user={currentUser} />
     </Screen>
   );
 }
@@ -103,7 +106,7 @@ const styles = StyleSheet.create({
   content: { paddingTop: 12, gap: 16, paddingBottom: 100 },
   profile: { alignItems: 'center', gap: 8 },
   card: { gap: 10 },
-  bio: { textAlign: 'left', writingDirection: 'ltr', lineHeight: 22 },
+  bio: { textAlign: 'left', lineHeight: 22 },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

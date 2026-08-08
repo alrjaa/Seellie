@@ -1,4 +1,4 @@
-
+import { certificateImageUri } from '@/theme/certificates';
 
 // 1. Data Interfaces
 
@@ -56,7 +56,7 @@ export interface User {
   roles?: Array<'superadmin' | 'organizer' | 'follower' | 'freelancer'>;
   /** الواجهة الحالية */
   activeRole?: 'superadmin' | 'organizer' | 'follower' | 'freelancer';
-  status: 'active' | 'suspended' | 'warned';
+  status: 'active' | 'suspended' | 'warned' | 'blocked';
   handle: string; // Like a twitter handle, e.g., @username
   avatar?: string;
   /** رقم التسجيل الظاهر للمستخدم (مثال: FOL-1001) */
@@ -102,6 +102,10 @@ export interface User {
     statusReason?: string;
   }[];
   comments: Comment[]; // Comments made on this user's profile
+  /** معرفات الحسابات التي تتابع هذا المستخدم */
+  followers?: string[];
+  /** معرفات الحسابات التي يتابعها هذا المستخدم */
+  following?: string[];
 }
 
 export interface Player {
@@ -236,6 +240,9 @@ export interface Competition {
   logo?: string;
   status: 'active' | 'suspended' | 'warned';
   statusReason?: string;
+  /** إيقاف جدول المباريات من المشرف (منفصل عن حالة المسابقة) */
+  fixturesSuspended?: boolean;
+  fixturesSuspendReason?: string;
   venue?: CompetitionVenue;
   staff?: CompetitionStaff[];
   media: {
@@ -252,9 +259,10 @@ export interface Supporter {
   level: 'ماسي' | 'ذهبي' | 'فضي' | 'برونزي' | 'شريك';
 }
 
-export type SupportLevelName = 'إبداع' | 'برونزي' | 'فضي' | 'ذهبي' | 'ماسي';
+export type SupportLevelName = string;
 export interface SupportLevel {
-    name: SupportLevelName;
+    id: string;
+    name: string;
     price: number;
     description: string;
     imageUrl: string;
@@ -306,6 +314,37 @@ export interface Offer {
     timestamp: Date;
 }
 
+/** بطاقة مشاركة: محتوى أو طلب انضمام كلاعب */
+export type ShareCardKind = 'content' | 'join_request';
+export type ShareCardStatus = 'pending' | 'accepted' | 'declined' | 'seen';
+
+export interface ShareCard {
+  id: string;
+  kind: ShareCardKind;
+  status: ShareCardStatus;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  senderHandle?: string;
+  senderRole?: string;
+  recipientId: string;
+  recipientName: string;
+  recipientKind: 'user' | 'referee';
+  /** محتوى مشارك */
+  title?: string;
+  body?: string;
+  mediaUrl?: string;
+  mediaKind?: 'photo' | 'video' | 'text' | 'link';
+  /** طلب انضمام كلاعب */
+  competitionId?: string;
+  competitionName?: string;
+  teamId?: string;
+  teamName?: string;
+  position?: string;
+  timestamp: Date;
+  read: boolean;
+}
+
 export interface GiftTransaction {
   id: string; // Unique transaction ID
   /** رقم يظهر على شهادة الدعم */
@@ -318,10 +357,10 @@ export interface GiftTransaction {
   recipientName: string;
   recipientType: 'organizer' | 'team' | 'player' | 'freelancer' | 'follower';
   recipientVisibleId?: string; // or handle
-  certificateType: SupportLevel['name'];
+  certificateType: string;
   amountPaid: number;
   timestamp: Date;
-  status: 'paid';
+      status: 'paid' | 'pending_demo';
   competitionName?: string;
   teamName?: string;
 }
@@ -827,11 +866,11 @@ export const initialQuickComments: Comment[] = [
 export const initialMessages: Message[] = [];
 export const initialSupporters: Supporter[] = [];
 export const initialSupportLevels: SupportLevel[] = [
-    { name: 'إبداع', price: 5, description: 'للإشادة بالمهارات الاستثنائية والأفكار المبتكرة.', imageUrl: 'https://placehold.co/300x440/f3e8ff/a855f7.png' },
-    { name: 'برونزي', price: 10, description: 'تقديرًا للجهد المتميز والأداء المتطور.', imageUrl: 'https://placehold.co/300x440/fff7ed/c27803.png' },
-    { name: 'فضي', price: 25, description: 'للاحتفاء بالإنجازات البارزة والمساهمات القيمة.', imageUrl: 'https://placehold.co/300x440/f1f5f9/64748b.png' },
-    { name: 'ذهبي', price: 50, description: 'للاعتراف بالتفوق الواضح وتحقيق نتائج مبهرة.', imageUrl: 'https://placehold.co/300x440/fefce8/ca8a04.png' },
-    { name: 'ماسي', price: 100, description: 'أعلى مراتب التكريم، للإنجازات الاستثنائية والتأثير الملهم.', imageUrl: 'https://placehold.co/300x440/e0f2fe/0369a1.png' },
+    { id: 'level-creativity', name: 'إبداع', price: 5, description: 'للإشادة بالمهارات الاستثنائية والأفكار المبتكرة.', imageUrl: certificateImageUri('إبداع') },
+    { id: 'level-bronze', name: 'برونزي', price: 10, description: 'تقديرًا للجهد المتميز والأداء المتطور.', imageUrl: certificateImageUri('برونزي') },
+    { id: 'level-silver', name: 'فضي', price: 25, description: 'للاحتفاء بالإنجازات البارزة والمساهمات القيمة.', imageUrl: certificateImageUri('فضي') },
+    { id: 'level-gold', name: 'ذهبي', price: 50, description: 'للاعتراف بالتفوق الواضح وتحقيق نتائج مبهرة.', imageUrl: certificateImageUri('ذهبي') },
+    { id: 'level-diamond', name: 'ماسي', price: 100, description: 'أعلى مراتب التكريم، للإنجازات الاستثنائية والتأثير الملهم.', imageUrl: certificateImageUri('ماسي') },
 ];
 export const initialOffers: Offer[] = [
     {

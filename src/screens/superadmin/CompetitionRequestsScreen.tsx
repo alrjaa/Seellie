@@ -1,13 +1,17 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { useTournament, type CompetitionRequest } from '@/providers/TournamentProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
-import { Button, Card, Input, Muted, Subtitle } from '@/components/ui';
+import { Button, Card, Input, Muted, SearchBar, Subtitle } from '@/components/ui';
 import { formatArabicDate } from '@/utils';
 import { MIN_COMPETITION_TEAMS } from '@/utils/competition-request';
+import { matchesSearchQuery } from '@/utils/search';
 import { useAppTheme } from '@/providers/ThemeProvider';
+import { statusToneColor } from '@/utils/status-tone';
+import { isSupabaseConfigured } from '@/services/supabase';
 
 const RequestCard = memo(function RequestCard({
   item,
@@ -23,12 +27,10 @@ const RequestCard = memo(function RequestCard({
   const theme = useAppTheme();
   const { t } = useTranslation();
   const pending = item.status === 'pending';
-  const statusColor =
-    item.status === 'approved'
-      ? theme.colors.primary
-      : item.status === 'rejected'
-        ? theme.colors.danger
-        : theme.colors.warning;
+  const statusColor = statusToneColor(
+    theme.colors,
+    item.status === 'approved' ? 'accepted' : item.status
+  );
   const pledgeMark = (ok: boolean) => (ok ? '✓' : '✗');
 
   return (
@@ -97,23 +99,18 @@ export default function CompetitionRequestsScreen() {
     competitionRequests,
     approveCompetitionRequest,
     rejectCompetitionRequest,
+    refreshCloudCompetitionRequests,
   } = useTournament();
   const { t } = useTranslation();
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [query, setQuery] = useState('');
 
-  const sorted = useMemo(
-    () =>
-      [...competitionRequests].sort((a, b) => {
-        const order = { pending: 0, approved: 1, rejected: 2 };
-        if (order[a.status] !== order[b.status]) {
-          return order[a.status] - order[b.status];
-        }
-        return (
-          new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime()
-        );
-      }),
-    [competitionRequests]
+  useFocusEffect(
+    useCallback(() => {
+      if (!isSupabaseConfigured()) return;
+      void refreshCloudCompetitionRequests();
+    }, [refreshCloudCompetitionRequests])
   );
 
   const organizerName = useCallback(
@@ -122,9 +119,37 @@ export default function CompetitionRequestsScreen() {
     [users]
   );
 
+  const sorted = useMemo(
+    () =>
+      [...competitionRequests]
+        .filter((item) =>
+          matchesSearchQuery(
+            query,
+            item.name,
+            item.id,
+            item.status,
+            item.region,
+            item.city,
+            item.neighborhood,
+            item.venueName,
+            organizerName(item.organizerId)
+          )
+        )
+        .sort((a, b) => {
+          const order = { pending: 0, approved: 1, rejected: 2 };
+          if (order[a.status] !== order[b.status]) {
+            return order[a.status] - order[b.status];
+          }
+          return (
+            new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime()
+          );
+        }),
+    [competitionRequests, query, organizerName]
+  );
+
   const confirmReject = useCallback(() => {
     if (!rejectId) return;
-    rejectCompetitionRequest(rejectId, rejectReason);
+    void rejectCompetitionRequest(rejectId, rejectReason);
     setRejectId(null);
     setRejectReason('');
   }, [rejectId, rejectReason, rejectCompetitionRequest]);
@@ -145,7 +170,9 @@ export default function CompetitionRequestsScreen() {
               { text: t('common.cancel'), style: 'cancel' },
               {
                 text: t('superadmin.actions.accept'),
-                onPress: () => approveCompetitionRequest(item.id),
+                onPress: () => {
+                  void approveCompetitionRequest(item.id);
+                },
               },
             ]
           );
@@ -169,6 +196,13 @@ export default function CompetitionRequestsScreen() {
           <View style={{ gap: 8, marginBottom: 8 }}>
             <Subtitle>{t('superadmin.competitionRequests.title')}</Subtitle>
             <Muted>{t('superadmin.competitionRequests.subtitle')}</Muted>
+            <SearchBar
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t('superadmin.searchPlaceholder')}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
             {rejectId ? (
               <Card style={{ gap: 8 }}>
                 <Subtitle>{t('superadmin.competitionRequests.rejectReasonTitle')}</Subtitle>
@@ -198,8 +232,16 @@ export default function CompetitionRequestsScreen() {
         }
         ListEmptyComponent={
           <EmptyState
-            title={t('superadmin.competitionRequests.emptyTitle')}
-            description={t('superadmin.competitionRequests.emptyDesc')}
+            title={
+              query.trim()
+                ? t('superadmin.noSearchResults')
+                : t('superadmin.competitionRequests.emptyTitle')
+            }
+            description={
+              query.trim()
+                ? undefined
+                : t('superadmin.competitionRequests.emptyDesc')
+            }
             icon="trophy-outline"
           />
         }

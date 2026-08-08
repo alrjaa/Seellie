@@ -17,10 +17,12 @@ import {
   type User,
 } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
-import { useTranslation } from '@/providers/LanguageProvider';
+import { useTranslation, useLanguage } from '@/providers/LanguageProvider';
+import { useNotifications } from '@/providers/NotificationsProvider';
 import { Screen } from '@/components/layout/Screen';
 import { HomeHeader } from '@/components/layout/HomeHeader';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { AccountSocialStats } from '@/components/account/AccountSocialStats';
 import {
   Avatar,
   Button,
@@ -30,6 +32,7 @@ import {
   SearchBar,
   Subtitle,
 } from '@/components/ui';
+import { useResponsive } from '@/hooks/useResponsive';
 import { formatArabicDate, formatArabicTime } from '@/utils';
 import {
   computeStandings,
@@ -37,11 +40,26 @@ import {
   selectHomeCompetitions,
 } from '@/utils/competition';
 import { userHasRole } from '@/utils/roles';
+import { cairoText } from '@/theme/fonts';
+
+function useHomeTitleDir() {
+  const { isRTL } = useLanguage();
+  return useMemo(
+    () => ({
+      textAlign: (isRTL ? 'right' : 'left') as 'left' | 'right',
+      writingDirection: (isRTL ? 'rtl' : 'ltr') as 'rtl' | 'ltr',
+      width: '100%' as const,
+      alignSelf: 'stretch' as const,
+    }),
+    [isRTL]
+  );
+}
 
 type CombinedPlayer = (Player | User) & {
   totalLikes: number;
   teamName?: string;
   teamLogo?: string;
+  isFreelancer?: boolean;
 };
 
 const UpcomingMatchCard = memo(function UpcomingMatchCard({
@@ -93,20 +111,22 @@ const PlayerCard = memo(function PlayerCard({
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
+  const roleLabel = item.isFreelancer
+    ? t('home.freelancerPlayer')
+    : t('searchUi.kindPlayer');
+
   return (
     <Pressable accessibilityRole="button" onPress={onPress}>
-      <Card style={styles.playerCard}>
-      <Avatar uri={item.avatar} name={item.name} size={64} />
-      <Text
-        style={[styles.playerName, { color: theme.colors.text }]}
-        numberOfLines={1}
-      >
-        {item.name}
-      </Text>
-      <Muted style={styles.playerMeta}>{item.teamName}</Muted>
-      <Text style={[styles.likes, { color: theme.colors.primary }]}>
-        {item.totalLikes} {t('common.likes')}
-      </Text>
+      <Card style={styles.playerCard} padded={false}>
+        <View style={styles.playerCardInner}>
+          <Avatar uri={item.avatar} name={item.name} size={64} />
+          <Text
+            style={[styles.playerRole, { color: theme.colors.textMuted }]}
+            numberOfLines={1}
+          >
+            {roleLabel}
+          </Text>
+        </View>
       </Card>
     </Pressable>
   );
@@ -125,6 +145,7 @@ const StandingsTable = memo(function StandingsTable({
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
+  const titleDir = useHomeTitleDir();
   const standings = useMemo(
     () => computeStandings(competition),
     [competition]
@@ -140,8 +161,8 @@ const StandingsTable = memo(function StandingsTable({
           accessibilityRole="button"
           style={styles.compTitlePress}
         >
-          <Subtitle style={styles.compTitle}>{competition.name}</Subtitle>
-          <Muted style={styles.compMeta}>
+          <Subtitle style={[styles.compTitle, titleDir]}>{competition.name}</Subtitle>
+          <Muted style={[styles.compMeta, titleDir]}>
             {competition.venue?.city || t('home.noCity')}
             {pinned ? ` · ${t('home.pinned')}` : ''}
           </Muted>
@@ -157,7 +178,7 @@ const StandingsTable = memo(function StandingsTable({
           <Ionicons
             name={pinned ? 'pin' : 'pin-outline'}
             size={20}
-            color={pinned ? theme.colors.primary : theme.colors.textMuted}
+            color={pinned ? theme.colors.accent : theme.colors.textMuted}
           />
         </Pressable>
       </View>
@@ -205,7 +226,7 @@ const StandingsTable = memo(function StandingsTable({
           <Text style={[styles.td, { color: theme.colors.text }]}>
             {row.goalDiff > 0 ? `+${row.goalDiff}` : row.goalDiff}
           </Text>
-          <Text style={[styles.tdPoints, { color: theme.colors.primary }]}>
+          <Text style={[styles.tdPoints, { color: theme.colors.accent }]}>
             {row.points}
           </Text>
         </View>
@@ -244,6 +265,7 @@ const FixturesTable = memo(function FixturesTable({
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
+  const titleDir = useHomeTitleDir();
   const fixtures = useMemo(
     () =>
       [...competition.matches].sort(
@@ -267,8 +289,8 @@ const FixturesTable = memo(function FixturesTable({
           accessibilityRole="button"
           style={styles.compTitlePress}
         >
-          <Subtitle style={styles.compTitle}>{competition.name}</Subtitle>
-          <Muted style={styles.compMeta}>
+          <Subtitle style={[styles.compTitle, titleDir]}>{competition.name}</Subtitle>
+          <Muted style={[styles.compMeta, titleDir]}>
             {competition.venue?.city || t('home.noCity')}
             {pinned ? ` · ${t('home.pinned')}` : ''} · {t('home.matchesCount', { count: fixtures.length })}
           </Muted>
@@ -282,7 +304,7 @@ const FixturesTable = memo(function FixturesTable({
           <Ionicons
             name={pinned ? 'pin' : 'pin-outline'}
             size={20}
-            color={pinned ? theme.colors.primary : theme.colors.textMuted}
+            color={pinned ? theme.colors.accent : theme.colors.textMuted}
           />
         </Pressable>
       </View>
@@ -355,7 +377,7 @@ const FixturesTable = memo(function FixturesTable({
                 styles.fxScore,
                 {
                   color: played
-                    ? theme.colors.primary
+                    ? theme.colors.accent
                     : theme.colors.textMuted,
                 },
               ]}
@@ -384,11 +406,35 @@ export default function FollowerHomeScreen() {
     personalitySectionBg,
     currentUser,
     togglePinnedCompetition,
+    shareCards,
+    messages,
   } = useTournament();
   const theme = useAppTheme();
   const { t } = useTranslation();
+  const { unreadCountFor } = useNotifications();
+  const titleDir = useHomeTitleDir();
   const router = useRouter();
   const [query, setQuery] = useState('');
+
+  const unreadShareCards = useMemo(
+    () =>
+      currentUser
+        ? shareCards.filter((c) => c.recipientId === currentUser.id && !c.read)
+            .length
+        : 0,
+    [shareCards, currentUser]
+  );
+
+  const unreadMessages = useMemo(
+    () =>
+      currentUser
+        ? messages.filter((m) => m.recipientId === currentUser.id && !m.read)
+            .length
+        : 0,
+    [messages, currentUser]
+  );
+
+  const unreadNotifs = unreadCountFor(currentUser?.id);
 
   const pinnedIds = currentUser?.pinnedCompetitionIds || [];
   const locationLabel = [currentUser?.city, currentUser?.region]
@@ -483,6 +529,7 @@ export default function FollowerHomeScreen() {
           ...user,
           totalLikes: calculateLikes(user),
           teamName: t('home.freelancerPlayer'),
+          isFreelancer: true,
         });
       });
 
@@ -509,8 +556,8 @@ export default function FollowerHomeScreen() {
 
       {isSearching ? (
         <View style={styles.section}>
-          <Subtitle style={styles.sectionTitle}>{t('home.searchResults')}</Subtitle>
-          <Muted style={styles.sectionTitle}>
+          <Subtitle style={[styles.sectionTitle, titleDir]}>{t('home.searchResults')}</Subtitle>
+          <Muted style={[styles.sectionTitle, titleDir]}>
             {t('home.searchHint')}
           </Muted>
           {searchResults.length === 0 ? (
@@ -534,11 +581,11 @@ export default function FollowerHomeScreen() {
                       }
                     >
                       <Text
-                        style={[styles.searchTitle, { color: theme.colors.text }]}
+                        style={[styles.searchTitle, titleDir, { color: theme.colors.text }]}
                       >
                         {comp.name}
                       </Text>
-                      <Muted style={styles.compMeta} numberOfLines={1}>
+                      <Muted style={[styles.compMeta, titleDir]} numberOfLines={1}>
                         {formatVenueAddress(comp)}
                       </Muted>
                     </Pressable>
@@ -549,10 +596,10 @@ export default function FollowerHomeScreen() {
                         styles.pinBtn,
                         {
                           backgroundColor: pinned
-                            ? theme.colors.primary
+                            ? theme.colors.accent
                             : theme.colors.inputBg,
                           borderColor: pinned
-                            ? theme.colors.primary
+                            ? theme.colors.accent
                             : theme.colors.border,
                         },
                       ]}
@@ -567,13 +614,11 @@ export default function FollowerHomeScreen() {
                         }
                       />
                       <Text
-                        style={{
-                          color: pinned
-                            ? theme.colors.textInverse
-                            : theme.colors.textMuted,
-                          fontSize: 12,
-                          fontWeight: '700',
-                        }}
+                        style={[
+                          { color: pinned ? theme.colors.textInverse : theme.colors.textMuted, fontSize: 12 },
+                          // cairoText applied via home styles where possible
+                          { fontFamily: 'Cairo_700Bold', fontWeight: 'normal' as const },
+                        ]}
                       >
                         {pinned ? t('home.pinned') : t('home.pin')}
                       </Text>
@@ -587,8 +632,8 @@ export default function FollowerHomeScreen() {
       ) : (
         <>
           <View style={styles.section}>
-            <Subtitle style={styles.sectionTitle}>{t('home.upcoming')}</Subtitle>
-            <Muted style={styles.sectionTitle}>
+            <Subtitle style={[styles.sectionTitle, titleDir]}>{t('home.upcoming')}</Subtitle>
+            <Muted style={[styles.sectionTitle, titleDir]}>
               {locationLabel
                 ? t('home.upcomingFrom', { location: locationLabel })
                 : t('home.upcomingFallback')}
@@ -615,8 +660,8 @@ export default function FollowerHomeScreen() {
           </View>
 
           <View style={styles.section}>
-            <Subtitle style={styles.sectionTitle}>{t('home.fixtures')}</Subtitle>
-            <Muted style={styles.sectionTitle}>
+            <Subtitle style={[styles.sectionTitle, titleDir]}>{t('home.fixtures')}</Subtitle>
+            <Muted style={[styles.sectionTitle, titleDir]}>
               {t('home.fixturesSub')}
             </Muted>
             {competitionsWithFixtures.length === 0 ? (
@@ -644,8 +689,8 @@ export default function FollowerHomeScreen() {
           </View>
 
           <View style={styles.section}>
-            <Subtitle style={styles.sectionTitle}>{t('home.standings')}</Subtitle>
-            <Muted style={styles.sectionTitle}>
+            <Subtitle style={[styles.sectionTitle, titleDir]}>{t('home.standings')}</Subtitle>
+            <Muted style={[styles.sectionTitle, titleDir]}>
               {t('home.standingsSub')}
             </Muted>
             {competitionsWithStandings.length === 0 ? (
@@ -687,8 +732,8 @@ export default function FollowerHomeScreen() {
                   { backgroundColor: theme.colors.overlay },
                 ]}
               >
-                <Text style={styles.bannerTitle}>{t('home.personalityBanner')}</Text>
-                <Text style={styles.bannerDesc}>
+                <Text style={[styles.bannerTitle, titleDir]}>{t('home.personalityBanner')}</Text>
+                <Text style={[styles.bannerDesc, titleDir]}>
                   {t('home.personalityBannerDesc')}
                 </Text>
               </View>
@@ -696,7 +741,7 @@ export default function FollowerHomeScreen() {
           </Pressable>
 
           <View style={styles.section}>
-            <Subtitle style={styles.sectionTitle}>{t('home.topPlayers')}</Subtitle>
+            <Subtitle style={[styles.sectionTitle, titleDir]}>{t('home.topPlayers')}</Subtitle>
             {topPlayers.length === 0 ? (
               <EmptyState title={t('home.noPlayers')} icon="people-outline" />
             ) : (
@@ -705,9 +750,12 @@ export default function FollowerHomeScreen() {
                 data={topPlayers}
                 keyExtractor={(item) => item.id}
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 12 }}
+                contentContainerStyle={{ gap: 8 }}
                 initialNumToRender={4}
                 windowSize={5}
+                maxToRenderPerBatch={4}
+                removeClippedSubviews
+                nestedScrollEnabled
                 renderItem={({ item }) => (
                   <PlayerCard
                     item={item}
@@ -721,7 +769,40 @@ export default function FollowerHomeScreen() {
           </View>
 
           <View style={styles.section}>
-            <Subtitle style={styles.sectionTitle}>{t('home.explore')}</Subtitle>
+            <Subtitle style={[styles.sectionTitle, titleDir]}>{t('home.explore')}</Subtitle>
+            <ListRow
+              title={t('home.messages')}
+              subtitle={
+                unreadMessages > 0
+                  ? t('home.messagesSubUnread', { count: unreadMessages })
+                  : t('home.messagesSub')
+              }
+              icon="mail-outline"
+              badge={unreadMessages}
+              onPress={() => router.push('/(follower)/messages' as any)}
+            />
+            <ListRow
+              title={t('notifications.title')}
+              subtitle={
+                unreadNotifs > 0
+                  ? `${unreadNotifs} إشعار غير مقروء`
+                  : t('notifications.emptyDesc')
+              }
+              icon="notifications-outline"
+              badge={unreadNotifs}
+              onPress={() => router.push('/notifications' as any)}
+            />
+            <ListRow
+              title={t('home.shareCards')}
+              subtitle={
+                unreadShareCards > 0
+                  ? t('home.shareCardsSubUnread', { count: unreadShareCards })
+                  : t('home.shareCardsSub')
+              }
+              icon="mail-unread-outline"
+              badge={unreadShareCards}
+              onPress={() => router.push('/share-cards' as any)}
+            />
             <ListRow
               title={t('home.matches')}
               subtitle={t('home.matchesSub')}
@@ -773,8 +854,8 @@ export default function FollowerHomeScreen() {
           </View>
 
           <Card style={styles.highlightCard}>
-            <Subtitle style={styles.sectionTitle}>{t('home.highlightsCard')}</Subtitle>
-            <Muted style={styles.sectionTitle}>
+            <Subtitle style={[styles.sectionTitle, titleDir]}>{t('home.highlightsCard')}</Subtitle>
+            <Muted style={[styles.sectionTitle, titleDir]}>
               {t('home.highlightsCardDesc')}
             </Muted>
             <Button
@@ -786,6 +867,8 @@ export default function FollowerHomeScreen() {
           </Card>
         </>
       )}
+
+      <AccountSocialStats user={currentUser} />
     </Screen>
   );
 }
@@ -794,7 +877,7 @@ const styles = StyleSheet.create({
   content: { paddingTop: 8, gap: 20 },
   section: { gap: 10, width: '100%' },
   sectionTitle: {
-    textAlign: 'left',
+    width: '100%',
   },
   standingsCard: { gap: 8 },
   fixturesCard: { gap: 8 },
@@ -822,29 +905,26 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 20,
     fontWeight: '800',
-    textAlign: 'left',
   },
   bannerDesc: {
     color: 'rgba(255,255,255,0.85)',
     fontSize: 12,
-    textAlign: 'left',
   },
   playerCard: {
-    width: 132,
+    width: 88,
+  },
+  playerCardInner: {
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
   },
-  playerName: {
-    fontWeight: '700',
-    textAlign: 'left',
-  },
-  playerMeta: {
-    textAlign: 'left',
-  },
-  likes: {
-    fontWeight: '700',
-    fontSize: 12,
-    textAlign: 'left',
+  playerRole: {
+    ...cairoText('semiBold'),
+    fontSize: 11,
+    lineHeight: 14,
+    textAlign: 'center',
+    width: '100%',
   },
   highlightBtn: { alignSelf: 'flex-start', minWidth: 160 },
   compHeader: {
@@ -859,15 +939,15 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   compTitle: {
-    textAlign: 'left',
+    width: '100%',
   },
   compMeta: {
-    textAlign: 'left',
+    width: '100%',
   },
   searchTitle: {
     fontWeight: '800',
     fontSize: 15,
-    textAlign: 'left',
+    width: '100%',
   },
   pinBtn: {
     flexDirection: 'row',

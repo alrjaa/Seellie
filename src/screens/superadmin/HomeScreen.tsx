@@ -7,6 +7,7 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { HomeHeader } from '@/components/layout/HomeHeader';
+import { AccountSocialStats } from '@/components/account/AccountSocialStats';
 import { Card, Muted, Subtitle } from '@/components/ui';
 import { ADMIN_MODULES, type AdminModule } from './modules';
 import { useResponsive } from '@/hooks/useResponsive';
@@ -21,13 +22,30 @@ function StatCard({
   icon: keyof typeof Ionicons.glyphMap;
 }) {
   const theme = useAppTheme();
+  const { isRTL } = useTranslation();
+  const align = (isRTL ? 'right' : 'left') as 'left' | 'right';
   return (
-    <Card style={styles.statCard}>
+    <Card
+      style={[
+        styles.statCard,
+        { direction: isRTL ? 'rtl' : 'ltr' },
+      ]}
+    >
       <View style={styles.statHeader}>
-        <Muted>{label}</Muted>
+        <Muted style={{ flexShrink: 1 }}>{label}</Muted>
         <Ionicons name={icon} size={16} color={theme.colors.textMuted} />
       </View>
-      <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+      <Text
+        {...({ physicalAlign: true } as object)}
+        style={[
+          styles.statValue,
+          {
+            color: theme.colors.accent,
+            textAlign: align,
+            writingDirection: isRTL ? 'rtl' : 'ltr',
+          },
+        ]}
+      >
         {value}
       </Text>
     </Card>
@@ -46,30 +64,46 @@ function ModuleCard({
   onPress: () => void;
 }) {
   const theme = useAppTheme();
+  const { isRTL } = useTranslation();
+  const align = (isRTL ? 'right' : 'left') as 'left' | 'right';
+  const writingDirection = (isRTL ? 'rtl' : 'ltr') as 'rtl' | 'ltr';
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={title}
       onPress={onPress}
+      hitSlop={4}
       style={({ pressed }) => [
         styles.moduleCard,
         {
           backgroundColor: theme.colors.card,
           borderColor: theme.colors.border,
           opacity: pressed ? 0.85 : 1,
+          direction: isRTL ? 'rtl' : 'ltr',
         },
       ]}
     >
       <View
-        style={[styles.iconWrap, { backgroundColor: theme.colors.primarySoft }]}
+        style={[styles.iconWrap, { backgroundColor: theme.colors.accentSoft }]}
       >
-        <Ionicons name={module.icon} size={20} color={theme.colors.primary} />
+        <Ionicons name={module.icon} size={20} color={theme.colors.accent} />
       </View>
-      <Text style={[styles.moduleTitle, { color: theme.colors.text }]} numberOfLines={1}>
+      <Text
+        {...({ physicalAlign: true } as object)}
+        style={[
+          styles.moduleTitle,
+          { color: theme.colors.text, textAlign: align, writingDirection },
+        ]}
+        numberOfLines={1}
+      >
         {title}
       </Text>
       <Text
-        style={[styles.moduleDesc, { color: theme.colors.textMuted }]}
+        {...({ physicalAlign: true } as object)}
+        style={[
+          styles.moduleDesc,
+          { color: theme.colors.textMuted, textAlign: align, writingDirection },
+        ]}
         numberOfLines={2}
       >
         {description}
@@ -79,7 +113,7 @@ function ModuleCard({
 }
 
 export default function SuperAdminDashboardScreen() {
-  const { users, competitions, referees, messages } = useTournament();
+  const { users, competitions, referees, messages, currentUser } = useTournament();
   const router = useRouter();
   const { columns } = useResponsive();
   const { t, isRTL } = useTranslation();
@@ -111,7 +145,7 @@ export default function SuperAdminDashboardScreen() {
   }, []);
 
   return (
-    <Screen scroll contentStyle={styles.content} edges={['top', 'left', 'right']}>
+    <Screen scroll contentStyle={styles.content} edges={['top', 'left', 'right']} density="dashboard">
       <HomeHeader
         accountHref="/(superadmin)/settings"
         pageTitle={t('superadmin.dashboard.title')}
@@ -166,7 +200,7 @@ export default function SuperAdminDashboardScreen() {
             {modules.map((module) => (
               <View
                 key={module.key}
-                style={{ width: `${100 / gridCols - 1.5}%` as any, minWidth: 140, flexGrow: 1 }}
+                style={{ width: `${100 / gridCols - 1.5}%` as any, minWidth: 140, flexGrow: 0 }}
               >
                 <ModuleCard
                   module={module}
@@ -179,6 +213,8 @@ export default function SuperAdminDashboardScreen() {
           </View>
         </View>
       ))}
+
+      <AccountSocialStats user={currentUser} />
     </Screen>
   );
 }
@@ -188,11 +224,13 @@ const styles = StyleSheet.create({
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   statCard: { flexGrow: 1, minWidth: 140, gap: 6 },
   statHeader: {
+    width: '100%',
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
+    gap: 6,
   },
-  statValue: { fontSize: 26, fontWeight: '900', textAlign: 'left' },
+  statValue: { fontSize: 26, fontWeight: '900', width: '100%' },
   section: { gap: 10 },
   modulesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   moduleCard: {
@@ -209,7 +247,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 2,
+    alignSelf: 'flex-start',
   },
-  moduleTitle: { fontSize: 14, fontWeight: '800', textAlign: 'left' },
-  moduleDesc: { fontSize: 11, lineHeight: 16, textAlign: 'left' },
+  moduleTitle: { fontSize: 12, fontWeight: '800', width: '100%' },
+  moduleDesc: { fontSize: 10, lineHeight: 14, width: '100%' },
 });

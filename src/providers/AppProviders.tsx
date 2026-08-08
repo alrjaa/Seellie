@@ -8,6 +8,7 @@ import {
 } from '@/providers/LanguageProvider';
 import { NavigationCairoProvider } from '@/providers/NavigationCairoProvider';
 import { ToastProvider } from '@/providers/ToastProvider';
+import { NotificationsProvider } from '@/providers/NotificationsProvider';
 import { TournamentProvider } from '@/providers/TournamentProvider';
 import { FloatingChromeProvider } from '@/providers/FloatingChromeProvider';
 import { LoadingState } from '@/components/feedback/LoadingState';
@@ -30,9 +31,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
             <LanguageReadyGate>
               <NavigationCairoProvider>
                 <ToastProvider>
-                  <TournamentProvider>
-                    <FloatingChromeProvider>{children}</FloatingChromeProvider>
-                  </TournamentProvider>
+                  <NotificationsProvider>
+                    <TournamentProvider>
+                      <FloatingChromeProvider>{children}</FloatingChromeProvider>
+                    </TournamentProvider>
+                  </NotificationsProvider>
                 </ToastProvider>
               </NavigationCairoProvider>
             </LanguageReadyGate>

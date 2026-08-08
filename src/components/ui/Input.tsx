@@ -36,7 +36,7 @@ export const Input = memo(
                 color: theme.colors.textMuted,
                 fontSize: theme.fontSize.xs,
                 writingDirection: forceLtr ? 'ltr' : 'rtl',
-                textAlign: 'left',
+                textAlign: forceLtr ? 'left' : 'right',
               },
             ]}
             accessibilityRole="text"
@@ -63,7 +63,7 @@ export const Input = memo(
               paddingVertical: multiline ? theme.spacing.sm : 10,
               minHeight: multiline ? 88 : 44,
               fontSize: theme.fontSize.sm + 1,
-              textAlign: 'left',
+              textAlign: forceLtr ? 'left' : 'right',
               writingDirection: forceLtr ? 'ltr' : 'rtl',
               direction: forceLtr ? 'ltr' : 'rtl',
             },
@@ -76,7 +76,12 @@ export const Input = memo(
             style={[
               styles.error,
               cairoText('regular'),
-              { color: theme.colors.danger, fontSize: theme.fontSize.xs },
+              {
+                color: theme.colors.danger,
+                fontSize: theme.fontSize.xs,
+                writingDirection: forceLtr ? 'ltr' : 'rtl',
+                textAlign: forceLtr ? 'left' : 'right',
+              },
             ]}
           >
             {error}
@@ -89,14 +94,10 @@ export const Input = memo(
 
 const styles = StyleSheet.create({
   wrap: { gap: 6, width: '100%' },
-  label: {
-    textAlign: 'left',
-  },
+  label: {},
   input: {
     borderWidth: 1,
     width: '100%',
   },
-  error: {
-    textAlign: 'left',
-  },
+  error: {},
 });

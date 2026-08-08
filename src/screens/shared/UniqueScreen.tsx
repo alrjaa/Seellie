@@ -27,6 +27,11 @@ import {
   type FullScreenContent,
 } from '@/components/media/FullScreenFeed';
 import {
+  ShareTargetModal,
+  TinyShareButton,
+  type ContentSharePayload,
+} from '@/components/share/ShareTargetModal';
+import {
   Button,
   Card,
   Input,
@@ -34,10 +39,16 @@ import {
   Muted,
   Subtitle,
 } from '@/components/ui';
+import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatArabicDate } from '@/utils';
 import { ANALYST_TERMS, isActiveAnalyst, isAnalystSuspendActive } from '@/utils/analyst';
+import {
+  ANALYSIS_VIDEO_MAX_SEC,
+  isVideoWithinLimit,
+  videoDurationSecFromPicker,
+} from '@/utils/media-limits';
 import { ar } from '@/i18n/locales/ar';
 import { en } from '@/i18n/locales/en';
 
@@ -67,10 +78,12 @@ const AnalysisCard = memo(function AnalysisCard({
   item,
   liked,
   onLike,
+  onShare,
 }: {
   item: AnalysisItem;
   liked: boolean;
   onLike: () => void;
+  onShare?: () => void;
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
@@ -81,21 +94,22 @@ const AnalysisCard = memo(function AnalysisCard({
     <Card style={styles.card}>
       <View style={styles.row}>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={[styles.author, { color: theme.colors.primary }]}>
+          <Text style={[styles.author, { color: theme.colors.accent }]}>
             {item.authorHandle || item.authorName}
           </Text>
           <Muted>{formatArabicDate(item.timestamp)}</Muted>
         </View>
+        {onShare && !hasVideo ? <TinyShareButton onPress={onShare} /> : null}
         <View
           style={[
             styles.kindBadge,
-            { backgroundColor: theme.colors.primarySoft },
+            { backgroundColor: theme.colors.accentSoft },
           ]}
         >
           <Ionicons
             name={hasVideo ? 'videocam' : 'document-text'}
             size={16}
-            color={theme.colors.primary}
+            color={theme.colors.accent}
           />
         </View>
       </View>
@@ -111,20 +125,27 @@ const AnalysisCard = memo(function AnalysisCard({
       ) : null}
 
       {hasVideo ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('unique.playAnalysisVideoA11y')}
-          onPress={() => {
-            void Linking.openURL(item.videoUrl!).catch(() => undefined);
-          }}
-          style={[
-            styles.videoBox,
-            { backgroundColor: theme.colors.surfaceElevated },
-          ]}
-        >
-          <Ionicons name="play-circle" size={56} color={theme.colors.primary} />
-          <Muted>{t('unique.analysisVideoTap')}</Muted>
-        </Pressable>
+        <View style={styles.mediaWrap}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('unique.playAnalysisVideoA11y')}
+            onPress={() => {
+              void Linking.openURL(item.videoUrl!).catch(() => undefined);
+            }}
+            style={[
+              styles.videoBox,
+              { backgroundColor: theme.colors.surfaceElevated },
+            ]}
+          >
+            <Ionicons name="play-circle" size={56} color={theme.colors.accent} />
+            <Muted>{t('unique.analysisVideoTap')}</Muted>
+          </Pressable>
+          {onShare ? (
+            <View style={styles.mediaShare}>
+              <TinyShareButton onPress={onShare} />
+            </View>
+          ) : null}
+        </View>
       ) : null}
 
       {isTextOnly ? (
@@ -173,6 +194,9 @@ export default function UniqueScreen() {
   /** الانضمام اختياري — لا نفرض نموذج الطلب على كل زائر */
   const [showJoinForm, setShowJoinForm] = useState(false);
   const [showGatePanel, setShowGatePanel] = useState(false);
+  const [sharePayload, setSharePayload] = useState<ContentSharePayload | null>(
+    null
+  );
 
   const analyses = useMemo(() => {
     const items: AnalysisItem[] = [];
@@ -262,13 +286,24 @@ export default function UniqueScreen() {
         });
         return;
       }
+      const maxSec = ANALYSIS_VIDEO_MAX_SEC;
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Videos,
         quality: 0.85,
+        videoMaxDuration: maxSec,
       });
-      if (!result.canceled && result.assets[0]?.uri) {
-        setVideoUrl(result.assets[0].uri);
+      if (result.canceled || !result.assets[0]?.uri) return;
+      const asset = result.assets[0];
+      const durationSec = videoDurationSecFromPicker(asset.duration);
+      if (!isVideoWithinLimit(durationSec, maxSec)) {
+        toast({
+          variant: 'destructive',
+          title: t('media.videoTooLong'),
+          description: t('media.videoTooLongDesc', { sec: maxSec }),
+        });
+        return;
       }
+      setVideoUrl(asset.uri);
     } catch {
       toast({
         variant: 'destructive',
@@ -377,6 +412,10 @@ export default function UniqueScreen() {
             autoCapitalize="none"
             ltr
           />
+          <MediaUploadSpecs
+            kind="analysisVideo"
+            title={t('media.specs.videoTitle')}
+          />
           <Button
             label={
               picking ? t('unique.pickingVideo') : t('unique.pickVideoFromDevice')
@@ -449,9 +488,9 @@ export default function UniqueScreen() {
               style={[
                 styles.checkbox,
                 {
-                  borderColor: theme.colors.primary,
+                  borderColor: theme.colors.accent,
                   backgroundColor: termsAccepted
-                    ? theme.colors.primary
+                    ? theme.colors.accent
                     : 'transparent',
                 },
               ]}
@@ -487,7 +526,7 @@ export default function UniqueScreen() {
             styles.card,
             {
               borderWidth: 1.5,
-              borderColor: theme.colors.primary,
+              borderColor: theme.colors.accent,
             },
           ]}
         >
@@ -524,9 +563,9 @@ export default function UniqueScreen() {
             style={[
               styles.checkbox,
               {
-                borderColor: theme.colors.primary,
+                borderColor: theme.colors.accent,
                 backgroundColor: termsAccepted
-                  ? theme.colors.primary
+                  ? theme.colors.accent
                   : 'transparent',
               },
             ]}
@@ -584,19 +623,33 @@ export default function UniqueScreen() {
               styles.filterIconBtn,
               {
                 backgroundColor: active
-                  ? theme.colors.primary
+                  ? theme.colors.accent
                   : theme.colors.surfaceElevated,
                 borderColor: active
-                  ? theme.colors.primary
+                  ? theme.colors.accent
                   : theme.colors.border,
               },
             ]}
           >
             <Ionicons
               name={f.icon}
-              size={15}
-              color={active ? theme.colors.textInverse : theme.colors.primary}
+              size={14}
+              color={active ? theme.colors.textInverse : theme.colors.textMuted}
             />
+            <Text
+              style={{
+                color: active ? theme.colors.textInverse : theme.colors.textMuted,
+                fontSize: 11,
+                fontWeight: '700',
+              }}
+              numberOfLines={1}
+            >
+              {f.key === 'all'
+                ? t('screens.all')
+                : f.key === 'video'
+                  ? t('screens.videos')
+                  : t('sharesUi.texts')}
+            </Text>
           </Pressable>
         );
       })}
@@ -623,7 +676,7 @@ export default function UniqueScreen() {
           data={fullScreenData}
           onLike={onFullLike}
           authorPresentation="handleOnly"
-          emptyTitle={t('screens.generalEmpty')}
+          emptyTitle={t('unique.emptyTitle')}
           emptyDescription={t('unique.emptyDesc')}
           emptyIcon="analytics-outline"
           topOverlaySafeArea
@@ -684,7 +737,7 @@ export default function UniqueScreen() {
         <Subtitle>{t('unique.analystContent')}</Subtitle>
         {filtered.length === 0 ? (
           <EmptyState
-            title={t('screens.generalEmpty')}
+            title={t('unique.emptyTitle')}
             description={t('unique.emptyDesc')}
             icon="analytics-outline"
           />
@@ -695,10 +748,24 @@ export default function UniqueScreen() {
               item={item}
               liked={item.likes.includes(currentUser.id)}
               onLike={() => toggleAnalysisLike(item.authorId, item.id)}
+              onShare={() =>
+                setSharePayload({
+                  kind: 'content',
+                  title: item.title,
+                  body: item.content,
+                  mediaUrl: item.videoUrl,
+                  mediaKind: item.videoUrl ? 'video' : 'text',
+                })
+              }
             />
           ))
         )}
       </Screen>
+      <ShareTargetModal
+        visible={!!sharePayload}
+        payload={sharePayload}
+        onClose={() => setSharePayload(null)}
+      />
     </View>
   );
 }
@@ -713,12 +780,15 @@ const styles = StyleSheet.create({
     direction: 'ltr',
   },
   filterIconBtn: {
-    width: 32,
-    height: 32,
+    minHeight: 32,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   mobileOverlay: {
     gap: 8,
@@ -751,11 +821,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 16,
     textAlign: 'left',
-    writingDirection: 'ltr',
   },
   body: {
     textAlign: 'left',
-    writingDirection: 'ltr',
     lineHeight: 22,
   },
   videoBox: {
@@ -764,6 +832,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+  },
+  mediaWrap: { position: 'relative' },
+  mediaShare: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 2,
   },
   textTag: {
     flexDirection: 'row',
@@ -796,12 +871,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
     textAlign: 'left',
-    writingDirection: 'ltr',
   },
   termsBody: {
     fontSize: 12,
     lineHeight: 20,
     textAlign: 'left',
-    writingDirection: 'ltr',
   },
 });

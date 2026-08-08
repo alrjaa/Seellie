@@ -1,5 +1,8 @@
 import React, { memo } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { AccountMenuButton } from '@/components/layout/AccountMenuButton';
+import { AdminEntryChip } from '@/components/account/AdminEntryChip';
+import { useLanguage } from '@/providers/LanguageProvider';
 
 type Props = {
   accountHref: string;
@@ -7,20 +10,36 @@ type Props = {
   compact?: boolean;
 };
 
-/** معرّف الحساب فقط (@follower) — بدون أيقونة صورة. */
+/** معرّف الحساب + زر دخول المشرف الظاهر في الهيدر. */
 function AccountHeaderButtonComponent({
   accountHref,
   settingsHref,
   compact,
 }: Props) {
+  const { isRTL } = useLanguage();
   return (
-    <AccountMenuButton
-      accountHref={accountHref}
-      settingsHref={settingsHref}
-      variant="handle"
-      compact={compact}
-    />
+    <View
+      style={[
+        styles.row,
+        { flexDirection: isRTL ? 'row-reverse' : 'row' },
+      ]}
+    >
+      <AdminEntryChip compact={compact} />
+      <AccountMenuButton
+        accountHref={accountHref}
+        settingsHref={settingsHref}
+        variant="handle"
+        compact={compact}
+      />
+    </View>
   );
 }
 
 export const AccountHeaderButton = memo(AccountHeaderButtonComponent);
+
+const styles = StyleSheet.create({
+  row: {
+    alignItems: 'center',
+    gap: 6,
+  },
+});

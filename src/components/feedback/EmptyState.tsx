@@ -2,7 +2,9 @@ import React, { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/providers/ThemeProvider';
+import { useLanguage } from '@/providers/LanguageProvider';
 import { Button } from '@/components/ui/Button';
+import { cairoText } from '@/theme/fonts';
 
 type Props = {
   title: string;
@@ -20,6 +22,9 @@ function EmptyStateComponent({
   onAction,
 }: Props) {
   const theme = useAppTheme();
+  const { isRTL } = useLanguage();
+  const align = isRTL ? 'right' : 'left';
+  const edge = isRTL ? 'flex-end' : 'flex-start';
 
   return (
     <View
@@ -31,21 +36,32 @@ function EmptyStateComponent({
           borderColor: theme.colors.border,
           borderRadius: theme.radius.lg,
           padding: theme.spacing.lg,
+          alignItems: edge,
+          direction: isRTL ? 'rtl' : 'ltr',
         },
       ]}
     >
       <View
         style={[
           styles.iconWrap,
-          { backgroundColor: theme.colors.primarySoft },
+          {
+            backgroundColor: theme.colors.accentSoft,
+            alignSelf: edge,
+          },
         ]}
       >
-        <Ionicons name={icon} size={28} color={theme.colors.primary} />
+        <Ionicons name={icon} size={28} color={theme.colors.accent} />
       </View>
       <Text
         style={[
           styles.title,
-          { color: theme.colors.text, fontSize: theme.fontSize.md + 1 },
+          cairoText('extraBold'),
+          {
+            color: theme.colors.text,
+            fontSize: theme.fontSize.md + 1,
+            textAlign: align,
+            writingDirection: isRTL ? 'rtl' : 'ltr',
+          },
         ]}
       >
         {title}
@@ -54,14 +70,20 @@ function EmptyStateComponent({
         <Text
           style={[
             styles.desc,
-            { color: theme.colors.textMuted, fontSize: theme.fontSize.sm },
+            cairoText('regular'),
+            {
+              color: theme.colors.textMuted,
+              fontSize: theme.fontSize.sm,
+              textAlign: align,
+              writingDirection: isRTL ? 'rtl' : 'ltr',
+            },
           ]}
         >
           {description}
         </Text>
       ) : null}
       {actionLabel && onAction ? (
-        <View style={styles.action}>
+        <View style={[styles.action, { alignItems: edge }]}>
           <Button label={actionLabel} onPress={onAction} variant="secondary" />
         </View>
       ) : null}
@@ -75,7 +97,6 @@ const styles = StyleSheet.create({
   wrap: {
     width: '100%',
     borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'flex-start',
     gap: 8,
   },
   iconWrap: {
@@ -85,17 +106,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
-    alignSelf: 'flex-start',
   },
   title: {
-    fontWeight: '800',
-    textAlign: 'left',
     width: '100%',
     flexShrink: 1,
   },
   desc: {
     lineHeight: 20,
-    textAlign: 'left',
     marginBottom: 8,
     width: '100%',
     flexShrink: 1,

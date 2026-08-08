@@ -1,11 +1,12 @@
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTournament, type Referee } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
-import { Avatar, Card, Muted, Subtitle } from '@/components/ui';
+import { Avatar, Card, Muted, SearchBar, Subtitle } from '@/components/ui';
+import { matchesSearchQuery } from '@/utils/search';
 
 const RefereeRow = memo(function RefereeRow({
   item,
@@ -40,14 +41,14 @@ const RefereeRow = memo(function RefereeRow({
         </View>
       </View>
       <View style={styles.actions}>
-        <Pressable onPress={onToggle}>
-          <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 12 }}>
+        <Pressable onPress={onToggle} hitSlop={8}>
+          <Text style={{ color: theme.colors.accent, fontWeight: '700', fontSize: 12 }}>
             {item.status === 'active'
               ? t('superadmin.actions.suspend')
               : t('superadmin.actions.activate')}
           </Text>
         </Pressable>
-        <Pressable onPress={onDelete}>
+        <Pressable onPress={onDelete} hitSlop={8}>
           <Text style={{ color: theme.colors.danger, fontWeight: '800', fontSize: 12 }}>
             {t('superadmin.actions.delete')}
           </Text>
@@ -60,6 +61,15 @@ const RefereeRow = memo(function RefereeRow({
 export default function RefereesScreen() {
   const { referees, updateReferee, deleteReferee } = useTournament();
   const { t } = useTranslation();
+  const [query, setQuery] = useState('');
+
+  const data = useMemo(
+    () =>
+      referees.filter((item) =>
+        matchesSearchQuery(query, item.name, item.id, item.status, item.rating)
+      ),
+    [referees, query]
+  );
 
   const renderItem = useCallback(
     ({ item }: { item: Referee }) => (
@@ -93,17 +103,32 @@ export default function RefereesScreen() {
   return (
     <Screen>
       <FlatList
-        data={referees}
+        data={data}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
-          <View style={{ gap: 4, marginBottom: 8 }}>
+          <View style={{ gap: 8, marginBottom: 8 }}>
             <Subtitle>{t('superadmin.modules.referees.title')}</Subtitle>
             <Muted>{t('superadmin.referees.subtitle')}</Muted>
+            <SearchBar
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t('superadmin.searchPlaceholder')}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
           </View>
         }
         ListEmptyComponent={
-          <EmptyState title={t('superadmin.referees.empty')} icon="person-outline" />
+          <EmptyState
+            title={
+              query.trim()
+                ? t('superadmin.noSearchResults')
+                : t('superadmin.referees.empty')
+            }
+            icon="person-outline"
+          />
         }
         renderItem={renderItem}
       />

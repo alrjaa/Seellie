@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTournament } from '@/providers/TournamentProvider';
@@ -6,31 +6,67 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
-import { Card, Muted, Title } from '@/components/ui';
+import { Card, Muted, SearchBar, Title } from '@/components/ui';
 import { buildInvoices } from '@/screens/superadmin/InvoiceDetailScreen';
+import { matchesSearchQuery } from '@/utils/search';
 
 export default function InvoicesScreen() {
   const { giftTransactions, supportLevels } = useTournament();
   const theme = useAppTheme();
   const router = useRouter();
   const { t } = useTranslation();
+  const [query, setQuery] = useState('');
 
   const invoices = useMemo(
     () => buildInvoices(giftTransactions, supportLevels, t),
     [giftTransactions, supportLevels, t]
   );
 
+  const filtered = useMemo(
+    () =>
+      invoices.filter((inv) =>
+        matchesSearchQuery(
+          query,
+          inv.title,
+          inv.party,
+          inv.id,
+          inv.status,
+          inv.amount,
+          inv.recipientName,
+          inv.competitionName,
+          inv.certificateType
+        )
+      ),
+    [invoices, query]
+  );
+
   return (
     <Screen scroll contentStyle={styles.content}>
       <Title>{t('superadmin.modules.invoices.title')}</Title>
       <Muted>{t('superadmin.invoices.subtitle')}</Muted>
+      <SearchBar
+        value={query}
+        onChangeText={setQuery}
+        placeholder={t('superadmin.searchPlaceholder')}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
 
-      {invoices.length === 0 ? (
-        <EmptyState title={t('superadmin.invoices.empty')} icon="document-text-outline" />
+      {filtered.length === 0 ? (
+        <EmptyState
+          title={
+            query.trim()
+              ? t('superadmin.noSearchResults')
+              : t('superadmin.invoices.empty')
+          }
+          icon="document-text-outline"
+        />
       ) : (
-        invoices.map((inv) => (
+        filtered.map((inv) => (
           <Pressable
             key={inv.id}
+            accessibilityRole="button"
+            hitSlop={4}
             onPress={() =>
               router.push(`/(superadmin)/invoices/${inv.id}` as any)
             }
@@ -41,7 +77,7 @@ export default function InvoicesScreen() {
               </Text>
               <Muted>{inv.party}</Muted>
               <View style={styles.meta}>
-                <Text style={[styles.amount, { color: theme.colors.primary }]}>
+                <Text style={[styles.amount, { color: theme.colors.accent }]}>
                   {t('superadmin.invoices.amountCurrency', { amount: inv.amount })}
                 </Text>
                 <Muted>{inv.status}</Muted>

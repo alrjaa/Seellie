@@ -20,7 +20,11 @@ import { Screen } from '@/components/layout/Screen';
 import { HeaderBackButton } from '@/components/layout/HeaderBackButton';
 import { AccountHeaderButton } from '@/components/layout/AccountHeaderButton';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { useResponsive } from '@/hooks/useResponsive';
 import { headerSafeTop } from '@/theme/navigation';
+import {
+  certificateImageSource,
+} from '@/theme/certificates';
 import {
   Avatar,
   Button,
@@ -60,9 +64,9 @@ const RecipientRow = memo(function RecipientRow({
       style={[
         styles.recipientRow,
         {
-          borderColor: selected ? theme.colors.primary : theme.colors.border,
+          borderColor: selected ? theme.colors.accent : theme.colors.border,
           backgroundColor: selected
-            ? theme.colors.primarySoft
+            ? theme.colors.accentSoft
             : theme.colors.surfaceElevated,
         },
       ]}
@@ -91,6 +95,7 @@ export default function CertificatesScreen() {
   const theme = useAppTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { desktop } = useResponsive();
 
   const levels = useMemo(
     () => supportLevels.filter((l) => (l.name as string) !== 'محلل'),
@@ -205,6 +210,7 @@ export default function CertificatesScreen() {
     <Screen
       scroll
       edges={['left', 'right']}
+      density={desktop ? 'wide' : 'default'}
       contentStyle={{ ...styles.content, paddingTop: headerSafeTop(insets.top) }}
     >
       <View style={styles.topBar}>
@@ -234,20 +240,32 @@ export default function CertificatesScreen() {
           icon="ribbon-outline"
         />
       ) : (
-        levels.map((level) => (
-          <Card key={level.name} style={styles.card}>
+        <View style={[styles.levelsGrid, desktop && styles.levelsGridDesktop]}>
+          {levels.map((level) => (
+          <Card
+            key={level.name}
+            style={[styles.card, desktop && styles.cardDesktop]}
+          >
             <Image
-              source={{ uri: level.imageUrl }}
+              source={
+                /^(file:|data:|https?:|content:|ph:|assets-library:)/i.test(
+                  level.imageUrl || ''
+                )
+                  ? { uri: level.imageUrl }
+                  : certificateImageSource(level.name) ?? {
+                      uri: level.imageUrl,
+                    }
+              }
               style={[
                 styles.image,
                 { backgroundColor: theme.colors.surfaceElevated },
               ]}
-              contentFit="cover"
+              contentFit="contain"
               transition={200}
             />
             <View style={styles.body}>
               <Subtitle>{level.name}</Subtitle>
-              <Text style={[styles.price, { color: theme.colors.primary }]}>
+              <Text style={[styles.price, { color: theme.colors.accent }]}>
                 {t('certificates.price', { amount: level.price })}
               </Text>
               <Muted>{level.description}</Muted>
@@ -263,7 +281,8 @@ export default function CertificatesScreen() {
               />
             </View>
           </Card>
-        ))
+          ))}
+        </View>
       )}
 
       <Modal
@@ -288,7 +307,7 @@ export default function CertificatesScreen() {
               <Card style={styles.certificate}>
                 <Muted>{t('certificates.certNumber')}</Muted>
                 <Text
-                  style={[styles.certNumber, { color: theme.colors.primary }]}
+                  style={[styles.certNumber, { color: theme.colors.accent }]}
                 >
                   {issued.certificateNumber}
                 </Text>
@@ -305,7 +324,7 @@ export default function CertificatesScreen() {
                 <Text style={[styles.certName, { color: theme.colors.text }]}>
                   {issued.recipientName}
                 </Text>
-                <Text style={[styles.certId, { color: theme.colors.primary }]}>
+                <Text style={[styles.certId, { color: theme.colors.accent }]}>
                   {issued.recipientVisibleId || '—'}
                 </Text>
                 <Muted>
@@ -327,7 +346,7 @@ export default function CertificatesScreen() {
               </Title>
               <Muted>{t('certificates.searchHint')}</Muted>
               {selectedLevel ? (
-                <Text style={[styles.price, { color: theme.colors.primary }]}>
+                <Text style={[styles.price, { color: theme.colors.accent }]}>
                   {t('certificates.price', {
                     amount: selectedLevel.price,
                   })}
@@ -349,7 +368,7 @@ export default function CertificatesScreen() {
                     {recipient.name}
                   </Text>
                   <Text
-                    style={[styles.certId, { color: theme.colors.primary }]}
+                    style={[styles.certId, { color: theme.colors.accent }]}
                   >
                     {recipient.visibleId || recipient.handle || '—'}
                   </Text>
@@ -404,6 +423,12 @@ export default function CertificatesScreen() {
 
 const styles = StyleSheet.create({
   content: { gap: 14, paddingBottom: 40 },
+  levelsGrid: { gap: 14 },
+  levelsGridDesktop: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
   topBar: {
     minHeight: 32,
     flexDirection: 'row',
@@ -415,9 +440,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
   },
-  card: { gap: 12, padding: 0, overflow: 'hidden' },
-  image: { width: '100%', height: 140 },
-  body: { gap: 8, padding: 14 },
+  card: {
+    gap: 0,
+    padding: 0,
+    overflow: 'hidden',
+  },
+  cardDesktop: {
+    width: '48%',
+    flexGrow: 1,
+    minWidth: 320,
+    maxWidth: '48%',
+  },
+  image: {
+    width: '100%',
+    aspectRatio: 900 / 674,
+  },
+  body: { gap: 8, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 14 },
   price: { fontSize: 18, fontWeight: '800', textAlign: 'left' },
   modal: { flex: 1, paddingHorizontal: 16 },
   modalBody: { flex: 1, gap: 12 },

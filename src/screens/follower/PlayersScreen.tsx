@@ -11,6 +11,7 @@ import { useListChrome } from '@/hooks/useListChrome';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { FreelancerPlayerCard } from '@/components/player/FreelancerPlayerCard';
 import {
   Avatar,
   Card,
@@ -18,6 +19,7 @@ import {
   SearchBar,
   Subtitle,
 } from '@/components/ui';
+import { cairoText } from '@/theme/fonts';
 import { userHasRole } from '@/utils/roles';
 
 type PlayerRow = {
@@ -28,9 +30,20 @@ type PlayerRow = {
   position?: string;
   jerseyNumber?: number;
   isFreelancer: boolean;
+  handle?: string;
+  visibleId?: string;
+  city?: string;
+  bio?: string;
+  photosCount?: number;
+  videosCount?: number;
+  totalLikes?: number;
 };
 
-const PlayerRowCard = memo(function PlayerRowCard({ item }: { item: PlayerRow }) {
+const TeamPlayerRowCard = memo(function TeamPlayerRowCard({
+  item,
+}: {
+  item: PlayerRow;
+}) {
   const theme = useAppTheme();
   const router = useRouter();
 
@@ -39,20 +52,21 @@ const PlayerRowCard = memo(function PlayerRowCard({ item }: { item: PlayerRow })
       accessibilityRole="button"
       onPress={() => router.push(`/(follower)/players/${item.id}` as any)}
     >
-      <Card style={styles.card}>
-        <View style={styles.row}>
+      <Card style={styles.teamCard} padded={false}>
+        <View style={styles.teamRow}>
           <Avatar uri={item.avatar} name={item.name} size={48} />
           <View style={styles.textCol}>
             <Text style={[styles.name, { color: theme.colors.text }]}>
               {item.name}
             </Text>
-            <Muted>{item.teamName}</Muted>
-            {item.position ? (
-              <Muted>
-                {item.position}
-                {item.jerseyNumber ? ` · #${item.jerseyNumber}` : ''}
-              </Muted>
-            ) : null}
+            <Text style={[styles.meta, { color: theme.colors.textMuted }]}>
+              {item.teamName}
+              {item.position
+                ? `  ·  ${item.position}${
+                    item.jerseyNumber ? ` #${item.jerseyNumber}` : ''
+                  }`
+                : ''}
+            </Text>
           </View>
         </View>
       </Card>
@@ -60,12 +74,39 @@ const PlayerRowCard = memo(function PlayerRowCard({ item }: { item: PlayerRow })
   );
 });
 
+const PlayerRowCard = memo(function PlayerRowCard({
+  item,
+}: {
+  item: PlayerRow;
+}) {
+  const router = useRouter();
+
+  if (item.isFreelancer) {
+    return (
+      <FreelancerPlayerCard
+        variant="row"
+        name={item.name}
+        avatar={item.avatar}
+        handle={item.handle}
+        visibleId={item.visibleId}
+        city={item.city}
+        bio={item.bio}
+        photosCount={item.photosCount}
+        videosCount={item.videosCount}
+        totalLikes={item.totalLikes}
+        onPress={() => router.push(`/(follower)/players/${item.id}` as any)}
+      />
+    );
+  }
+
+  return <TeamPlayerRowCard item={item} />;
+});
+
 export default function PlayersScreen() {
   const { competitions, users } = useTournament();
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const listChrome = useListChrome();
-
 
   const players = useMemo(() => {
     const rows: PlayerRow[] = [];
@@ -89,16 +130,31 @@ export default function PlayersScreen() {
     users
       .filter((u) => userHasRole(u, 'freelancer'))
       .forEach((user: User) => {
+        const photos = user.media?.photos || [];
+        const videos = user.media?.videos || [];
+        const totalLikes =
+          photos.reduce((s, p) => s + p.likes.length, 0) +
+          videos.reduce((s, v) => s + v.likes.length, 0);
         rows.push({
           id: user.id,
           name: user.name,
           avatar: user.avatar,
           teamName: t('home.freelancerPlayer'),
           isFreelancer: true,
+          handle: user.handle,
+          visibleId: user.visibleId,
+          city: user.city,
+          bio: user.bio,
+          photosCount: photos.length,
+          videosCount: videos.length,
+          totalLikes,
         });
       });
 
-    return rows.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+    return rows.sort((a, b) => {
+      if (a.isFreelancer !== b.isFreelancer) return a.isFreelancer ? -1 : 1;
+      return a.name.localeCompare(b.name, 'ar');
+    });
   }, [competitions, users, t]);
 
   const filtered = useMemo(() => {
@@ -107,7 +163,9 @@ export default function PlayersScreen() {
     return players.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
-        p.teamName.toLowerCase().includes(q)
+        p.teamName.toLowerCase().includes(q) ||
+        (p.handle || '').toLowerCase().includes(q) ||
+        (p.city || '').toLowerCase().includes(q)
     );
   }, [players, query]);
 
@@ -156,21 +214,29 @@ export default function PlayersScreen() {
 const styles = StyleSheet.create({
   list: { paddingTop: 12, gap: 10, paddingBottom: 40 },
   header: { gap: 10, marginBottom: 4 },
-  card: { gap: 0 },
-  row: {
+  teamCard: { overflow: 'hidden' },
+  teamRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   textCol: {
     flex: 1,
-    gap: 2,
+    gap: 3,
     minWidth: 0,
   },
   name: {
-    fontWeight: '800',
+    ...cairoText('extraBold'),
+    fontSize: 15,
+    lineHeight: 22,
     textAlign: 'left',
-    fontSize: 14,
+  },
+  meta: {
+    ...cairoText('medium'),
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'left',
   },
 });

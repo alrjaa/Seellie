@@ -16,7 +16,8 @@ import type { UserRole } from '@/types';
  */
 export function RolePathCard() {
   const theme = useAppTheme();
-  const { t } = useTranslation();
+  const { t, isRTL } = useTranslation();
+  const align = (isRTL ? 'right' : 'left') as 'left' | 'right';
   const { currentUser, enableSecondaryRole, switchActiveRole } = useTournament();
   const [termsOrg, setTermsOrg] = useState(false);
   const [termsFlr, setTermsFlr] = useState(false);
@@ -45,7 +46,7 @@ export function RolePathCard() {
       style={{
         ...styles.card,
         borderWidth: 1.5,
-        borderColor: theme.colors.primary,
+        borderColor: theme.colors.accent,
       }}
     >
       <Subtitle>{t('paths.title')}</Subtitle>
@@ -57,7 +58,12 @@ export function RolePathCard() {
       </Muted>
 
       {secondary ? (
-        <View style={styles.switchRow}>
+        <View
+          style={[
+            styles.switchRow,
+            { flexDirection: isRTL ? 'row-reverse' : 'row' },
+          ]}
+        >
           {normalized.roles.includes('follower') ? (
             <Button
               label={t('paths.switchFollower')}
@@ -95,12 +101,21 @@ export function RolePathCard() {
                   setShowOrgTerms(true);
                   return;
                 }
-                enableSecondaryRole('organizer', true);
+                void enableSecondaryRole('organizer', true);
               }}
             />
             {showOrgTerms || termsOrg ? (
               <>
-                <Text style={[styles.terms, { color: theme.colors.textMuted }]}>
+                <Text
+                  style={[
+                    styles.terms,
+                    {
+                      color: theme.colors.textMuted,
+                      textAlign: align,
+                      writingDirection: isRTL ? 'rtl' : 'ltr',
+                    },
+                  ]}
+                >
                   {t('paths.organizerTerms')}
                 </Text>
                 <Pledge
@@ -110,7 +125,7 @@ export function RolePathCard() {
                 />
                 <Button
                   label={t('paths.confirmOrganizer')}
-                  onPress={() => enableSecondaryRole('organizer', termsOrg)}
+                  onPress={() => void enableSecondaryRole('organizer', termsOrg)}
                   disabled={!termsOrg}
                 />
               </>
@@ -120,18 +135,27 @@ export function RolePathCard() {
           <View style={styles.pathBlock}>
             <Button
               label={t('paths.chooseFreelancer')}
-              variant="secondary"
+              variant="outline"
               onPress={() => {
                 if (!termsFlr) {
                   setShowFlrTerms(true);
                   return;
                 }
-                enableSecondaryRole('freelancer', true);
+                void enableSecondaryRole('freelancer', true);
               }}
             />
             {showFlrTerms || termsFlr ? (
               <>
-                <Text style={[styles.terms, { color: theme.colors.textMuted }]}>
+                <Text
+                  style={[
+                    styles.terms,
+                    {
+                      color: theme.colors.textMuted,
+                      textAlign: align,
+                      writingDirection: isRTL ? 'rtl' : 'ltr',
+                    },
+                  ]}
+                >
                   {t('paths.freelancerTerms')}
                 </Text>
                 <Pledge
@@ -141,8 +165,8 @@ export function RolePathCard() {
                 />
                 <Button
                   label={t('paths.confirmFreelancer')}
-                  variant="secondary"
-                  onPress={() => enableSecondaryRole('freelancer', termsFlr)}
+                  variant="outline"
+                  onPress={() => void enableSecondaryRole('freelancer', termsFlr)}
                   disabled={!termsFlr}
                 />
               </>
@@ -168,14 +192,22 @@ function Pledge({
   onToggle: () => void;
 }) {
   const theme = useAppTheme();
+  const { isRTL } = useTranslation();
   return (
-    <Pressable onPress={onToggle} style={styles.pledge} accessibilityRole="checkbox">
+    <Pressable
+      onPress={onToggle}
+      style={[
+        styles.pledge,
+        { flexDirection: isRTL ? 'row-reverse' : 'row' },
+      ]}
+      accessibilityRole="checkbox"
+    >
       <View
         style={[
           styles.checkbox,
           {
-            borderColor: theme.colors.primary,
-            backgroundColor: checked ? theme.colors.primary : 'transparent',
+            borderColor: theme.colors.accent,
+            backgroundColor: checked ? theme.colors.accent : 'transparent',
           },
         ]}
       >
@@ -183,16 +215,30 @@ function Pledge({
           <Ionicons name="checkmark" size={14} color={theme.colors.textInverse} />
         ) : null}
       </View>
-      <Text style={[styles.pledgeLabel, { color: theme.colors.text }]}>{label}</Text>
+      <Text
+        style={[
+          styles.pledgeLabel,
+          {
+            color: theme.colors.text,
+            textAlign: isRTL ? 'right' : 'left',
+            writingDirection: isRTL ? 'rtl' : 'ltr',
+          },
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: { gap: 12 },
-  switchRow: { flexDirection: 'row', gap: 8 },
+  switchRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   pathBlock: { gap: 8 },
-  terms: { textAlign: 'left', fontSize: 12, lineHeight: 20 },
+  terms: { fontSize: 12, lineHeight: 20 },
   pledge: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -209,7 +255,6 @@ const styles = StyleSheet.create({
   },
   pledgeLabel: {
     flex: 1,
-    textAlign: 'left',
     fontWeight: '700',
     fontSize: 13,
     lineHeight: 20,

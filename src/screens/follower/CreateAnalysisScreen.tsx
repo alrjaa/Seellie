@@ -6,7 +6,13 @@ import { useTournament } from '@/providers/TournamentProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
+import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
 import { Button, Card, Input, Muted, Subtitle, Title } from '@/components/ui';
+import {
+  ANALYSIS_VIDEO_MAX_SEC,
+  isVideoWithinLimit,
+  videoDurationSecFromPicker,
+} from '@/utils/media-limits';
 
 export default function CreateAnalysisScreen() {
   const { addAnalysis } = useTournament();
@@ -30,13 +36,24 @@ export default function CreateAnalysisScreen() {
         });
         return;
       }
+      const maxSec = ANALYSIS_VIDEO_MAX_SEC;
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Videos,
         quality: 0.85,
+        videoMaxDuration: maxSec,
       });
-      if (!result.canceled && result.assets[0]?.uri) {
-        setVideoUrl(result.assets[0].uri);
+      if (result.canceled || !result.assets[0]?.uri) return;
+      const asset = result.assets[0];
+      const durationSec = videoDurationSecFromPicker(asset.duration);
+      if (!isVideoWithinLimit(durationSec, maxSec)) {
+        toast({
+          variant: 'destructive',
+          title: t('media.videoTooLong'),
+          description: t('media.videoTooLongDesc', { sec: maxSec }),
+        });
+        return;
       }
+      setVideoUrl(asset.uri);
     } catch {
       toast({
         variant: 'destructive',
@@ -86,6 +103,10 @@ export default function CreateAnalysisScreen() {
           onChangeText={setVideoUrl}
           autoCapitalize="none"
           ltr
+        />
+        <MediaUploadSpecs
+          kind="analysisVideo"
+          title={t('media.specs.videoTitle')}
         />
         <Button
           label={

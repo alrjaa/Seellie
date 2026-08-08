@@ -14,12 +14,14 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { OfflineBanner } from '@/components/feedback/OfflineBanner';
 import { FloatingActionMenu } from '@/components/layout/FloatingActionMenu';
+import { AuthDeepLinkHandler } from '@/components/auth/AuthDeepLinkHandler';
 import {
   applyGlobalCairoFonts,
   cairoFontMap,
 } from '@/theme/fonts';
 import { transparentHeaderOptions } from '@/theme/navigation';
 import { layoutDirectionStyle } from '@/theme/direction';
+import { injectDesktopWebStyles } from '@/theme/desktop-web';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -27,6 +29,10 @@ function RootNavigator() {
   const theme = useAppTheme();
   const { isRTL } = useTranslation();
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    injectDesktopWebStyles();
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === 'android') {
@@ -94,6 +100,46 @@ function RootNavigator() {
               ...header,
             }}
           />
+          <Stack.Screen
+            name="notifications"
+            options={{
+              headerShown: false,
+              title: '',
+              ...header,
+            }}
+          />
+          <Stack.Screen
+            name="share-cards"
+            options={{
+              headerShown: false,
+              title: '',
+              ...header,
+            }}
+          />
+          <Stack.Screen
+            name="privacy"
+            options={{
+              headerShown: false,
+              title: '',
+              ...header,
+            }}
+          />
+          <Stack.Screen
+            name="terms"
+            options={{
+              headerShown: false,
+              title: '',
+              ...header,
+            }}
+          />
+          <Stack.Screen
+            name="profile/[id]"
+            options={{
+              headerShown: false,
+              title: '',
+              ...header,
+            }}
+          />
         </Stack>
       </View>
       <FloatingActionMenu />
@@ -118,6 +164,7 @@ export default function RootLayout() {
 
   return (
     <AppProviders>
+      <AuthDeepLinkHandler />
       <RootNavigator />
     </AppProviders>
   );

@@ -25,6 +25,11 @@ import { EmptyState } from '@/components/feedback/EmptyState';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { PlayerMediaSection } from '@/components/media/PlayerMediaSection';
 import {
+  ShareTargetModal,
+  TinyShareButton,
+  type ContentSharePayload,
+} from '@/components/share/ShareTargetModal';
+import {
   FullScreenFeed,
   type FullScreenContent,
 } from '@/components/media/FullScreenFeed';
@@ -38,6 +43,7 @@ import {
   Subtitle,
 } from '@/components/ui';
 import { useResponsive } from '@/hooks/useResponsive';
+import { useListChrome } from '@/hooks/useListChrome';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatArabicDate } from '@/utils';
 import { userHasRole } from '@/utils/roles';
@@ -64,11 +70,13 @@ const ShareCard = memo(function ShareCard({
   liked,
   onLike,
   onOpenPlayer,
+  onShare,
 }: {
   item: ShareItem;
   liked: boolean;
   onLike: () => void;
   onOpenPlayer?: () => void;
+  onShare?: () => void;
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
@@ -96,10 +104,13 @@ const ShareCard = memo(function ShareCard({
             {formatArabicDate(item.timestamp)}
           </Muted>
         </View>
+        {onShare && item.kind === 'post' ? (
+          <TinyShareButton onPress={onShare} />
+        ) : null}
         <View
           style={[
             styles.kindBadge,
-            { backgroundColor: theme.colors.primarySoft },
+            { backgroundColor: theme.colors.accentSoft },
           ]}
         >
           <Ionicons
@@ -111,7 +122,7 @@ const ShareCard = memo(function ShareCard({
                   : 'document-text-outline'
             }
             size={16}
-            color={theme.colors.primary}
+            color={theme.colors.accent}
           />
         </View>
       </Pressable>
@@ -123,27 +134,41 @@ const ShareCard = memo(function ShareCard({
       ) : null}
 
       {item.kind === 'photo' && item.mediaUrl ? (
-        <Image
-          source={{ uri: item.mediaUrl }}
-          style={styles.media}
-          contentFit="cover"
-          transition={200}
-        />
+        <View style={styles.mediaWrap}>
+          <Image
+            source={{ uri: item.mediaUrl }}
+            style={styles.media}
+            contentFit="cover"
+            transition={200}
+          />
+          {onShare ? (
+            <View style={styles.mediaShare}>
+              <TinyShareButton onPress={onShare} />
+            </View>
+          ) : null}
+        </View>
       ) : null}
 
       {item.kind === 'video' && item.mediaUrl ? (
-        <Pressable
-          onPress={() => {
-            void Linking.openURL(item.mediaUrl!).catch(() => undefined);
-          }}
-          style={[
-            styles.videoBox,
-            { backgroundColor: theme.colors.surfaceElevated },
-          ]}
-        >
-          <Ionicons name="play-circle" size={48} color={theme.colors.primary} />
-          <Muted>{t('sharesUi.playPlayerVideo')}</Muted>
-        </Pressable>
+        <View style={styles.mediaWrap}>
+          <Pressable
+            onPress={() => {
+              void Linking.openURL(item.mediaUrl!).catch(() => undefined);
+            }}
+            style={[
+              styles.videoBox,
+              { backgroundColor: theme.colors.surfaceElevated },
+            ]}
+          >
+            <Ionicons name="play-circle" size={48} color={theme.colors.accent} />
+            <Muted>{t('sharesUi.playPlayerVideo')}</Muted>
+          </Pressable>
+          {onShare ? (
+            <View style={styles.mediaShare}>
+              <TinyShareButton onPress={onShare} />
+            </View>
+          ) : null}
+        </View>
       ) : null}
 
       <LikeButton count={item.likes.length} liked={liked} onPress={onLike} />
@@ -174,9 +199,13 @@ export default function SharesScreen() {
   const { tablet } = useResponsive();
   const insets = useSafeAreaInsets();
   const topPad = stackTopChromePad(insets.top);
+  const listChrome = useListChrome({ hasTabBar: false });
   const [text, setText] = useState('');
   const [filter, setFilter] = useState<ShareFilter>('all');
   const [composerOpen, setComposerOpen] = useState(false);
+  const [sharePayload, setSharePayload] = useState<ContentSharePayload | null>(
+    null
+  );
 
   const isPlayer = userHasRole(currentUser, 'freelancer');
   const freelancerLabel = t('home.freelancerPlayer');
@@ -395,6 +424,20 @@ export default function SharesScreen() {
               ? () => router.push(`/(follower)/players/${item.authorId}` as any)
               : undefined
           }
+          onShare={() =>
+            setSharePayload({
+              kind: 'content',
+              title: item.authorName,
+              body: item.text,
+              mediaUrl: item.mediaUrl,
+              mediaKind:
+                item.kind === 'photo'
+                  ? 'photo'
+                  : item.kind === 'video'
+                    ? 'video'
+                    : 'text',
+            })
+          }
         />
       );
     },
@@ -442,19 +485,35 @@ export default function SharesScreen() {
               styles.filterIconBtn,
               {
                 backgroundColor: active
-                  ? theme.colors.primary
+                  ? theme.colors.accent
                   : theme.colors.surfaceElevated,
                 borderColor: active
-                  ? theme.colors.primary
+                  ? theme.colors.accent
                   : theme.colors.border,
               },
             ]}
           >
             <Ionicons
               name={f.icon}
-              size={15}
-              color={active ? theme.colors.textInverse : theme.colors.primary}
+              size={14}
+              color={active ? theme.colors.textInverse : theme.colors.textMuted}
             />
+            <Text
+              style={{
+                color: active ? theme.colors.textInverse : theme.colors.textMuted,
+                fontSize: 11,
+                fontWeight: '700',
+              }}
+              numberOfLines={1}
+            >
+              {f.key === 'all'
+                ? t('screens.all')
+                : f.key === 'photos'
+                  ? t('screens.photos')
+                  : f.key === 'videos'
+                    ? t('screens.videos')
+                    : t('sharesUi.texts')}
+            </Text>
           </Pressable>
         );
       })}
@@ -529,8 +588,8 @@ export default function SharesScreen() {
           onPressAuthor={
             currentUser.role === 'follower' ? onPressAuthor : undefined
           }
-          emptyTitle={t('common.noResults')}
-          emptyDescription={t('screens.personalityEmptyDesc')}
+          emptyTitle={t('sharesUi.emptyTitle')}
+          emptyDescription={t('sharesUi.emptyDesc')}
           emptyIcon="share-social-outline"
           topOverlaySafeArea
           topOverlay={
@@ -621,12 +680,17 @@ export default function SharesScreen() {
           style={{ flex: 1 }}
           data={filtered}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={[styles.list, { paddingTop: topPad }]}
+          {...listChrome}
+          contentContainerStyle={[
+            styles.list,
+            listChrome.contentContainerStyle,
+            { paddingTop: topPad },
+          ]}
           ListHeaderComponent={header}
           ListEmptyComponent={
             <EmptyState
-              title={t('common.noResults')}
-              description={t('screens.personalityEmptyDesc')}
+              title={t('sharesUi.emptyTitle')}
+              description={t('sharesUi.emptyDesc')}
               icon="share-social-outline"
             />
           }
@@ -635,6 +699,11 @@ export default function SharesScreen() {
           renderItem={renderItem}
         />
       </Screen>
+      <ShareTargetModal
+        visible={!!sharePayload}
+        payload={sharePayload}
+        onClose={() => setSharePayload(null)}
+      />
     </View>
   );
 }
@@ -650,12 +719,15 @@ const styles = StyleSheet.create({
     direction: 'ltr',
   },
   filterIconBtn: {
-    width: 32,
-    height: 32,
+    minHeight: 32,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   mobileOverlay: {
     paddingHorizontal: 12,
@@ -676,13 +748,18 @@ const styles = StyleSheet.create({
   composer: { gap: 10 },
   card: { gap: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  author: { fontWeight: '800', textAlign: 'left' },
+  author: { fontWeight: '800' },
   body: {
-    textAlign: 'left',
-    writingDirection: 'ltr',
     lineHeight: 22,
   },
+  mediaWrap: { position: 'relative' },
   media: { width: '100%', height: 220, borderRadius: 14 },
+  mediaShare: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 2,
+  },
   videoBox: {
     height: 160,
     borderRadius: 14,

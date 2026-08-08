@@ -200,13 +200,13 @@ export default function IconsScreen() {
               <View
                 style={[
                   styles.iconWrap,
-                  { backgroundColor: theme.colors.primarySoft },
+                  { backgroundColor: theme.colors.accentSoft },
                 ]}
               >
                 <Ionicons
                   name={item.icon}
                   size={22}
-                  color={theme.colors.primary}
+                  color={theme.colors.accent}
                 />
               </View>
               <View style={{ flex: 1, gap: 2 }}>

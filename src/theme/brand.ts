@@ -1,7 +1,11 @@
 import { Image, type ImageSourcePropType } from 'react-native';
+import { brandPalette } from '@/theme/colors';
 
 /** اسم العرض الافتراضي للتطبيق */
 export const APP_DISPLAY_NAME = 'Seellie';
+
+/** ألوان الهوية البصرية */
+export const BRAND_COLORS = brandPalette;
 
 /** وحدة الشعار المضمّنة */
 export const DEFAULT_LOGO_MODULE =

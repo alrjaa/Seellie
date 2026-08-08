@@ -2,15 +2,24 @@ import React, { memo } from 'react';
 import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/providers/ThemeProvider';
-import { useTranslation } from '@/providers/LanguageProvider';
+import { useLanguage, useTranslation } from '@/providers/LanguageProvider';
+import { cairoText } from '@/theme/fonts';
 
 type Props = TextInputProps & {
   onClear?: () => void;
 };
 
-function SearchBarComponent({ value, onChangeText, onClear, placeholder, ...rest }: Props) {
+function SearchBarComponent({
+  value,
+  onChangeText,
+  onClear,
+  placeholder,
+  ...rest
+}: Props) {
   const theme = useAppTheme();
   const { t } = useTranslation();
+  const { isRTL } = useLanguage();
+
   return (
     <View
       style={[
@@ -18,6 +27,8 @@ function SearchBarComponent({ value, onChangeText, onClear, placeholder, ...rest
         {
           backgroundColor: theme.colors.inputBg,
           borderColor: theme.colors.border,
+          // لا نعكس الصف يدوياً — I18nManager RTL يعكس row تلقائياً
+          flexDirection: 'row',
         },
       ]}
     >
@@ -27,8 +38,15 @@ function SearchBarComponent({ value, onChangeText, onClear, placeholder, ...rest
         onChangeText={onChangeText}
         placeholder={placeholder ?? t('common.searchPlaceholder')}
         placeholderTextColor={theme.colors.textMuted}
-        style={[styles.input, { color: theme.colors.text }]}
-        textAlign="right"
+        style={[
+          styles.input,
+          cairoText('regular'),
+          {
+            color: theme.colors.text,
+            textAlign: isRTL ? 'right' : 'left',
+            writingDirection: isRTL ? 'rtl' : 'ltr',
+          },
+        ]}
         {...rest}
       />
       {value ? (
@@ -50,7 +68,6 @@ export const SearchBar = memo(SearchBarComponent);
 
 const styles = StyleSheet.create({
   wrap: {
-    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,

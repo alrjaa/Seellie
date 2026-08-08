@@ -37,8 +37,8 @@ export const Card = memo(CardComponent);
 
 const styles = StyleSheet.create({
   card: {
-    width: '100%',
+    // لا نفرض width:100% — يكسر شبكات flexWrap على Android
+    alignSelf: 'stretch',
     borderWidth: StyleSheet.hairlineWidth,
-    // visible حتى لا تُقص الظلال أو العناصر المتداخلة
   },
 });

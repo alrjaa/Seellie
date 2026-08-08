@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -7,41 +8,130 @@ import { Screen } from '@/components/layout/Screen';
 import { Button, Card, Input, Muted, Subtitle, Title } from '@/components/ui';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageCard } from '@/components/account/LanguageCard';
+import { AccountSocialStats } from '@/components/account/AccountSocialStats';
 import { useTranslation } from '@/providers/LanguageProvider';
+import { isValidEmail, normalizeEmail } from '@/utils';
+import { hashPassword } from '@/utils/password';
+import { isUuid } from '@/services/supabase-messages';
 
 export default function SettingsScreen() {
-  const { appName, appLogo, setAppName, setAppLogo, currentUser } =
-    useTournament();
+  const {
+    appName,
+    appLogo,
+    setAppName,
+    setAppLogo,
+    currentUser,
+    users,
+    updateUser,
+    logout,
+  } = useTournament();
   const { toast } = useToast();
   const { preference, setPreference } = useTheme();
   const { t } = useTranslation();
+  const router = useRouter();
   const [name, setName] = useState(appName);
   const [logo, setLogo] = useState(appLogo);
+  const [accountName, setAccountName] = useState(currentUser?.name || '');
+  const [accountEmail, setAccountEmail] = useState(currentUser?.email || '');
+  const [accountPassword, setAccountPassword] = useState('');
+
+  const saveAdminAccount = () => {
+    if (!currentUser) return;
+    const email = normalizeEmail(accountEmail);
+    if (!isValidEmail(email)) {
+      toast({
+        variant: 'destructive',
+        title: t('superadmin.settings.invalidEmail'),
+      });
+      return;
+    }
+    const taken = users.some(
+      (u) => u.id !== currentUser.id && normalizeEmail(u.email) === email
+    );
+    if (taken) {
+      toast({
+        variant: 'destructive',
+        title: t('superadmin.settings.emailTaken'),
+      });
+      return;
+    }
+    const nextPassword = accountPassword.trim();
+    if (nextPassword && nextPassword.length < 6) {
+      toast({
+        variant: 'destructive',
+        title: t('toasts.t004_8fdbe1'),
+        description: t('toasts.t076_91bef0'),
+      });
+      return;
+    }
+    updateUser(
+      {
+        ...currentUser,
+        name: accountName.trim() || currentUser.name,
+        email,
+        ...(nextPassword
+          ? { passwordHash: hashPassword(nextPassword) }
+          : {}),
+      },
+      t('superadmin.settings.accountSaved')
+    );
+    setAccountPassword('');
+  };
 
   return (
-    <Screen scroll contentStyle={styles.content}>
+    <Screen scroll keyboard contentStyle={styles.content}>
       <Title>{t('settings.title')}</Title>
       <Muted>{t('settings.subtitle')}</Muted>
 
       <LanguageCard />
 
       <Card style={styles.card}>
-        <Subtitle>{t('settings.accountSettings')}</Subtitle>
-        <Muted>
-          {t('settings.name')}: {currentUser?.name}
-        </Muted>
+        <Subtitle>{t('superadmin.settings.editAccount')}</Subtitle>
+        <Muted>{t('superadmin.settings.editAccountHint')}</Muted>
+        {!isUuid(currentUser?.id) ? (
+          <Muted>
+            حسابك الآن محلي. لتفعيل السحابة: اخرج → ادخل من /admin بإيميل Sign
+            up بعد ترقية SQL. تعديل الإيميل هنا لا يحوّله لحساب سحابي.
+          </Muted>
+        ) : (
+          <Muted>حساب سحابي ✓ {currentUser?.email}</Muted>
+        )}
         <Muted>
           {t('settings.handle')}: {currentUser?.handle}
         </Muted>
         <Muted>
           {t('settings.regId')}: {currentUser?.visibleId}
         </Muted>
-        <Muted>
-          {t('settings.email')}: {currentUser?.email}
-        </Muted>
-        <Muted>
-          {t('roles.superadmin')}
-        </Muted>
+        <Input
+          label={t('settings.name')}
+          value={accountName}
+          onChangeText={setAccountName}
+        />
+        <Input
+          label={t('settings.email')}
+          value={accountEmail}
+          onChangeText={setAccountEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          ltr
+        />
+        <Input
+          label={t('superadmin.settings.newPassword')}
+          value={accountPassword}
+          onChangeText={setAccountPassword}
+          secureTextEntry
+          placeholder={t('superadmin.settings.newPasswordHint')}
+          ltr
+        />
+        <Button
+          label={t('superadmin.settings.saveAccount')}
+          onPress={saveAdminAccount}
+        />
+        <Button
+          label="خروج ثم دخول سحابي"
+          variant="outline"
+          onPress={() => logout()}
+        />
       </Card>
 
       <Card style={styles.card}>
@@ -113,6 +203,23 @@ export default function SettingsScreen() {
           }}
         />
       </Card>
+
+      <Button
+        label={t('notifications.title')}
+        variant="outline"
+        onPress={() => router.push('/notifications' as any)}
+      />
+      <Button
+        label={t('legal.openPrivacy')}
+        variant="ghost"
+        onPress={() => router.push('/privacy' as any)}
+      />
+      <Button
+        label={t('legal.openTerms')}
+        variant="ghost"
+        onPress={() => router.push('/terms' as any)}
+      />
+      <AccountSocialStats user={currentUser} />
     </Screen>
   );
 }

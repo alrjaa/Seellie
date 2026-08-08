@@ -2,6 +2,7 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -9,101 +10,176 @@ import React, {
 } from 'react';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
-type FloatingChromeContextValue = {
+type VisibilityValue = {
   visible: boolean;
   setVisible: (visible: boolean) => void;
+};
+
+type ScrollHandlersValue = {
   /** ربطه بـ onScroll للقوائم والشاشات القابلة للتمرير */
   onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
   onScrollBeginDrag: () => void;
-  onScrollEndDrag: () => void;
+  onScrollEndDrag: (
+    e?: NativeSyntheticEvent<NativeScrollEvent>
+  ) => void;
+  onMomentumScrollBegin: () => void;
   onMomentumScrollEnd: () => void;
 };
 
-const FloatingChromeContext = createContext<FloatingChromeContextValue | null>(
-  null
-);
+const FloatingChromeVisibilityContext =
+  createContext<VisibilityValue | null>(null);
+
+const FloatingChromeScrollContext =
+  createContext<ScrollHandlersValue | null>(null);
+
+/** إظهار الأزرار فقط بعد توقف حقيقي عن التمرير — يمنع الاهتزاز */
+const SHOW_AFTER_IDLE_MS = 700;
 
 /**
  * يُخفي الأزرار العائمة أثناء التمرير ويُظهرها بعد التوقف.
+ * لا يُعاد إظهارها أثناء onScroll حتى لا يحدث تردد (إظهار↔إخفاء).
  */
 export function FloatingChromeProvider({ children }: { children: ReactNode }) {
-  const [visible, setVisible] = useState(true);
+  const [visible, setVisibleState] = useState(true);
+  const visibleRef = useRef(true);
   const lastY = useRef(0);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const interacting = useRef(false);
+  const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearTimer = useCallback(() => {
-    if (hideTimer.current) {
-      clearTimeout(hideTimer.current);
-      hideTimer.current = null;
+    if (showTimer.current) {
+      clearTimeout(showTimer.current);
+      showTimer.current = null;
     }
+  }, []);
+
+  const setVisible = useCallback((next: boolean) => {
+    if (visibleRef.current === next) return;
+    visibleRef.current = next;
+    setVisibleState(next);
   }, []);
 
   const scheduleShow = useCallback(() => {
     clearTimer();
-    hideTimer.current = setTimeout(() => setVisible(true), 700);
+    showTimer.current = setTimeout(() => {
+      if (!interacting.current && !visibleRef.current) {
+        visibleRef.current = true;
+        setVisibleState(true);
+      }
+      showTimer.current = null;
+    }, SHOW_AFTER_IDLE_MS);
   }, [clearTimer]);
 
+  const hideNow = useCallback(() => {
+    if (!visibleRef.current) return;
+    visibleRef.current = false;
+    setVisibleState(false);
+  }, []);
+
   const onScrollBeginDrag = useCallback(() => {
+    interacting.current = true;
     clearTimer();
-    setVisible(false);
-  }, [clearTimer]);
+    hideNow();
+  }, [clearTimer, hideNow]);
+
+  const onMomentumScrollBegin = useCallback(() => {
+    interacting.current = true;
+    clearTimer();
+    hideNow();
+  }, [clearTimer, hideNow]);
 
   const onScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const y = e.nativeEvent.contentOffset.y;
-      if (Math.abs(y - lastY.current) > 4) {
-        setVisible(false);
-        clearTimer();
+      // إخفاء فقط — بدون جدولة إظهار أثناء الحركة (مصدر التردد السابق)
+      if (Math.abs(y - lastY.current) > 8) {
+        hideNow();
       }
       lastY.current = y;
     },
-    [clearTimer]
+    [hideNow]
   );
 
-  const onScrollEndDrag = useCallback(() => {
-    scheduleShow();
-  }, [scheduleShow]);
+  const onScrollEndDrag = useCallback(
+    (e?: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const vy = Math.abs(e?.nativeEvent?.velocity?.y ?? 0);
+      // إن استمر الزخم، ننتظر onMomentumScrollEnd
+      if (vy > 0.15) {
+        return;
+      }
+      interacting.current = false;
+      scheduleShow();
+    },
+    [scheduleShow]
+  );
 
   const onMomentumScrollEnd = useCallback(() => {
+    interacting.current = false;
     scheduleShow();
   }, [scheduleShow]);
 
-  const value = useMemo(
+  useEffect(() => () => clearTimer(), [clearTimer]);
+
+  const visibilityValue = useMemo(
     () => ({
       visible,
       setVisible,
+    }),
+    [visible, setVisible]
+  );
+
+  const scrollValue = useMemo(
+    () => ({
       onScroll,
       onScrollBeginDrag,
       onScrollEndDrag,
+      onMomentumScrollBegin,
       onMomentumScrollEnd,
     }),
     [
-      visible,
       onScroll,
       onScrollBeginDrag,
       onScrollEndDrag,
+      onMomentumScrollBegin,
       onMomentumScrollEnd,
     ]
   );
 
   return (
-    <FloatingChromeContext.Provider value={value}>
-      {children}
-    </FloatingChromeContext.Provider>
+    <FloatingChromeVisibilityContext.Provider value={visibilityValue}>
+      <FloatingChromeScrollContext.Provider value={scrollValue}>
+        {children}
+      </FloatingChromeScrollContext.Provider>
+    </FloatingChromeVisibilityContext.Provider>
   );
 }
 
-export function useFloatingChrome() {
-  const ctx = useContext(FloatingChromeContext);
+const noopScroll: ScrollHandlersValue = {
+  onScroll: (_: NativeSyntheticEvent<NativeScrollEvent>) => undefined,
+  onScrollBeginDrag: () => undefined,
+  onScrollEndDrag: () => undefined,
+  onMomentumScrollBegin: () => undefined,
+  onMomentumScrollEnd: () => undefined,
+};
+
+export function useFloatingChromeVisible() {
+  const ctx = useContext(FloatingChromeVisibilityContext);
   if (!ctx) {
     return {
       visible: true,
       setVisible: (_: boolean) => undefined,
-      onScroll: (_: NativeSyntheticEvent<NativeScrollEvent>) => undefined,
-      onScrollBeginDrag: () => undefined,
-      onScrollEndDrag: () => undefined,
-      onMomentumScrollEnd: () => undefined,
     };
   }
   return ctx;
+}
+
+export function useFloatingChromeScroll() {
+  const ctx = useContext(FloatingChromeScrollContext);
+  return ctx ?? noopScroll;
+}
+
+export function useFloatingChrome() {
+  const visibility = useFloatingChromeVisible();
+  const scroll = useFloatingChromeScroll();
+  return { ...visibility, ...scroll };
 }

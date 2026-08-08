@@ -18,12 +18,18 @@ import {
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import {
+  ShareTargetModal,
+  TinyShareButton,
+  type ContentSharePayload,
+} from '@/components/share/ShareTargetModal';
+import {
   Card,
   Muted,
   SearchBar,
 } from '@/components/ui';
 import { useListChrome } from '@/hooks/useListChrome';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { userHasRole } from '@/utils/roles';
 
 type Hit = {
   id: string;
@@ -31,6 +37,7 @@ type Hit = {
   subtitle: string;
   href: string;
   kind: string;
+  joinShare?: ContentSharePayload;
 };
 
 /** بحث شامل في محتوى التطبيق. */
@@ -51,8 +58,15 @@ export default function SearchScreen() {
   const listChrome = useListChrome({ hasTabBar: false });
   const topPad = stackTopChromePad(insets.top);
   const [query, setQuery] = useState('');
+  const [sharePayload, setSharePayload] = useState<ContentSharePayload | null>(
+    null
+  );
 
   const homeHref = currentUser ? routeForRole(currentUser.role) : '/';
+  const isOrganizer =
+    !!currentUser &&
+    (currentUser.activeRole === 'organizer' ||
+      currentUser.role === 'organizer');
 
   const hits = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -120,12 +134,34 @@ export default function SearchScreen() {
             p.name.toLowerCase().includes(q) ||
             String(p.jerseyNumber).includes(q)
           ) {
+            const matched = users.find(
+              (u) =>
+                u.id === p.id ||
+                (p.email && u.email === p.email) ||
+                u.name.trim().toLowerCase() === p.name.trim().toLowerCase()
+            );
             results.push({
               id: `player-${p.id}`,
               title: p.name,
               subtitle: `${team.name} · ${p.position}`,
               href: playerHref(p.id),
               kind: t('searchUi.kindPlayer'),
+              joinShare: isOrganizer
+                ? {
+                    kind: 'join_request',
+                    competitionId: c.id,
+                    competitionName: c.name,
+                    teamId: team.id,
+                    teamName: team.name,
+                    position: p.position,
+                    presetRecipientId: matched?.id,
+                    presetRecipientName: matched?.name || p.name,
+                    presetRecipientKind: 'user',
+                    body: t('shareCards.defaultJoinNote', {
+                      name: matched?.name || p.name,
+                    }),
+                  }
+                : undefined,
             });
           }
         });
@@ -149,18 +185,23 @@ export default function SearchScreen() {
     users.forEach((u) => {
       const blob = `${u.name} ${u.handle || ''} ${u.email} ${u.bio || ''}`.toLowerCase();
       if (!blob.includes(q)) return;
-      const href =
-        u.role === 'freelancer'
-          ? playerHref(u.id)
-          : u.role === 'organizer' && role === 'superadmin'
-            ? `/(superadmin)/organizers/${u.id}`
-            : '/forums';
       results.push({
         id: `user-${u.id}`,
         title: u.name,
         subtitle: `${u.handle} · ${u.visibleId} · ${u.role}`,
-        href,
+        href: `/profile/${u.id}`,
         kind: t('settings.account'),
+        joinShare:
+          isOrganizer &&
+          (userHasRole(u, 'freelancer') || userHasRole(u, 'follower'))
+            ? {
+                kind: 'join_request',
+                presetRecipientId: u.id,
+                presetRecipientName: u.name,
+                presetRecipientKind: 'user',
+                body: t('shareCards.defaultJoinNote', { name: u.name }),
+              }
+            : undefined,
       });
       u.analysisContent.forEach((a) => {
         if (
@@ -182,7 +223,7 @@ export default function SearchScreen() {
             id: `post-${p.id}`,
             title: p.text.slice(0, 60),
             subtitle: `${t('menu.shares')} · ${u.name}`,
-            href: role === 'freelancer' ? '/shares' : '/forums',
+            href: `/profile/${u.id}`,
             kind: t('menu.shares'),
           });
         }
@@ -214,7 +255,17 @@ export default function SearchScreen() {
     });
 
     return results.slice(0, 60);
-  }, [query, competitions, users, comments, referees, currentUser, homeHref, t]);
+  }, [
+    query,
+    competitions,
+    users,
+    comments,
+    referees,
+    currentUser,
+    homeHref,
+    isOrganizer,
+    t,
+  ]);
 
   if (loading) return <LoadingState />;
   if (!currentUser) return <Redirect href="/(auth)/login" />;
@@ -255,21 +306,22 @@ export default function SearchScreen() {
             />
           }
           renderItem={({ item }) => (
-            <Pressable
-              onPress={() => router.push(item.href as any)}
-              accessibilityRole="button"
-            >
-              <Card style={styles.card}>
-                <View style={styles.row}>
+            <Card style={styles.card}>
+              <View style={styles.row}>
+                <Pressable
+                  onPress={() => router.push(item.href as any)}
+                  accessibilityRole="button"
+                  style={styles.hitMain}
+                >
                   <View
                     style={[
                       styles.badge,
-                      { backgroundColor: theme.colors.primarySoft },
+                      { backgroundColor: theme.colors.accentSoft },
                     ]}
                   >
                     <Text
                       style={{
-                        color: theme.colors.primary,
+                        color: theme.colors.accent,
                         fontWeight: '800',
                         fontSize: 11,
                       }}
@@ -286,12 +338,23 @@ export default function SearchScreen() {
                     </Text>
                     <Muted>{item.subtitle}</Muted>
                   </View>
-                </View>
-              </Card>
-            </Pressable>
+                </Pressable>
+                {item.joinShare ? (
+                  <TinyShareButton
+                    onPress={() => setSharePayload(item.joinShare!)}
+                    accessibilityLabel={t('shareCards.sendJoinCard')}
+                  />
+                ) : null}
+              </View>
+            </Card>
           )}
         />
       </Screen>
+      <ShareTargetModal
+        visible={!!sharePayload}
+        payload={sharePayload}
+        onClose={() => setSharePayload(null)}
+      />
     </View>
   );
 }
@@ -302,6 +365,12 @@ const styles = StyleSheet.create({
   header: { gap: 10, marginBottom: 8 },
   card: { gap: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  hitMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   badge: {
     borderRadius: 10,
     paddingHorizontal: 8,

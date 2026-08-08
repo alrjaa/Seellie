@@ -77,7 +77,7 @@ export default function InvoiceDetailScreen() {
       <Card style={styles.card}>
         <View style={styles.row}>
           <Subtitle>{t('superadmin.invoices.statusLabel')}</Subtitle>
-          <Text style={[styles.value, { color: theme.colors.primary }]}>
+          <Text style={[styles.value, { color: theme.colors.accent }]}>
             {invoice.status}
           </Text>
         </View>
@@ -89,7 +89,7 @@ export default function InvoiceDetailScreen() {
         </View>
         <View style={styles.field}>
           <Muted>{t('superadmin.invoices.amountLabel')}</Muted>
-          <Text style={[styles.amount, { color: theme.colors.primary }]}>
+          <Text style={[styles.amount, { color: theme.colors.accent }]}>
             {t('superadmin.invoices.amountCurrency', { amount: invoice.amount })}
           </Text>
         </View>

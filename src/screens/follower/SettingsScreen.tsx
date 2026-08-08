@@ -4,9 +4,13 @@ import { useRouter } from 'expo-router';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
+import { useNotifications } from '@/providers/NotificationsProvider';
 import { Screen } from '@/components/layout/Screen';
 import { RolePathCard } from '@/components/account/RolePathCard';
 import { LanguageCard } from '@/components/account/LanguageCard';
+import { AdminEntryButton } from '@/components/account/AdminEntryButton';
+import { AccountSocialStats } from '@/components/account/AccountSocialStats';
+import { AvatarPickerCard } from '@/components/account/AvatarPickerCard';
 import {
   Button,
   Card,
@@ -17,16 +21,25 @@ import {
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 export default function SettingsScreen() {
-  const { currentUser, logout } = useTournament();
+  const { currentUser, logout, messages } = useTournament();
+  const { unreadCountFor } = useNotifications();
   const { preference, setPreference } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
+
+  const unreadMessages =
+    currentUser
+      ? messages.filter((m) => m.recipientId === currentUser.id && !m.read).length
+      : 0;
+  const unreadNotifs = unreadCountFor(currentUser?.id);
 
   return (
     <Screen scroll contentStyle={styles.content}>
       <View style={styles.pathsWrap}>
         <RolePathCard />
       </View>
+
+      <AvatarPickerCard />
 
       <LanguageCard />
 
@@ -81,6 +94,48 @@ export default function SettingsScreen() {
         </View>
       </Card>
 
+      <AdminEntryButton />
+      <ListRow
+        title={t('home.messages')}
+        subtitle={
+          unreadMessages > 0
+            ? t('home.messagesSubUnread', { count: unreadMessages })
+            : t('home.messagesSub')
+        }
+        icon="mail-outline"
+        badge={unreadMessages}
+        onPress={() => router.push('/(follower)/messages' as any)}
+      />
+      <ListRow
+        title={t('shareCards.menu')}
+        subtitle={t('shareCards.subtitle')}
+        icon="share-outline"
+        onPress={() => router.push('/share-cards' as any)}
+      />
+      <ListRow
+        title={t('notifications.title')}
+        subtitle={
+          unreadNotifs > 0
+            ? `${unreadNotifs} إشعار غير مقروء`
+            : t('notifications.emptyDesc')
+        }
+        icon="notifications-outline"
+        badge={unreadNotifs}
+        onPress={() => router.push('/notifications' as any)}
+      />
+      <ListRow
+        title={t('legal.openPrivacy')}
+        subtitle={t('legal.privacyTitle')}
+        icon="shield-checkmark-outline"
+        onPress={() => router.push('/privacy' as any)}
+      />
+      <ListRow
+        title={t('legal.openTerms')}
+        subtitle={t('legal.termsTitle')}
+        icon="document-text-outline"
+        onPress={() => router.push('/terms' as any)}
+      />
+      <AccountSocialStats user={currentUser} />
       <Button label={t('common.logout')} variant="danger" onPress={logout} />
     </Screen>
   );

@@ -39,7 +39,7 @@ function isMatchPlayed(match: Match): boolean {
 
 const MatchCard = memo(function MatchCard({ item }: { item: MatchRow }) {
   const theme = useAppTheme();
-  const { t } = useTranslation();
+  const { t, isRTL } = useTranslation();
   const router = useRouter();
   const played = isMatchPlayed(item);
 
@@ -49,7 +49,12 @@ const MatchCard = memo(function MatchCard({ item }: { item: MatchRow }) {
       onPress={() => router.push(`/(follower)/matches/${item.id}` as any)}
     >
       <Card style={styles.card}>
-        <View style={styles.topRow}>
+        <View
+          style={[
+            styles.topRow,
+            { flexDirection: isRTL ? 'row-reverse' : 'row' },
+          ]}
+        >
           <Text style={[styles.competition, { color: theme.colors.textMuted }]}>
             {item.competition.name}
           </Text>
@@ -58,7 +63,7 @@ const MatchCard = memo(function MatchCard({ item }: { item: MatchRow }) {
               styles.badge,
               {
                 backgroundColor: played
-                  ? theme.colors.primarySoft
+                  ? theme.colors.accentSoft
                   : theme.colors.inputBg,
               },
             ]}
@@ -67,7 +72,7 @@ const MatchCard = memo(function MatchCard({ item }: { item: MatchRow }) {
               style={[
                 styles.badgeText,
                 {
-                  color: played ? theme.colors.primary : theme.colors.textMuted,
+                  color: played ? theme.colors.accent : theme.colors.textMuted,
                 },
               ]}
             >
@@ -187,16 +192,12 @@ const styles = StyleSheet.create({
   header: { gap: 10, marginBottom: 4 },
   card: { gap: 8 },
   topRow: {
-    direction: 'ltr',
-    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   competition: {
     fontSize: 12,
     fontWeight: '700',
-    textAlign: 'left',
-    writingDirection: 'ltr',
     flex: 1,
   },
   badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },

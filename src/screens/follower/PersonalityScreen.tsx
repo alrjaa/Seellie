@@ -1,7 +1,6 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
-  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -19,6 +18,7 @@ import {
   FullScreenFeed,
   type FullScreenContent,
 } from '@/components/media/FullScreenFeed';
+import { InlineVideoPlayer } from '@/components/media/InlineVideoPlayer';
 import {
   Avatar,
   Card,
@@ -106,18 +106,7 @@ const MediaCard = memo(function MediaCard({
           transition={200}
         />
       ) : (
-        <Pressable
-          onPress={() => {
-            void Linking.openURL(item.url).catch(() => undefined);
-          }}
-          style={[
-            styles.videoBox,
-            { backgroundColor: theme.colors.surfaceElevated },
-          ]}
-        >
-          <Ionicons name="play-circle" size={52} color={theme.colors.primary} />
-          <Muted>{t('screens.playFreelancerVideo')}</Muted>
-        </Pressable>
+        <InlineVideoPlayer uri={item.url} />
       )}
 
       <LikeButton count={item.likes.length} liked={liked} onPress={onLike} />
@@ -247,12 +236,12 @@ export default function PersonalityScreen() {
               styles.filterChip,
               {
                 backgroundColor: active
-                  ? theme.colors.primary
+                  ? theme.colors.accent
                   : tablet
                     ? theme.colors.inputBg
                     : 'rgba(255,255,255,0.18)',
                 borderColor: active
-                  ? theme.colors.primary
+                  ? theme.colors.accent
                   : tablet
                     ? theme.colors.border
                     : 'rgba(255,255,255,0.35)',
@@ -261,7 +250,7 @@ export default function PersonalityScreen() {
           >
             <Ionicons
               name={active ? f.iconActive : f.icon}
-              size={16}
+              size={14}
               color={
                 active
                   ? theme.colors.textInverse
@@ -270,6 +259,20 @@ export default function PersonalityScreen() {
                     : '#fff'
               }
             />
+            <Text
+              style={{
+                color: active
+                  ? theme.colors.textInverse
+                  : tablet
+                    ? theme.colors.textMuted
+                    : '#fff',
+                fontSize: 11,
+                fontWeight: '700',
+              }}
+              numberOfLines={1}
+            >
+              {t(f.labelKey)}
+            </Text>
           </Pressable>
         );
       })}
@@ -365,10 +368,13 @@ const styles = StyleSheet.create({
   filterChip: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 999,
-    width: 32,
-    height: 32,
+    minHeight: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   mobileOverlay: {
     paddingHorizontal: 8,
@@ -388,12 +394,5 @@ const styles = StyleSheet.create({
   card: { gap: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   name: { fontWeight: '800', textAlign: 'left' },
-  media: { width: '100%', height: 220, borderRadius: 14 },
-  videoBox: {
-    height: 180,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
+  media: { width: '100%', aspectRatio: 16 / 9, minHeight: 280, borderRadius: 14 },
 });

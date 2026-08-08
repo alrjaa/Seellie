@@ -2,7 +2,8 @@ import React, { memo, useEffect, useRef, type ReactNode } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HeaderBackButton } from '@/components/layout/HeaderBackButton';
-import { useFloatingChrome } from '@/providers/FloatingChromeProvider';
+import { useFloatingChromeVisible } from '@/providers/FloatingChromeProvider';
+import { useLanguage } from '@/providers/LanguageProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
 
@@ -17,7 +18,8 @@ type Props = {
 function StackTopChromeComponent({ children }: Props) {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
-  const { visible } = useFloatingChrome();
+  const { isRTL } = useLanguage();
+  const { visible } = useFloatingChromeVisible();
   const opacity = useRef(new Animated.Value(1)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const height = insets.top + HEADER_BELOW_STATUS_GAP + 40;
@@ -26,12 +28,12 @@ function StackTopChromeComponent({ children }: Props) {
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: visible ? 1 : 0,
-        duration: 180,
+        duration: 120,
         useNativeDriver: true,
       }),
       Animated.timing(translateY, {
-        toValue: visible ? 0 : -height,
-        duration: 180,
+        toValue: visible ? 0 : -Math.min(height, 28),
+        duration: 120,
         useNativeDriver: true,
       }),
     ]).start();
@@ -51,7 +53,15 @@ function StackTopChromeComponent({ children }: Props) {
         },
       ]}
     >
-      <View style={styles.row}>
+      <View
+        style={[
+          styles.row,
+          {
+            flexDirection: 'row',
+            direction: isRTL ? 'rtl' : 'ltr',
+          },
+        ]}
+      >
         <HeaderBackButton />
         {children}
       </View>
@@ -80,9 +90,7 @@ const styles = StyleSheet.create({
   },
   row: {
     minHeight: 40,
-    flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    direction: 'ltr',
   },
 });

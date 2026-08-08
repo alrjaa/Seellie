@@ -6,7 +6,9 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { ReasonModal } from '@/components/feedback/ReasonModal';
-import { Avatar, Card, LikeButton, Muted, Subtitle } from '@/components/ui';
+import { Avatar, Card, LikeButton, Muted, SearchBar, Subtitle } from '@/components/ui';
+import { matchesSearchQuery } from '@/utils/search';
+import { statusToneColor } from '@/utils/status-tone';
 
 type DiscussionStatus = 'active' | 'warned' | 'suspended' | 'blocked';
 
@@ -43,12 +45,7 @@ const DiscussionCard = memo(function DiscussionCard({
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
-  const statusColor =
-    item.status === 'active'
-      ? theme.colors.primary
-      : item.status === 'warned'
-        ? theme.colors.warning
-        : theme.colors.danger;
+  const statusColor = statusToneColor(theme.colors, item.status);
 
   return (
     <Card style={styles.card}>
@@ -97,7 +94,7 @@ const DiscussionCard = memo(function DiscussionCard({
 
       <View style={styles.actions}>
         <Pressable onPress={() => onAction(item, 'active')}>
-          <Text style={{ color: theme.colors.primary, fontWeight: '800', fontSize: 12 }}>
+          <Text style={{ color: theme.colors.accent, fontWeight: '800', fontSize: 12 }}>
             {t('superadmin.actions.activate')}
           </Text>
         </Pressable>
@@ -132,6 +129,7 @@ export default function DiscussionsScreen() {
   } = useTournament();
   const { t } = useTranslation();
   const [pending, setPending] = useState<PendingAction | null>(null);
+  const [query, setQuery] = useState('');
 
   const feed = useMemo<FeedItem[]>(() => {
     const analyses = users.flatMap((u) =>
@@ -164,8 +162,18 @@ export default function DiscussionsScreen() {
       status: (c.status || 'active') as DiscussionStatus,
       statusReason: c.statusReason,
     }));
-    return [...analyses, ...general];
-  }, [users, comments, t]);
+    return [...analyses, ...general].filter((item) =>
+      matchesSearchQuery(
+        query,
+        item.title,
+        item.author,
+        item.text,
+        item.typeLabel,
+        item.id,
+        item.statusReason
+      )
+    );
+  }, [users, comments, t, query]);
 
   const onAction = useCallback((item: FeedItem, status: DiscussionStatus) => {
     setPending({ item, status });
@@ -244,14 +252,25 @@ export default function DiscussionsScreen() {
         keyExtractor={(item) => item.key}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
-          <View style={{ gap: 4, marginBottom: 8 }}>
+          <View style={{ gap: 8, marginBottom: 8 }}>
             <Subtitle>{t('superadmin.modules.discussions.title')}</Subtitle>
             <Muted>{t('superadmin.discussions.subtitle')}</Muted>
+            <SearchBar
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t('superadmin.searchPlaceholder')}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
           </View>
         }
         ListEmptyComponent={
           <EmptyState
-            title={t('superadmin.discussions.empty')}
+            title={
+              query.trim()
+                ? t('superadmin.noSearchResults')
+                : t('superadmin.discussions.empty')
+            }
             icon="chatbox-ellipses-outline"
           />
         }
@@ -298,7 +317,7 @@ const styles = StyleSheet.create({
   card: { gap: 10 },
   row: { flexDirection: 'row', gap: 10 },
   title: { fontWeight: '800', textAlign: 'left' },
-  body: { textAlign: 'left', writingDirection: 'ltr', lineHeight: 20 },
+  body: { textAlign: 'left', lineHeight: 20 },
   actions: {
     flexDirection: 'row',
     flexWrap: 'wrap',

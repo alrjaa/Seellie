@@ -1,23 +1,51 @@
 /**
- * مساعدات تخطيط عربية — تعتمد على I18nManager RTL للتطبيق.
- * لا تستخدم محاذاة يمين ثابتة عبر الخط.
+ * مساعدات تخطيط عربية — تعتمد على اتجاه اللغة (RTL).
  */
-import type { TextStyle, ViewStyle } from 'react-native';
+import type { FlexStyle, TextStyle, ViewStyle } from 'react-native';
 
-/** بداية السطر (يمين عند RTL) — وفق سلوك React Native مع swapLeftAndRight */
+/** بداية السطر وفق اتجاه الحاوية */
 export const arabicTextStyle: TextStyle = {
-  textAlign: 'left',
+  writingDirection: 'rtl',
 };
 
 export const arabicTitleStyle: TextStyle = {
-  textAlign: 'left',
+  writingDirection: 'rtl',
 };
 
 export const arabicContainerStyle: ViewStyle = {
-  alignItems: 'flex-start',
+  alignItems: 'stretch',
   width: '100%',
 };
 
 export const arabicContentWindowStyle: ViewStyle = {
   width: '100%',
 };
+
+/** محاذاة نص لبداية السطر حسب اللغة */
+export function rtlTextAlign(isRTL: boolean): 'left' | 'right' {
+  return isRTL ? 'right' : 'left';
+}
+
+export function rtlWriting(isRTL: boolean): 'rtl' | 'ltr' {
+  return isRTL ? 'rtl' : 'ltr';
+}
+
+/** صف أيقونة+نص يتبع اتجاه اللغة */
+export function rtlRow(isRTL: boolean): FlexStyle['flexDirection'] {
+  return isRTL ? 'row-reverse' : 'row';
+}
+
+export function rtlTextStyle(isRTL: boolean): TextStyle {
+  return {
+    textAlign: rtlTextAlign(isRTL),
+    writingDirection: rtlWriting(isRTL),
+  };
+}
+
+export function rtlAlignItems(isRTL: boolean): FlexStyle['alignItems'] {
+  return isRTL ? 'flex-end' : 'flex-start';
+}
+
+export function rtlSelf(isRTL: boolean): FlexStyle['alignSelf'] {
+  return isRTL ? 'flex-end' : 'flex-start';
+}

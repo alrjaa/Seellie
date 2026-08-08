@@ -8,6 +8,7 @@ import {
 import type { Competition, CompetitionRequest } from '@/data/initial-data';
 import { getDb } from '@/services/firebase';
 import { getJson, setJson } from '@/services/storage';
+import { isSupabaseConfigured } from '@/services/supabase';
 
 export const COMPETITION_REQUESTS_KEY = 'seellie.competitionRequests';
 export const COMPETITIONS_KEY = 'seellie.competitions';
@@ -69,6 +70,9 @@ export async function saveCompetitionRequests(
 ): Promise<void> {
   const plain = items.map(serializeRequest);
   await setJson(COMPETITION_REQUESTS_KEY, plain);
+
+  // عندما تكون Supabase مهيأة فهي مصدر الحقيقة بين الأجهزة — لا تستبدل Firebase كامل المستند
+  if (isSupabaseConfigured()) return;
 
   const db = getDb();
   if (!db) return;
@@ -144,8 +148,19 @@ function reviveCompetitions(items: Competition[]): Competition[] {
   return items.map(reviveMatchDates);
 }
 
-export async function saveCompetitions(items: Competition[]): Promise<void> {
+export async function saveCompetitions(
+  items: Competition[],
+  options?: { fromCloud?: boolean }
+): Promise<void> {
   await setJson(COMPETITIONS_KEY, items);
+
+  if (isSupabaseConfigured()) {
+    // من سحب السحابة: نخزّن محلياً فقط لتفادي حلقة realtime
+    if (!options?.fromCloud) {
+      void pushCompetitionsToSupabase(items);
+    }
+    return;
+  }
 
   const db = getDb();
   if (!db) return;
@@ -157,6 +172,30 @@ export async function saveCompetitions(items: Competition[]): Promise<void> {
     });
   } catch (error) {
     console.warn('[competition-sync] save competitions failed', error);
+  }
+}
+
+/** مسابقات البذرة التجريبية تبقى محلية؛ الباقي يُرفع للسحابة */
+function isSeedCompetitionId(id: string): boolean {
+  return /^comp-\d+$/i.test(id);
+}
+
+async function pushCompetitionsToSupabase(items: Competition[]): Promise<void> {
+  try {
+    const { upsertCompetitionCloud } = await import(
+      '@/services/supabase-competitions'
+    );
+    const targets = items.filter((c) => c?.id && !isSeedCompetitionId(c.id));
+    await Promise.all(
+      targets.map(async (c) => {
+        const res = await upsertCompetitionCloud(c);
+        if (!res.ok && res.error && res.error !== 'no_session') {
+          console.warn('[competition-sync] cloud upsert', c.id, res.error);
+        }
+      })
+    );
+  } catch (error) {
+    console.warn('[competition-sync] push to supabase failed', error);
   }
 }
 

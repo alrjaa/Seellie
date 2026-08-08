@@ -14,15 +14,22 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { SearchBar } from '@/components/ui/SearchBar';
+import {
+  ShareTargetModal,
+  TinyShareButton,
+  type ContentSharePayload,
+} from '@/components/share/ShareTargetModal';
 import { userHasRole } from '@/utils/roles';
 import { Avatar, Button, Card, Input, Muted, Subtitle } from '@/components/ui';
 
 const FreelancerRow = memo(function FreelancerRow({
   item,
   onOffer,
+  onShareCard,
 }: {
   item: User;
   onOffer: () => void;
+  onShareCard: () => void;
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
@@ -31,9 +38,15 @@ const FreelancerRow = memo(function FreelancerRow({
       <View style={styles.row}>
         <Avatar uri={item.avatar} name={item.name} size={44} />
         <View style={{ flex: 1, gap: 3 }}>
-          <Text style={[styles.name, { color: theme.colors.text }]}>
-            {item.name}
-          </Text>
+          <View style={styles.nameRow}>
+            <Text style={[styles.name, { color: theme.colors.text, flex: 1 }]}>
+              {item.name}
+            </Text>
+            <TinyShareButton
+              onPress={onShareCard}
+              accessibilityLabel={t('shareCards.sendJoinCard')}
+            />
+          </View>
           <Muted>{item.handle}</Muted>
           <Muted>
             {t('organizer.freelancers.regIdLine', { id: item.visibleId })}
@@ -68,6 +81,9 @@ export default function FreelancersScreen() {
   );
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [offerMessage, setOfferMessage] = useState('');
+  const [sharePayload, setSharePayload] = useState<ContentSharePayload | null>(
+    null
+  );
 
   const freelancers = useMemo(
     () => users.filter((u) => userHasRole(u, 'freelancer')),
@@ -107,9 +123,21 @@ export default function FreelancersScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: User }) => (
-      <FreelancerRow item={item} onOffer={() => openOffer(item)} />
+      <FreelancerRow
+        item={item}
+        onOffer={() => openOffer(item)}
+        onShareCard={() =>
+          setSharePayload({
+            kind: 'join_request',
+            presetRecipientId: item.id,
+            presetRecipientName: item.name,
+            presetRecipientKind: 'user',
+            body: t('shareCards.defaultJoinNote', { name: item.name }),
+          })
+        }
+      />
     ),
-    [openOffer]
+    [openOffer, t]
   );
 
   return (
@@ -171,11 +199,11 @@ export default function FreelancersScreen() {
                       {
                         borderColor:
                           selectedTeamId === team.teamId
-                            ? theme.colors.primary
+                            ? theme.colors.accent
                             : theme.colors.border,
                         backgroundColor:
                           selectedTeamId === team.teamId
-                            ? theme.colors.primarySoft
+                            ? theme.colors.accentSoft
                             : theme.colors.inputBg,
                       },
                     ]}
@@ -221,6 +249,11 @@ export default function FreelancersScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+      <ShareTargetModal
+        visible={!!sharePayload}
+        payload={sharePayload}
+        onClose={() => setSharePayload(null)}
+      />
     </Screen>
   );
 }
@@ -229,8 +262,13 @@ const styles = StyleSheet.create({
   list: { paddingTop: 8, gap: 10, paddingBottom: 40 },
   card: { gap: 10 },
   row: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  name: { fontWeight: '800', textAlign: 'left', fontSize: 15 },
-  bio: { textAlign: 'left', fontSize: 12, lineHeight: 18 },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  name: { fontWeight: '800', fontSize: 15 },
+  bio: { fontSize: 12, lineHeight: 18 },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

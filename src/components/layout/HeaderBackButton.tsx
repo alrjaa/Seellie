@@ -12,7 +12,7 @@ import { useTranslation } from '@/providers/LanguageProvider';
 function HeaderBackButtonComponent() {
   const theme = useAppTheme();
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, isRTL } = useTranslation();
   const { currentUser, routeForRole } = useTournament();
 
   const onPress = useCallback(() => {
@@ -41,7 +41,11 @@ function HeaderBackButtonComponent() {
         },
       ]}
     >
-      <Ionicons name="arrow-back" size={15} color={theme.colors.primary} />
+      <Ionicons
+        name={isRTL ? 'arrow-forward' : 'arrow-back'}
+        size={15}
+        color={theme.colors.accent}
+      />
     </Pressable>
   );
 }

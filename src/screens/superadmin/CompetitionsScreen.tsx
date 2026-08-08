@@ -1,43 +1,50 @@
-import React, { memo, useCallback, useMemo } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { memo, useCallback, useMemo, useState } from 'react';
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useTournament, type Competition } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
-import { Avatar, Card, Muted, Subtitle } from '@/components/ui';
+import { Avatar, Card, Muted, SearchBar, Subtitle } from '@/components/ui';
 import { formatVenueAddress } from '@/utils/competition';
+import { matchesSearchQuery } from '@/utils/search';
+import { statusToneColor } from '@/utils/status-tone';
+import { isSupabaseConfigured } from '@/services/supabase';
 
 const CompetitionRow = memo(function CompetitionRow({
   item,
   organizerName,
   onPress,
+  onDelete,
 }: {
   item: Competition;
   organizerName: string;
   onPress: () => void;
+  onDelete: () => void;
 }) {
   const theme = useAppTheme();
-  const { t } = useTranslation();
-  const statusColor =
-    item.status === 'active'
-      ? theme.colors.primary
-      : item.status === 'suspended'
-        ? theme.colors.danger
-        : theme.colors.warning;
+  const { t, isRTL } = useTranslation();
+  const statusColor = statusToneColor(theme.colors, item.status);
 
   return (
-    <Pressable onPress={onPress} accessibilityRole="button">
-      <Card style={styles.card}>
-        <View style={styles.row}>
+    <Card style={styles.card}>
+      <Pressable onPress={onPress} accessibilityRole="button">
+        <View
+          style={[
+            styles.row,
+            { flexDirection: isRTL ? 'row-reverse' : 'row' },
+          ]}
+        >
           <Avatar uri={item.logo} name={item.name} size={48} />
           <View style={{ flex: 1, gap: 3 }}>
             <Text style={[styles.name, { color: theme.colors.text }]}>
               {item.name}
             </Text>
             <Muted>
-              {t('superadmin.competitions.organizerLine', { name: organizerName })}
+              {t('superadmin.competitions.organizerLine', {
+                name: organizerName,
+              })}
             </Muted>
             <Muted numberOfLines={2}>{formatVenueAddress(item)}</Muted>
             <Muted>
@@ -52,24 +59,78 @@ const CompetitionRow = memo(function CompetitionRow({
             </Text>
           </View>
         </View>
-        <Text style={[styles.open, { color: theme.colors.primary }]}>
+        <Text style={[styles.open, { color: theme.colors.accent }]}>
           {t('superadmin.competitions.openAdmin')}
         </Text>
-      </Card>
-    </Pressable>
+      </Pressable>
+      <Pressable onPress={onDelete} accessibilityRole="button">
+        <Text style={[styles.delete, { color: theme.colors.danger }]}>
+          {t('organizer.competitionManage.deleteCompetition')}
+        </Text>
+      </Pressable>
+    </Card>
   );
 });
 
 export default function CompetitionsScreen() {
-  const { competitions, users } = useTournament();
+  const {
+    competitions,
+    users,
+    deleteCompetition,
+    refreshCloudCompetitionRequests,
+  } = useTournament();
   const router = useRouter();
   const { t } = useTranslation();
+  const [query, setQuery] = useState('');
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isSupabaseConfigured()) return;
+      void refreshCloudCompetitionRequests();
+    }, [refreshCloudCompetitionRequests])
+  );
 
   const organizerMap = useMemo(() => {
     const map = new Map<string, string>();
     users.forEach((u) => map.set(u.id, u.name));
     return map;
   }, [users]);
+
+  const data = useMemo(
+    () =>
+      competitions.filter((c) =>
+        matchesSearchQuery(
+          query,
+          c.name,
+          c.id,
+          c.visibleId,
+          c.status,
+          organizerMap.get(c.organizerId),
+          formatVenueAddress(c)
+        )
+      ),
+    [competitions, organizerMap, query]
+  );
+
+  const confirmDelete = useCallback(
+    (item: Competition) => {
+      Alert.alert(
+        t('organizer.competitionManage.deleteCompetition'),
+        t('organizer.competitionManage.deleteCompetitionConfirm'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('organizer.competitionManage.deleteCompetition'),
+            style: 'destructive',
+            onPress: () => {
+              void deleteCompetition(item.id);
+            },
+          },
+        ]
+      );
+    },
+    [deleteCompetition, t]
+  );
 
   const renderItem = useCallback(
     ({ item }: { item: Competition }) => (
@@ -79,26 +140,39 @@ export default function CompetitionsScreen() {
           organizerMap.get(item.organizerId) || t('superadmin.labels.unknown')
         }
         onPress={() => router.push(`/(superadmin)/competitions/${item.id}`)}
+        onDelete={() => confirmDelete(item)}
       />
     ),
-    [organizerMap, router, t]
+    [organizerMap, router, t, confirmDelete]
   );
 
   return (
     <Screen>
       <FlatList
-        data={competitions}
+        data={data}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
-          <View style={{ gap: 4, marginBottom: 8 }}>
+          <View style={{ gap: 8, marginBottom: 8 }}>
             <Subtitle>{t('superadmin.modules.competitions.title')}</Subtitle>
             <Muted>{t('superadmin.competitions.subtitle')}</Muted>
+            <SearchBar
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t('superadmin.searchPlaceholder')}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
           </View>
         }
         ListEmptyComponent={
           <EmptyState
-            title={t('superadmin.competitions.empty')}
+            title={
+              query.trim()
+                ? t('superadmin.noSearchResults')
+                : t('superadmin.competitions.empty')
+            }
             icon="trophy-outline"
           />
         }
@@ -111,8 +185,13 @@ export default function CompetitionsScreen() {
 const styles = StyleSheet.create({
   list: { paddingTop: 8, gap: 10, paddingBottom: 40 },
   card: { gap: 8 },
-  row: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  name: { fontWeight: '800', textAlign: 'left', fontSize: 15 },
-  status: { fontWeight: '800', textAlign: 'left', fontSize: 12 },
-  open: { fontWeight: '800', textAlign: 'left', fontSize: 12 },
+  row: { gap: 12, alignItems: 'center' },
+  name: { fontWeight: '800', fontSize: 13 },
+  status: { fontWeight: '800', fontSize: 11 },
+  open: { fontWeight: '800', fontSize: 11 },
+  delete: {
+    fontWeight: '800',
+    fontSize: 12,
+    marginTop: 4,
+  },
 });

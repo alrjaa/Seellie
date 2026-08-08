@@ -1,12 +1,13 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  Alert,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
@@ -23,6 +24,7 @@ import {
   COMPETITION_ORG_TERMS,
   MIN_COMPETITION_TEAMS,
 } from '@/utils/competition-request';
+import { isSupabaseConfigured } from '@/services/supabase';
 
 function PledgeRow({
   checked,
@@ -40,8 +42,8 @@ function PledgeRow({
         style={[
           styles.checkbox,
           {
-            borderColor: theme.colors.primary,
-            backgroundColor: checked ? theme.colors.primary : 'transparent',
+            borderColor: theme.colors.accent,
+            backgroundColor: checked ? theme.colors.accent : 'transparent',
           },
         ]}
       >
@@ -62,7 +64,16 @@ export default function RequestCompetitionScreen() {
     currentUser,
     competitionRequests,
     applyForCompetition,
+    refreshCloudCompetitionRequests,
+    deleteCompetitionRequest,
   } = useTournament();
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isSupabaseConfigured()) return;
+      void refreshCloudCompetitionRequests();
+    }, [refreshCloudCompetitionRequests])
+  );
 
   const [name, setName] = useState('');
   const [region, setRegion] = useState('');
@@ -82,6 +93,29 @@ export default function RequestCompetitionScreen() {
     [competitionRequests, currentUser?.id]
   );
 
+  const confirmDeleteRequest = useCallback(
+    (requestId: string, requestName: string) => {
+      Alert.alert(
+        t('organizer.requestCompetition.deleteRequest'),
+        `${t('organizer.requestCompetition.deleteRequestConfirm')}\n«${requestName}»`,
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('organizer.requestCompetition.deleteRequest'),
+            style: 'destructive',
+            onPress: () => {
+              void deleteCompetitionRequest(
+                requestId,
+                t('organizer.requestCompetition.requestDeleted')
+              );
+            },
+          },
+        ]
+      );
+    },
+    [deleteCompetitionRequest, t]
+  );
+
   const canSubmit =
     name.trim().length > 0 &&
     region.trim().length > 0 &&
@@ -94,8 +128,8 @@ export default function RequestCompetitionScreen() {
     firstAidPledge &&
     orderPledge;
 
-  const submit = useCallback(() => {
-    const ok = applyForCompetition({
+  const submit = useCallback(async () => {
+    const ok = await applyForCompetition({
       name,
       region,
       city,
@@ -259,6 +293,11 @@ export default function RequestCompetitionScreen() {
                     }
                   />
                 ) : null}
+                <Button
+                  label={t('organizer.requestCompetition.deleteRequest')}
+                  variant="danger"
+                  onPress={() => confirmDeleteRequest(r.id, r.name)}
+                />
               </View>
             ))}
           </Card>

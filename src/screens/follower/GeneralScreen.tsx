@@ -20,6 +20,7 @@ import {
   FullScreenFeed,
   type FullScreenContent,
 } from '@/components/media/FullScreenFeed';
+import { InlineVideoPlayer } from '@/components/media/InlineVideoPlayer';
 import {
   Button,
   Card,
@@ -117,7 +118,7 @@ const FeedCard = memo(function FeedCard({
             accessibilityRole="button"
             accessibilityLabel={t('screens.openHandle', { handle: handleLabel })}
           >
-            <Text style={[styles.handle, { color: theme.colors.primary }]}>
+            <Text style={[styles.handle, { color: theme.colors.accent }]}>
               {handleLabel}
             </Text>
           </Pressable>
@@ -154,20 +155,7 @@ const FeedCard = memo(function FeedCard({
         ) : null}
 
         {item.type === 'video' && item.mediaUrl ? (
-          <Pressable
-            onPress={onOpenMedia}
-            style={[
-              styles.videoBox,
-              { backgroundColor: theme.colors.surfaceElevated },
-            ]}
-          >
-            <Ionicons
-              name="play-circle"
-              size={48}
-              color={theme.colors.primary}
-            />
-            <Muted>{t('screens.tapPlayVideo')}</Muted>
-          </Pressable>
+          <InlineVideoPlayer uri={item.mediaUrl} />
         ) : null}
 
         <LikeButton
@@ -190,6 +178,7 @@ export default function GeneralFeedScreen() {
     users,
     competitions,
     comments,
+    quickComments,
     currentUser,
     toggleCommentLike,
     togglePostLike,
@@ -394,11 +383,29 @@ export default function GeneralFeedScreen() {
       });
     });
 
+    // نقاشات سريعة (أرشيف الدردشة السابق) تظهر مع الساحة
+    quickComments.forEach((c) => {
+      if (c.status === 'blocked' || c.status === 'suspended') return;
+      const author = users.find((u) => u.id === c.authorId);
+      items.push({
+        id: `discussion-${c.id}`,
+        type: 'discussion',
+        authorId: c.authorId,
+        authorName: c.authorName,
+        authorHandle: author?.handle,
+        authorAvatar: c.authorAvatar,
+        text: c.text,
+        likes: c.likes,
+        timestamp: new Date(c.timestamp),
+        subtitle: t('screens.quickDiscuss'),
+      });
+    });
+
     return items.sort(
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
-  }, [users, competitions, comments, t]);
+  }, [users, competitions, comments, quickComments, t]);
 
   const filtered = useMemo(() => {
     switch (filter) {
@@ -551,19 +558,29 @@ export default function GeneralFeedScreen() {
               styles.filterChip,
               {
                 backgroundColor: active
-                  ? theme.colors.primary
+                  ? theme.colors.accent
                   : 'rgba(255,255,255,0.18)',
                 borderColor: active
-                  ? theme.colors.primary
+                  ? theme.colors.accent
                   : 'rgba(255,255,255,0.35)',
               },
             ]}
           >
             <Ionicons
               name={active ? f.iconActive : f.icon}
-              size={16}
+              size={14}
               color={active ? theme.colors.textInverse : '#fff'}
             />
+            <Text
+              style={{
+                color: active ? theme.colors.textInverse : '#fff',
+                fontSize: 10,
+                fontWeight: '700',
+              }}
+              numberOfLines={1}
+            >
+              {t(f.labelKey)}
+            </Text>
           </Pressable>
         );
       })}
@@ -592,21 +609,33 @@ export default function GeneralFeedScreen() {
                 styles.filterChip,
                 {
                   backgroundColor: active
-                    ? theme.colors.primary
+                    ? theme.colors.accent
                     : theme.colors.inputBg,
                   borderColor: active
-                    ? theme.colors.primary
+                    ? theme.colors.accent
                     : theme.colors.border,
                 },
               ]}
             >
               <Ionicons
                 name={active ? f.iconActive : f.icon}
-                size={18}
+                size={14}
                 color={
                   active ? theme.colors.textInverse : theme.colors.textMuted
                 }
               />
+              <Text
+                style={{
+                  color: active
+                    ? theme.colors.textInverse
+                    : theme.colors.textMuted,
+                  fontSize: 11,
+                  fontWeight: '700',
+                }}
+                numberOfLines={1}
+              >
+                {t(f.labelKey)}
+              </Text>
             </Pressable>
           );
         })}
@@ -618,9 +647,22 @@ export default function GeneralFeedScreen() {
             accessibilityRole="button"
             accessibilityLabel={t('screens.quickDiscuss')}
             onPress={() => setDiscussionOpen((v) => !v)}
-            style={styles.quickToggle}
+            style={[
+              styles.quickToggle,
+              {
+                backgroundColor: theme.colors.accentSoft,
+                borderColor: theme.colors.accent,
+              },
+            ]}
           >
-            <Text style={[styles.quickToggleLabel, { color: theme.colors.primary }]}>
+            <Ionicons
+              name="chatbubbles-outline"
+              size={14}
+              color={theme.colors.accent}
+            />
+            <Text
+              style={[styles.quickToggleLabel, { color: theme.colors.accent }]}
+            >
               {t('screens.quickDiscuss')}
             </Text>
           </Pressable>
@@ -688,19 +730,38 @@ export default function GeneralFeedScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={t('screens.quickDiscuss')}
                     onPress={() => setDiscussionOpen((v) => !v)}
-                    style={styles.quickToggle}
+                    style={[
+                      styles.quickToggle,
+                      {
+                        backgroundColor: 'rgba(37, 244, 238, 0.22)',
+                        borderColor: theme.colors.accent,
+                      },
+                    ]}
                   >
+                    <Ionicons
+                      name="chatbubbles-outline"
+                      size={14}
+                      color={theme.colors.accent}
+                    />
                     <Text
                       style={[
                         styles.quickToggleLabel,
-                        { color: theme.colors.primary },
+                        { color: theme.colors.accent },
                       ]}
                     >
                       {t('screens.quickDiscuss')}
                     </Text>
                   </Pressable>
                   {discussionOpen ? (
-                    <View style={styles.mobileComposerBody}>
+                    <View
+                      style={[
+                        styles.mobileComposerBody,
+                        {
+                          backgroundColor: theme.colors.card,
+                          borderColor: theme.colors.border,
+                        },
+                      ]}
+                    >
                       <Input
                         value={discussionText}
                         onChangeText={setDiscussionText}
@@ -764,12 +825,13 @@ const styles = StyleSheet.create({
   filterChip: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 999,
-    width: 32,
-    height: 32,
+    minHeight: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 0,
-    paddingVertical: 0,
+    flexDirection: 'row',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   mobileOverlay: {
     paddingHorizontal: 8,
@@ -792,16 +854,25 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   mobileComposerBody: {
-    gap: 6,
+    gap: 8,
     width: '100%',
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   quickToggle: {
     alignSelf: 'flex-end',
-    paddingVertical: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   quickToggleLabel: {
     fontWeight: '700',
-    fontSize: 10,
+    fontSize: 11,
   },
   composer: { gap: 8 },
   composerBody: { gap: 10 },
@@ -822,19 +893,12 @@ const styles = StyleSheet.create({
   body: {
     lineHeight: 22,
     textAlign: 'left',
-    writingDirection: 'ltr',
   },
   media: {
     width: '100%',
-    height: 220,
+    aspectRatio: 16 / 9,
+    minHeight: 280,
     borderRadius: 14,
-  },
-  videoBox: {
-    height: 180,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
   },
   typeBadge: {
     width: 32,

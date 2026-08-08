@@ -22,6 +22,12 @@ export const ORGANIZER_MODULES: OrganizerModule[] = [
     group: 'core',
   },
   {
+    key: 'referees',
+    href: '/(organizer)/referees',
+    icon: 'flag',
+    group: 'core',
+  },
+  {
     key: 'freelancers',
     href: '/(organizer)/freelancers',
     icon: 'football',

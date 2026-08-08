@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
+import { AccountSocialStats } from '@/components/account/AccountSocialStats';
+import { AvatarPickerCard } from '@/components/account/AvatarPickerCard';
 import { Button, Card, Input, Muted, Subtitle, Title } from '@/components/ui';
 
 /** Profile editing only — account paths are in Settings via the dropdown menu */
@@ -51,6 +53,8 @@ export default function AccountScreen() {
     <Screen scroll keyboard contentStyle={styles.content}>
       <Title>{t('settings.accountSettings')}</Title>
       <Muted>{t('account.subtitle')}</Muted>
+
+      <AvatarPickerCard />
 
       <Card style={styles.card}>
         <Subtitle>{t('account.personalData')}</Subtitle>
@@ -132,6 +136,7 @@ export default function AccountScreen() {
         variant="outline"
         onPress={() => router.push('/(follower)/settings' as any)}
       />
+      <AccountSocialStats user={currentUser} />
       <Button
         label={t('common.back')}
         variant="ghost"

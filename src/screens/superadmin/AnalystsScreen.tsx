@@ -19,10 +19,12 @@ import {
   Card,
   Input,
   Muted,
+  SearchBar,
   Subtitle,
 } from '@/components/ui';
 import { formatArabicDate } from '@/utils';
 import { isAnalystSuspendActive } from '@/utils/analyst';
+import { matchesSearchQuery } from '@/utils/search';
 
 type ModerationMode = 'warn' | 'suspend' | 'ban' | null;
 
@@ -199,6 +201,7 @@ export default function AnalystsScreen() {
   const [reason, setReason] = useState('');
   const [fromDate, setFromDate] = useState(toInputDate());
   const [toDate, setToDate] = useState(toInputDate(new Date(Date.now() + 7 * 86400000)));
+  const [query, setQuery] = useState('');
 
   const closeModal = useCallback(() => {
     setTarget(null);
@@ -239,6 +242,18 @@ export default function AnalystsScreen() {
     () =>
       users
         .filter((u) => u.analyst && u.analyst.status !== 'none')
+        .filter((u) =>
+          matchesSearchQuery(
+            query,
+            u.name,
+            u.handle,
+            u.email,
+            u.visibleId,
+            u.mobile,
+            u.analyst?.accessCode,
+            u.analyst?.status
+          )
+        )
         .sort((a, b) => {
           const order = {
             pending: 0,
@@ -253,7 +268,7 @@ export default function AnalystsScreen() {
           const sb = order[b.analyst!.status as keyof typeof order] ?? 9;
           return sa - sb;
         }),
-    [users]
+    [users, query]
   );
 
   const pendingCount = requests.filter(
@@ -331,12 +346,25 @@ export default function AnalystsScreen() {
             <Muted>
               {t('superadmin.analysts.subtitle', { count: pendingCount })}
             </Muted>
+            <SearchBar
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t('superadmin.searchPlaceholder')}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
           </View>
         }
         ListEmptyComponent={
           <EmptyState
-            title={t('superadmin.analysts.emptyTitle')}
-            description={t('superadmin.analysts.emptyDesc')}
+            title={
+              query.trim()
+                ? t('superadmin.noSearchResults')
+                : t('superadmin.analysts.emptyTitle')
+            }
+            description={
+              query.trim() ? undefined : t('superadmin.analysts.emptyDesc')
+            }
             icon="analytics-outline"
           />
         }

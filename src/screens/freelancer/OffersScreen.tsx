@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   card: { gap: 10 },
   row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   title: { fontWeight: '800', textAlign: 'left' },
-  message: { textAlign: 'left', writingDirection: 'ltr', lineHeight: 20, fontSize: 13 },
+  message: { textAlign: 'left', lineHeight: 20, fontSize: 13 },
   meta: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -1,11 +1,12 @@
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTournament, type Comment } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
-import { Avatar, Card, LikeButton, Muted, Subtitle } from '@/components/ui';
+import { Avatar, Card, LikeButton, Muted, SearchBar, Subtitle } from '@/components/ui';
+import { matchesSearchQuery } from '@/utils/search';
 
 const CommentRow = memo(function CommentRow({
   item,
@@ -51,6 +52,15 @@ export default function QuickCommentsScreen() {
   const { quickComments, currentUser, deleteQuickComment, toggleCommentLike } =
     useTournament();
   const { t } = useTranslation();
+  const [query, setQuery] = useState('');
+
+  const data = useMemo(
+    () =>
+      quickComments.filter((item) =>
+        matchesSearchQuery(query, item.authorName, item.text, item.id)
+      ),
+    [quickComments, query]
+  );
 
   const renderItem = useCallback(
     ({ item }: { item: Comment }) => (
@@ -77,19 +87,35 @@ export default function QuickCommentsScreen() {
   return (
     <Screen>
       <FlatList
-        data={quickComments}
+        data={data}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
-          <View style={{ gap: 4, marginBottom: 8 }}>
+          <View style={{ gap: 8, marginBottom: 8 }}>
             <Subtitle>{t('superadmin.quickComments.title')}</Subtitle>
             <Muted>{t('superadmin.quickComments.subtitle')}</Muted>
+            <SearchBar
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t('superadmin.searchPlaceholder')}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
           </View>
         }
         ListEmptyComponent={
           <EmptyState
-            title={t('superadmin.quickComments.empty')}
-            description={t('superadmin.quickComments.emptyDesc')}
+            title={
+              query.trim()
+                ? t('superadmin.noSearchResults')
+                : t('superadmin.quickComments.empty')
+            }
+            description={
+              query.trim()
+                ? undefined
+                : t('superadmin.quickComments.emptyDesc')
+            }
             icon="flash-outline"
           />
         }
@@ -104,5 +130,5 @@ const styles = StyleSheet.create({
   card: { gap: 8 },
   row: { flexDirection: 'row', gap: 10 },
   author: { fontWeight: '800', textAlign: 'left' },
-  text: { textAlign: 'left', writingDirection: 'ltr', lineHeight: 20 },
+  text: { textAlign: 'left', lineHeight: 20 },
 });

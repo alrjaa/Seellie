@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
-import type { StyleProp, ViewStyle } from 'react-native';
+import { Platform, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFloatingChrome } from '@/providers/FloatingChromeProvider';
+import { useFloatingChromeScroll } from '@/providers/FloatingChromeProvider';
 import { screenContentBottomPadding } from '@/theme/navigation';
 
 type Options = {
@@ -13,8 +13,7 @@ type Options = {
 
 /**
  * خصائص موحّدة لـ FlatList / SectionList:
- * - إخفاء الأزرار العائمة أثناء التمرير
- * - paddingBottom يمنع قصّ آخر عنصر خلف FAB / الشريط
+ * تمرير أكثر مرونة بدون تردد، مع إخفاء FAB عند السحب فقط.
  */
 export function useListChrome(options: Options = {}) {
   const insets = useSafeAreaInsets();
@@ -22,8 +21,9 @@ export function useListChrome(options: Options = {}) {
     onScroll,
     onScrollBeginDrag,
     onScrollEndDrag,
+    onMomentumScrollBegin,
     onMomentumScrollEnd,
-  } = useFloatingChrome();
+  } = useFloatingChromeScroll();
 
   const paddingBottom = screenContentBottomPadding({
     bottomInset: insets.bottom,
@@ -36,8 +36,23 @@ export function useListChrome(options: Options = {}) {
       onScroll,
       onScrollBeginDrag,
       onScrollEndDrag,
+      onMomentumScrollBegin,
       onMomentumScrollEnd,
-      scrollEventThrottle: 16 as const,
+      // أقل ضغطاً على JS أثناء السحب
+      scrollEventThrottle: 48 as const,
+      // إزالة القصّ العدواني الذي يسبب وميضاً/تردد على أندرويد
+      removeClippedSubviews: false,
+      maxToRenderPerBatch: 8,
+      updateCellsBatchingPeriod: 40,
+      windowSize: 9,
+      initialNumToRender: 8,
+      // تمرير أنعم
+      decelerationRate: (Platform.OS === 'ios' ? 'normal' : 0.985) as
+        | 'normal'
+        | number,
+      overScrollMode: 'never' as const,
+      bounces: true,
+      alwaysBounceVertical: false,
       contentContainerStyle: [
         { flexGrow: 1, paddingBottom },
         options.contentContainerStyle,
@@ -47,6 +62,7 @@ export function useListChrome(options: Options = {}) {
       onScroll,
       onScrollBeginDrag,
       onScrollEndDrag,
+      onMomentumScrollBegin,
       onMomentumScrollEnd,
       paddingBottom,
       options.contentContainerStyle,

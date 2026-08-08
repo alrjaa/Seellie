@@ -1,12 +1,22 @@
-import React, { memo, useCallback } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { memo, useCallback, useMemo, useState } from 'react';
+import {
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { useTournament, type Message } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
-import { Avatar, Card, Muted, Subtitle } from '@/components/ui';
+import { Avatar, Card, Muted, SearchBar, Subtitle } from '@/components/ui';
 import { formatArabicDate } from '@/utils';
+import { matchesSearchQuery } from '@/utils/search';
+import { isUuid } from '@/services/supabase-messages';
 
 const MessageRow = memo(function MessageRow({
   item,
@@ -17,11 +27,11 @@ const MessageRow = memo(function MessageRow({
 }) {
   const theme = useAppTheme();
   return (
-    <Pressable onPress={onPress}>
+    <Pressable onPress={onPress} hitSlop={6}>
       <Card
         style={
           !item.read
-            ? { ...styles.card, borderColor: theme.colors.primary }
+            ? { ...styles.card, borderColor: theme.colors.accent }
             : styles.card
         }
       >
@@ -42,7 +52,7 @@ const MessageRow = memo(function MessageRow({
           </View>
           {!item.read ? (
             <View
-              style={[styles.dot, { backgroundColor: theme.colors.primary }]}
+              style={[styles.dot, { backgroundColor: theme.colors.accent }]}
             />
           ) : null}
         </View>
@@ -52,8 +62,43 @@ const MessageRow = memo(function MessageRow({
 });
 
 export default function MessagesScreen() {
-  const { messages, markMessageAsRead } = useTournament();
+  const {
+    messages,
+    markMessageAsRead,
+    currentUser,
+    refreshCloudMessages,
+  } = useTournament();
   const { t } = useTranslation();
+  const [query, setQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!currentUser || !isUuid(currentUser.id)) return;
+      void refreshCloudMessages();
+    }, [currentUser, refreshCloudMessages])
+  );
+
+  const data = useMemo(() => {
+    const inbox = currentUser
+      ? messages.filter((m) => m.recipientId === currentUser.id)
+      : messages;
+    return inbox
+      .filter((item) =>
+        matchesSearchQuery(
+          query,
+          item.subject,
+          item.senderName,
+          item.body,
+          item.id,
+          item.recipientId
+        )
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+  }, [messages, query, currentUser]);
 
   const renderItem = useCallback(
     ({ item }: { item: Message }) => (
@@ -65,17 +110,44 @@ export default function MessagesScreen() {
   return (
     <Screen>
       <FlatList
-        data={messages}
+        data={data}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await refreshCloudMessages();
+              setRefreshing(false);
+            }}
+          />
+        }
         ListHeaderComponent={
-          <View style={{ gap: 4, marginBottom: 8 }}>
+          <View style={{ gap: 8, marginBottom: 8 }}>
             <Subtitle>{t('superadmin.modules.messages.title')}</Subtitle>
-            <Muted>{t('superadmin.messages.subtitle')}</Muted>
+            <Muted>
+              وارد الدعم من المتابعين. للرد أو المراسلة استخدم شاشة البريد.
+            </Muted>
+            <SearchBar
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t('superadmin.searchPlaceholder')}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
           </View>
         }
         ListEmptyComponent={
-          <EmptyState title={t('superadmin.messages.empty')} icon="chatbubbles-outline" />
+          <EmptyState
+            title={
+              query.trim()
+                ? t('superadmin.noSearchResults')
+                : t('superadmin.messages.empty')
+            }
+            icon="chatbubbles-outline"
+          />
         }
         renderItem={renderItem}
       />
@@ -88,6 +160,10 @@ const styles = StyleSheet.create({
   card: { gap: 6 },
   row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   subject: { fontWeight: '800', textAlign: 'left' },
-  body: { textAlign: 'left', writingDirection: 'ltr', lineHeight: 18, fontSize: 12 },
+  body: {
+    textAlign: 'left',
+    lineHeight: 18,
+    fontSize: 12,
+  },
   dot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
 });

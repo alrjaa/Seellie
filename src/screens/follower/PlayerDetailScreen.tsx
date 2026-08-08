@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   useTournament,
@@ -19,8 +20,8 @@ import {
   SectionHeader,
   StatusBadge,
   Subtitle,
-  Title,
 } from '@/components/ui';
+import { cairoText } from '@/theme/fonts';
 import { userHasRole } from '@/utils/roles';
 
 type PlayerInfo = {
@@ -37,6 +38,43 @@ type PlayerInfo = {
   isFreelancer: boolean;
   user?: User;
 };
+
+function StatPill({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number | string;
+  accent?: boolean;
+}) {
+  const theme = useAppTheme();
+  return (
+    <View
+      style={[
+        styles.statPill,
+        {
+          backgroundColor: accent
+            ? theme.colors.accentSoft
+            : theme.colors.surfaceElevated,
+          borderColor: accent ? theme.colors.accentMuted : theme.colors.border,
+        },
+      ]}
+    >
+      <Text
+        style={[
+          styles.statValue,
+          { color: accent ? theme.colors.accent : theme.colors.text },
+        ]}
+      >
+        {value}
+      </Text>
+      <Text style={[styles.statLabel, { color: theme.colors.textMuted }]}>
+        {label}
+      </Text>
+    </View>
+  );
+}
 
 export default function PlayerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -112,65 +150,171 @@ export default function PlayerDetailScreen() {
     playerInfo.isFreelancer &&
     currentUser.id === playerInfo.id;
   const analyses = playerInfo.user?.analysisContent || [];
+  const totalLikes =
+    playerInfo.photos.reduce((s, p) => s + p.likes.length, 0) +
+    playerInfo.videos.reduce((s, v) => s + v.likes.length, 0);
+
+  const metaParts = playerInfo.isFreelancer
+    ? ([
+        playerInfo.user?.handle?.trim(),
+        playerInfo.user?.city?.trim(),
+      ].filter(Boolean) as string[])
+    : ([
+        playerInfo.teamName,
+        playerInfo.position,
+        playerInfo.jerseyNumber != null
+          ? `#${playerInfo.jerseyNumber}`
+          : null,
+      ].filter(Boolean) as string[]);
 
   return (
     <Screen scroll contentStyle={styles.content}>
-      <View style={styles.profile}>
-        <Avatar uri={playerInfo.avatar} name={playerInfo.name} size={88} />
-        <Title>{playerInfo.name}</Title>
-        {playerInfo.user?.handle ? (
-          <Muted>{playerInfo.user.handle}</Muted>
-        ) : null}
-        {playerInfo.user?.visibleId ? (
-          <Muted>
-            {t('player.regIdLine', { id: playerInfo.user.visibleId })}
-          </Muted>
-        ) : null}
-        <Muted>{playerInfo.teamName}</Muted>
-        {playerInfo.status ? (
-          <StatusBadge status={playerInfo.status} />
-        ) : null}
-        {isOwner ? <Muted>{t('player.ownerHint')}</Muted> : null}
-      </View>
+      <Card style={styles.heroCard} padded={false}>
+        <View
+          style={[
+            styles.heroBand,
+            {
+              backgroundColor: playerInfo.isFreelancer
+                ? theme.colors.accentSoft
+                : theme.colors.surfaceElevated,
+            },
+          ]}
+        />
+        <View style={styles.heroBody}>
+          <View style={styles.heroTop}>
+            <View
+              style={[
+                styles.avatarRing,
+                {
+                  borderColor: theme.colors.card,
+                  backgroundColor: theme.colors.card,
+                },
+              ]}
+            >
+              <Avatar
+                uri={playerInfo.avatar}
+                name={playerInfo.name}
+                size={88}
+              />
+            </View>
+            <View style={styles.heroIdentity}>
+              {playerInfo.isFreelancer ? (
+                <View
+                  style={[
+                    styles.roleBadge,
+                    {
+                      backgroundColor: theme.colors.card,
+                      borderColor: theme.colors.accentMuted,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="flash"
+                    size={12}
+                    color={theme.colors.accent}
+                  />
+                  <Text
+                    style={[styles.roleBadgeText, { color: theme.colors.accent }]}
+                  >
+                    {t('home.freelancerPlayer')}
+                  </Text>
+                </View>
+              ) : null}
+              <Text
+                style={[styles.heroName, { color: theme.colors.text }]}
+                numberOfLines={2}
+              >
+                {playerInfo.name}
+              </Text>
+              {metaParts.length > 0 ? (
+                <Text
+                  style={[styles.heroMeta, { color: theme.colors.textMuted }]}
+                  numberOfLines={2}
+                >
+                  {metaParts.join('  ·  ')}
+                </Text>
+              ) : null}
+              {playerInfo.user?.visibleId ? (
+                <Text
+                  style={[styles.regId, { color: theme.colors.textMuted }]}
+                >
+                  {t('player.regIdLine', { id: playerInfo.user.visibleId })}
+                </Text>
+              ) : null}
+              {playerInfo.status ? (
+                <View style={{ marginTop: 4 }}>
+                  <StatusBadge status={playerInfo.status} />
+                </View>
+              ) : null}
+            </View>
+          </View>
 
-      <Card style={styles.card}>
-        {playerInfo.jerseyNumber ? (
-          <View style={styles.infoRow}>
-            <Muted>{t('player.jerseyNumber')}</Muted>
-            <Text style={[styles.value, { color: theme.colors.text }]}>
-              {playerInfo.jerseyNumber}
-            </Text>
+          {playerInfo.bio ? (
+            <View style={styles.bioBlock}>
+              <Text style={[styles.bioLabel, { color: theme.colors.textMuted }]}>
+                {t('account.bio')}
+              </Text>
+              <Text style={[styles.bioText, { color: theme.colors.text }]}>
+                {playerInfo.bio}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={styles.statsGrid}>
+            <StatPill
+              label={t('player.photos')}
+              value={playerInfo.photos.length}
+            />
+            <StatPill
+              label={t('player.videos')}
+              value={playerInfo.videos.length}
+            />
+            <StatPill
+              label={t('player.likesStat')}
+              value={totalLikes}
+              accent
+            />
           </View>
-        ) : null}
-        {playerInfo.position ? (
-          <View style={styles.infoRow}>
-            <Muted>{t('player.position')}</Muted>
-            <Text style={[styles.value, { color: theme.colors.text }]}>
-              {playerInfo.position}
-            </Text>
-          </View>
-        ) : null}
-        <View style={styles.infoRow}>
-          <Muted>{t('player.photos')}</Muted>
-          <Text style={[styles.value, { color: theme.colors.text }]}>
-            {playerInfo.photos.length}
-          </Text>
+
+          {isOwner ? (
+            <View
+              style={[
+                styles.ownerNote,
+                { backgroundColor: theme.colors.surfaceElevated },
+              ]}
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={16}
+                color={theme.colors.textMuted}
+              />
+              <Muted style={styles.ownerHint}>{t('player.ownerHint')}</Muted>
+            </View>
+          ) : null}
         </View>
-        <View style={styles.infoRow}>
-          <Muted>{t('player.videos')}</Muted>
-          <Text style={[styles.value, { color: theme.colors.text }]}>
-            {playerInfo.videos.length}
-          </Text>
-        </View>
-        {playerInfo.bio ? (
-          <View style={styles.bio}>
-            <Muted>{t('account.bio')}</Muted>
-            <Text style={[styles.bioText, { color: theme.colors.text }]}>
-              {playerInfo.bio}
-            </Text>
-          </View>
-        ) : null}
       </Card>
+
+      {!playerInfo.isFreelancer &&
+      (playerInfo.jerseyNumber != null || playerInfo.position) ? (
+        <Card style={styles.card}>
+          {playerInfo.jerseyNumber != null ? (
+            <View style={styles.infoRow}>
+              <Muted>{t('player.jerseyNumber')}</Muted>
+              <Text style={[styles.value, { color: theme.colors.text }]}>
+                {playerInfo.jerseyNumber}
+              </Text>
+            </View>
+          ) : null}
+          {playerInfo.position ? (
+            <View style={styles.infoRow}>
+              <Muted>{t('player.position')}</Muted>
+              <Text style={[styles.value, { color: theme.colors.text }]}>
+                {playerInfo.position}
+              </Text>
+            </View>
+          ) : null}
+        </Card>
+      ) : null}
 
       <PlayerMediaSection
         photos={playerInfo.photos}
@@ -247,19 +391,139 @@ export default function PlayerDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingTop: 12, gap: 20, paddingBottom: 40 },
-  profile: { alignItems: 'center', gap: 8 },
+  content: { paddingTop: 12, gap: 16, paddingBottom: 40 },
+  heroCard: {
+    overflow: 'hidden',
+  },
+  heroBand: {
+    height: 72,
+  },
+  heroBody: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    gap: 14,
+    marginTop: -36,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 14,
+  },
+  avatarRing: {
+    borderRadius: 52,
+    borderWidth: 3,
+    padding: 2,
+  },
+  heroIdentity: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+    paddingBottom: 4,
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 2,
+  },
+  roleBadgeText: {
+    ...cairoText('semiBold'),
+    fontSize: 11,
+    textAlign: 'left',
+  },
+  heroName: {
+    ...cairoText('extraBold'),
+    fontSize: 22,
+    lineHeight: 30,
+    textAlign: 'left',
+  },
+  heroMeta: {
+    ...cairoText('medium'),
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'left',
+  },
+  regId: {
+    ...cairoText('regular'),
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'left',
+  },
+  bioBlock: {
+    gap: 6,
+    paddingTop: 2,
+  },
+  bioLabel: {
+    ...cairoText('semiBold'),
+    fontSize: 11,
+    letterSpacing: 0.3,
+    textAlign: 'left',
+    textTransform: 'uppercase',
+  },
+  bioText: {
+    ...cairoText('regular'),
+    fontSize: 14,
+    lineHeight: 24,
+    textAlign: 'left',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  statPill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  statValue: {
+    ...cairoText('extraBold'),
+    fontSize: 18,
+    lineHeight: 24,
+    textAlign: 'center',
+  },
+  statLabel: {
+    ...cairoText('medium'),
+    fontSize: 11,
+    lineHeight: 16,
+    textAlign: 'center',
+  },
+  ownerNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 10,
+    borderRadius: 12,
+  },
+  ownerHint: {
+    flex: 1,
+    textAlign: 'left',
+    lineHeight: 18,
+  },
   card: { gap: 12 },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  value: { fontWeight: '800', textAlign: 'left' },
-  bio: { gap: 6 },
-  bioText: { textAlign: 'left', lineHeight: 22 },
+  value: {
+    ...cairoText('bold'),
+    textAlign: 'left',
+  },
   section: { gap: 10 },
   analysisCard: { gap: 8 },
-  analysisBody: { textAlign: 'left', lineHeight: 22 },
-  like: { fontWeight: '800', textAlign: 'left' },
+  analysisBody: {
+    ...cairoText('regular'),
+    textAlign: 'left',
+    lineHeight: 22,
+  },
 });

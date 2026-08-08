@@ -1,36 +1,71 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useToast } from '@/providers/ToastProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
+import { useTournament } from '@/providers/TournamentProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Button, Card, Input, Muted, Subtitle, Title } from '@/components/ui';
 import { formatArabicDate } from '@/utils';
+import { createId } from '@/utils/id';
+import { getJson, setJson } from '@/services/storage';
 
 type Announcement = {
   id: string;
   title: string;
   body: string;
-  createdAt: Date;
+  createdAt: string;
+  organizerId: string;
+  competitionId?: string;
 };
+
+const STORAGE_KEY = 'seellie.organizer.announcements.v1';
 
 export default function AnnouncementsScreen() {
   const { toast } = useToast();
   const theme = useAppTheme();
-  const { t } = useTranslation();
+  const { t, isRTL } = useTranslation();
+  const { currentUser, competitions } = useTournament();
   const [items, setItems] = useState<Announcement[]>([]);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [hydrated, setHydrated] = useState(false);
+
+  const myCompetitionId = competitions.find(
+    (c) => c.organizerId === currentUser?.id
+  )?.id;
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const stored = await getJson<Announcement[]>(STORAGE_KEY);
+      if (!active) return;
+      if (Array.isArray(stored)) setItems(stored);
+      setHydrated(true);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    void setJson(STORAGE_KEY, items);
+  }, [items, hydrated]);
+
+  const mine = items.filter((a) => a.organizerId === currentUser?.id);
 
   const addAnnouncement = () => {
-    if (!title.trim() || !body.trim()) return;
+    if (!currentUser || !title.trim() || !body.trim()) return;
     setItems((prev) => [
       {
-        id: String(Date.now()),
+        id: createId('ann'),
         title: title.trim(),
         body: body.trim(),
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
+        organizerId: currentUser.id,
+        competitionId: myCompetitionId,
       },
       ...prev,
     ]);
@@ -67,24 +102,39 @@ export default function AnnouncementsScreen() {
         />
       </Card>
 
-      {items.length === 0 ? (
+      {mine.length === 0 ? (
         <EmptyState
           title={t('organizer.announcements.empty')}
           description={t('organizer.announcements.emptyDesc')}
           icon="megaphone-outline"
         />
       ) : (
-        items.map((a) => (
+        mine.map((a) => (
           <Card key={a.id} style={styles.card}>
-            <View style={styles.row}>
+            <View
+              style={[
+                styles.row,
+                { flexDirection: isRTL ? 'row-reverse' : 'row' },
+              ]}
+            >
               <View style={{ flex: 1, gap: 4 }}>
                 <Subtitle>{a.title}</Subtitle>
-                <Text style={[styles.body, { color: theme.colors.text }]}>
+                <Text
+                  style={[
+                    styles.body,
+                    {
+                      color: theme.colors.text,
+                      textAlign: isRTL ? 'right' : 'left',
+                    },
+                  ]}
+                >
                   {a.body}
                 </Text>
-                <Muted>{formatArabicDate(a.createdAt)}</Muted>
+                <Muted>{formatArabicDate(new Date(a.createdAt))}</Muted>
               </View>
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('superadmin.actions.delete')}
                 onPress={() => {
                   setItems((prev) => prev.filter((x) => x.id !== a.id));
                   toast({
@@ -108,6 +158,6 @@ export default function AnnouncementsScreen() {
 const styles = StyleSheet.create({
   content: { paddingTop: 8, gap: 12, paddingBottom: 40 },
   card: { gap: 10 },
-  row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  body: { textAlign: 'left', lineHeight: 20 },
+  row: { gap: 10, alignItems: 'flex-start' },
+  body: { lineHeight: 20 },
 });

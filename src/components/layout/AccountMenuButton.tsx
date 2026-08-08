@@ -3,6 +3,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -19,6 +20,7 @@ import {
   normalizeUserRoles,
 } from '@/utils/roles';
 import type { UserRole } from '@/types';
+import { cairoText } from '@/theme/fonts';
 
 type Props = {
   accountHref: string;
@@ -51,7 +53,7 @@ function defaultSettingsHref(
 }
 
 /**
- * قائمة الحساب المنسدلة: مسارات الحساب (لغير المشرف) + إعدادات الحساب + خروج.
+ * قائمة الحساب المنسدلة: مسارات الحساب + دخول المشرف + إعدادات + خروج.
  */
 function AccountMenuButtonComponent({
   accountHref,
@@ -62,8 +64,13 @@ function AccountMenuButtonComponent({
 }: Props) {
   const { currentUser, logout, switchActiveRole } = useTournament();
   const theme = useAppTheme();
-  const { t } = useTranslation();
+  const { t, isRTL } = useTranslation();
   const router = useRouter();
+  const rowDir = isRTL ? ('row-reverse' as const) : ('row' as const);
+  const textStart = {
+    textAlign: (isRTL ? 'right' : 'left') as 'left' | 'right',
+    writingDirection: (isRTL ? 'rtl' : 'ltr') as 'rtl' | 'ltr',
+  };
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
 
@@ -101,6 +108,11 @@ function AccountMenuButtonComponent({
     logout();
   }, [logout]);
 
+  const onEnterAdmin = useCallback(() => {
+    setOpen(false);
+    logout({ to: 'admin' });
+  }, [logout]);
+
   const onSwitchRole = useCallback(
     (role: UserRole) => {
       setOpen(false);
@@ -129,8 +141,9 @@ function AccountMenuButtonComponent({
           variant === 'handle' ? styles.handleWrap : styles.wrap,
           variant === 'handle' && compact && styles.handleWrapCompact,
           variant === 'handle' && {
-            borderColor: theme.colors.primary,
-            backgroundColor: theme.colors.primarySoft,
+            borderColor: theme.colors.accent,
+            backgroundColor: theme.colors.accentSoft,
+            flexDirection: rowDir,
           },
           { opacity: pressed ? 0.8 : 1 },
         ]}
@@ -140,7 +153,9 @@ function AccountMenuButtonComponent({
             style={[
               styles.handleLabel,
               compact && styles.handleLabelCompact,
-              { color: theme.colors.primary },
+              cairoText('semiBold'),
+              { color: theme.colors.accent },
+              textStart,
             ]}
             numberOfLines={1}
           >
@@ -154,14 +169,14 @@ function AccountMenuButtonComponent({
                 width: size,
                 height: size,
                 borderRadius: size / 2,
-                backgroundColor: theme.colors.primarySoft,
+                backgroundColor: theme.colors.accentSoft,
               },
             ]}
           >
             <Ionicons
               name="person"
               size={Math.round(size * 0.5)}
-              color={theme.colors.primary}
+              color={theme.colors.accent}
             />
           </View>
         )}
@@ -170,7 +185,7 @@ function AccountMenuButtonComponent({
             style={[
               styles.badge,
               {
-                backgroundColor: theme.colors.primary,
+                backgroundColor: theme.colors.accent,
                 borderColor: theme.colors.surface,
               },
             ]}
@@ -185,7 +200,7 @@ function AccountMenuButtonComponent({
           <Ionicons
             name="chevron-down"
             size={compact ? 10 : 12}
-            color={theme.colors.primary}
+            color={theme.colors.accent}
           />
         )}
       </Pressable>
@@ -210,18 +225,29 @@ function AccountMenuButtonComponent({
                 backgroundColor: theme.colors.card,
                 borderColor: theme.colors.border,
                 marginTop: headerSafeTop(insets.top),
+                direction: isRTL ? 'rtl' : 'ltr',
               },
             ]}
           >
-            <View style={styles.menuHeader}>
+            <View
+              style={[
+                styles.menuHeader,
+                { alignItems: isRTL ? 'flex-end' : 'flex-start' },
+              ]}
+            >
               <Text
-                style={[styles.menuHandle, { color: theme.colors.primary }]}
+                style={[
+                  styles.menuHandle,
+                  cairoText('extraBold'),
+                  { color: theme.colors.accent },
+                  textStart,
+                ]}
                 numberOfLines={1}
               >
                 {currentUser.handle}
               </Text>
               <Text
-                style={[styles.menuReg, { color: theme.colors.textMuted }]}
+                style={[styles.menuReg, { color: theme.colors.textMuted }, textStart]}
                 numberOfLines={1}
               >
                 {currentUser.visibleId}
@@ -232,143 +258,197 @@ function AccountMenuButtonComponent({
               style={[styles.divider, { backgroundColor: theme.colors.border }]}
             />
 
-            {!isSuperAdmin ? (
+            <ScrollView
+              style={styles.menuScroll}
+              bounces={false}
+              showsVerticalScrollIndicator={false}
+            >
+              {!isSuperAdmin ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('menu.enterAdmin')}
+                  onPress={onEnterAdmin}
+                  style={({ pressed }) => [
+                    styles.item,
+                    styles.itemHighlight,
+                    {
+                      backgroundColor: theme.colors.accentSoft,
+                      borderColor: theme.colors.accent,
+                      opacity: pressed ? 0.85 : 1,
+                      flexDirection: rowDir,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="shield-checkmark-outline"
+                    size={20}
+                    color={theme.colors.accent}
+                  />
+                  <Text
+                    style={[
+                      styles.itemLabel,
+                      { color: theme.colors.accent },
+                      textStart,
+                    ]}
+                  >
+                    {t('menu.enterAdmin')}
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              {!isSuperAdmin ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('menu.accountPaths')}
+                  onPress={goPaths}
+                  style={({ pressed }) => [
+                    styles.item,
+                    {
+                      backgroundColor: pressed
+                        ? theme.colors.accentSoft
+                        : 'transparent',
+                      flexDirection: rowDir,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="swap-horizontal-outline"
+                    size={20}
+                    color={theme.colors.accent}
+                  />
+                  <Text
+                    style={[styles.itemLabel, { color: theme.colors.text }, textStart]}
+                  >
+                    {t('menu.accountPaths')}
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              {roleSwitch ? (
+                <>
+                  {roleSwitch.roles.includes('follower') &&
+                  roleSwitch.active !== 'follower' ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('menu.enterFollower')}
+                      onPress={() => onSwitchRole('follower')}
+                      style={({ pressed }) => [
+                        styles.item,
+                        {
+                          backgroundColor: pressed
+                            ? theme.colors.accentSoft
+                            : 'transparent',
+                          flexDirection: rowDir,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="people-outline"
+                        size={20}
+                        color={theme.colors.accent}
+                      />
+                      <Text
+                        style={[
+                          styles.itemLabel,
+                          { color: theme.colors.accent },
+                          textStart,
+                        ]}
+                      >
+                        {t('menu.enterFollower')}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {roleSwitch.active !== roleSwitch.secondary ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('menu.enterRole', {
+                        role: roleLabel(roleSwitch.secondary),
+                      })}
+                      onPress={() => onSwitchRole(roleSwitch.secondary)}
+                      style={({ pressed }) => [
+                        styles.item,
+                        styles.itemHighlight,
+                        {
+                          backgroundColor: theme.colors.accentSoft,
+                          borderColor: theme.colors.accent,
+                          opacity: pressed ? 0.85 : 1,
+                          flexDirection: rowDir,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="briefcase-outline"
+                        size={20}
+                        color={theme.colors.accent}
+                      />
+                      <Text
+                        style={[
+                          styles.itemLabel,
+                          { color: theme.colors.accent },
+                          textStart,
+                        ]}
+                      >
+                        {t('menu.enterRole', {
+                          role: roleLabel(roleSwitch.secondary),
+                        })}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </>
+              ) : null}
+
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={t('menu.accountPaths')}
-                onPress={goPaths}
+                accessibilityLabel={t('menu.accountSettings')}
+                onPress={sameHref || isSuperAdmin ? goPaths : goAccount}
                 style={({ pressed }) => [
                   styles.item,
                   {
                     backgroundColor: pressed
-                      ? theme.colors.primarySoft
+                      ? theme.colors.accentSoft
                       : 'transparent',
+                    flexDirection: rowDir,
                   },
                 ]}
               >
-                <Text style={[styles.itemLabel, { color: theme.colors.text }]}>
-                  {t('menu.accountPaths')}
-                </Text>
                 <Ionicons
-                  name="swap-horizontal-outline"
+                  name="settings-outline"
                   size={20}
-                  color={theme.colors.primary}
+                  color={theme.colors.accent}
                 />
+                <Text
+                  style={[styles.itemLabel, { color: theme.colors.text }, textStart]}
+                >
+                  {t('menu.accountSettings')}
+                </Text>
               </Pressable>
-            ) : null}
 
-            {roleSwitch ? (
-              <>
-                {roleSwitch.roles.includes('follower') &&
-                roleSwitch.active !== 'follower' ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('menu.enterFollower')}
-                    onPress={() => onSwitchRole('follower')}
-                    style={({ pressed }) => [
-                      styles.item,
-                      {
-                        backgroundColor: pressed
-                          ? theme.colors.primarySoft
-                          : 'transparent',
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[styles.itemLabel, { color: theme.colors.primary }]}
-                    >
-                      {t('menu.enterFollower')}
-                    </Text>
-                    <Ionicons
-                      name="people-outline"
-                      size={20}
-                      color={theme.colors.primary}
-                    />
-                  </Pressable>
-                ) : null}
-                {roleSwitch.active !== roleSwitch.secondary ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('menu.enterRole', {
-                      role: roleLabel(roleSwitch.secondary),
-                    })}
-                    onPress={() => onSwitchRole(roleSwitch.secondary)}
-                    style={({ pressed }) => [
-                      styles.item,
-                      styles.itemHighlight,
-                      {
-                        backgroundColor: pressed
-                          ? theme.colors.primarySoft
-                          : theme.colors.primarySoft,
-                        borderColor: theme.colors.primary,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.itemLabel,
-                        { color: theme.colors.primary },
-                      ]}
-                    >
-                      {t('menu.enterRole', {
-                        role: roleLabel(roleSwitch.secondary),
-                      })}
-                    </Text>
-                    <Ionicons
-                      name="briefcase-outline"
-                      size={20}
-                      color={theme.colors.primary}
-                    />
-                  </Pressable>
-                ) : null}
-              </>
-            ) : null}
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('menu.accountSettings')}
-              onPress={sameHref || isSuperAdmin ? goPaths : goAccount}
-              style={({ pressed }) => [
-                styles.item,
-                {
-                  backgroundColor: pressed
-                    ? theme.colors.primarySoft
-                    : 'transparent',
-                },
-              ]}
-            >
-              <Text style={[styles.itemLabel, { color: theme.colors.text }]}>
-                {t('menu.accountSettings')}
-              </Text>
-              <Ionicons
-                name="settings-outline"
-                size={20}
-                color={theme.colors.primary}
-              />
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('menu.exit')}
-              onPress={onLogout}
-              style={({ pressed }) => [
-                styles.item,
-                {
-                  backgroundColor: pressed
-                    ? theme.colors.dangerSoft
-                    : 'transparent',
-                },
-              ]}
-            >
-              <Text style={[styles.itemLabel, { color: theme.colors.danger }]}>
-                {t('menu.exit')}
-              </Text>
-              <Ionicons
-                name="log-out-outline"
-                size={20}
-                color={theme.colors.danger}
-              />
-            </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('menu.exit')}
+                onPress={onLogout}
+                style={({ pressed }) => [
+                  styles.item,
+                  {
+                    backgroundColor: pressed
+                      ? theme.colors.dangerSoft
+                      : 'transparent',
+                    flexDirection: rowDir,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="log-out-outline"
+                  size={20}
+                  color={theme.colors.danger}
+                />
+                <Text
+                  style={[styles.itemLabel, { color: theme.colors.danger }, textStart]}
+                >
+                  {t('menu.exit')}
+                </Text>
+              </Pressable>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -384,7 +464,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   handleWrap: {
-    direction: 'ltr',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
@@ -405,15 +484,9 @@ const styles = StyleSheet.create({
   },
   handleLabel: {
     fontSize: Platform.OS === 'android' ? 9 : 11,
-    fontWeight: '700',
-    textAlign: 'left',
-    writingDirection: 'ltr',
   },
   handleLabelCompact: {
     fontSize: Platform.OS === 'android' ? 8 : 9,
-    fontWeight: '600',
-    textAlign: 'left',
-    writingDirection: 'ltr',
   },
   avatarFallback: {
     alignItems: 'center',
@@ -442,6 +515,7 @@ const styles = StyleSheet.create({
   menu: {
     width: '88%',
     maxWidth: 340,
+    maxHeight: '78%',
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 10,
@@ -452,22 +526,21 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 10,
   },
+  menuScroll: {
+    maxHeight: 420,
+  },
   menuHeader: {
-    alignItems: 'flex-start',
     gap: 4,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
   menuHandle: {
-    fontWeight: '800',
     fontSize: 16,
-    textAlign: 'left',
     width: '100%',
   },
   menuReg: {
     fontWeight: '600',
     fontSize: 11,
-    textAlign: 'left',
     width: '100%',
   },
   divider: {
@@ -493,6 +566,5 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '800',
-    textAlign: 'left',
   },
 });

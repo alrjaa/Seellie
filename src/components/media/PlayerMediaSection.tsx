@@ -1,6 +1,5 @@
 import React, { memo, useCallback, useState } from 'react';
 import {
-  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -13,7 +12,20 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { InlineVideoPlayer } from '@/components/media/InlineVideoPlayer';
+import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
+import {
+  ShareTargetModal,
+  TinyShareButton,
+  type ContentSharePayload,
+} from '@/components/share/ShareTargetModal';
 import { Button, Card, Input, LikeButton, Muted, Subtitle } from '@/components/ui';
+import {
+  PROFILE_VIDEO_MAX_SEC,
+  MEDIA_SPECS,
+  validatePickerAsset,
+  type MediaUploadKind,
+} from '@/utils/media-limits';
 
 export type MediaItem = {
   id: string;
@@ -56,6 +68,9 @@ function PlayerMediaSectionComponent({
   const [photoUrl, setPhotoUrl] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [picking, setPicking] = useState(false);
+  const [sharePayload, setSharePayload] = useState<ContentSharePayload | null>(
+    null
+  );
 
   const pickFromLibrary = useCallback(
     async (kind: 'photo' | 'video') => {
@@ -79,12 +94,53 @@ function PlayerMediaSectionComponent({
               : ImagePicker.MediaTypeOptions.Videos,
           quality: 0.85,
           allowsEditing: kind === 'photo',
+          aspect: kind === 'photo' ? [1, 1] : undefined,
+          videoMaxDuration:
+            kind === 'video' ? PROFILE_VIDEO_MAX_SEC : undefined,
         });
 
         if (result.canceled || !result.assets?.[0]?.uri) return;
-        const uri = result.assets[0].uri;
-        if (kind === 'photo') onAddPhoto?.(uri);
-        else onAddVideo?.(uri);
+        const asset = result.assets[0];
+        const validateKind: MediaUploadKind =
+          kind === 'photo' ? 'photo' : 'video';
+        const check = validatePickerAsset(validateKind, {
+          uri: asset.uri,
+          width: asset.width,
+          height: asset.height,
+          fileSize: asset.fileSize,
+          duration: asset.duration,
+        });
+        if (!check.ok) {
+          if (check.reason === 'duration') {
+            toast({
+              variant: 'destructive',
+              title: t('media.videoTooLong'),
+              description: t('media.videoTooLongDesc', {
+                sec: PROFILE_VIDEO_MAX_SEC,
+              }),
+            });
+          } else if (check.reason === 'size') {
+            toast({
+              variant: 'destructive',
+              title: t('media.fileTooLarge'),
+              description: t('media.fileTooLargeDesc', {
+                mb: MEDIA_SPECS[validateKind].maxMb,
+              }),
+            });
+          } else {
+            toast({
+              variant: 'destructive',
+              title: t('media.imageTooSmall'),
+              description: t('media.imageTooSmallDesc', {
+                w: (MEDIA_SPECS.photo as { width: number }).width,
+              }),
+            });
+          }
+          return;
+        }
+
+        if (kind === 'video') onAddVideo?.(asset.uri);
+        else onAddPhoto?.(asset.uri);
       } catch {
         toast({
           variant: 'destructive',
@@ -122,6 +178,18 @@ function PlayerMediaSectionComponent({
                   contentFit="cover"
                   transition={200}
                 />
+                <View style={styles.shareCorner}>
+                  <TinyShareButton
+                    onPress={() =>
+                      setSharePayload({
+                        kind: 'content',
+                        title: t('media.photoGallery'),
+                        mediaUrl: photo.url,
+                        mediaKind: 'photo',
+                      })
+                    }
+                  />
+                </View>
                 {editable ? (
                   <View style={styles.tileActions}>
                     {onSetAvatar ? (
@@ -131,7 +199,7 @@ function PlayerMediaSectionComponent({
                         onPress={() => onSetAvatar(photo.url)}
                         style={[
                           styles.iconBtn,
-                          { backgroundColor: theme.colors.primary },
+                          { backgroundColor: theme.colors.accent },
                         ]}
                       >
                         <Ionicons
@@ -173,6 +241,17 @@ function PlayerMediaSectionComponent({
       {editable ? (
         <Card style={styles.form}>
           <Muted>{t('media.addPhotoHint')}</Muted>
+          <MediaUploadSpecs
+            kind="photo"
+            title={t('media.specs.photoTitle')}
+          />
+          {onSetAvatar ? (
+            <MediaUploadSpecs
+              kind="avatar"
+              title={t('media.specs.avatarTitle')}
+              compact
+            />
+          ) : null}
           <Button
             label={
               picking ? t('media.picking') : t('media.pickPhotoFromDevice')
@@ -213,40 +292,23 @@ function PlayerMediaSectionComponent({
         <View style={styles.videoList}>
           {videos.map((video, index) => (
             <Card key={video.id} style={styles.videoCard}>
-              <View style={styles.videoRow}>
-                <View
-                  style={[
-                    styles.videoIcon,
-                    { backgroundColor: theme.colors.primarySoft },
-                  ]}
-                >
-                  <Ionicons
-                    name="play-circle"
-                    size={28}
-                    color={theme.colors.primary}
-                  />
-                </View>
-                <View style={{ flex: 1, gap: 4 }}>
-                  <Text style={[styles.videoTitle, { color: theme.colors.text }]}>
-                    {t('media.videoNumber', { n: index + 1 })}
-                  </Text>
-                  <Muted numberOfLines={1}>{video.url}</Muted>
-                </View>
-              </View>
-              <View style={styles.videoActions}>
-                <Button
-                  label={t('media.play')}
-                  variant="outline"
-                  onPress={() => {
-                    void Linking.openURL(video.url).catch(() =>
-                      toast({
-                        variant: 'destructive',
-                        title: t('media.openVideoFailed'),
-                      })
-                    );
-                  }}
-                  style={{ flex: 1 }}
+              <View style={styles.videoHead}>
+                <Text style={[styles.videoTitle, { color: theme.colors.text, flex: 1 }]}>
+                  {t('media.videoNumber', { n: index + 1 })}
+                </Text>
+                <TinyShareButton
+                  onPress={() =>
+                    setSharePayload({
+                      kind: 'content',
+                      title: t('media.videoNumber', { n: index + 1 }),
+                      mediaUrl: video.url,
+                      mediaKind: 'video',
+                    })
+                  }
                 />
+              </View>
+              <InlineVideoPlayer uri={video.url} />
+              <View style={styles.videoActions}>
                 {editable ? (
                   <Button
                     label={t('media.delete')}
@@ -274,6 +336,10 @@ function PlayerMediaSectionComponent({
       {editable ? (
         <Card style={styles.form}>
           <Muted>{t('media.addVideoHint')}</Muted>
+          <MediaUploadSpecs
+            kind="video"
+            title={t('media.specs.videoTitle')}
+          />
           <Button
             label={
               picking ? t('media.picking') : t('media.pickVideoFromDevice')
@@ -298,6 +364,12 @@ function PlayerMediaSectionComponent({
           />
         </Card>
       ) : null}
+
+      <ShareTargetModal
+        visible={!!sharePayload}
+        payload={sharePayload}
+        onClose={() => setSharePayload(null)}
+      />
     </View>
   );
 }
@@ -332,6 +404,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
   },
+  shareCorner: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    zIndex: 2,
+  },
   iconBtn: {
     width: 32,
     height: 32,
@@ -342,14 +420,11 @@ const styles = StyleSheet.create({
   form: { gap: 10 },
   videoList: { gap: 10 },
   videoCard: { gap: 10 },
-  videoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  videoIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  videoHead: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
   },
-  videoTitle: { fontWeight: '800', textAlign: 'left' },
+  videoTitle: { fontWeight: '800' },
   videoActions: { flexDirection: 'row', gap: 8 },
 });

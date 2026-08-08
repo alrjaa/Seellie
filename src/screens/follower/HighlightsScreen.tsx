@@ -55,9 +55,9 @@ const MediaRow = memo(function MediaRow({
           onPress={() => {
             void Linking.openURL(item.url).catch(() => undefined);
           }}
-          style={[styles.videoThumb, { backgroundColor: theme.colors.primarySoft }]}
+          style={[styles.videoThumb, { backgroundColor: theme.colors.accentSoft }]}
         >
-          <Ionicons name="play" size={22} color={theme.colors.primary} />
+          <Ionicons name="play" size={22} color={theme.colors.accent} />
         </Pressable>
       )}
       <View style={{ flex: 1, gap: 6 }}>

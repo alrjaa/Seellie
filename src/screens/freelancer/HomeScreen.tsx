@@ -8,6 +8,7 @@ import { LoadingState } from '@/components/feedback/LoadingState';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Screen } from '@/components/layout/Screen';
 import { HomeHeader } from '@/components/layout/HomeHeader';
+import { AccountSocialStats } from '@/components/account/AccountSocialStats';
 import {
   Card,
   ListRow,
@@ -18,7 +19,8 @@ import {
 import { formatArabicDate } from '@/utils';
 
 export default function FreelancerHomeScreen() {
-  const { currentUser, loading, offers, routeForRole } = useTournament();
+  const { currentUser, loading, offers, shareCards, routeForRole } =
+    useTournament();
   const theme = useAppTheme();
   const router = useRouter();
   const { t } = useTranslation();
@@ -35,6 +37,14 @@ export default function FreelancerHomeScreen() {
   const pendingCount = useMemo(
     () => myOffers.filter((o) => o.status === 'pending').length,
     [myOffers]
+  );
+  const unreadShareCards = useMemo(
+    () =>
+      currentUser
+        ? shareCards.filter((c) => c.recipientId === currentUser.id && !c.read)
+            .length
+        : 0,
+    [shareCards, currentUser]
   );
 
   if (loading) return <LoadingState />;
@@ -53,7 +63,7 @@ export default function FreelancerHomeScreen() {
       <Card style={styles.statsCard}>
         <View style={styles.stats}>
           <View style={styles.stat}>
-            <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+            <Text style={[styles.statValue, { color: theme.colors.accent }]}>
               {myOffers.length}
             </Text>
             <Muted>{t('freelancer.offers')}</Muted>
@@ -75,6 +85,17 @@ export default function FreelancerHomeScreen() {
 
       <Card style={{ gap: 10 }}>
         <Subtitle>{t('freelancer.shortcuts')}</Subtitle>
+        <ListRow
+          title={t('home.shareCards')}
+          subtitle={
+            unreadShareCards > 0
+              ? t('home.shareCardsSubUnread', { count: unreadShareCards })
+              : t('home.shareCardsSub')
+          }
+          icon="mail-unread-outline"
+          badge={unreadShareCards}
+          onPress={() => router.push('/share-cards' as any)}
+        />
         <ListRow
           title={t('freelancer.myProfile')}
           subtitle={t('freelancer.myProfileSub')}
@@ -127,6 +148,8 @@ export default function FreelancerHomeScreen() {
           ))
         )}
       </Card>
+
+      <AccountSocialStats user={currentUser} />
     </Screen>
   );
 }
@@ -143,5 +166,5 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  offerText: { fontWeight: '800', textAlign: 'left', writingDirection: 'ltr' },
+  offerText: { fontWeight: '800', textAlign: 'left' },
 });
