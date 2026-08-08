@@ -1,5 +1,6 @@
 import 'react-native-get-random-values';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import Constants from 'expo-constants';
 
@@ -35,7 +36,9 @@ export function getSupabase(): SupabaseClient | null {
         storage: AsyncStorage,
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: false,
+        // على الويب فقط: قراءة ?code= / #access_token من رابط الاستعادة
+        // على الموبايل نستهلك الرابط يدوياً عبر AuthDeepLinkHandler
+        detectSessionInUrl: Platform.OS === 'web',
         // PKCE يضع ?code= في الرابط — يبقى على Android (الـ hash غالباً يُفقد)
         flowType: 'pkce',
       },

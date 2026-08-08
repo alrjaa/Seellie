@@ -1,4 +1,4 @@
-# استعادة كلمة المرور (Supabase + Expo)
+# استعادة كلمة المرور (Supabase + ويب / Expo)
 
 ## لماذا تظهر صفحة فارغة في المتصفح؟
 
@@ -9,34 +9,41 @@
 
 | redirect_to | النتيجة |
 |---|---|
-| `http://localhost:3000` | صفحة فارغة (لا يوجد موقع) |
-| `seellie://...` بدون تطبيق مثبت | المتصفح يبقى فارغاً (Expo Go لا يفتح `seellie://`) |
-| `exp://IP:8081/--/reset-password` | يفتح Expo Go → شاشة تعيين كلمة المرور |
+| `http://localhost:…` | صفحة فارغة (لا يوجد موقع) |
+| `seellie://…` من متصفح الكمبيوتر | شاشة فارغة (المتصفح لا يفتح التطبيق) |
+| `https://seellie.com/reset-password` | يفتح موقع Seellie → شاشة كلمة المرور الجديدة |
+
+إرسال الاستعادة من **لوحة Supabase** يستخدم **Site URL** كـ `redirect_to`.  
+لذلك يجب أن يكون Site URL موقعاً حقيقياً على الويب وليس `seellie://`.
 
 ## إعداد لمرة واحدة في Supabase
 
 **Authentication → URL Configuration**
 
-1. **Site URL** — ضع أحد الخيارين (ليس localhost):
-   - للتطوير مع Expo Go: نفس رابط `exp://...` الذي يظهر بعد إرسال الاستعادة من التطبيق
-   - أو: `seellie://reset-password`
-
-2. **Redirect URLs** — أضف الكل:
+1. **Site URL** (مهم جداً):
    ```
+   https://seellie.com
+   ```
+
+2. **Redirect URLs** — أضف:
+   ```
+   https://seellie.com/**
+   https://seellie.com/reset-password
+   https://www.seellie.com/**
+   https://*.vercel.app/**
    seellie://reset-password
    exp://**/--/reset-password
    ```
 
-3. احفظ، ثم من التطبيق اطلب رابط استعادة **جديداً** (الروابط القديمة تحتفظ بـ localhost).
+3. احفظ، ثم اطلب رابط استعادة **جديداً** (الروابط القديمة تحتفظ بـ redirect القديم).
 
-## طريقة الاستخدام الصحيحة
+## طريقة الاستخدام (ويب / أدمن)
 
-1. شغّل Expo على الكمبيوتر وافتح التطبيق على الهاتف.
-2. من شاشة الدخول → نسيت كلمة المرور → أرسل الرابط.
-3. انسخ من رسالة النجاح قيمة Redirect إن ظهرت، وتأكد أنها في قائمة Redirect URLs.
-4. افتح رسالة البريد **من الهاتف** (Gmail/Mail على الجوال)، وليس من متصفح الكمبيوتر.
-5. يفترض أن يفتح Expo ويعرض شاشة كلمة المرور الجديدة.
+1. من الموقع أو من Supabase: أرسل رابط الاستعادة إلى `alrjaa.ns@gmail.com`.
+2. افتح الرسالة من المتصفح واضغط الرابط.
+3. يجب أن تفتح: `https://seellie.com/reset-password` مع نموذج كلمة المرور الجديدة.
+4. بعد الحفظ ادخل من `/admin`.
 
-## طوارئ للمشرف
+## طوارئ للمشرف (بدون بريد)
 
-نفّذ `native/supabase/set-admin-password.sql` في SQL Editor إن احتجت تعيين كلمة المرور فوراً بدون البريد.
+نفّذ `native/supabase/set-admin-password.sql` في SQL Editor.

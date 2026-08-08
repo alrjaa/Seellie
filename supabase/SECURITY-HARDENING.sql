@@ -11,23 +11,41 @@ set search_path = public
 as $$
 declare
   caller_is_admin boolean;
+  new_is_admin boolean;
+  old_was_admin boolean;
 begin
+  -- SQL Editor / migrations تعمل كـ postgres بدون auth.uid()
+  if auth.uid() is null
+     and current_user in ('postgres', 'supabase_admin')
+  then
+    return NEW;
+  end if;
+
   caller_is_admin := public.is_app_superadmin();
 
   if caller_is_admin then
     return NEW;
   end if;
 
-  -- لا يحق لغير المشرف منح أو الإبقاء على صلاحية مشرف عبر التحديث
-  if NEW.role = 'superadmin'
-     or coalesce(NEW.active_role, '') = 'superadmin'
-     or coalesce(NEW.roles, array[]::text[]) && array['superadmin']::text[]
-  then
+  new_is_admin :=
+    NEW.role = 'superadmin'
+    or coalesce(NEW.active_role, '') = 'superadmin'
+    or coalesce(NEW.roles, array[]::text[]) && array['superadmin']::text[];
+
+  old_was_admin :=
+    TG_OP = 'UPDATE'
+    and (
+      OLD.role = 'superadmin'
+      or coalesce(OLD.active_role, '') = 'superadmin'
+      or coalesce(OLD.roles, array[]::text[]) && array['superadmin']::text[]
+    );
+
+  -- امنع الترقية إلى مشرف فقط، لا تمنع الإبقاء على مشرف موجود
+  if new_is_admin and not old_was_admin then
     raise exception 'privilege_escalation_denied';
   end if;
 
   -- لا يحق لغير المشرف تعديل حالة حسابه إلى محظور/موقوف عبر التلاعب
-  -- (المشرف يحدّث عبر سياسة profiles_update_admin)
   if TG_OP = 'UPDATE'
      and NEW.id = auth.uid()
      and NEW.status is distinct from OLD.status

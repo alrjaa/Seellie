@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import {
@@ -6,9 +7,14 @@ import {
   setPendingAuthUrl,
 } from '@/services/pending-auth-url';
 
+function currentWebUrl(): string | null {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
+  return window.location.href;
+}
+
 /**
- * يستقبل رابط استعادة كلمة المرور ويفتح شاشة التعيين داخل التطبيق
- * بدل ترك المتصفح على صفحة فارغة.
+ * يستقبل رابط استعادة كلمة المرور ويفتح شاشة التعيين
+ * (ويب: https://seellie.com/reset-password — موبايل: deep link).
  */
 export function AuthDeepLinkHandler() {
   const router = useRouter();
@@ -23,6 +29,7 @@ export function AuthDeepLinkHandler() {
       router.push('/(auth)/reset-password' as any);
     };
 
+    openReset(currentWebUrl());
     void Linking.getInitialURL().then(openReset);
     const sub = Linking.addEventListener('url', ({ url }) => openReset(url));
     return () => sub.remove();

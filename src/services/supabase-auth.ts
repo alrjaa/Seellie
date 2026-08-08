@@ -5,6 +5,7 @@ import { normalizeUserRoles } from '@/utils/roles';
 import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
 import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 export type ProfileRow = {
   id: string;
@@ -334,14 +335,26 @@ export async function supabaseSignOut(): Promise<void> {
 }
 
 /**
- * رابط يفتح التطبيق بعد التحقق من البريد.
+ * رابط بعد التحقق من البريد.
+ * - ويب (seellie.com) → https://…/reset-password
  * - Expo Go → exp://IP:PORT/--/reset-password
  * - تطبيق مستقل → seellie://reset-password
  * لا نستخدم localhost (يفتح متصفحاً فارغاً).
  */
 export function passwordResetRedirectUrl(): string {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const origin = window.location.origin.replace(/\/$/, '');
+    // تجنب localhost في بريد حقيقي — استخدم الدومين المنشور
+    if (
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1')
+    ) {
+      return 'https://seellie.com/reset-password';
+    }
+    return `${origin}/reset-password`;
+  }
+
   const url = Linking.createURL('reset-password');
-  // حماية: لا نسمح بـ http://localhost في بريد الاستعادة
   if (
     url.includes('localhost') ||
     url.includes('127.0.0.1') ||

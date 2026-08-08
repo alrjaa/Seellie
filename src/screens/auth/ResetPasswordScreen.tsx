@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import { useToast } from '@/providers/ToastProvider';
@@ -12,6 +12,16 @@ import {
 } from '@/services/supabase-auth';
 import { isSupabaseConfigured } from '@/services/supabase';
 import { takePendingAuthUrl } from '@/services/pending-auth-url';
+
+function stripAuthParamsFromWebUrl() {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  try {
+    const clean = `${window.location.origin}${window.location.pathname}`;
+    window.history.replaceState({}, document.title, clean);
+  } catch {
+    // ignore
+  }
+}
 
 /**
  * شاشة تعيين كلمة مرور جديدة بعد فتح رابط الاستعادة من البريد.
@@ -33,6 +43,7 @@ export default function ResetPasswordScreen() {
       if (result.ok) {
         setReady(true);
         setStatus(t('auth.resetReady'));
+        stripAuthParamsFromWebUrl();
       } else if (result.error && result.error !== 'no_tokens') {
         setStatus(result.error);
       }
@@ -50,6 +61,11 @@ export default function ResetPasswordScreen() {
 
     // رابط محفوظ من معالج الروابط العميقة
     void run(takePendingAuthUrl());
+
+    // ويب: الرموز تكون في عنوان المتصفح بعد redirect من Supabase
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      void run(window.location.href);
+    }
 
     void Linking.getInitialURL().then((url) => {
       void run(url);

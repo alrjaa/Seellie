@@ -21,11 +21,15 @@ export function peekPendingAuthUrl(): string | null {
 export function isPasswordRecoveryUrl(url: string | null | undefined): boolean {
   if (!url) return false;
   const u = url.toLowerCase();
+  // لوحة Supabase ترسل غالباً إلى Site URL (الجذر) بـ ?code= أو #access_token
   return (
     u.includes('reset-password') ||
     u.includes('type=recovery') ||
     u.includes('type%3drecovery') ||
     u.includes('access_token=') ||
-    (u.includes('code=') && (u.includes('recovery') || u.includes('reset')))
+    u.includes('refresh_token=') ||
+    u.includes('token_hash=') ||
+    // PKCE: أي صفحة فيها code= بعد رابط الاستعادة
+    /[?&#]code=/.test(u)
   );
 }
