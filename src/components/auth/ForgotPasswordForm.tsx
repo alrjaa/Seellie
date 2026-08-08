@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { useToast } from '@/providers/ToastProvider';
@@ -7,6 +8,7 @@ import { Button, Input, Muted } from '@/components/ui';
 import { isValidEmail, normalizeEmail } from '@/utils';
 import { supabaseRequestPasswordReset } from '@/services/supabase-auth';
 import { isSupabaseConfigured } from '@/services/supabase';
+import { setPendingResetEmail } from '@/services/pending-auth-url';
 import { cairoText } from '@/theme/fonts';
 
 type Props = {
@@ -19,6 +21,7 @@ export function ForgotPasswordForm({ initialEmail = '', onBack }: Props) {
   const theme = useAppTheme();
   const { t } = useTranslation();
   const { toast } = useToast();
+  const router = useRouter();
   const [email, setEmail] = useState(initialEmail);
   const [emailError, setEmailError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,13 +57,16 @@ export function ForgotPasswordForm({ initialEmail = '', onBack }: Props) {
         });
         return;
       }
+      setPendingResetEmail(normalized);
       toast({
         variant: 'success',
         title: t('auth.resetSentTitle'),
-        description: result.redirectTo
-          ? `${t('auth.resetSentDesc')}\n${t('auth.resetRedirectHint')}\n${result.redirectTo}`
-          : t('auth.resetSentDesc'),
+        description: t('auth.resetSentDesc'),
       });
+      router.replace({
+        pathname: '/(auth)/reset-password',
+        params: { email: normalized },
+      } as any);
     } catch (e) {
       toast({
         variant: 'destructive',
@@ -70,7 +76,7 @@ export function ForgotPasswordForm({ initialEmail = '', onBack }: Props) {
     } finally {
       setBusy(false);
     }
-  }, [email, t, toast]);
+  }, [email, t, toast, router]);
 
   return (
     <View style={styles.form}>

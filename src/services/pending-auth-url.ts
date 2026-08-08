@@ -1,9 +1,10 @@
 /**
  * يحفظ رابط الاستعادة القادم من البريد حتى تستهلكه شاشة reset-password.
- * على الويب: نلتقط ?code= / #access_token فوراً قبل أن يمسحها الراوتر.
+ * على الويب: نلتقط ?code= / #access_token / أخطاء OTP فوراً قبل أن يمسحها الراوتر.
  */
 
 const WEB_CAPTURE_KEY = 'seellie.authCallbackUrl';
+const WEB_EMAIL_KEY = 'seellie.resetEmail';
 
 let pendingAuthUrl: string | null = null;
 
@@ -17,6 +18,11 @@ function hasAuthTokens(url: string): boolean {
     u.includes('type%3drecovery') ||
     /[?&#]code=/.test(u)
   );
+}
+
+function hasAuthCallbackPayload(url: string): boolean {
+  if (hasAuthTokens(url)) return true;
+  return !!getAuthCallbackError(url);
 }
 
 export function getAuthCallbackError(url: string | null | undefined): string | null {
@@ -44,14 +50,24 @@ export function getAuthCallbackError(url: string | null | undefined): string | n
   }
 }
 
+function persistCapturedUrl(href: string) {
+  pendingAuthUrl = href;
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(WEB_CAPTURE_KEY, href);
+    window.sessionStorage.setItem(WEB_CAPTURE_KEY, href);
+  } catch {
+    // ignore
+  }
+}
+
 /** يُستدعى عند تحميل التطبيق على الويب بأسرع ما يمكن */
 export function captureWebAuthUrlEarly(): void {
   if (typeof window === 'undefined') return;
   try {
     const href = window.location.href;
-    if (!hasAuthTokens(href)) return;
-    pendingAuthUrl = href;
-    window.sessionStorage.setItem(WEB_CAPTURE_KEY, href);
+    if (!hasAuthCallbackPayload(href)) return;
+    persistCapturedUrl(href);
   } catch {
     // ignore
   }
@@ -61,35 +77,66 @@ export function captureWebAuthUrlEarly(): void {
 captureWebAuthUrlEarly();
 
 export function setPendingAuthUrl(url: string | null) {
-  pendingAuthUrl = url;
-  if (typeof window !== 'undefined' && url && hasAuthTokens(url)) {
-    try {
-      window.sessionStorage.setItem(WEB_CAPTURE_KEY, url);
-    } catch {
-      // ignore
-    }
+  if (!url) {
+    pendingAuthUrl = null;
+    return;
+  }
+  if (hasAuthCallbackPayload(url)) {
+    persistCapturedUrl(url);
+  } else {
+    pendingAuthUrl = url;
   }
 }
 
-export function takePendingAuthUrl(): string | null {
-  let url = pendingAuthUrl;
-  pendingAuthUrl = null;
-  if (!url && typeof window !== 'undefined') {
-    try {
-      url = window.sessionStorage.getItem(WEB_CAPTURE_KEY);
-      window.sessionStorage.removeItem(WEB_CAPTURE_KEY);
-    } catch {
-      // ignore
-    }
-  }
-  return url;
-}
-
+/** قراءة الرابط المحفوظ دون حذفه (حتى ينجح الاستهلاك) */
 export function peekPendingAuthUrl(): string | null {
   if (pendingAuthUrl) return pendingAuthUrl;
   if (typeof window === 'undefined') return null;
   try {
-    return window.sessionStorage.getItem(WEB_CAPTURE_KEY);
+    return (
+      window.localStorage.getItem(WEB_CAPTURE_KEY) ||
+      window.sessionStorage.getItem(WEB_CAPTURE_KEY)
+    );
+  } catch {
+    return null;
+  }
+}
+
+/** حذف بعد نجاح تفعيل الجلسة فقط */
+export function clearPendingAuthUrl(): void {
+  pendingAuthUrl = null;
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(WEB_CAPTURE_KEY);
+    window.sessionStorage.removeItem(WEB_CAPTURE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+/** @deprecated استخدم peek + clear بعد النجاح */
+export function takePendingAuthUrl(): string | null {
+  const url = peekPendingAuthUrl();
+  return url;
+}
+
+export function setPendingResetEmail(email: string | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (email) {
+      window.localStorage.setItem(WEB_EMAIL_KEY, email.trim().toLowerCase());
+    } else {
+      window.localStorage.removeItem(WEB_EMAIL_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function peekPendingResetEmail(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(WEB_EMAIL_KEY);
   } catch {
     return null;
   }
@@ -110,5 +157,9 @@ export function isPasswordRecoveryUrl(url: string | null | undefined): boolean {
 
 export function isAuthCallbackUrl(url: string | null | undefined): boolean {
   if (!url) return false;
-  return isPasswordRecoveryUrl(url) || hasAuthTokens(url.toLowerCase());
+  return (
+    isPasswordRecoveryUrl(url) ||
+    hasAuthTokens(url.toLowerCase()) ||
+    !!getAuthCallbackError(url)
+  );
 }

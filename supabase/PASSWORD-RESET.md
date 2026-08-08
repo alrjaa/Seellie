@@ -1,49 +1,51 @@
-# استعادة كلمة المرور (Supabase + ويب / Expo)
+# استعادة كلمة المرور (موثوقة عبر رمز OTP)
 
-## لماذا تظهر صفحة فارغة في المتصفح؟
+روابط البريد (`ConfirmationURL`) غالباً تُفتح تلقائياً من ماسحات Gmail/Outlook فتصبح `otp_expired`
+قبل أن يضغطها المستخدم. لذلك المسار الصحيح هو **رمز 6 أرقام** وليس الرابط.
 
-رابط البريد يمرّ أولاً عبر:
-`https://YOUR_PROJECT.supabase.co/auth/v1/verify?...&redirect_to=...`
+## 1) قالب الإيميل في Supabase (إلزامي)
 
-بعد التحقق يعيد التوجيه إلى `redirect_to`. إذا كان:
+**Authentication → Email Templates → Reset password**
 
-| redirect_to | النتيجة |
-|---|---|
-| `http://localhost:…` | صفحة فارغة (لا يوجد موقع) |
-| `seellie://…` من متصفح الكمبيوتر | شاشة فارغة (المتصفح لا يفتح التطبيق) |
-| `https://seellie.com/reset-password` | يفتح موقع Seellie → شاشة كلمة المرور الجديدة |
+استبدل المحتوى بما يلي (أو أضف سطر الرمز على الأقل):
 
-إرسال الاستعادة من **لوحة Supabase** يستخدم **Site URL** كـ `redirect_to`.  
-لذلك يجب أن يكون Site URL موقعاً حقيقياً على الويب وليس `seellie://`.
+```html
+<h2>استعادة كلمة المرور — Seellie</h2>
+<p>رمز الاستعادة (انسخه فقط، لا تفتح أي رابط تحقق):</p>
+<p style="font-size:28px;letter-spacing:4px;"><strong>{{ .Token }}</strong></p>
+<p>
+  افتح صفحة التعيين وأدخل الرمز:
+  <a href="https://www.seellie.com/reset-password">https://www.seellie.com/reset-password</a>
+</p>
+<p>الرمز ينتهي خلال ساعة تقريباً. اطلب رمزاً جديداً إن انتهت صلاحيته.</p>
+```
 
-## إعداد لمرة واحدة في Supabase
+مهم: **لا تستخدم** `{{ .ConfirmationURL }}` كزر رئيسي — ذلك يستهلك الرمز فور فتحه.
+
+## 2) URL Configuration
 
 **Authentication → URL Configuration**
 
-1. **Site URL** (مهم جداً):
-   ```
-   https://seellie.com
-   ```
+- **Site URL:** `https://www.seellie.com`
+- **Redirect URLs:**
+  ```
+  https://www.seellie.com/**
+  https://www.seellie.com/reset-password
+  https://seellie.com/**
+  https://*.vercel.app/**
+  seellie://reset-password
+  exp://**/--/reset-password
+  ```
 
-2. **Redirect URLs** — أضف:
-   ```
-   https://seellie.com/**
-   https://seellie.com/reset-password
-   https://www.seellie.com/**
-   https://*.vercel.app/**
-   seellie://reset-password
-   exp://**/--/reset-password
-   ```
+## 3) طريقة الاستخدام
 
-3. احفظ، ثم اطلب رابط استعادة **جديداً** (الروابط القديمة تحتفظ بـ redirect القديم).
+1. من `/admin` أو الدخول → «نسيت كلمة المرور»
+2. أدخل الإيميل → إرسال رمز الاستعادة
+3. ستفتح شاشة التعيين تلقائياً
+4. انسخ **الرمز** من الإيميل (ليس الرابط)
+5. أدخل الرمز + كلمة المرور الجديدة → حفظ
+6. سجّل الدخول
 
-## طريقة الاستخدام (ويب / أدمن)
+## طوارئ للمشرف فقط
 
-1. من الموقع أو من Supabase: أرسل رابط الاستعادة إلى `alrjaa.ns@gmail.com`.
-2. افتح الرسالة من المتصفح واضغط الرابط.
-3. يجب أن تفتح: `https://seellie.com/reset-password` مع نموذج كلمة المرور الجديدة.
-4. بعد الحفظ ادخل من `/admin`.
-
-## طوارئ للمشرف (بدون بريد)
-
-نفّذ `native/supabase/set-admin-password.sql` في SQL Editor.
+`native/supabase/set-admin-password.sql` في SQL Editor.

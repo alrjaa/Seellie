@@ -71,20 +71,27 @@ export const en: TranslationTree = {
     forgotPassword: 'Forgot password?',
     forgotPasswordTitle: 'Reset password',
     forgotPasswordHint:
-      'Enter your Sign up email and we will send a reset link. Local demo accounts cannot use this.',
-    sendResetLink: 'Send reset link',
+      'Enter your Sign up email. We send a 6-digit code — do not tap the email link if present; copy the code only.',
+    sendResetLink: 'Send reset code',
     resetSentTitle: 'Check your email',
     resetSentDesc:
-      'If you received the email, open the link in the same browser. You should then see fields to set a new password.',
-    resetFailed: 'Could not send reset link',
-    resetWaitingLink: 'Verifying your reset link…',
+      'Copy the 6-digit code from the email and enter it here with your new password. Avoid opening the email link — mail scanners often invalidate it.',
+    resetFailed: 'Could not send reset code',
+    resetWaitingLink: 'Checking… you can enter the email code below.',
     resetReady: 'You can set a new password now.',
     resetOpenFromEmail:
-      'If this message stays: the link expired or opened without session tokens. Request a new link from Forgot password, or set the admin password via SQL (set-admin-password.sql).',
+      'Enter your email, the code from the recovery message, then your new password.',
     resetLinkInvalid:
-      'Could not activate the reset link. Request a new one from the login screen, or use SQL for the admin password.',
+      'The email link is invalid. Use the code from the message below, or request a new code from Forgot password.',
     resetOtpExpired:
-      'This email link is invalid or has expired. Request a new link and open it once immediately, or set the password via SQL (set-admin-password.sql).',
+      'The email link expired. Do not use the link — request a new code from Forgot password and enter the digits here.',
+    resetUseOtpHint:
+      'Enter email, the 6-digit email code, and a new password. If the code is missing from the email, update the Recovery template in Supabase to include {{ .Token }}.',
+    resetOtpSectionTitle: 'Reset with email code',
+    resetOtpSectionHint:
+      'Reliable path: code from the email + new password. No need to open the link.',
+    resetOtpLabel: 'Recovery code (6 digits)',
+    resetOtpShort: 'Enter the recovery code from your email (at least 6 digits)',
     resetNoSupabase: 'Supabase is not configured on this site.',
     resetRedirectHint: 'Make sure this URL is allowed in Supabase → Redirect URLs:',
     newPassword: 'New password',

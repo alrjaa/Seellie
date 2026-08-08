@@ -411,6 +411,39 @@ export async function supabaseUpdatePassword(
   return { ok: true };
 }
 
+/**
+ * مسار موثوق: رمز من رسالة الاستعادة (بدون الضغط على الرابط الذي تستهلكه ماسحات البريد).
+ */
+export async function supabaseVerifyRecoveryOtp(
+  email: string,
+  token: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: 'not_configured' };
+  }
+  const cleaned = token.replace(/\s+/g, '');
+  if (!cleaned) return { ok: false, error: 'missing_token' };
+  const sb = getSupabase()!;
+  const { error } = await sb.auth.verifyOtp({
+    email: email.trim().toLowerCase(),
+    token: cleaned,
+    type: 'recovery',
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** تحقق من الرمز ثم عيّن كلمة المرور في خطوة واحدة */
+export async function supabaseResetPasswordWithOtp(input: {
+  email: string;
+  token: string;
+  password: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const verified = await supabaseVerifyRecoveryOtp(input.email, input.token);
+  if (!verified.ok) return verified;
+  return supabaseUpdatePassword(input.password);
+}
+
 function collectAuthParams(url: string): URLSearchParams {
   const params = new URLSearchParams();
   try {

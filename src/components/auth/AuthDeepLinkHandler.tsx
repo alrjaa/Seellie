@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import * as Linking from 'expo-linking';
 import { usePathname, useRouter } from 'expo-router';
 import {
-  isPasswordRecoveryUrl,
+  isAuthCallbackUrl,
   setPendingAuthUrl,
 } from '@/services/pending-auth-url';
 
@@ -13,7 +13,7 @@ function currentWebUrl(): string | null {
 }
 
 /**
- * يفتح شاشة التعيين فقط عند وجود رموز استعادة في الرابط.
+ * يفتح شاشة التعيين عند وجود رموز استعادة أو خطأ OTP في الرابط.
  */
 export function AuthDeepLinkHandler() {
   const router = useRouter();
@@ -22,7 +22,7 @@ export function AuthDeepLinkHandler() {
 
   useEffect(() => {
     const openReset = (url: string | null) => {
-      if (!url || !isPasswordRecoveryUrl(url)) return;
+      if (!url || !isAuthCallbackUrl(url)) return;
       if (handled.current === url) return;
       handled.current = url;
       setPendingAuthUrl(url);
