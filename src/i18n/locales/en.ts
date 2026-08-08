@@ -83,6 +83,8 @@ export const en: TranslationTree = {
       'If this message stays: the link expired or opened without session tokens. Request a new link from Forgot password, or set the admin password via SQL (set-admin-password.sql).',
     resetLinkInvalid:
       'Could not activate the reset link. Request a new one from the login screen, or use SQL for the admin password.',
+    resetOtpExpired:
+      'This email link is invalid or has expired. Request a new link and open it once immediately, or set the password via SQL (set-admin-password.sql).',
     resetNoSupabase: 'Supabase is not configured on this site.',
     resetRedirectHint: 'Make sure this URL is allowed in Supabase → Redirect URLs:',
     newPassword: 'New password',

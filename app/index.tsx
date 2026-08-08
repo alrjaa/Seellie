@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useTournament } from '@/providers/TournamentProvider';
 import { LoadingState } from '@/components/feedback/LoadingState';
-import { isPasswordRecoveryUrl } from '@/services/pending-auth-url';
+import { isPasswordRecoveryUrl, getAuthCallbackError } from '@/services/pending-auth-url';
 
 export default function Index() {
   const { currentUser, loading, routeForRole } = useTournament();
@@ -15,7 +15,10 @@ export default function Index() {
       setWebChecked(true);
       return;
     }
-    setRecovery(isPasswordRecoveryUrl(window.location.href));
+    const href = window.location.href;
+    setRecovery(
+      !!isPasswordRecoveryUrl(href) || !!getAuthCallbackError(href)
+    );
     setWebChecked(true);
   }, []);
 

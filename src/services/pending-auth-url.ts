@@ -19,6 +19,31 @@ function hasAuthTokens(url: string): boolean {
   );
 }
 
+export function getAuthCallbackError(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const hash = url.includes('#') ? url.split('#')[1] || '' : '';
+    const query = url.includes('?')
+      ? url.split('?')[1]?.split('#')[0] || ''
+      : '';
+    const params = new URLSearchParams(
+      [query, hash].filter(Boolean).join('&')
+    );
+    const code = params.get('error_code') || params.get('error');
+    const desc = params.get('error_description') || params.get('error');
+    if (!code && !desc) return null;
+    if (
+      (code && /otp_expired|expired|access_denied/i.test(code)) ||
+      (desc && /expired|invalid/i.test(desc))
+    ) {
+      return 'otp_expired';
+    }
+    return desc || code;
+  } catch {
+    return null;
+  }
+}
+
 /** يُستدعى عند تحميل التطبيق على الويب بأسرع ما يمكن */
 export function captureWebAuthUrlEarly(): void {
   if (typeof window === 'undefined') return;

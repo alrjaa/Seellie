@@ -11,7 +11,7 @@ import {
   supabaseUpdatePassword,
 } from '@/services/supabase-auth';
 import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
-import { takePendingAuthUrl } from '@/services/pending-auth-url';
+import { takePendingAuthUrl, getAuthCallbackError } from '@/services/pending-auth-url';
 
 function stripAuthParamsFromWebUrl() {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return;
@@ -86,7 +86,15 @@ export default function ResetPasswordScreen() {
     void run(takePendingAuthUrl());
 
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      void run(window.location.href);
+      const href = window.location.href;
+      const authErr = getAuthCallbackError(href);
+      if (authErr === 'otp_expired') {
+        setStatus(t('auth.resetOtpExpired'));
+      } else if (authErr) {
+        setStatus(authErr);
+      } else {
+        void run(href);
+      }
     }
 
     void Linking.getInitialURL().then((url) => {
