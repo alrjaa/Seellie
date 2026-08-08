@@ -37,6 +37,7 @@ import {
 } from '@/components/ui';
 import { formatArabicDate, formatArabicTime } from '@/utils';
 import { useListChrome } from '@/hooks/useListChrome';
+import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
 import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
 import {
   FORUM_VIDEO_MAX_SEC,
@@ -50,56 +51,86 @@ const CommentCard = memo(function CommentCard({
   liked,
   onLike,
   onShare,
+  onSave,
 }: {
   item: Comment;
   liked: boolean;
   onLike: () => void;
   onShare: () => void;
+  onSave: () => void;
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
+  const lastTapRef = React.useRef(0);
+
+  const onPressCard = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTapRef.current < 320) {
+      lastTapRef.current = 0;
+      onSave();
+      return;
+    }
+    lastTapRef.current = now;
+  }, [onSave]);
+
   return (
-    <Card style={styles.card}>
-      <View style={styles.row}>
-        <Avatar uri={item.authorAvatar} name={item.authorName} size={40} />
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={[styles.author, { color: theme.colors.text }]}>
-            {item.authorName}
-          </Text>
-          <Muted>
-            {formatArabicDate(item.timestamp)} · {formatArabicTime(item.timestamp)}
-            {item.videoUrl
-              ? ` · ${t('common.video')}${
-                  item.videoDurationSec
-                    ? ` ${Math.round(item.videoDurationSec)}${t('media.secondsAbbr')}`
-                    : ''
-                }`
-              : ''}
-          </Muted>
-        </View>
-        {!item.videoUrl ? <TinyShareButton onPress={onShare} /> : null}
-      </View>
-      {item.text ? (
-        <Text style={[styles.body, { color: theme.colors.text }]}>
-          {item.text}
-        </Text>
-      ) : null}
-      {item.videoUrl ? (
-        <View style={styles.mediaWrap}>
-          <Video
-            source={{ uri: item.videoUrl }}
-            style={styles.video}
-            useNativeControls
-            resizeMode={ResizeMode.CONTAIN}
-            isLooping={false}
-          />
-          <View style={styles.mediaShare}>
-            <TinyShareButton onPress={onShare} />
+    <Pressable onPress={onPressCard} accessibilityRole="button">
+      <Card style={styles.card}>
+        <View style={styles.row}>
+          <Avatar uri={item.authorAvatar} name={item.authorName} size={40} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[styles.author, { color: theme.colors.text }]}>
+              {item.authorName}
+            </Text>
+            <Muted>
+              {formatArabicDate(item.timestamp)} ·{' '}
+              {formatArabicTime(item.timestamp)}
+              {item.videoUrl
+                ? ` · ${t('common.video')}${
+                    item.videoDurationSec
+                      ? ` ${Math.round(item.videoDurationSec)}${t('media.secondsAbbr')}`
+                      : ''
+                  }`
+                : ''}
+            </Muted>
           </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('privateSpace.saveA11y')}
+            onPress={onSave}
+            hitSlop={10}
+            style={({ pressed }) => [{ opacity: pressed ? 0.65 : 1 }]}
+          >
+            <Ionicons
+              name="bookmark-outline"
+              size={22}
+              color={theme.colors.accent}
+            />
+          </Pressable>
+          {!item.videoUrl ? <TinyShareButton onPress={onShare} /> : null}
         </View>
-      ) : null}
-      <LikeButton count={item.likes.length} liked={liked} onPress={onLike} />
-    </Card>
+        {item.text ? (
+          <Text style={[styles.body, { color: theme.colors.text }]}>
+            {item.text}
+          </Text>
+        ) : null}
+        {item.videoUrl ? (
+          <View style={styles.mediaWrap}>
+            <Video
+              source={{ uri: item.videoUrl }}
+              style={styles.video}
+              useNativeControls
+              resizeMode={ResizeMode.CONTAIN}
+              isLooping={false}
+            />
+            <View style={styles.mediaShare}>
+              <TinyShareButton onPress={onShare} />
+            </View>
+          </View>
+        ) : null}
+        <LikeButton count={item.likes.length} liked={liked} onPress={onLike} />
+      </Card>
+    </Pressable>
   );
 });
 
@@ -127,6 +158,7 @@ export default function ForumsScreen() {
   const [sharePayload, setSharePayload] = useState<ContentSharePayload | null>(
     null
   );
+  const saveToPrivate = useSaveToPrivateSpace();
 
   useFocusEffect(
     useCallback(() => {
@@ -271,6 +303,22 @@ export default function ForumsScreen() {
     videoUri,
   ]);
 
+  const saveForumComment = useCallback(
+    (item: Comment) => {
+      void saveToPrivate({
+        id: item.id,
+        kind: item.videoUrl ? 'video' : 'text',
+        mediaUrl: item.videoUrl,
+        text: item.text,
+        title: item.authorName,
+        authorName: item.authorName,
+        likes: item.likes,
+        liked: currentUser ? item.likes.includes(currentUser.id) : false,
+      });
+    },
+    [currentUser, saveToPrivate]
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: Comment }) => {
       const liked = currentUser ? item.likes.includes(currentUser.id) : false;
@@ -279,6 +327,7 @@ export default function ForumsScreen() {
           item={item}
           liked={liked}
           onLike={() => toggleCommentLike(item.id)}
+          onSave={() => saveForumComment(item)}
           onShare={() =>
             setSharePayload({
               kind: 'content',
@@ -291,7 +340,7 @@ export default function ForumsScreen() {
         />
       );
     },
-    [currentUser, toggleCommentLike]
+    [currentUser, saveForumComment, toggleCommentLike]
   );
 
   if (loading) return <LoadingState />;
@@ -318,6 +367,7 @@ export default function ForumsScreen() {
         ListHeaderComponent={
           <View style={styles.header}>
             <Muted>{t('forums.subtitle', { sec: FORUM_VIDEO_MAX_SEC })}</Muted>
+            <Muted>{t('forums.saveHint')}</Muted>
             <Card style={styles.composer}>
               <Subtitle>{t('forums.addComment')}</Subtitle>
               <Input

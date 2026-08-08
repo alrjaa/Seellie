@@ -271,6 +271,7 @@ export const en: TranslationTree = {
     durationApprox: 'Duration ≈ %{sec} seconds',
     maxDuration: 'Maximum %{sec} seconds',
     cloudSyncFailed: 'Cloud publish failed — shown locally on this device only',
+    saveHint: 'Save any post to Private via the bookmark icon or a double-tap on the card.',
   },
   media: {
     permissionDenied: 'Permission denied',
@@ -498,11 +499,13 @@ export const en: TranslationTree = {
     privateWith: 'Private chat with %{name}',
     noMessages: 'No messages yet — write the first one.',
     messagePlaceholder: 'Private message…',
-    savedHint: 'Content you saved with a double-tap from any feed.',
+    savedHint: 'Content you saved with a double-tap from feeds or from Forums.',
     noSaved: 'No saved content',
-    noSavedDesc: 'Double-tap any photo, video, or post to save it here.',
+    noSavedDesc:
+      'Double-tap any photo/video/post, or tap the bookmark in Forums.',
     savedToast: 'Saved to Private',
     alreadySaved: 'Already saved',
+    saveA11y: 'Save to private space',
     cloudHint:
       'For cloud sync, run supabase/private-space.sql once in the SQL Editor.',
   },

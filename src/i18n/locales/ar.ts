@@ -273,6 +273,7 @@ export const ar = {
     durationApprox: 'المدة ≈ %{sec} ثانية',
     maxDuration: 'الحد الأقصى %{sec} ثانية',
     cloudSyncFailed: 'تعذّر النشر السحابي — ظهر محلياً فقط على هذا الجهاز',
+    saveHint: 'احفظ أي مساهمة في الخاصة عبر أيقونة الإشارة أو بنقرتين على البطاقة.',
   },
   media: {
     permissionDenied: 'الإذن مرفوض',
@@ -500,11 +501,13 @@ export const ar = {
     privateWith: 'محادثة خاصة مع %{name}',
     noMessages: 'لا رسائل بعد — اكتب أول رسالة.',
     messagePlaceholder: 'رسالة خاصة…',
-    savedHint: 'المحتوى الذي حفظته بنقرتين من أي خلاصة.',
+    savedHint: 'المحتوى الذي حفظته بنقرتين من الخلاصات أو من الساحات.',
     noSaved: 'لا محتوى محفوظ',
-    noSavedDesc: 'انقر مرتين بسرعة على أي صورة أو فيديو أو منشور لحفظه هنا.',
+    noSavedDesc:
+      'انقر مرتين على أي صورة/فيديو/منشور، أو اضغط إشارة الحفظ في الساحات.',
     savedToast: 'حُفظ في الخاصة',
     alreadySaved: 'هذا المحتوى محفوظ مسبقاً',
+    saveA11y: 'حفظ في المساحة الخاصة',
     cloudHint:
       'للحفظ السحابي نفّذ supabase/private-space.sql في SQL Editor مرة واحدة.',
   },
