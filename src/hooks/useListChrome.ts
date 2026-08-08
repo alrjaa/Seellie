@@ -1,29 +1,72 @@
-import { useMemo } from 'react';
-import { Platform, type StyleProp, type ViewStyle } from 'react-native';
+import { useCallback, useEffect, useId, useMemo } from 'react';
+import { AppState, Platform, type StyleProp, type ViewStyle } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFloatingChromeScroll } from '@/providers/FloatingChromeProvider';
+import {
+  claimFloatingScrollSource,
+  forceFloatingVisible,
+  noteFloatingScrollOffset,
+  noteFloatingScrollSettle,
+  releaseFloatingScrollSource,
+} from '@/services/floating-scroll-bus';
 import { screenContentBottomPadding } from '@/theme/navigation';
 
 type Options = {
   hasTabBar?: boolean;
   fabClearance?: boolean;
-  /** دمج مع style قائمة موجود */
   contentContainerStyle?: StyleProp<ViewStyle>;
 };
 
 /**
- * خصائص موحّدة لـ FlatList / SectionList:
- * تمرير أكثر مرونة بدون تردد، مع إخفاء FAB عند السحب فقط.
+ * خصائص FlatList: مصدر تمرير فريد + أحداث فقط عند التركيز.
  */
 export function useListChrome(options: Options = {}) {
   const insets = useSafeAreaInsets();
-  const {
-    onScroll,
-    onScrollBeginDrag,
-    onScrollEndDrag,
-    onMomentumScrollBegin,
-    onMomentumScrollEnd,
-  } = useFloatingChromeScroll();
+  const focused = useIsFocused();
+  const reactId = useId();
+  const sourceId = `list:${reactId}`;
+
+  useEffect(() => {
+    if (!focused) {
+      releaseFloatingScrollSource(sourceId);
+      return;
+    }
+    claimFloatingScrollSource(sourceId);
+    return () => releaseFloatingScrollSource(sourceId);
+  }, [focused, sourceId]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && focused) forceFloatingVisible();
+    });
+    return () => sub.remove();
+  }, [focused]);
+
+  const onScroll = useCallback(
+    (e: { nativeEvent: { contentOffset: { y: number } } }) => {
+      if (!focused) return;
+      noteFloatingScrollOffset(sourceId, e.nativeEvent.contentOffset.y);
+    },
+    [focused, sourceId]
+  );
+
+  const onScrollBeginDrag = useCallback(() => {
+    // الاتجاه يُحسب من onScroll
+  }, []);
+
+  const onScrollEndDrag = useCallback(() => {
+    if (!focused) return;
+    noteFloatingScrollSettle(sourceId);
+  }, [focused, sourceId]);
+
+  const onMomentumScrollBegin = useCallback(() => {
+    // لا إخفاء عند بداية الزخم
+  }, []);
+
+  const onMomentumScrollEnd = useCallback(() => {
+    if (!focused) return;
+    noteFloatingScrollSettle(sourceId);
+  }, [focused, sourceId]);
 
   const paddingBottom = screenContentBottomPadding({
     bottomInset: insets.bottom,
@@ -38,15 +81,12 @@ export function useListChrome(options: Options = {}) {
       onScrollEndDrag,
       onMomentumScrollBegin,
       onMomentumScrollEnd,
-      // أقل ضغطاً على JS أثناء السحب
-      scrollEventThrottle: 48 as const,
-      // إزالة القصّ العدواني الذي يسبب وميضاً/تردد على أندرويد
+      scrollEventThrottle: 16 as const,
       removeClippedSubviews: false,
       maxToRenderPerBatch: 8,
       updateCellsBatchingPeriod: 40,
       windowSize: 9,
       initialNumToRender: 8,
-      // تمرير أنعم
       decelerationRate: (Platform.OS === 'ios' ? 'normal' : 0.985) as
         | 'normal'
         | number,

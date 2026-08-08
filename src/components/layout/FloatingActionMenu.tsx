@@ -1,6 +1,8 @@
 import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  Easing,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -12,8 +14,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { floatingAboveTabOffset } from '@/theme/navigation';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
-import { useFloatingChromeVisible } from '@/providers/FloatingChromeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
+import { useFloatingVisibility } from '@/hooks/useFloatingVisibility';
+import { forceFloatingVisible } from '@/services/floating-scroll-bus';
 import { cairoText } from '@/theme/fonts';
 import { useResponsive } from '@/hooks/useResponsive';
 
@@ -22,7 +25,6 @@ type SideAction = {
   labelKey: string;
   icon: keyof typeof Ionicons.glyphMap;
   href: string;
-  roles?: Array<'follower' | 'organizer' | 'freelancer' | 'superadmin'>;
 };
 
 const ACTIONS: SideAction[] = [
@@ -58,9 +60,11 @@ const ACTIONS: SideAction[] = [
   },
 ];
 
+const useNativeDriver = Platform.OS !== 'web';
+
 /**
- * أزرار عائمة ثابتة على اليسار فعلياً (iOS + Android) —
- * بدون تسميات ظاهرة؛ تظهر التسمية عند اللمس فقط.
+ * أزرار تنقل عائمة — على الجوال ومتصفح الجوال.
+ * تُخفى فقط في تخطيط سطح المكتب الواسع (شريط جانبي).
  */
 function FloatingActionMenuComponent() {
   const { currentUser } = useTournament();
@@ -69,26 +73,57 @@ function FloatingActionMenuComponent() {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { visible } = useFloatingChromeVisible();
+  const { visible } = useFloatingVisibility(true);
   const { desktop } = useResponsive();
   const opacity = useRef(new Animated.Value(1)).current;
-  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
   const [pressedKey, setPressedKey] = useState<string | null>(null);
 
   useEffect(() => {
+    forceFloatingVisible();
+    opacity.setValue(1);
+    translateY.setValue(0);
+  }, [pathname, opacity, translateY]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') forceFloatingVisible();
+  }, []);
+
+  useEffect(() => {
+    if (visible) {
+      opacity.setValue(1);
+      translateY.setValue(0);
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 180,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver,
+        }),
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 180,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver,
+        }),
+      ]).start();
+      return;
+    }
     Animated.parallel([
       Animated.timing(opacity, {
-        toValue: visible ? 1 : 0,
+        toValue: 0,
         duration: 140,
-        useNativeDriver: true,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver,
       }),
-      Animated.timing(translateX, {
-        toValue: visible ? 0 : -40,
+      Animated.timing(translateY, {
+        toValue: 18,
         duration: 140,
-        useNativeDriver: true,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver,
       }),
     ]).start();
-  }, [opacity, translateX, visible]);
+  }, [opacity, translateY, visible]);
 
   const actions = useMemo(() => {
     if (!currentUser) return [];
@@ -96,15 +131,12 @@ function FloatingActionMenuComponent() {
     if (active === 'superadmin' || currentUser.role === 'superadmin') {
       return [];
     }
-    // المنظم: بحث + إشعارات فقط (المشاركة من على المحتوى/اللاعبين)
     if (active === 'organizer' || currentUser.role === 'organizer') {
       return ACTIONS.filter((a) =>
         ['search', 'notifications'].includes(a.key)
       ).map((a) => ({ ...a, label: t(a.labelKey) }));
     }
-    return ACTIONS.filter(
-      (a) => !a.roles || a.roles.includes(currentUser.role as any)
-    ).map((a) => ({ ...a, label: t(a.labelKey) }));
+    return ACTIONS.map((a) => ({ ...a, label: t(a.labelKey) }));
   }, [currentUser, t]);
 
   if (!currentUser || actions.length === 0) return null;
@@ -122,18 +154,27 @@ function FloatingActionMenuComponent() {
   const isActive = (href: string) =>
     pathname === href || pathname?.endsWith(href);
 
+  const bottom = floatingAboveTabOffset(
+    Math.max(insets.bottom, Platform.OS === 'web' ? 8 : 0)
+  );
+
   return (
-    <View pointerEvents="box-none" style={styles.layer}>
+    <View
+      pointerEvents="box-none"
+      // @ts-expect-error RN web dataset
+      dataSet={{ seellieFab: '1' }}
+      style={[styles.layer, Platform.OS === 'web' && styles.layerWeb]}
+    >
       <Animated.View
         pointerEvents={visible ? 'box-none' : 'none'}
         style={[
           styles.wrap,
+          Platform.OS === 'web' && styles.wrapWeb,
           {
             left: 10,
-            right: undefined,
-            bottom: floatingAboveTabOffset(insets.bottom),
+            bottom,
             opacity,
-            transform: [{ translateX }],
+            transform: [{ translateY }],
           },
         ]}
       >
@@ -172,14 +213,13 @@ function FloatingActionMenuComponent() {
                 accessibilityLabel={action.label}
                 onPressIn={() => setPressedKey(action.key)}
                 onPressOut={() => {
-                  // إبقاء الاسم لحظة قصيرة ليُقرأ كاملاً
                   setTimeout(() => {
                     setPressedKey((k) => (k === action.key ? null : k));
                   }, 700);
                 }}
                 onPress={() => router.push(action.href as any)}
-                hitSlop={6}
-                style={[
+                hitSlop={8}
+                style={({ pressed }) => [
                   styles.btn,
                   {
                     backgroundColor: active
@@ -188,6 +228,8 @@ function FloatingActionMenuComponent() {
                     borderColor: active
                       ? theme.colors.accent
                       : theme.colors.border,
+                    opacity: pressed ? 0.9 : 1,
+                    transform: [{ scale: pressed ? 0.96 : 1 }],
                   },
                 ]}
               >
@@ -212,11 +254,18 @@ export const FloatingActionMenu = memo(FloatingActionMenuComponent);
 const styles = StyleSheet.create({
   layer: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 40,
-    elevation: 40,
-    // تثبيت المحاذاة الفيزيائية لليسار بغض النظر عن RTL/LTR
+    zIndex: 999,
+    elevation: 999,
     direction: 'ltr',
     overflow: 'visible',
+  },
+  layerWeb: {
+    position: 'fixed' as any,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 2147483000,
   },
   wrap: {
     position: 'absolute',
@@ -224,6 +273,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     direction: 'ltr',
     overflow: 'visible',
+  },
+  wrapWeb: {
+    position: 'fixed' as any,
+    zIndex: 2147483001,
   },
   item: {
     position: 'relative',
@@ -254,7 +307,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    // بدون قصّ — يظهر الاسم كاملاً
     maxWidth: 200,
     minWidth: 48,
   },

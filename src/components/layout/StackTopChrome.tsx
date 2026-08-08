@@ -2,7 +2,7 @@ import React, { memo, useEffect, useRef, type ReactNode } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HeaderBackButton } from '@/components/layout/HeaderBackButton';
-import { useFloatingChromeVisible } from '@/providers/FloatingChromeProvider';
+import { useFloatingVisibility } from '@/hooks/useFloatingVisibility';
 import { useLanguage } from '@/providers/LanguageProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
@@ -19,21 +19,25 @@ function StackTopChromeComponent({ children }: Props) {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const { isRTL } = useLanguage();
-  const { visible } = useFloatingChromeVisible();
+  const { visible } = useFloatingVisibility(true);
   const opacity = useRef(new Animated.Value(1)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const height = insets.top + HEADER_BELOW_STATUS_GAP + 40;
 
   useEffect(() => {
+    if (visible) {
+      opacity.setValue(1);
+      translateY.setValue(0);
+    }
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: visible ? 1 : 0,
-        duration: 120,
+        duration: visible ? 180 : 120,
         useNativeDriver: true,
       }),
       Animated.timing(translateY, {
         toValue: visible ? 0 : -Math.min(height, 28),
-        duration: 120,
+        duration: visible ? 180 : 120,
         useNativeDriver: true,
       }),
     ]).start();

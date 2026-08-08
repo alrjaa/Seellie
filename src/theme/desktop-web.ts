@@ -22,6 +22,17 @@ export function injectDesktopWebStyles() {
       text-rendering: optimizeLegibility;
       overflow: hidden;
     }
+    /* طبقة الأزرار العائمة فوق كل شيء في متصفح الجوال */
+    [data-seellie-fab='1'] {
+      position: fixed !important;
+      z-index: 2147483000 !important;
+      pointer-events: none;
+    }
+    [data-seellie-fab='1'] a,
+    [data-seellie-fab='1'] button,
+    [data-seellie-fab='1'] [role='button'] {
+      pointer-events: auto;
+    }
     * {
       box-sizing: border-box;
     }

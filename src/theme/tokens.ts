@@ -24,9 +24,26 @@ export function isTablet(width = SCREEN_WIDTH) {
   return width >= 768;
 }
 
-/** سطح مكتب الويب فقط — لا يؤثر على الجوال/التابلت الأصلي */
+/** سطح مكتب الويب فقط — هواتف/لمس تبقى بواجهة الجوال حتى لو اتسع العرض */
 export function isDesktopWeb(width = SCREEN_WIDTH) {
-  return Platform.OS === 'web' && width >= 1024;
+  if (Platform.OS !== 'web') return false;
+  if (typeof window !== 'undefined') {
+    try {
+      // جوال/تابلت بلمس: لا نُخفي الأزرار العائمة بسبب «طلب موقع سطح المكتب»
+      const coarse = window.matchMedia?.('(pointer: coarse)')?.matches;
+      const fineOnly = window.matchMedia?.('(pointer: fine)')?.matches;
+      if (coarse && !fineOnly && width < 1280) return false;
+      if (
+        /Android|iPhone|iPad|iPod|Mobile/i.test(window.navigator?.userAgent || '') &&
+        width < 1280
+      ) {
+        return false;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return width >= 1024;
 }
 
 export function contentMaxWidth(width: number) {

@@ -1,5 +1,6 @@
-import React, { memo, useContext, type ReactNode } from 'react';
+import React, { memo, useCallback, useContext, useEffect, useId, type ReactNode } from 'react';
 import {
+  AppState,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,10 +14,17 @@ import {
   type Edge,
 } from 'react-native-safe-area-context';
 import { HeaderHeightContext } from '@react-navigation/elements';
+import { useIsFocused } from '@react-navigation/native';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useLanguage } from '@/providers/LanguageProvider';
 import { useResponsive } from '@/hooks/useResponsive';
-import { useFloatingChromeScroll } from '@/providers/FloatingChromeProvider';
+import {
+  claimFloatingScrollSource,
+  forceFloatingVisible,
+  noteFloatingScrollOffset,
+  noteFloatingScrollSettle,
+  releaseFloatingScrollSource,
+} from '@/services/floating-scroll-bus';
 import { screenContentBottomPadding } from '@/theme/navigation';
 
 type Props = {
@@ -66,15 +74,44 @@ function ScreenComponent({
   const insets = useSafeAreaInsets();
   const { contentWidth, feedWidth, dashboardWidth, formWidth, gutter, desktop } =
     useResponsive();
-  const {
-    onScroll,
-    onScrollBeginDrag,
-    onScrollEndDrag,
-    onMomentumScrollBegin,
-    onMomentumScrollEnd,
-  } = useFloatingChromeScroll();
-  // headerHeight يُستخدم فقط لتعويض لوحة المفاتيح، لا لإزاحة المحتوى
+  const focused = useIsFocused();
+  const reactId = useId();
+  const sourceId = `screen:${reactId}`;
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
+
+  useEffect(() => {
+    if (!scroll) return;
+    if (!focused) {
+      releaseFloatingScrollSource(sourceId);
+      return;
+    }
+    claimFloatingScrollSource(sourceId);
+    return () => releaseFloatingScrollSource(sourceId);
+  }, [focused, scroll, sourceId]);
+
+  useEffect(() => {
+    if (!scroll) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && focused) forceFloatingVisible();
+    });
+    return () => sub.remove();
+  }, [focused, scroll]);
+
+  const onScroll = useCallback(
+    (e: { nativeEvent: { contentOffset: { y: number } } }) => {
+      if (!focused) return;
+      noteFloatingScrollOffset(sourceId, e.nativeEvent.contentOffset.y);
+    },
+    [focused, sourceId]
+  );
+  const onScrollEndDrag = useCallback(() => {
+    if (!focused) return;
+    noteFloatingScrollSettle(sourceId);
+  }, [focused, sourceId]);
+  const onMomentumScrollEnd = useCallback(() => {
+    if (!focused) return;
+    noteFloatingScrollSettle(sourceId);
+  }, [focused, sourceId]);
 
   const clearFab = fabClearance ?? !bleed;
   const bottomPad = bleed
@@ -128,11 +165,9 @@ function ScreenComponent({
       contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
       style={styles.scroll}
       onScroll={onScroll}
-      onScrollBeginDrag={onScrollBeginDrag}
       onScrollEndDrag={onScrollEndDrag}
-      onMomentumScrollBegin={onMomentumScrollBegin}
       onMomentumScrollEnd={onMomentumScrollEnd}
-      scrollEventThrottle={48}
+      scrollEventThrottle={16}
       removeClippedSubviews={false}
       decelerationRate={Platform.OS === 'ios' ? 'normal' : 0.985}
       overScrollMode="never"

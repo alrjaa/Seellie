@@ -2,12 +2,14 @@ import React, {
   memo,
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   type ReactNode,
 } from 'react';
 import {
   Animated,
+  AppState,
   FlatList,
   Platform,
   Pressable,
@@ -23,14 +25,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { ResizeMode, Video } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { LikeButton } from '@/components/ui';
+import { useFloatingVisibility } from '@/hooks/useFloatingVisibility';
 import {
-  useFloatingChromeScroll,
-  useFloatingChromeVisible,
-} from '@/providers/FloatingChromeProvider';
+  claimFloatingScrollSource,
+  forceFloatingVisible,
+  noteFloatingScrollOffset,
+  noteFloatingScrollSettle,
+  releaseFloatingScrollSource,
+} from '@/services/floating-scroll-bus';
 import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
 
 export type FullScreenContent = {
@@ -224,14 +231,10 @@ function FullScreenFeedComponent({
   const theme = useAppTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { visible } = useFloatingChromeVisible();
-  const {
-    onScroll,
-    onScrollBeginDrag,
-    onScrollEndDrag,
-    onMomentumScrollBegin,
-    onMomentumScrollEnd,
-  } = useFloatingChromeScroll();
+  const focused = useIsFocused();
+  const { visible } = useFloatingVisibility(true);
+  const reactId = useId();
+  const sourceId = `feed:${reactId}`;
   const [height, setHeight] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(data[0]?.id ?? null);
   const overlayOpacity = useRef(new Animated.Value(1)).current;
@@ -240,20 +243,56 @@ function FullScreenFeedComponent({
     itemVisiblePercentThreshold: 70,
   }).current;
 
+  useEffect(() => {
+    if (!focused) {
+      releaseFloatingScrollSource(sourceId);
+      return;
+    }
+    claimFloatingScrollSource(sourceId);
+    return () => releaseFloatingScrollSource(sourceId);
+  }, [focused, sourceId]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && focused) forceFloatingVisible();
+    });
+    return () => sub.remove();
+  }, [focused]);
+
+  const onScroll = useCallback(
+    (e: { nativeEvent: { contentOffset: { y: number } } }) => {
+      if (!focused) return;
+      noteFloatingScrollOffset(sourceId, e.nativeEvent.contentOffset.y);
+    },
+    [focused, sourceId]
+  );
+  const onScrollEndDrag = useCallback(() => {
+    if (!focused) return;
+    noteFloatingScrollSettle(sourceId);
+  }, [focused, sourceId]);
+  const onMomentumScrollEnd = useCallback(() => {
+    if (!focused) return;
+    noteFloatingScrollSettle(sourceId);
+  }, [focused, sourceId]);
+
   const overlayPadTop = topOverlaySafeArea
     ? insets.top + HEADER_BELOW_STATUS_GAP
     : 8;
 
   useEffect(() => {
+    if (visible) {
+      overlayOpacity.setValue(1);
+      overlayTranslate.setValue(0);
+    }
     Animated.parallel([
       Animated.timing(overlayOpacity, {
         toValue: visible ? 1 : 0,
-        duration: 120,
+        duration: visible ? 180 : 120,
         useNativeDriver: true,
       }),
       Animated.timing(overlayTranslate, {
         toValue: visible ? 0 : -12,
-        duration: 120,
+        duration: visible ? 180 : 120,
         useNativeDriver: true,
       }),
     ]).start();
@@ -325,11 +364,9 @@ function FullScreenFeedComponent({
           windowSize={5}
           removeClippedSubviews={false}
           onScroll={onScroll}
-          onScrollBeginDrag={onScrollBeginDrag}
           onScrollEndDrag={onScrollEndDrag}
-          onMomentumScrollBegin={onMomentumScrollBegin}
           onMomentumScrollEnd={onMomentumScrollEnd}
-          scrollEventThrottle={48}
+          scrollEventThrottle={16}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           ListEmptyComponent={

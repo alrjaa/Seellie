@@ -2,13 +2,16 @@ import React, {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
-  useRef,
-  useState,
   type ReactNode,
 } from 'react';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import {
+  forceFloatingHidden,
+  forceFloatingVisible,
+  noteFloatingScrollOffset,
+  noteFloatingScrollSettle,
+} from '@/services/floating-scroll-bus';
 
 type VisibilityValue = {
   visible: boolean;
@@ -16,14 +19,17 @@ type VisibilityValue = {
 };
 
 type ScrollHandlersValue = {
-  /** ربطه بـ onScroll للقوائم والشاشات القابلة للتمرير */
-  onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
-  onScrollBeginDrag: () => void;
-  onScrollEndDrag: (
-    e?: NativeSyntheticEvent<NativeScrollEvent>
+  onScroll: (
+    e: NativeSyntheticEvent<NativeScrollEvent>,
+    sourceId?: string
   ) => void;
-  onMomentumScrollBegin: () => void;
-  onMomentumScrollEnd: () => void;
+  onScrollBeginDrag: (sourceId?: string) => void;
+  onScrollEndDrag: (
+    e?: NativeSyntheticEvent<NativeScrollEvent>,
+    sourceId?: string
+  ) => void;
+  onMomentumScrollBegin: (sourceId?: string) => void;
+  onMomentumScrollEnd: (sourceId?: string) => void;
 };
 
 const FloatingChromeVisibilityContext =
@@ -32,100 +38,58 @@ const FloatingChromeVisibilityContext =
 const FloatingChromeScrollContext =
   createContext<ScrollHandlersValue | null>(null);
 
-/** إظهار الأزرار فقط بعد توقف حقيقي عن التمرير — يمنع الاهتزاز */
-const SHOW_AFTER_IDLE_MS = 700;
+const ROOT_SOURCE = 'floating-chrome-root';
+
+const noopScroll: ScrollHandlersValue = {
+  onScroll: () => undefined,
+  onScrollBeginDrag: () => undefined,
+  onScrollEndDrag: () => undefined,
+  onMomentumScrollBegin: () => undefined,
+  onMomentumScrollEnd: () => undefined,
+};
 
 /**
- * يُخفي الأزرار العائمة أثناء التمرير ويُظهرها بعد التوقف.
- * لا يُعاد إظهارها أثناء onScroll حتى لا يحدث تردد (إظهار↔إخفاء).
+ * يمرّر إزاحة التمرير إلى الـ bus (اتجاه + سكون).
+ * الشاشات المركّزة تستخدم sourceId عبر useListChrome / Screen.
  */
 export function FloatingChromeProvider({ children }: { children: ReactNode }) {
-  const [visible, setVisibleState] = useState(true);
-  const visibleRef = useRef(true);
-  const lastY = useRef(0);
-  const interacting = useRef(false);
-  const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearTimer = useCallback(() => {
-    if (showTimer.current) {
-      clearTimeout(showTimer.current);
-      showTimer.current = null;
-    }
-  }, []);
-
   const setVisible = useCallback((next: boolean) => {
-    if (visibleRef.current === next) return;
-    visibleRef.current = next;
-    setVisibleState(next);
+    if (next) forceFloatingVisible();
+    else forceFloatingHidden();
   }, []);
-
-  const scheduleShow = useCallback(() => {
-    clearTimer();
-    showTimer.current = setTimeout(() => {
-      if (!interacting.current && !visibleRef.current) {
-        visibleRef.current = true;
-        setVisibleState(true);
-      }
-      showTimer.current = null;
-    }, SHOW_AFTER_IDLE_MS);
-  }, [clearTimer]);
-
-  const hideNow = useCallback(() => {
-    if (!visibleRef.current) return;
-    visibleRef.current = false;
-    setVisibleState(false);
-  }, []);
-
-  const onScrollBeginDrag = useCallback(() => {
-    interacting.current = true;
-    clearTimer();
-    hideNow();
-  }, [clearTimer, hideNow]);
-
-  const onMomentumScrollBegin = useCallback(() => {
-    interacting.current = true;
-    clearTimer();
-    hideNow();
-  }, [clearTimer, hideNow]);
 
   const onScroll = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const y = e.nativeEvent.contentOffset.y;
-      // إخفاء فقط — بدون جدولة إظهار أثناء الحركة (مصدر التردد السابق)
-      if (Math.abs(y - lastY.current) > 8) {
-        hideNow();
-      }
-      lastY.current = y;
+    (e: NativeSyntheticEvent<NativeScrollEvent>, sourceId = ROOT_SOURCE) => {
+      noteFloatingScrollOffset(sourceId, e.nativeEvent.contentOffset.y);
     },
-    [hideNow]
+    []
   );
+
+  const onScrollBeginDrag = useCallback((_sourceId?: string) => {
+    // لا نخفي عند begin — ننتظر اتجاه الحركة من onScroll
+  }, []);
 
   const onScrollEndDrag = useCallback(
-    (e?: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const vy = Math.abs(e?.nativeEvent?.velocity?.y ?? 0);
-      // إن استمر الزخم، ننتظر onMomentumScrollEnd
-      if (vy > 0.15) {
-        return;
-      }
-      interacting.current = false;
-      scheduleShow();
+    (
+      _e?: NativeSyntheticEvent<NativeScrollEvent>,
+      sourceId = ROOT_SOURCE
+    ) => {
+      noteFloatingScrollSettle(sourceId);
     },
-    [scheduleShow]
+    []
   );
 
-  const onMomentumScrollEnd = useCallback(() => {
-    interacting.current = false;
-    scheduleShow();
-  }, [scheduleShow]);
+  const onMomentumScrollBegin = useCallback((_sourceId?: string) => {
+    // لا نخفي هنا — يمنع التعليق أثناء paging
+  }, []);
 
-  useEffect(() => () => clearTimer(), [clearTimer]);
+  const onMomentumScrollEnd = useCallback((sourceId = ROOT_SOURCE) => {
+    noteFloatingScrollSettle(sourceId);
+  }, []);
 
   const visibilityValue = useMemo(
-    () => ({
-      visible,
-      setVisible,
-    }),
-    [visible, setVisible]
+    () => ({ visible: true, setVisible }),
+    [setVisible]
   );
 
   const scrollValue = useMemo(
@@ -154,20 +118,14 @@ export function FloatingChromeProvider({ children }: { children: ReactNode }) {
   );
 }
 
-const noopScroll: ScrollHandlersValue = {
-  onScroll: (_: NativeSyntheticEvent<NativeScrollEvent>) => undefined,
-  onScrollBeginDrag: () => undefined,
-  onScrollEndDrag: () => undefined,
-  onMomentumScrollBegin: () => undefined,
-  onMomentumScrollEnd: () => undefined,
-};
-
 export function useFloatingChromeVisible() {
   const ctx = useContext(FloatingChromeVisibilityContext);
   if (!ctx) {
     return {
       visible: true,
-      setVisible: (_: boolean) => undefined,
+      setVisible: (next: boolean) => {
+        if (next) forceFloatingVisible();
+      },
     };
   }
   return ctx;
@@ -179,7 +137,10 @@ export function useFloatingChromeScroll() {
 }
 
 export function useFloatingChrome() {
-  const visibility = useFloatingChromeVisible();
-  const scroll = useFloatingChromeScroll();
-  return { ...visibility, ...scroll };
+  return {
+    ...useFloatingChromeVisible(),
+    ...useFloatingChromeScroll(),
+  };
 }
+
+export { forceFloatingVisible };
