@@ -74,12 +74,15 @@ export const en: TranslationTree = {
     sendResetLink: 'Send reset link',
     resetSentTitle: 'Check your email',
     resetSentDesc:
-      'Open the email on your phone with the app/Expo running. Do not open the link in a desktop browser.',
+      'If you received the email, open the link in the same browser. You should then see fields to set a new password.',
     resetFailed: 'Could not send reset link',
-    resetWaitingLink: 'Waiting for the reset link from your email…',
+    resetWaitingLink: 'Verifying your reset link…',
     resetReady: 'You can set a new password now.',
     resetOpenFromEmail:
-      'Open the reset link from your phone email while the app is running. A blank browser page usually means Supabase Redirect URLs are wrong (see supabase/PASSWORD-RESET.md).',
+      'If this message stays: the link expired or opened without session tokens. Request a new link from Forgot password, or set the admin password via SQL (set-admin-password.sql).',
+    resetLinkInvalid:
+      'Could not activate the reset link. Request a new one from the login screen, or use SQL for the admin password.',
+    resetNoSupabase: 'Supabase is not configured on this site.',
     resetRedirectHint: 'Make sure this URL is allowed in Supabase → Redirect URLs:',
     newPassword: 'New password',
     confirmPassword: 'Confirm password',

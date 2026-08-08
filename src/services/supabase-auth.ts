@@ -445,7 +445,12 @@ export async function supabaseConsumeAuthUrl(
     const code = params.get('code');
     if (code) {
       const { error } = await sb.auth.exchangeCodeForSession(code);
-      if (error) return { ok: false, error: error.message };
+      if (error) {
+        // قد تكون الجلسة اكتملت عبر detectSessionInUrl
+        const { data } = await sb.auth.getSession();
+        if (data.session) return { ok: true, recovery: true };
+        return { ok: false, error: error.message };
+      }
       return { ok: true, recovery: true };
     }
 
@@ -461,7 +466,7 @@ export async function supabaseConsumeAuthUrl(
       return { ok: true, recovery: type === 'recovery' || true };
     }
 
-    // رابط verify قد يمرّر token_hash
+    // رابط verify قد يمرّر token_hash أو token
     const token_hash = params.get('token_hash') || params.get('token');
     const otpType = (params.get('type') || 'recovery') as
       | 'recovery'
@@ -477,6 +482,11 @@ export async function supabaseConsumeAuthUrl(
       if (error) return { ok: false, error: error.message };
       return { ok: true, recovery: true };
     }
+
+    // بعض الرسائل تضع error في الرابط
+    const err = params.get('error_description') || params.get('error');
+    if (err) return { ok: false, error: err };
+
     return { ok: false, error: 'no_tokens' };
   } catch (e) {
     return {

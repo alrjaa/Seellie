@@ -1,21 +1,11 @@
 /**
  * يحفظ رابط الاستعادة القادم من البريد حتى تستهلكه شاشة reset-password.
+ * على الويب: نلتقط ?code= / #access_token فوراً قبل أن يمسحها الراوتر.
  */
+
+const WEB_CAPTURE_KEY = 'seellie.authCallbackUrl';
+
 let pendingAuthUrl: string | null = null;
-
-export function setPendingAuthUrl(url: string | null) {
-  pendingAuthUrl = url;
-}
-
-export function takePendingAuthUrl(): string | null {
-  const url = pendingAuthUrl;
-  pendingAuthUrl = null;
-  return url;
-}
-
-export function peekPendingAuthUrl(): string | null {
-  return pendingAuthUrl;
-}
 
 function hasAuthTokens(url: string): boolean {
   const u = url.toLowerCase();
@@ -29,6 +19,57 @@ function hasAuthTokens(url: string): boolean {
   );
 }
 
+/** يُستدعى عند تحميل التطبيق على الويب بأسرع ما يمكن */
+export function captureWebAuthUrlEarly(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const href = window.location.href;
+    if (!hasAuthTokens(href)) return;
+    pendingAuthUrl = href;
+    window.sessionStorage.setItem(WEB_CAPTURE_KEY, href);
+  } catch {
+    // ignore
+  }
+}
+
+// التقاط فوري عند استيراد الوحدة في المتصفح
+captureWebAuthUrlEarly();
+
+export function setPendingAuthUrl(url: string | null) {
+  pendingAuthUrl = url;
+  if (typeof window !== 'undefined' && url && hasAuthTokens(url)) {
+    try {
+      window.sessionStorage.setItem(WEB_CAPTURE_KEY, url);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export function takePendingAuthUrl(): string | null {
+  let url = pendingAuthUrl;
+  pendingAuthUrl = null;
+  if (!url && typeof window !== 'undefined') {
+    try {
+      url = window.sessionStorage.getItem(WEB_CAPTURE_KEY);
+      window.sessionStorage.removeItem(WEB_CAPTURE_KEY);
+    } catch {
+      // ignore
+    }
+  }
+  return url;
+}
+
+export function peekPendingAuthUrl(): string | null {
+  if (pendingAuthUrl) return pendingAuthUrl;
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.sessionStorage.getItem(WEB_CAPTURE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * رابط استعادة حقيقي من البريد (فيه رموز) — وليس مجرد فتح /reset-password.
  */
@@ -38,7 +79,6 @@ export function isPasswordRecoveryUrl(url: string | null | undefined): boolean {
   const recoveryType =
     u.includes('type=recovery') || u.includes('type%3drecovery');
   if (recoveryType) return true;
-  // المسار Alone لا يكفي — كان يسبب ظهور الشاشة ثم اختفاءها
   if (u.includes('/reset-password') && hasAuthTokens(u)) return true;
   return false;
 }

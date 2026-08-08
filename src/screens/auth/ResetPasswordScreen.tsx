@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
@@ -10,7 +10,7 @@ import {
   supabaseConsumeAuthUrl,
   supabaseUpdatePassword,
 } from '@/services/supabase-auth';
-import { isSupabaseConfigured } from '@/services/supabase';
+import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
 import { takePendingAuthUrl } from '@/services/pending-auth-url';
 
 function stripAuthParamsFromWebUrl() {
@@ -21,6 +21,20 @@ function stripAuthParamsFromWebUrl() {
   } catch {
     // ignore
   }
+}
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function hrefHasAuthParams(href: string): boolean {
+  return (
+    href.includes('access_token=') ||
+    href.includes('refresh_token=') ||
+    href.includes('code=') ||
+    href.includes('token_hash=') ||
+    href.includes('type=recovery')
+  );
 }
 
 /**
@@ -35,34 +49,42 @@ export default function ResetPasswordScreen() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [status, setStatus] = useState(t('auth.resetWaitingLink'));
+  const readyRef = useRef(false);
+
+  const markReady = useCallback(() => {
+    readyRef.current = true;
+    setReady(true);
+    setStatus(t('auth.resetReady'));
+    stripAuthParamsFromWebUrl();
+  }, [t]);
 
   const consume = useCallback(
     async (url: string | null) => {
-      if (!url || !isSupabaseConfigured()) return;
+      if (!url || !isSupabaseConfigured()) return false;
       const result = await supabaseConsumeAuthUrl(url);
       if (result.ok) {
-        setReady(true);
-        setStatus(t('auth.resetReady'));
-        stripAuthParamsFromWebUrl();
-      } else if (result.error && result.error !== 'no_tokens') {
+        markReady();
+        return true;
+      }
+      if (result.error && result.error !== 'no_tokens') {
         setStatus(result.error);
       }
+      return false;
     },
-    [t]
+    [markReady]
   );
 
   useEffect(() => {
     let active = true;
+    const sb = isSupabaseConfigured() ? getSupabase() : null;
 
     const run = async (url: string | null) => {
-      if (!active || !url) return;
+      if (!active || !url || readyRef.current) return;
       await consume(url);
     };
 
-    // رابط محفوظ من معالج الروابط العميقة
     void run(takePendingAuthUrl());
 
-    // ويب: الرموز تكون في عنوان المتصفح بعد redirect من Supabase
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       void run(window.location.href);
     }
@@ -70,27 +92,48 @@ export default function ResetPasswordScreen() {
     void Linking.getInitialURL().then((url) => {
       void run(url);
     });
-    const sub = Linking.addEventListener('url', ({ url }) => {
+    const linkSub = Linking.addEventListener('url', ({ url }) => {
       void run(url);
     });
 
-    // إن فُتحت الشاشة بعد جلسة استعادة قائمة
+    const authSub = sb?.auth.onAuthStateChange((event, session) => {
+      if (!active || !session) return;
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+        markReady();
+      }
+    });
+
     void (async () => {
-      if (!isSupabaseConfigured()) return;
-      const { getSupabase } = await import('@/services/supabase');
-      const sb = getSupabase();
-      const { data } = await sb!.auth.getSession();
-      if (active && data.session) {
-        setReady(true);
-        setStatus(t('auth.resetReady'));
+      if (!sb) {
+        if (active) setStatus(t('auth.resetNoSupabase'));
+        return;
+      }
+      for (let i = 0; i < 12 && active && !readyRef.current; i++) {
+        const { data } = await sb.auth.getSession();
+        if (data.session) {
+          markReady();
+          return;
+        }
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const href = window.location.href;
+          if (hrefHasAuthParams(href)) {
+            const ok = await consume(href);
+            if (ok) return;
+          }
+        }
+        await sleep(250);
+      }
+      if (active && !readyRef.current) {
+        setStatus(t('auth.resetLinkInvalid'));
       }
     })();
 
     return () => {
       active = false;
-      sub.remove();
+      linkSub.remove();
+      authSub?.data.subscription.unsubscribe();
     };
-  }, [consume, t]);
+  }, [consume, markReady, t]);
 
   const onSave = useCallback(async () => {
     if (password.trim().length < 6) {
@@ -130,7 +173,7 @@ export default function ResetPasswordScreen() {
 
   return (
     <Screen scroll keyboard contentStyle={styles.content}>
-      <Title>{t('auth.forgotPassword')}</Title>
+      <Title>{t('auth.forgotPasswordTitle')}</Title>
       <Muted>{status}</Muted>
       <Card style={styles.card}>
         <Subtitle>{t('auth.newPassword')}</Subtitle>

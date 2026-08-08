@@ -2,6 +2,9 @@ import 'react-native-get-random-values';
 import 'react-native-gesture-handler';
 // تفعيل RTL للتطبيق العربي قبل أي واجهة
 import '@/theme/rtl-setup';
+// التقاط رموز الاستعادة من رابط البريد قبل أن يمسحها الراوتر
+import { captureWebAuthUrlEarly } from '@/services/pending-auth-url';
+captureWebAuthUrlEarly();
 import { useEffect } from 'react';
 import { Platform, StatusBar as RNStatusBar, View } from 'react-native';
 import { Stack } from 'expo-router';
