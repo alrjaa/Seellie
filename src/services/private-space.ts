@@ -155,18 +155,66 @@ export async function loadPrivateSpace(
   userId: string
 ): Promise<PrivateSpaceState> {
   if (!userId) return emptyState();
+  const local = await loadLocal(userId);
   if (canUseCloud(userId)) {
     try {
-      const cloud = await loadCloud(userId);
+      let cloud = await loadCloud(userId);
       if (cloud) {
-        await saveLocal(userId, cloud);
-        return cloud;
+        // إن وُجد أصدقاء محلياً ولم يصلوا للسحابة — حاول رفعهم ثم أعد الجلب
+        const missing = local.friendIds.filter(
+          (id) => isUuid(id) && !cloud!.friendIds.includes(id)
+        );
+        if (missing.length) {
+          const sb = getSupabase();
+          if (sb) {
+            for (const friendId of missing) {
+              const { error: rpcError } = await sb.rpc('add_private_friend', {
+                p_friend_id: friendId,
+              });
+              if (rpcError) {
+                await sb.from('private_friends').upsert(
+                  { owner_id: userId, friend_id: friendId },
+                  { onConflict: 'owner_id,friend_id' }
+                );
+              }
+            }
+            cloud = (await loadCloud(userId)) || cloud;
+          }
+        }
+        // دمج احتياطي: لا تمسح أصدقاء محليين إن السحابة فارغة جزئياً بعد فشل الرفع
+        const friendIds = Array.from(
+          new Set([...cloud.friendIds, ...local.friendIds])
+        );
+        const chats = { ...local.chats, ...cloud.chats };
+        for (const id of friendIds) {
+          const a = local.chats[id] || [];
+          const b = cloud.chats[id] || [];
+          if (a.length || b.length) {
+            const byId = new Map<string, (typeof a)[number]>();
+            [...a, ...b].forEach((m) => byId.set(m.id, m));
+            chats[id] = Array.from(byId.values()).sort((x, y) =>
+              x.at.localeCompare(y.at)
+            );
+          }
+        }
+        const itemsBySource = new Map(
+          [...local.items, ...cloud.items].map((i) => [i.sourceId || i.id, i])
+        );
+        const merged: PrivateSpaceState = {
+          friendIds,
+          chats,
+          items: Array.from(itemsBySource.values()).sort((a, b) =>
+            b.savedAt.localeCompare(a.savedAt)
+          ),
+        };
+        await saveLocal(userId, merged);
+        return merged;
       }
     } catch (e) {
       console.warn('[private-space] cloud load failed', e);
     }
   }
-  return loadLocal(userId);
+  return local;
 }
 
 export async function addPrivateFriend(
@@ -176,18 +224,46 @@ export async function addPrivateFriend(
   if (canUseCloud(userId) && isUuid(friendId)) {
     const sb = getSupabase();
     if (sb) {
-      // صداقة ثنائية حتى يظهر الطرفان بعضهما
-      const { error } = await sb.from('private_friends').upsert(
-        [
-          { owner_id: userId, friend_id: friendId },
-          { owner_id: friendId, friend_id: userId },
-        ],
+      // 1) دالة السحابة (موثوقة — تضيف الطرفين)
+      const { data: rpcData, error: rpcError } = await sb.rpc(
+        'add_private_friend',
+        { p_friend_id: friendId }
+      );
+      const rpcOk =
+        !rpcError &&
+        (rpcData === true ||
+          (rpcData &&
+            typeof rpcData === 'object' &&
+            (rpcData as { ok?: boolean }).ok === true));
+      if (rpcOk) {
+        return loadPrivateSpace(userId);
+      }
+      if (rpcError) {
+        console.warn('[private-space] add friend rpc', rpcError.message);
+      } else if (rpcData && typeof rpcData === 'object') {
+        console.warn(
+          '[private-space] add friend rpc',
+          (rpcData as { error?: string }).error
+        );
+      }
+
+      // 2) احتياطي: صف واحد على الأقل (صاحبي → الصديق)
+      const { error: ownErr } = await sb.from('private_friends').upsert(
+        { owner_id: userId, friend_id: friendId },
         { onConflict: 'owner_id,friend_id' }
       );
-      if (!error) return loadPrivateSpace(userId);
-      console.warn('[private-space] add friend', error.message);
+      if (!ownErr) {
+        // محاولة الصف المعاكس (قد تفشل بالـ RLS القديم — لا بأس)
+        await sb.from('private_friends').upsert(
+          { owner_id: friendId, friend_id: userId },
+          { onConflict: 'owner_id,friend_id' }
+        );
+        return loadPrivateSpace(userId);
+      }
+      console.warn('[private-space] add friend', ownErr.message);
     }
   }
+
   const state = await loadLocal(userId);
   if (!state.friendIds.includes(friendId)) {
     state.friendIds = [friendId, ...state.friendIds];
@@ -230,14 +306,20 @@ export async function sendPrivateChatMessage(
   if (canUseCloud(userId) && isUuid(friendId)) {
     const sb = getSupabase();
     if (sb) {
-      // صداقة ثنائية + نسختان من الرسالة (مرسل + مستلم)
-      await sb.from('private_friends').upsert(
-        [
+      // صداقة ثنائية عبر الدالة إن وُجدت، وإلا صفوف مباشرة
+      const { error: rpcError } = await sb.rpc('add_private_friend', {
+        p_friend_id: friendId,
+      });
+      if (rpcError) {
+        await sb.from('private_friends').upsert(
           { owner_id: userId, friend_id: friendId },
+          { onConflict: 'owner_id,friend_id' }
+        );
+        await sb.from('private_friends').upsert(
           { owner_id: friendId, friend_id: userId },
-        ],
-        { onConflict: 'owner_id,friend_id' }
-      );
+          { onConflict: 'owner_id,friend_id' }
+        );
+      }
       const { error } = await sb.from('private_messages').insert([
         {
           owner_id: userId,

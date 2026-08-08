@@ -216,6 +216,7 @@ export default function PrivateScreen() {
       toast({
         variant: 'success',
         title: t('privateSpace.friendAdded'),
+        description: t('privateSpace.friendCloudHint'),
       });
     },
     [space, toast, t]

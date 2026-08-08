@@ -497,6 +497,8 @@ export const en: TranslationTree = {
     noFriendsDesc: 'Add friends from following or from saved content authors.',
     friendAdded: 'Friend added',
     friendRemoved: 'Friend removed',
+    friendCloudHint:
+      'If friends disappear after refresh: run supabase/private-space-friends-fix.sql once.',
     addAuthorFriend: 'Add as friend',
     alreadyFriend: 'Already a friend',
     chatNeedFriend: 'Add a friend first to start a private chat.',

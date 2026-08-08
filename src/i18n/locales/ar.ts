@@ -499,6 +499,8 @@ export const ar = {
     noFriendsDesc: 'أضف أصدقاء من المتابَعين أو من المحتوى المحفوظ.',
     friendAdded: 'تمت إضافة الصديق',
     friendRemoved: 'تمت إزالة الصديق',
+    friendCloudHint:
+      'إن اختفى الصديق بعد التحديث: نفّذ supabase/private-space-friends-fix.sql مرة واحدة.',
     addAuthorFriend: 'إضافة كصديق',
     alreadyFriend: 'صديق بالفعل',
     chatNeedFriend: 'أضف صديقاً أولاً لبدء محادثة خاصة.',
