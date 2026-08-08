@@ -396,11 +396,21 @@ export default function PrivateScreen() {
 
       {section === 'saved' ? (
         <FlatList
+          style={styles.savedList}
           data={space.items}
           keyExtractor={(item) => item.id}
           {...listChrome}
+          contentContainerStyle={[
+            styles.savedListContent,
+            listChrome.contentContainerStyle,
+          ]}
           ListHeaderComponent={
-            <Muted style={{ marginBottom: 8 }}>{t('privateSpace.savedHint')}</Muted>
+            <Muted style={{ marginBottom: 8 }}>
+              {t('privateSpace.savedHint')}
+              {space.items.length
+                ? ` (${space.items.length})`
+                : ''}
+            </Muted>
           }
           ListEmptyComponent={
             <EmptyState
@@ -467,6 +477,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   savedCard: { gap: 8, marginBottom: 10 },
+  savedList: { flex: 1, minHeight: 280 },
+  savedListContent: { paddingBottom: 40, flexGrow: 1 },
   savedHead: {
     flexDirection: 'row',
     justifyContent: 'space-between',

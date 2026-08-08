@@ -504,6 +504,8 @@ export const ar = {
     noSavedDesc: 'انقر مرتين بسرعة على أي صورة أو فيديو أو منشور لحفظه هنا.',
     savedToast: 'حُفظ في الخاصة',
     alreadySaved: 'هذا المحتوى محفوظ مسبقاً',
+    cloudHint:
+      'للحفظ السحابي نفّذ supabase/private-space.sql في SQL Editor مرة واحدة.',
   },
   screens: {
     highlights: 'اللقطات',

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   addPrivateContent,
   addPrivateFriend,
@@ -36,6 +37,14 @@ export function usePrivateSpace(userId: string | undefined) {
     void reload();
   }, [reload]);
 
+  // عند الرجوع لتبويب الخاصة أعد التحميل (بعد الحفظ من خلاصة أخرى)
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId) return;
+      void reload();
+    }, [userId, reload])
+  );
+
   const addFriend = useCallback(
     async (friendId: string) => {
       if (!userId) return;
@@ -61,7 +70,9 @@ export function usePrivateSpace(userId: string | undefined) {
   );
 
   const saveContent = useCallback(
-    async (item: Omit<PrivateContentItem, 'id' | 'savedAt'> & { sourceId: string }) => {
+    async (
+      item: Omit<PrivateContentItem, 'id' | 'savedAt'> & { sourceId: string }
+    ) => {
       if (!userId) return { added: false };
       const result = await addPrivateContent(userId, item);
       setState(result.state);

@@ -502,6 +502,8 @@ export const en: TranslationTree = {
     noSavedDesc: 'Double-tap any photo, video, or post to save it here.',
     savedToast: 'Saved to Private',
     alreadySaved: 'Already saved',
+    cloudHint:
+      'For cloud sync, run supabase/private-space.sql once in the SQL Editor.',
   },
   screens: {
     highlights: 'Highlights',
