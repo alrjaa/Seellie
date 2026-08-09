@@ -21,15 +21,30 @@ const TOP_EDGE = 16;
 const IDLE_SHOW_MS = 650;
 
 function emit(next: boolean) {
-  if (visible === next) return;
-  visible = next;
+  const effective = suppressFloating ? false : next;
+  if (visible === effective) return;
+  visible = effective;
   listeners.forEach((listener) => {
     try {
-      listener(next);
+      listener(visible);
     } catch {
       // ignore
     }
   });
+}
+
+/** إخفاء قسري للأزرار العائمة (مثلاً داخل محادثة الخاصة) حتى يُلغى */
+let suppressFloating = false;
+
+export function setFloatingSuppressed(suppressed: boolean) {
+  suppressFloating = suppressed;
+  clearIdle();
+  lastY = null;
+  emit(!suppressed);
+}
+
+export function isFloatingSuppressed() {
+  return suppressFloating;
 }
 
 function clearIdle() {
@@ -118,11 +133,15 @@ export function noteFloatingScrollSettle(sourceId: string) {
 export function forceFloatingVisible() {
   lastY = null;
   clearIdle();
+  if (suppressFloating) {
+    emit(false);
+    return;
+  }
   emit(true);
 }
 
 export function forceFloatingHidden() {
   clearIdle();
   emit(false);
-  armIdleShow(IDLE_SHOW_MS);
+  if (!suppressFloating) armIdleShow(IDLE_SHOW_MS);
 }

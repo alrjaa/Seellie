@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -39,6 +39,7 @@ import type {
 } from '@/services/private-space';
 import type { User } from '@/providers/TournamentProvider';
 import { isUuid } from '@/services/supabase-messages';
+import { setFloatingSuppressed } from '@/services/floating-scroll-bus';
 
 function isHttpUrl(url?: string) {
   return !!url && /^https?:\/\//i.test(url.trim());
@@ -211,6 +212,12 @@ export default function PrivateScreen() {
   const [attachOpen, setAttachOpen] = useState(false);
   const [attachSource, setAttachSource] = useState<AttachSource>('saved');
   const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    const hideFab = section === 'chat';
+    setFloatingSuppressed(hideFab);
+    return () => setFloatingSuppressed(false);
+  }, [section]);
 
   const me = useMemo(
     () => (currentUser ? ensureSocialLists(currentUser) : null),
@@ -904,18 +911,22 @@ export default function PrivateScreen() {
                         ]}
                       >
                         {m.mediaUrl && m.mediaKind === 'photo' ? (
-                          <Image
-                            source={{ uri: m.mediaUrl }}
-                            style={styles.bubbleMedia}
-                            resizeMode="cover"
-                          />
+                          <View style={styles.bubbleMediaWrap}>
+                            <Image
+                              source={{ uri: m.mediaUrl }}
+                              style={styles.bubbleMedia}
+                              resizeMode="cover"
+                            />
+                          </View>
                         ) : null}
                         {m.mediaUrl && m.mediaKind === 'video' ? (
-                          <InlineVideoPlayer
-                            uri={m.mediaUrl}
-                            height={120}
-                            style={styles.bubbleVideo}
-                          />
+                          <View style={styles.bubbleMediaWrap}>
+                            <InlineVideoPlayer
+                              uri={m.mediaUrl}
+                              height={120}
+                              style={styles.bubbleVideo}
+                            />
+                          </View>
                         ) : null}
                         {m.text ? (
                           <Text
@@ -1347,21 +1358,27 @@ const styles = StyleSheet.create({
   chatList: { gap: 8, paddingBottom: 8 },
   bubble: {
     maxWidth: '82%',
+    minWidth: 120,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 14,
     gap: 8,
+    overflow: 'hidden',
+  },
+  bubbleMediaWrap: {
+    width: 200,
+    height: 120,
+    borderRadius: 10,
+    overflow: 'hidden',
+    alignSelf: 'center',
   },
   bubbleMedia: {
-    width: '100%',
-    maxWidth: 200,
+    width: 200,
     height: 120,
-    maxHeight: 120,
-    borderRadius: 10,
   },
   bubbleVideo: {
-    width: '100%',
-    maxWidth: 200,
+    width: 200,
+    height: 120,
     borderRadius: 10,
     overflow: 'hidden',
   },
