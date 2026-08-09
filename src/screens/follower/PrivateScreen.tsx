@@ -3,14 +3,15 @@ import {
   Alert,
   FlatList,
   Image,
+  Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
@@ -31,17 +32,25 @@ import { useListChrome } from '@/hooks/useListChrome';
 import { usePrivateSpace } from '@/hooks/usePrivateSpace';
 import { ensureSocialLists } from '@/utils/social-stats';
 import { formatArabicDate } from '@/utils';
-import {
-  MEDIA_SPECS,
-  PROFILE_VIDEO_MAX_SEC,
-  validatePickerAsset,
-} from '@/utils/media-limits';
 import type {
   PrivateChatMediaKind,
   PrivateContentItem,
 } from '@/services/private-space';
 import type { User } from '@/providers/TournamentProvider';
 import { isUuid } from '@/services/supabase-messages';
+
+function isHttpUrl(url?: string) {
+  return !!url && /^https?:\/\//i.test(url.trim());
+}
+
+type AttachSource = 'saved' | 'highlights' | 'content';
+
+type AttachableItem = {
+  id: string;
+  uri: string;
+  kind: PrivateChatMediaKind;
+  label: string;
+};
 
 async function confirmAction(input: {
   title: string;
@@ -182,7 +191,7 @@ const SavedCard = memo(function SavedCard({
  * مساحة خاصة بالمتابع: أصدقاء + رسائل خاصة + محتوى محفوظ بنقرتين.
  */
 export default function PrivateScreen() {
-  const { currentUser, users, loading } = useTournament();
+  const { currentUser, users, competitions, loading } = useTournament();
   const theme = useAppTheme();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -195,8 +204,10 @@ export default function PrivateScreen() {
   const [pendingMedia, setPendingMedia] = useState<{
     uri: string;
     kind: PrivateChatMediaKind;
+    label?: string;
   } | null>(null);
-  const [pickingMedia, setPickingMedia] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [attachSource, setAttachSource] = useState<AttachSource>('saved');
   const [sending, setSending] = useState(false);
 
   const me = useMemo(
@@ -376,65 +387,154 @@ export default function PrivateScreen() {
     [space, toast, t]
   );
 
-  const onPickChatMedia = useCallback(
-    async (kind: PrivateChatMediaKind) => {
-      if (!activeFriend || pickingMedia || sending) return;
-      setPickingMedia(true);
-      try {
-        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!perm.granted) {
-          toast({
-            variant: 'destructive',
-            title: t('media.permissionDenied'),
-            description: t('media.allowLibrary'),
-          });
-          return;
-        }
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: kind === 'photo' ? ['images'] : ['videos'],
-          quality: 0.85,
-          allowsEditing: false,
-          videoMaxDuration: PROFILE_VIDEO_MAX_SEC,
-        });
-        if (result.canceled || !result.assets?.[0]?.uri) return;
-        const asset = result.assets[0];
-        const check = validatePickerAsset(kind, {
-          uri: asset.uri,
-          width: asset.width,
-          height: asset.height,
-          fileSize: asset.fileSize,
-          duration: asset.duration,
-        });
-        if (!check.ok) {
-          toast({
-            variant: 'destructive',
-            title:
-              check.reason === 'duration'
-                ? t('media.videoTooLong')
-                : check.reason === 'size'
-                  ? t('media.fileTooLarge')
-                  : t('media.imageTooSmall'),
-            description:
-              check.reason === 'size'
-                ? t('media.fileTooLargeDesc', {
-                    mb: MEDIA_SPECS[kind].maxMb,
-                  })
-                : undefined,
-          });
-          return;
-        }
-        setPendingMedia({ uri: asset.uri, kind });
-      } catch {
-        toast({
-          variant: 'destructive',
-          title: t('media.pickFailed'),
-        });
-      } finally {
-        setPickingMedia(false);
-      }
-    },
-    [activeFriend, pickingMedia, sending, toast, t]
+  const savedAttachables = useMemo<AttachableItem[]>(
+    () =>
+      space.items
+        .filter(
+          (item) =>
+            (item.kind === 'photo' || item.kind === 'video') &&
+            isHttpUrl(item.mediaUrl)
+        )
+        .map((item) => ({
+          id: `saved-${item.id}`,
+          uri: item.mediaUrl!,
+          kind: item.kind as PrivateChatMediaKind,
+          label:
+            item.title ||
+            item.authorHandle ||
+            item.authorName ||
+            t('privateSpace.saved'),
+        })),
+    [space.items, t]
   );
+
+  const highlightAttachables = useMemo<AttachableItem[]>(() => {
+    const items: AttachableItem[] = [];
+    competitions.forEach((comp) => {
+      (comp.media?.photos || []).forEach((p) => {
+        if (!isHttpUrl(p.url)) return;
+        items.push({
+          id: `hl-comp-photo-${p.id}`,
+          uri: p.url,
+          kind: 'photo',
+          label: comp.name,
+        });
+      });
+      (comp.media?.videos || []).forEach((v) => {
+        if (!isHttpUrl(v.url)) return;
+        items.push({
+          id: `hl-comp-video-${v.id}`,
+          uri: v.url,
+          kind: 'video',
+          label: comp.name,
+        });
+      });
+      comp.teams.forEach((team) => {
+        team.players.forEach((player) => {
+          (player.media?.photos || []).forEach((p) => {
+            if (!isHttpUrl(p.url)) return;
+            items.push({
+              id: `hl-player-photo-${p.id}`,
+              uri: p.url,
+              kind: 'photo',
+              label: `${player.name} · ${team.name}`,
+            });
+          });
+          (player.media?.videos || []).forEach((v) => {
+            if (!isHttpUrl(v.url)) return;
+            items.push({
+              id: `hl-player-video-${v.id}`,
+              uri: v.url,
+              kind: 'video',
+              label: `${player.name} · ${team.name}`,
+            });
+          });
+        });
+      });
+      comp.matches.forEach((match) => {
+        const team1 = comp.teams.find((x) => x.id === match.team1Id)?.name;
+        const team2 = comp.teams.find((x) => x.id === match.team2Id)?.name;
+        const label = `${team1 || '?'} vs ${team2 || '?'}`;
+        (match.media?.photos || []).forEach((p) => {
+          if (!isHttpUrl(p.url)) return;
+          items.push({
+            id: `hl-match-photo-${p.id}`,
+            uri: p.url,
+            kind: 'photo',
+            label,
+          });
+        });
+        (match.media?.videos || []).forEach((v) => {
+          if (!isHttpUrl(v.url)) return;
+          items.push({
+            id: `hl-match-video-${v.id}`,
+            uri: v.url,
+            kind: 'video',
+            label,
+          });
+        });
+      });
+    });
+    return items;
+  }, [competitions]);
+
+  const contentAttachables = useMemo<AttachableItem[]>(() => {
+    const items: AttachableItem[] = [];
+    const seen = new Set<string>();
+    users.forEach((user) => {
+      (user.media?.photos || []).forEach((p) => {
+        if (!isHttpUrl(p.url) || seen.has(p.url)) return;
+        seen.add(p.url);
+        items.push({
+          id: `user-photo-${p.id}`,
+          uri: p.url,
+          kind: 'photo',
+          label: user.handle || user.name,
+        });
+      });
+      (user.media?.videos || []).forEach((v) => {
+        if (!isHttpUrl(v.url) || seen.has(v.url)) return;
+        seen.add(v.url);
+        items.push({
+          id: `user-video-${v.id}`,
+          uri: v.url,
+          kind: 'video',
+          label: user.handle || user.name,
+        });
+      });
+      (user.personalityPhotos || []).forEach((url, idx) => {
+        if (!isHttpUrl(url) || seen.has(url)) return;
+        seen.add(url);
+        items.push({
+          id: `personality-${user.id}-${idx}`,
+          uri: url,
+          kind: 'photo',
+          label: user.handle || user.name,
+        });
+      });
+    });
+    return items;
+  }, [users]);
+
+  const attachables = useMemo(() => {
+    if (attachSource === 'saved') return savedAttachables;
+    if (attachSource === 'highlights') return highlightAttachables;
+    return contentAttachables;
+  }, [
+    attachSource,
+    savedAttachables,
+    highlightAttachables,
+    contentAttachables,
+  ]);
+
+  const onSelectAttachable = useCallback((item: AttachableItem) => {
+    setPendingMedia({
+      uri: item.uri,
+      kind: item.kind,
+      label: item.label,
+    });
+    setAttachOpen(false);
+  }, []);
 
   const onSend = useCallback(async () => {
     if (!activeFriend || sending) return;
@@ -442,16 +542,19 @@ export default function PrivateScreen() {
     if (!text && !pendingMedia) return;
     setSending(true);
     setDraft('');
-    const media = pendingMedia;
+    const media = pendingMedia
+      ? { uri: pendingMedia.uri, kind: pendingMedia.kind }
+      : undefined;
+    const pendingSnapshot = pendingMedia;
     setPendingMedia(null);
     try {
       const result = await space.sendMessage(
         activeFriend.id,
         text,
-        media || undefined
+        media
       );
       if (!result.ok) {
-        if (media) setPendingMedia(media);
+        if (pendingSnapshot) setPendingMedia(pendingSnapshot);
         if (text) setDraft(text);
         toast({
           variant: 'destructive',
@@ -752,10 +855,11 @@ export default function PrivateScreen() {
                         />
                       </View>
                     )}
-                    <Muted style={{ flex: 1 }}>
-                      {pendingMedia.kind === 'photo'
-                        ? t('privateSpace.attachPhotoReady')
-                        : t('privateSpace.attachVideoReady')}
+                    <Muted style={{ flex: 1 }} numberOfLines={2}>
+                      {pendingMedia.label ||
+                        (pendingMedia.kind === 'photo'
+                          ? t('privateSpace.attachPhotoReady')
+                          : t('privateSpace.attachVideoReady'))}
                     </Muted>
                     <Pressable
                       onPress={() => setPendingMedia(null)}
@@ -779,30 +883,25 @@ export default function PrivateScreen() {
                 />
                 <View style={styles.chatActions}>
                   <Pressable
-                    onPress={() => void onPickChatMedia('photo')}
-                    disabled={!activeFriend || pickingMedia || sending}
+                    onPress={() => {
+                      setAttachSource(
+                        savedAttachables.length
+                          ? 'saved'
+                          : highlightAttachables.length
+                            ? 'highlights'
+                            : 'content'
+                      );
+                      setAttachOpen(true);
+                    }}
+                    disabled={!activeFriend || sending}
                     hitSlop={8}
                     accessibilityRole="button"
-                    accessibilityLabel={t('privateSpace.attachPhoto')}
+                    accessibilityLabel={t('privateSpace.attachContent')}
                     style={{ opacity: activeFriend ? 1 : 0.35 }}
                   >
                     <Ionicons
-                      name="image-outline"
-                      size={22}
-                      color={theme.colors.accent}
-                    />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => void onPickChatMedia('video')}
-                    disabled={!activeFriend || pickingMedia || sending}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('privateSpace.attachVideo')}
-                    style={{ opacity: activeFriend ? 1 : 0.35 }}
-                  >
-                    <Ionicons
-                      name="videocam-outline"
-                      size={22}
+                      name="attach-outline"
+                      size={24}
                       color={theme.colors.accent}
                     />
                   </Pressable>
@@ -880,6 +979,155 @@ export default function PrivateScreen() {
           }}
         />
       ) : null}
+
+      <Modal
+        visible={attachOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAttachOpen(false)}
+      >
+        <View style={styles.attachBackdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => setAttachOpen(false)}
+          />
+          <View
+            style={[
+              styles.attachSheet,
+              { backgroundColor: theme.colors.card },
+            ]}
+          >
+            <View style={styles.attachHead}>
+              <Subtitle>{t('privateSpace.attachContent')}</Subtitle>
+              <Pressable
+                onPress={() => setAttachOpen(false)}
+                hitSlop={8}
+                accessibilityRole="button"
+              >
+                <Ionicons
+                  name="close"
+                  size={22}
+                  color={theme.colors.text}
+                />
+              </Pressable>
+            </View>
+            <Muted style={{ marginBottom: 8 }}>
+              {t('privateSpace.attachFromApp')}
+            </Muted>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.attachTabs}
+            >
+              {(
+                [
+                  {
+                    key: 'saved' as const,
+                    label: t('privateSpace.attachSourceSaved'),
+                    count: savedAttachables.length,
+                  },
+                  {
+                    key: 'highlights' as const,
+                    label: t('privateSpace.attachSourceHighlights'),
+                    count: highlightAttachables.length,
+                  },
+                  {
+                    key: 'content' as const,
+                    label: t('privateSpace.attachSourceContent'),
+                    count: contentAttachables.length,
+                  },
+                ] as const
+              ).map((tab) => {
+                const active = attachSource === tab.key;
+                return (
+                  <Pressable
+                    key={tab.key}
+                    onPress={() => setAttachSource(tab.key)}
+                    style={[
+                      styles.attachTab,
+                      {
+                        borderColor: active
+                          ? theme.colors.accent
+                          : theme.colors.border,
+                        backgroundColor: active
+                          ? theme.colors.accentSoft
+                          : theme.colors.surfaceElevated,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: theme.colors.text,
+                        fontWeight: '700',
+                        fontSize: 12,
+                      }}
+                    >
+                      {tab.label} ({tab.count})
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {attachables.length === 0 ? (
+              <EmptyState
+                title={t('privateSpace.attachEmpty')}
+                description={t('privateSpace.attachEmptyDesc')}
+                icon="images-outline"
+              />
+            ) : (
+              <FlatList
+                data={attachables}
+                keyExtractor={(item) => item.id}
+                numColumns={3}
+                style={styles.attachGrid}
+                contentContainerStyle={{ gap: 8, paddingBottom: 12 }}
+                columnWrapperStyle={{ gap: 8 }}
+                renderItem={({ item }) => (
+                  <Pressable
+                    onPress={() => onSelectAttachable(item)}
+                    style={[
+                      styles.attachCell,
+                      { backgroundColor: theme.colors.surfaceElevated },
+                    ]}
+                  >
+                    {item.kind === 'photo' ? (
+                      <Image
+                        source={{ uri: item.uri }}
+                        style={styles.attachThumb}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View
+                        style={[
+                          styles.attachThumb,
+                          styles.pendingVideo,
+                          { backgroundColor: theme.colors.border },
+                        ]}
+                      >
+                        <Ionicons
+                          name="play-circle"
+                          size={28}
+                          color={theme.colors.accent}
+                        />
+                      </View>
+                    )}
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        color: theme.colors.textMuted,
+                        fontSize: 10,
+                        marginTop: 4,
+                      }}
+                    >
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -968,6 +1216,53 @@ const styles = StyleSheet.create({
   pendingVideo: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  attachBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  attachSheet: {
+    maxHeight: '78%',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 20,
+    gap: 8,
+  },
+  attachHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  attachTabs: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  attachTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginRight: 8,
+  },
+  attachGrid: {
+    minHeight: 180,
+    maxHeight: 420,
+  },
+  attachCell: {
+    flex: 1,
+    maxWidth: '33%',
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 4,
+  },
+  attachThumb: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 8,
   },
   savedCard: { gap: 8, marginBottom: 10 },
   savedList: { flex: 1, minHeight: 280 },

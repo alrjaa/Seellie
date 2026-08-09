@@ -522,6 +522,15 @@ export const en: TranslationTree = {
     privateWith: 'Private chat with %{name}',
     noMessages: 'No messages yet — write the first one.',
     messagePlaceholder: 'Private message…',
+    attachContent: 'Attach content',
+    attachFromApp:
+      'Pick a photo or video from Saved, Highlights, or app content.',
+    attachSourceSaved: 'Saved',
+    attachSourceHighlights: 'Highlights',
+    attachSourceContent: 'Content',
+    attachEmpty: 'Nothing here yet',
+    attachEmptyDesc:
+      'Double-tap to save clips in the app, or open the Highlights tab.',
     attachPhoto: 'Attach photo',
     attachVideo: 'Attach video',
     attachPhotoReady: 'Photo ready to send',
