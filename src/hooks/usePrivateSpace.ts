@@ -9,6 +9,7 @@ import {
   removePrivateFriend,
   sendPrivateChatMessage,
   subscribePrivateSpace,
+  type PrivateChatMediaInput,
   type PrivateContentItem,
   type PrivateSpaceState,
 } from '@/services/private-space';
@@ -104,11 +105,16 @@ export function usePrivateSpace(userId: string | undefined) {
   );
 
   const sendMessage = useCallback(
-    async (friendId: string, text: string) => {
+    async (friendId: string, text: string, media?: PrivateChatMediaInput) => {
       if (!userId) {
         return { ok: false, error: 'no_user' as string };
       }
-      const result = await sendPrivateChatMessage(userId, friendId, text);
+      const result = await sendPrivateChatMessage(
+        userId,
+        friendId,
+        text,
+        media
+      );
       setState(result.state);
       return { ok: result.ok, error: result.error };
     },

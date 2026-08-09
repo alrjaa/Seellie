@@ -522,6 +522,12 @@ export const en: TranslationTree = {
     privateWith: 'Private chat with %{name}',
     noMessages: 'No messages yet — write the first one.',
     messagePlaceholder: 'Private message…',
+    attachPhoto: 'Attach photo',
+    attachVideo: 'Attach video',
+    attachPhotoReady: 'Photo ready to send',
+    attachVideoReady: 'Video ready to send',
+    attachUploadFailed: 'Could not upload the attachment',
+    sending: 'Sending…',
     sendFailed: 'Could not deliver the message to your friend',
     sendFailedRecipient:
       'Saved on your side only — run supabase/PRIVATE-DM-FIX.sql then send again.',

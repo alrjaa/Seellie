@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { resolvePublicMediaUrl } from '@/services/cloud-write';
 import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
 import { isUuid } from '@/services/supabase-messages';
 
@@ -17,11 +18,20 @@ export type PrivateContentItem = {
   savedAt: string;
 };
 
+export type PrivateChatMediaKind = 'photo' | 'video';
+
 export type PrivateChatMessage = {
   id: string;
   fromMe: boolean;
   text: string;
   at: string;
+  mediaUrl?: string;
+  mediaKind?: PrivateChatMediaKind;
+};
+
+export type PrivateChatMediaInput = {
+  uri: string;
+  kind: PrivateChatMediaKind;
 };
 
 export type PrivateSpaceState = {
@@ -139,15 +149,23 @@ async function loadCloud(userId: string): Promise<PrivateSpaceState | null> {
     id: string;
     friend_id: string;
     sender_id: string;
-    body: string;
+    body: string | null;
+    media_url?: string | null;
+    media_kind?: string | null;
     created_at: string;
   }>) {
+    const mediaKind =
+      row.media_kind === 'photo' || row.media_kind === 'video'
+        ? row.media_kind
+        : undefined;
     const list = chats[row.friend_id] || [];
     list.push({
       id: row.id,
       fromMe: row.sender_id === userId,
-      text: row.body,
+      text: row.body || '',
       at: row.created_at,
+      mediaUrl: row.media_url || undefined,
+      mediaKind: row.media_url ? mediaKind : undefined,
     });
     chats[row.friend_id] = list;
     // رسالة واردة ⇒ أظهر المرسل في الأصدقاء حتى لو فشلت صداقة الاتجاه المعاكس
@@ -390,11 +408,39 @@ export async function clearPrivateChat(
 export async function sendPrivateChatMessage(
   userId: string,
   friendId: string,
-  text: string
+  text: string,
+  media?: PrivateChatMediaInput
 ): Promise<{ state: PrivateSpaceState; ok: boolean; error?: string }> {
   const trimmed = text.trim();
-  if (!trimmed) {
+  if (!trimmed && !media?.uri) {
     return { state: await loadPrivateSpace(userId), ok: false, error: 'empty' };
+  }
+
+  let mediaUrl: string | undefined;
+  let mediaKind: PrivateChatMediaKind | undefined;
+
+  if (media?.uri) {
+    if (canUseCloud(userId)) {
+      const resolved = await resolvePublicMediaUrl({
+        uri: media.uri,
+        kind: media.kind,
+        folder: 'private-dm',
+        userId,
+        requireCloud: true,
+      });
+      if (!resolved.url) {
+        return {
+          state: await loadPrivateSpace(userId),
+          ok: false,
+          error: resolved.error || 'upload_failed',
+        };
+      }
+      mediaUrl = resolved.url;
+      mediaKind = media.kind;
+    } else {
+      mediaUrl = media.uri;
+      mediaKind = media.kind;
+    }
   }
 
   if (canUseCloud(userId) && isUuid(friendId)) {
@@ -415,6 +461,8 @@ export async function sendPrivateChatMessage(
         {
           p_friend_id: friendId,
           p_body: trimmed,
+          p_media_url: mediaUrl || null,
+          p_media_kind: mediaKind || null,
         }
       );
       const rpcOk =
@@ -433,18 +481,22 @@ export async function sendPrivateChatMessage(
 
       // احتياطي: إدراج صفّين مباشرة (يتطلب سياسة insert_thread)
       await sb.rpc('add_private_friend', { p_friend_id: friendId });
+      const rowBase = {
+        sender_id: userId,
+        body: trimmed,
+        media_url: mediaUrl || null,
+        media_kind: mediaKind || null,
+      };
       const { error } = await sb.from('private_messages').insert([
         {
           owner_id: userId,
           friend_id: friendId,
-          sender_id: userId,
-          body: trimmed,
+          ...rowBase,
         },
         {
           owner_id: friendId,
           friend_id: userId,
-          sender_id: userId,
-          body: trimmed,
+          ...rowBase,
         },
       ]);
       if (!error) {
@@ -456,8 +508,7 @@ export async function sendPrivateChatMessage(
       const { error: ownOnlyErr } = await sb.from('private_messages').insert({
         owner_id: userId,
         friend_id: friendId,
-        sender_id: userId,
-        body: trimmed,
+        ...rowBase,
       });
       if (!ownOnlyErr) {
         return {
@@ -489,6 +540,8 @@ export async function sendPrivateChatMessage(
     fromMe: true,
     text: trimmed,
     at: new Date().toISOString(),
+    mediaUrl,
+    mediaKind,
   });
   state.chats[friendId] = list;
   await saveLocal(userId, state);

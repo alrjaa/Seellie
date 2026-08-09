@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
@@ -17,6 +18,7 @@ import { useToast } from '@/providers/ToastProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { LoadingState } from '@/components/feedback/LoadingState';
+import { InlineVideoPlayer } from '@/components/media/InlineVideoPlayer';
 import {
   Avatar,
   Button,
@@ -29,7 +31,15 @@ import { useListChrome } from '@/hooks/useListChrome';
 import { usePrivateSpace } from '@/hooks/usePrivateSpace';
 import { ensureSocialLists } from '@/utils/social-stats';
 import { formatArabicDate } from '@/utils';
-import type { PrivateContentItem } from '@/services/private-space';
+import {
+  MEDIA_SPECS,
+  PROFILE_VIDEO_MAX_SEC,
+  validatePickerAsset,
+} from '@/utils/media-limits';
+import type {
+  PrivateChatMediaKind,
+  PrivateContentItem,
+} from '@/services/private-space';
 import type { User } from '@/providers/TournamentProvider';
 import { isUuid } from '@/services/supabase-messages';
 
@@ -182,6 +192,12 @@ export default function PrivateScreen() {
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [pickOpen, setPickOpen] = useState(false);
+  const [pendingMedia, setPendingMedia] = useState<{
+    uri: string;
+    kind: PrivateChatMediaKind;
+  } | null>(null);
+  const [pickingMedia, setPickingMedia] = useState(false);
+  const [sending, setSending] = useState(false);
 
   const me = useMemo(
     () => (currentUser ? ensureSocialLists(currentUser) : null),
@@ -360,25 +376,100 @@ export default function PrivateScreen() {
     [space, toast, t]
   );
 
+  const onPickChatMedia = useCallback(
+    async (kind: PrivateChatMediaKind) => {
+      if (!activeFriend || pickingMedia || sending) return;
+      setPickingMedia(true);
+      try {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          toast({
+            variant: 'destructive',
+            title: t('media.permissionDenied'),
+            description: t('media.allowLibrary'),
+          });
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: kind === 'photo' ? ['images'] : ['videos'],
+          quality: 0.85,
+          allowsEditing: false,
+          videoMaxDuration: PROFILE_VIDEO_MAX_SEC,
+        });
+        if (result.canceled || !result.assets?.[0]?.uri) return;
+        const asset = result.assets[0];
+        const check = validatePickerAsset(kind, {
+          uri: asset.uri,
+          width: asset.width,
+          height: asset.height,
+          fileSize: asset.fileSize,
+          duration: asset.duration,
+        });
+        if (!check.ok) {
+          toast({
+            variant: 'destructive',
+            title:
+              check.reason === 'duration'
+                ? t('media.videoTooLong')
+                : check.reason === 'size'
+                  ? t('media.fileTooLarge')
+                  : t('media.imageTooSmall'),
+            description:
+              check.reason === 'size'
+                ? t('media.fileTooLargeDesc', {
+                    mb: MEDIA_SPECS[kind].maxMb,
+                  })
+                : undefined,
+          });
+          return;
+        }
+        setPendingMedia({ uri: asset.uri, kind });
+      } catch {
+        toast({
+          variant: 'destructive',
+          title: t('media.pickFailed'),
+        });
+      } finally {
+        setPickingMedia(false);
+      }
+    },
+    [activeFriend, pickingMedia, sending, toast, t]
+  );
+
   const onSend = useCallback(async () => {
-    if (!activeFriend || !draft.trim()) return;
+    if (!activeFriend || sending) return;
     const text = draft.trim();
+    if (!text && !pendingMedia) return;
+    setSending(true);
     setDraft('');
-    const result = await space.sendMessage(activeFriend.id, text);
-    if (!result.ok) {
-      toast({
-        variant: 'destructive',
-        title: t('privateSpace.sendFailed'),
-        description:
-          result.error === 'recipient_inbox_failed'
-            ? t('privateSpace.sendFailedRecipient')
-            : result.error === 'no_session'
-              ? t('privateSpace.sendFailedSession')
-              : t('privateSpace.sendFailedHint'),
-      });
-      return;
+    const media = pendingMedia;
+    setPendingMedia(null);
+    try {
+      const result = await space.sendMessage(
+        activeFriend.id,
+        text,
+        media || undefined
+      );
+      if (!result.ok) {
+        if (media) setPendingMedia(media);
+        if (text) setDraft(text);
+        toast({
+          variant: 'destructive',
+          title: t('privateSpace.sendFailed'),
+          description:
+            result.error === 'recipient_inbox_failed'
+              ? t('privateSpace.sendFailedRecipient')
+              : result.error === 'no_session'
+                ? t('privateSpace.sendFailedSession')
+                : result.error === 'upload_failed'
+                  ? t('privateSpace.attachUploadFailed')
+                  : t('privateSpace.sendFailedHint'),
+        });
+      }
+    } finally {
+      setSending(false);
     }
-  }, [activeFriend, draft, space, toast, t]);
+  }, [activeFriend, draft, pendingMedia, sending, space, toast, t]);
 
   if (loading || !space.ready) return <LoadingState />;
   if (!currentUser) return null;
@@ -534,7 +625,10 @@ export default function PrivateScreen() {
                   const active = activeFriend?.id === u.id;
                   return (
                     <Pressable
-                      onPress={() => setActiveFriendId(u.id)}
+                      onPress={() => {
+                        setActiveFriendId(u.id);
+                        setPendingMedia(null);
+                      }}
                       style={[
                         styles.friendChip,
                         {
@@ -601,19 +695,82 @@ export default function PrivateScreen() {
                           },
                         ]}
                       >
-                        <Text
-                          style={{
-                            color: m.fromMe
-                              ? theme.colors.textInverse
-                              : theme.colors.text,
-                          }}
-                        >
-                          {m.text}
-                        </Text>
+                        {m.mediaUrl && m.mediaKind === 'photo' ? (
+                          <Image
+                            source={{ uri: m.mediaUrl }}
+                            style={styles.bubbleMedia}
+                            resizeMode="cover"
+                          />
+                        ) : null}
+                        {m.mediaUrl && m.mediaKind === 'video' ? (
+                          <InlineVideoPlayer
+                            uri={m.mediaUrl}
+                            height={180}
+                            style={styles.bubbleVideo}
+                          />
+                        ) : null}
+                        {m.text ? (
+                          <Text
+                            style={{
+                              color: m.fromMe
+                                ? theme.colors.textInverse
+                                : theme.colors.text,
+                            }}
+                          >
+                            {m.text}
+                          </Text>
+                        ) : null}
                       </View>
                     ))
                   )}
                 </View>
+                {pendingMedia ? (
+                  <View
+                    style={[
+                      styles.pendingMedia,
+                      { borderColor: theme.colors.border },
+                    ]}
+                  >
+                    {pendingMedia.kind === 'photo' ? (
+                      <Image
+                        source={{ uri: pendingMedia.uri }}
+                        style={styles.pendingThumb}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View
+                        style={[
+                          styles.pendingThumb,
+                          styles.pendingVideo,
+                          { backgroundColor: theme.colors.surfaceElevated },
+                        ]}
+                      >
+                        <Ionicons
+                          name="videocam"
+                          size={22}
+                          color={theme.colors.accent}
+                        />
+                      </View>
+                    )}
+                    <Muted style={{ flex: 1 }}>
+                      {pendingMedia.kind === 'photo'
+                        ? t('privateSpace.attachPhotoReady')
+                        : t('privateSpace.attachVideoReady')}
+                    </Muted>
+                    <Pressable
+                      onPress={() => setPendingMedia(null)}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('common.cancel')}
+                    >
+                      <Ionicons
+                        name="close-circle"
+                        size={22}
+                        color={theme.colors.danger}
+                      />
+                    </Pressable>
+                  </View>
+                ) : null}
                 <Input
                   value={draft}
                   onChangeText={setDraft}
@@ -621,6 +778,34 @@ export default function PrivateScreen() {
                   multiline
                 />
                 <View style={styles.chatActions}>
+                  <Pressable
+                    onPress={() => void onPickChatMedia('photo')}
+                    disabled={!activeFriend || pickingMedia || sending}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('privateSpace.attachPhoto')}
+                    style={{ opacity: activeFriend ? 1 : 0.35 }}
+                  >
+                    <Ionicons
+                      name="image-outline"
+                      size={22}
+                      color={theme.colors.accent}
+                    />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => void onPickChatMedia('video')}
+                    disabled={!activeFriend || pickingMedia || sending}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('privateSpace.attachVideo')}
+                    style={{ opacity: activeFriend ? 1 : 0.35 }}
+                  >
+                    <Ionicons
+                      name="videocam-outline"
+                      size={22}
+                      color={theme.colors.accent}
+                    />
+                  </Pressable>
                   <Button
                     label={t('privateSpace.clearChat')}
                     variant="ghost"
@@ -629,9 +814,17 @@ export default function PrivateScreen() {
                     disabled={!activeFriend || chatMessages.length === 0}
                   />
                   <Button
-                    label={t('common.send')}
+                    label={
+                      sending
+                        ? t('privateSpace.sending')
+                        : t('common.send')
+                    }
                     onPress={() => void onSend()}
-                    disabled={!draft.trim() || !activeFriend}
+                    disabled={
+                      sending ||
+                      !activeFriend ||
+                      (!draft.trim() && !pendingMedia)
+                    }
                     style={{ flex: 1 }}
                   />
                 </View>
@@ -745,6 +938,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 14,
+    gap: 8,
+  },
+  bubbleMedia: {
+    width: 220,
+    maxWidth: '100%',
+    height: 180,
+    borderRadius: 10,
+  },
+  bubbleVideo: {
+    width: 220,
+    maxWidth: '100%',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  pendingMedia: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    padding: 8,
+  },
+  pendingThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+  },
+  pendingVideo: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   savedCard: { gap: 8, marginBottom: 10 },
   savedList: { flex: 1, minHeight: 280 },

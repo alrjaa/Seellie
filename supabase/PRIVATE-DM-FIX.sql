@@ -84,10 +84,36 @@ $$;
 revoke all on function public.add_private_friend(uuid) from public;
 grant execute on function public.add_private_friend(uuid) to authenticated;
 
--- 3) Send DM to both inboxes (bypasses RLS via security definer)
+-- 3) Media columns on messages
+alter table public.private_messages
+  add column if not exists media_url text;
+
+alter table public.private_messages
+  add column if not exists media_kind text;
+
+do $$
+begin
+  alter table public.private_messages
+    drop constraint if exists private_messages_media_kind_check;
+  alter table public.private_messages
+    add constraint private_messages_media_kind_check
+    check (media_kind is null or media_kind in ('photo', 'video'));
+exception
+  when others then null;
+end $$;
+
+alter table public.private_messages
+  alter column body set default '';
+
+-- 3b) Send DM to both inboxes (text and/or media)
+drop function if exists public.send_private_message(uuid, text);
+drop function if exists public.send_private_message(uuid, text, text, text);
+
 create or replace function public.send_private_message(
   p_friend_id uuid,
-  p_body text
+  p_body text default null,
+  p_media_url text default null,
+  p_media_kind text default null
 )
 returns json
 language plpgsql
@@ -97,6 +123,8 @@ as $$
 declare
   me uuid := auth.uid();
   cleaned text := trim(both from coalesce(p_body, ''));
+  media text := nullif(trim(both from coalesce(p_media_url, '')), '');
+  kind text := nullif(trim(both from coalesce(p_media_kind, '')), '');
 begin
   if me is null then
     return json_build_object('ok', false, 'error', 'not_authenticated');
@@ -107,8 +135,14 @@ begin
   if p_friend_id = me then
     return json_build_object('ok', false, 'error', 'self');
   end if;
-  if cleaned = '' then
+  if cleaned = '' and media is null then
     return json_build_object('ok', false, 'error', 'empty');
+  end if;
+  if media is not null and (kind is null or kind not in ('photo', 'video')) then
+    return json_build_object('ok', false, 'error', 'bad_media_kind');
+  end if;
+  if media is null then
+    kind := null;
   end if;
   if not exists (select 1 from public.profiles p where p.id = p_friend_id) then
     return json_build_object('ok', false, 'error', 'friend_not_in_profiles');
@@ -122,17 +156,19 @@ begin
   values (p_friend_id, me)
   on conflict do nothing;
 
-  insert into public.private_messages (owner_id, friend_id, sender_id, body)
+  insert into public.private_messages (
+    owner_id, friend_id, sender_id, body, media_url, media_kind
+  )
   values
-    (me, p_friend_id, me, cleaned),
-    (p_friend_id, me, me, cleaned);
+    (me, p_friend_id, me, cleaned, media, kind),
+    (p_friend_id, me, me, cleaned, media, kind);
 
   return json_build_object('ok', true);
 end;
 $$;
 
-revoke all on function public.send_private_message(uuid, text) from public;
-grant execute on function public.send_private_message(uuid, text) to authenticated;
+revoke all on function public.send_private_message(uuid, text, text, text) from public;
+grant execute on function public.send_private_message(uuid, text, text, text) to authenticated;
 
 -- 4) حذف صديق + محادثة الطرفين
 create or replace function public.remove_private_friend(p_friend_id uuid)

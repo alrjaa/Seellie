@@ -524,6 +524,12 @@ export const ar = {
     privateWith: 'محادثة خاصة مع %{name}',
     noMessages: 'لا رسائل بعد — اكتب أول رسالة.',
     messagePlaceholder: 'رسالة خاصة…',
+    attachPhoto: 'إرفاق صورة',
+    attachVideo: 'إرفاق فيديو',
+    attachPhotoReady: 'صورة جاهزة للإرسال',
+    attachVideoReady: 'فيديو جاهز للإرسال',
+    attachUploadFailed: 'تعذّر رفع المرفق للسحابة',
+    sending: 'جارٍ الإرسال…',
     sendFailed: 'تعذّر إرسال الرسالة للصديق',
     sendFailedRecipient:
       'ظهرَت عندك فقط — نفّذ supabase/PRIVATE-DM-FIX.sql ثم أعد الإرسال.',
