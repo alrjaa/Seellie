@@ -17,23 +17,34 @@ export async function uploadAppMedia(
   if (/^https?:\/\//i.test(localUri)) return localUri;
 
   try {
-    const ext =
-      kind === 'video'
-        ? localUri.match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] || 'mp4'
-        : localUri.match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] || 'jpg';
+    const rawExt =
+      localUri.match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1]?.toLowerCase() ||
+      (kind === 'video' ? 'mp4' : 'jpg');
+    // على الويب/أندرويد .mov غالباً لا يُشغَّل — نُبقي الامتداد الحقيقي مع نوع محتوى أوضح
+    const ext = kind === 'video' && rawExt === 'qt' ? 'mov' : rawExt;
     const safeFolder = folder.replace(/[^a-z0-9/_-]/gi, '') || 'uploads';
-    const path = `${userId}/${safeFolder}/${Date.now()}.${ext.toLowerCase()}`;
+    const path = `${userId}/${safeFolder}/${Date.now()}.${ext}`;
     const response = await fetch(localUri);
     const blob = await response.blob();
     const contentType =
-      blob.type ||
-      (kind === 'video'
-        ? `video/${ext === 'mov' ? 'quicktime' : 'mp4'}`
-        : `image/${ext === 'png' ? 'png' : 'jpeg'}`);
+      blob.type && blob.type !== 'application/octet-stream'
+        ? blob.type
+        : kind === 'video'
+          ? ext === 'mov' || ext === 'qt'
+            ? 'video/quicktime'
+            : ext === 'webm'
+              ? 'video/webm'
+              : 'video/mp4'
+          : ext === 'png'
+            ? 'image/png'
+            : ext === 'webp'
+              ? 'image/webp'
+              : 'image/jpeg';
 
     const { error } = await sb.storage.from(BUCKET).upload(path, blob, {
       contentType,
       upsert: false,
+      cacheControl: '3600',
     });
     if (error) {
       console.warn('[supabase] upload', error.message);

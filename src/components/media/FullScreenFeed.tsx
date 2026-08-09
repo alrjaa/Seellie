@@ -94,7 +94,10 @@ const Slide = memo(function Slide({
   const theme = useAppTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const [paused, setPaused] = useState(false);
+  const videoRef = useRef<Video>(null);
+  /** ابدأ متوقفاً — الضغط يشغّل (مطلوب لسياسات المتصفح + أوضح للمستخدم) */
+  const [paused, setPaused] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const lastTapRef = useRef(0);
   const handleLabel =
     item.authorHandle?.trim() ||
@@ -104,11 +107,42 @@ const Slide = memo(function Slide({
         ? `@${item.authorName.replace(/\s+/g, '').slice(0, 16)}`
         : undefined);
   const bottomPad = Math.max(insets.bottom, 6) + 4;
-  // right/left تنعكس مع RTL+swap — نحسب الحافة اليمنى فيزيائياً
   const dockSide =
     I18nManager.isRTL && I18nManager.doLeftAndRightSwapInRTL
       ? ({ left: 14 } as const)
       : ({ right: 14 } as const);
+
+  const playableUri =
+    !!item.mediaUrl && /^https?:\/\//i.test(item.mediaUrl.trim());
+
+  useEffect(() => {
+    setPaused(true);
+    setLoadError(false);
+    void videoRef.current?.pauseAsync().catch(() => undefined);
+  }, [item.id, item.mediaUrl]);
+
+  useEffect(() => {
+    if (!active) {
+      setPaused(true);
+      void videoRef.current?.pauseAsync().catch(() => undefined);
+    }
+  }, [active]);
+
+  const toggleVideoPlayback = useCallback(async () => {
+    if (!playableUri || loadError) return;
+    try {
+      if (paused) {
+        setPaused(false);
+        await videoRef.current?.playAsync();
+      } else {
+        setPaused(true);
+        await videoRef.current?.pauseAsync();
+      }
+    } catch {
+      setLoadError(true);
+      setPaused(true);
+    }
+  }, [paused, playableUri, loadError]);
 
   const handleContentPress = useCallback(() => {
     const now = Date.now();
@@ -119,9 +153,9 @@ const Slide = memo(function Slide({
     }
     lastTapRef.current = now;
     if (item.kind === 'video') {
-      setPaused((v) => !v);
+      void toggleVideoPlayback();
     }
-  }, [item.kind, onDoubleTap]);
+  }, [item.kind, onDoubleTap, toggleVideoPlayback]);
 
   return (
     <View style={[styles.slide, { height, backgroundColor: '#000' }]}>
@@ -136,7 +170,7 @@ const Slide = memo(function Slide({
         </Pressable>
       ) : null}
 
-      {item.kind === 'video' && item.mediaUrl ? (
+      {item.kind === 'video' ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={
@@ -145,31 +179,44 @@ const Slide = memo(function Slide({
           onPress={handleContentPress}
           style={styles.videoFill}
         >
-          {item.posterUrl && (!active || paused) ? (
+          {playableUri && !loadError ? (
+            <Video
+              ref={videoRef}
+              source={{ uri: item.mediaUrl! }}
+              style={StyleSheet.absoluteFill}
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay={active && !paused}
+              isLooping
+              isMuted={false}
+              useNativeControls={false}
+              pointerEvents="none"
+              onError={() => {
+                setLoadError(true);
+                setPaused(true);
+              }}
+              {...(Platform.OS === 'web'
+                ? ({ playsInline: true } as object)
+                : null)}
+            />
+          ) : null}
+
+          {item.posterUrl && (paused || loadError || !playableUri) ? (
             <Image
               source={{ uri: item.posterUrl }}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
             />
           ) : null}
-          <Video
-            source={{ uri: item.mediaUrl }}
-            style={StyleSheet.absoluteFill}
-            resizeMode={ResizeMode.COVER}
-            shouldPlay={active && !paused}
-            isLooping
-            isMuted={false}
-            usePoster={!!item.posterUrl}
-            posterSource={
-              item.posterUrl ? { uri: item.posterUrl } : undefined
-            }
-          />
-          {paused || !active ? (
+
+          {loadError || !playableUri ? (
             <View style={styles.playWrap}>
+              <Ionicons name="alert-circle-outline" size={56} color="#fff" />
+              <Text style={styles.playLabel}>{t('media.videoPlayFailed')}</Text>
+            </View>
+          ) : paused || !active ? (
+            <View style={styles.playWrap} pointerEvents="none">
               <Ionicons name="play-circle" size={72} color="#fff" />
-              <Text style={styles.playLabel}>
-                {t('media.analysisVideoTapPlay')}
-              </Text>
+              <Text style={styles.playLabel}>{t('media.tapToPlayVideo')}</Text>
             </View>
           ) : null}
         </Pressable>
