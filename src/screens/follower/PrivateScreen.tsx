@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -196,6 +197,7 @@ export default function PrivateScreen() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const listChrome = useListChrome();
+  const { height: windowHeight } = useWindowDimensions();
   const space = usePrivateSpace(currentUser?.id);
   const [section, setSection] = useState<Section>('friends');
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
@@ -309,6 +311,12 @@ export default function PrivateScreen() {
   const chatMessages = activeFriend
     ? space.chats[activeFriend.id] || []
     : [];
+
+  // على الويب ScrollView يتمدّد مع المحتوى ما لم يُحدَّد maxHeight صراحة
+  const chatMessagesMaxHeight = useMemo(() => {
+    const reserved = Platform.OS === 'web' ? 390 : 360;
+    return Math.max(140, Math.min(280, windowHeight - reserved));
+  }, [windowHeight]);
 
   const onAddFriend = useCallback(
     async (friendId: string) => {
@@ -680,13 +688,15 @@ export default function PrivateScreen() {
         ...(section === 'chat' ? styles.contentChat : null),
       }}
       hasTabBar
-      scroll={section !== 'chat' && section !== 'saved'}
+      scroll={section !== 'saved'}
       keyboard={section === 'chat'}
     >
       <Subtitle style={{ width: '100%' }}>
         {t('privateSpace.title')}
       </Subtitle>
-      <Muted>{t('privateSpace.subtitle')}</Muted>
+      {section === 'chat' ? null : (
+        <Muted>{t('privateSpace.subtitle')}</Muted>
+      )}
       {sectionBar}
 
       {section === 'friends' ? (
@@ -849,10 +859,14 @@ export default function PrivateScreen() {
                   </Pressable>
                 </View>
                 <ScrollView
-                  style={styles.chatListScroll}
+                  style={[
+                    styles.chatListScroll,
+                    { maxHeight: chatMessagesMaxHeight, height: chatMessagesMaxHeight },
+                  ]}
                   contentContainerStyle={styles.chatList}
                   keyboardShouldPersistTaps="handled"
                   nestedScrollEnabled
+                  showsVerticalScrollIndicator
                 >
                   {chatMessages.length === 0 ? (
                     <Muted>{t('privateSpace.noMessages')}</Muted>
@@ -880,7 +894,7 @@ export default function PrivateScreen() {
                         {m.mediaUrl && m.mediaKind === 'video' ? (
                           <InlineVideoPlayer
                             uri={m.mediaUrl}
-                            height={180}
+                            height={140}
                             style={styles.bubbleVideo}
                           />
                         ) : null}
@@ -899,6 +913,7 @@ export default function PrivateScreen() {
                     ))
                   )}
                 </ScrollView>
+                <View style={styles.composerDock}>
                 {pendingMedia ? (
                   <View
                     style={[
@@ -998,6 +1013,7 @@ export default function PrivateScreen() {
                     }
                     style={{ flex: 1 }}
                   />
+                </View>
                 </View>
               </Card>
             </>
@@ -1254,26 +1270,32 @@ const styles = StyleSheet.create({
     maxWidth: 160,
   },
   chatCard: {
-    flex: 1,
-    minHeight: 0,
+    flexGrow: 0,
     gap: 10,
+    overflow: 'hidden',
   },
   chatHead: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 0,
+  },
+  composerDock: {
+    gap: 10,
+    flexShrink: 0,
   },
   chatActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     flexWrap: 'wrap',
+    flexShrink: 0,
   },
   chatListScroll: {
-    flex: 1,
-    minHeight: 120,
+    flexGrow: 0,
+    flexShrink: 0,
   },
-  chatList: { gap: 8, paddingBottom: 8, flexGrow: 1 },
+  chatList: { gap: 8, paddingBottom: 8 },
   bubble: {
     maxWidth: '82%',
     paddingHorizontal: 12,
@@ -1282,14 +1304,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   bubbleMedia: {
-    width: 220,
-    maxWidth: '100%',
-    height: 180,
+    width: '100%',
+    maxWidth: 220,
+    height: 140,
+    maxHeight: 140,
     borderRadius: 10,
   },
   bubbleVideo: {
-    width: 220,
-    maxWidth: '100%',
+    width: '100%',
+    maxWidth: 220,
     borderRadius: 10,
     overflow: 'hidden',
   },
