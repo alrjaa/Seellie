@@ -29,29 +29,31 @@ import { ensureSocialLists } from '@/utils/social-stats';
 import { formatArabicDate } from '@/utils';
 import type { PrivateContentItem } from '@/services/private-space';
 import type { User } from '@/providers/TournamentProvider';
+import { isUuid } from '@/services/supabase-messages';
 
 type Section = 'friends' | 'chat' | 'saved';
 
 function resolveAuthorId(
   item: PrivateContentItem,
-  users: User[]
+  users: User[],
+  selfId?: string
 ): string | undefined {
-  if (item.authorId) {
-    const byId = users.find((u) => u.id === item.authorId);
-    if (byId) return byId.id;
+  // معرف سحابي صالح → يُقبل حتى لو لم يُحمَّل الملف بعد في users
+  if (item.authorId && isUuid(item.authorId) && item.authorId !== selfId) {
+    return item.authorId;
   }
   if (item.authorHandle) {
     const handle = item.authorHandle.replace(/^@/, '').toLowerCase();
     const byHandle = users.find(
       (u) => (u.handle || '').replace(/^@/, '').toLowerCase() === handle
     );
-    if (byHandle) return byHandle.id;
+    if (byHandle && byHandle.id !== selfId) return byHandle.id;
   }
   if (item.authorName) {
     const byName = users.find(
       (u) => u.name.trim().toLowerCase() === item.authorName.trim().toLowerCase()
     );
-    if (byName) return byName.id;
+    if (byName && byName.id !== selfId) return byName.id;
   }
   return undefined;
 }
@@ -178,12 +180,13 @@ export default function PrivateScreen() {
     // أيضاً أصحاب المحتوى المحفوظ (حتى لو لم تتابعهم)
     const fromSavedIds = new Set(
       space.items
-        .map((item) => resolveAuthorId(item, users))
+        .map((item) => resolveAuthorId(item, users, me?.id))
         .filter((id): id is string => !!id && id !== me.id)
     );
     const fromSaved = users.filter(
       (u) => fromSavedIds.has(u.id) && !space.friendIds.includes(u.id)
     );
+    // أضف أصحاب المحفوظ غير الموجودين في users كمرشّحين وهميين عبر ids فقط — يُعالج عبر SavedCard
     const byId = new Map<string, (typeof users)[number]>();
     [...fromFollowing, ...fromSaved].forEach((u) => byId.set(u.id, u));
     return [...byId.values()];
@@ -191,9 +194,31 @@ export default function PrivateScreen() {
 
   const resolveSavedAuthor = useCallback(
     (item: PrivateContentItem) => {
-      const id = resolveAuthorId(item, users);
+      const id = resolveAuthorId(item, users, currentUser?.id);
       if (!id || id === currentUser?.id) return null;
-      return users.find((u) => u.id === id) || null;
+      return (
+        users.find((u) => u.id === id) || {
+          id,
+          name: item.authorName || item.authorHandle || id,
+          handle: item.authorHandle,
+          email: '',
+          passwordHash: '',
+          role: 'follower' as const,
+          status: 'active' as const,
+          visibleId: '',
+          permissions: {
+            canComment: true,
+            canUseVoice: true,
+            canCreateContent: false,
+            canNominateToPersonality: false,
+          },
+          posts: [],
+          media: { photos: [], videos: [] },
+          personalityPhotos: [],
+          analysisContent: [],
+          comments: [],
+        }
+      );
     },
     [users, currentUser?.id]
   );

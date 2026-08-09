@@ -510,6 +510,7 @@ export const en: TranslationTree = {
     noSaved: 'No saved content',
     noSavedDesc:
       'Double-tap any photo/video/post, or tap the bookmark in Forums.',
+    unknownAuthor: 'Unknown account',
     savedToast: 'Saved to Private',
     alreadySaved: 'Already saved',
     saveA11y: 'Save to private space',

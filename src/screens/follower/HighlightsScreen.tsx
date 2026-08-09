@@ -33,6 +33,8 @@ type MediaItem = {
   type: 'photo' | 'video';
   matchLabel: string;
   likes: string[];
+  organizerId?: string;
+  organizerName?: string;
 };
 
 const MediaRow = memo(function MediaRow({
@@ -86,6 +88,9 @@ export default function HighlightsScreen() {
   const media = useMemo(() => {
     const items: MediaItem[] = [];
     competitions.forEach((comp) => {
+      const organizerName =
+        /* يُعرض كصاحب الحساب القابل للإضافة كصديق */
+        comp.name;
       (comp.media?.photos || []).forEach((p) => {
         items.push({
           id: p.id,
@@ -95,6 +100,8 @@ export default function HighlightsScreen() {
           type: 'photo',
           matchLabel: comp.name,
           likes: p.likes,
+          organizerId: comp.organizerId,
+          organizerName,
         });
       });
       (comp.media?.videos || []).forEach((v) => {
@@ -106,6 +113,8 @@ export default function HighlightsScreen() {
           type: 'video',
           matchLabel: comp.name,
           likes: v.likes,
+          organizerId: comp.organizerId,
+          organizerName,
         });
       });
 
@@ -122,6 +131,8 @@ export default function HighlightsScreen() {
             type: 'photo',
             matchLabel: label,
             likes: p.likes,
+            organizerId: comp.organizerId,
+            organizerName: comp.name,
           });
         });
         match.media?.videos?.forEach((v) => {
@@ -133,6 +144,8 @@ export default function HighlightsScreen() {
             type: 'video',
             matchLabel: label,
             likes: v.likes,
+            organizerId: comp.organizerId,
+            organizerName: comp.name,
           });
         });
       });
@@ -146,7 +159,9 @@ export default function HighlightsScreen() {
         id: `${item.source}-${item.type}-${item.id}`,
         kind: item.type,
         mediaUrl: item.url,
-        authorName: item.matchLabel,
+        authorId: item.organizerId,
+        authorName: item.organizerName || item.matchLabel,
+        title: item.matchLabel,
         subtitle:
           item.source === 'competition'
             ? item.type === 'photo'
