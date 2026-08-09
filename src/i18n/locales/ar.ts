@@ -505,6 +505,17 @@ export const ar = {
     noFriendsDesc: 'أضف أصدقاء من المتابَعين أو من المحتوى المحفوظ.',
     friendAdded: 'تمت إضافة الصديق',
     friendRemoved: 'تمت إزالة الصديق',
+    removeFriendTitle: 'إزالة الصديق',
+    removeFriendConfirm:
+      'سيتم حذف الصداقة ومسح المحادثة بينكما من الخاصة. هل تريد المتابعة؟',
+    removeFriendFailed: 'تعذّر إزالة الصديق',
+    removeFriendFailedHint:
+      'نفّذ supabase/PRIVATE-DM-FIX.sql ثم أعد المحاولة.',
+    clearChat: 'مسح المحادثة',
+    clearChatTitle: 'مسح المحادثة',
+    clearChatConfirm: 'هل تريد حذف كل رسائل هذه المحادثة من عندك؟',
+    clearChatFailed: 'تعذّر مسح المحادثة',
+    chatCleared: 'تم مسح المحادثة',
     friendCloudHint:
       'إن اختفى الصديق بعد التحديث: نفّذ supabase/private-space-friends-fix.sql مرة واحدة.',
     addAuthorFriend: 'إضافة كصديق',

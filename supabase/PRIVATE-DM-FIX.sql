@@ -134,6 +134,65 @@ $$;
 revoke all on function public.send_private_message(uuid, text) from public;
 grant execute on function public.send_private_message(uuid, text) to authenticated;
 
+-- 4) حذف صديق + محادثة الطرفين
+create or replace function public.remove_private_friend(p_friend_id uuid)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+begin
+  if me is null then
+    return json_build_object('ok', false, 'error', 'not_authenticated');
+  end if;
+  if p_friend_id is null then
+    return json_build_object('ok', false, 'error', 'missing_friend');
+  end if;
+
+  delete from public.private_messages
+  where (owner_id = me and friend_id = p_friend_id)
+     or (owner_id = p_friend_id and friend_id = me);
+
+  delete from public.private_friends
+  where (owner_id = me and friend_id = p_friend_id)
+     or (owner_id = p_friend_id and friend_id = me);
+
+  return json_build_object('ok', true);
+end;
+$$;
+
+revoke all on function public.remove_private_friend(uuid) from public;
+grant execute on function public.remove_private_friend(uuid) to authenticated;
+
+-- 5) مسح محادثة عندي فقط (يبقى الصديق)
+create or replace function public.clear_private_chat(p_friend_id uuid)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+begin
+  if me is null then
+    return json_build_object('ok', false, 'error', 'not_authenticated');
+  end if;
+  if p_friend_id is null then
+    return json_build_object('ok', false, 'error', 'missing_friend');
+  end if;
+
+  delete from public.private_messages
+  where owner_id = me and friend_id = p_friend_id;
+
+  return json_build_object('ok', true);
+end;
+$$;
+
+revoke all on function public.clear_private_chat(uuid) from public;
+grant execute on function public.clear_private_chat(uuid) to authenticated;
+
 do $$
 begin
   alter publication supabase_realtime add table public.private_messages;

@@ -3,6 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import {
   addPrivateContent,
   addPrivateFriend,
+  clearPrivateChat,
   loadPrivateSpace,
   removePrivateContent,
   removePrivateFriend,
@@ -72,12 +73,32 @@ export function usePrivateSpace(userId: string | undefined) {
 
   const removeFriend = useCallback(
     async (friendId: string) => {
-      if (!userId) return;
+      if (!userId) return { ok: false, error: 'no_user' as string };
+      setState((prev) => {
+        const { [friendId]: _c, ...restChats } = prev.chats;
+        return {
+          ...prev,
+          friendIds: prev.friendIds.filter((id) => id !== friendId),
+          chats: restChats,
+        };
+      });
+      const result = await removePrivateFriend(userId, friendId);
+      setState(result.state);
+      return { ok: result.ok, error: result.error };
+    },
+    [userId]
+  );
+
+  const clearChat = useCallback(
+    async (friendId: string) => {
+      if (!userId) return { ok: false, error: 'no_user' as string };
       setState((prev) => ({
         ...prev,
-        friendIds: prev.friendIds.filter((id) => id !== friendId),
+        chats: { ...prev.chats, [friendId]: [] },
       }));
-      setState(await removePrivateFriend(userId, friendId));
+      const result = await clearPrivateChat(userId, friendId);
+      setState(result.state);
+      return { ok: result.ok, error: result.error };
     },
     [userId]
   );
@@ -126,6 +147,7 @@ export function usePrivateSpace(userId: string | undefined) {
     reload,
     addFriend,
     removeFriend,
+    clearChat,
     sendMessage,
     saveContent,
     removeContent,

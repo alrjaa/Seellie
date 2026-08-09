@@ -284,28 +284,107 @@ export async function addPrivateFriend(
 export async function removePrivateFriend(
   userId: string,
   friendId: string
-): Promise<PrivateSpaceState> {
-  // احذف محلياً أولاً حتى لا يعيد الدمج مع السحابة الصديق بعد الحذف
+): Promise<{ state: PrivateSpaceState; ok: boolean; error?: string }> {
+  // احذف محلياً أولاً
   const local = await loadLocal(userId);
   local.friendIds = local.friendIds.filter((id) => id !== friendId);
   const { [friendId]: _removed, ...restChats } = local.chats;
   local.chats = restChats;
   await saveLocal(userId, local);
 
-  if (canUseCloud(userId)) {
+  if (canUseCloud(userId) && isUuid(friendId)) {
     const sb = getSupabase();
     if (sb) {
-      const { error } = await sb
+      const { data: rpcData, error: rpcError } = await sb.rpc(
+        'remove_private_friend',
+        { p_friend_id: friendId }
+      );
+      const rpcOk =
+        !rpcError &&
+        rpcData &&
+        typeof rpcData === 'object' &&
+        (rpcData as { ok?: boolean }).ok === true;
+      if (rpcOk) {
+        return { state: await loadPrivateSpace(userId), ok: true };
+      }
+      if (rpcError) {
+        console.warn('[private-space] remove friend rpc', rpcError.message);
+      }
+
+      // احتياطي بدون RPC: صداقة + رسائل عندي
+      const { error: friendErr } = await sb
         .from('private_friends')
         .delete()
         .eq('owner_id', userId)
         .eq('friend_id', friendId);
-      if (error) {
-        console.warn('[private-space] remove friend', error.message);
+      const { error: msgErr } = await sb
+        .from('private_messages')
+        .delete()
+        .eq('owner_id', userId)
+        .eq('friend_id', friendId);
+      if (friendErr || msgErr) {
+        console.warn(
+          '[private-space] remove friend',
+          friendErr?.message || msgErr?.message
+        );
+        return {
+          state: await loadPrivateSpace(userId),
+          ok: false,
+          error: friendErr?.message || msgErr?.message || 'cloud_remove_failed',
+        };
       }
+      return { state: await loadPrivateSpace(userId), ok: true };
     }
   }
-  return loadPrivateSpace(userId);
+
+  return { state: await loadPrivateSpace(userId), ok: true };
+}
+
+export async function clearPrivateChat(
+  userId: string,
+  friendId: string
+): Promise<{ state: PrivateSpaceState; ok: boolean; error?: string }> {
+  const local = await loadLocal(userId);
+  local.chats = { ...local.chats, [friendId]: [] };
+  await saveLocal(userId, local);
+
+  if (canUseCloud(userId) && isUuid(friendId)) {
+    const sb = getSupabase();
+    if (sb) {
+      const { data: rpcData, error: rpcError } = await sb.rpc(
+        'clear_private_chat',
+        { p_friend_id: friendId }
+      );
+      const rpcOk =
+        !rpcError &&
+        rpcData &&
+        typeof rpcData === 'object' &&
+        (rpcData as { ok?: boolean }).ok === true;
+      if (rpcOk) {
+        return { state: await loadPrivateSpace(userId), ok: true };
+      }
+      if (rpcError) {
+        console.warn('[private-space] clear chat rpc', rpcError.message);
+      }
+
+      const { error } = await sb
+        .from('private_messages')
+        .delete()
+        .eq('owner_id', userId)
+        .eq('friend_id', friendId);
+      if (error) {
+        console.warn('[private-space] clear chat', error.message);
+        return {
+          state: await loadPrivateSpace(userId),
+          ok: false,
+          error: error.message,
+        };
+      }
+      return { state: await loadPrivateSpace(userId), ok: true };
+    }
+  }
+
+  return { state: local, ok: true };
 }
 
 export async function sendPrivateChatMessage(

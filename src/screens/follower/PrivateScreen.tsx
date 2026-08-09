@@ -1,7 +1,9 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -30,6 +32,32 @@ import { formatArabicDate } from '@/utils';
 import type { PrivateContentItem } from '@/services/private-space';
 import type { User } from '@/providers/TournamentProvider';
 import { isUuid } from '@/services/supabase-messages';
+
+async function confirmAction(input: {
+  title: string;
+  message: string;
+  cancelLabel: string;
+  confirmLabel: string;
+}): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    if (typeof window === 'undefined') return false;
+    return window.confirm(`${input.title}\n\n${input.message}`);
+  }
+  return await new Promise<boolean>((resolve) => {
+    Alert.alert(input.title, input.message, [
+      {
+        text: input.cancelLabel,
+        style: 'cancel',
+        onPress: () => resolve(false),
+      },
+      {
+        text: input.confirmLabel,
+        style: 'destructive',
+        onPress: () => resolve(true),
+      },
+    ]);
+  });
+}
 
 type Section = 'friends' | 'chat' | 'saved';
 
@@ -272,8 +300,23 @@ export default function PrivateScreen() {
 
   const onRemoveFriend = useCallback(
     async (friendId: string) => {
-      await space.removeFriend(friendId);
+      const ok = await confirmAction({
+        title: t('privateSpace.removeFriendTitle'),
+        message: t('privateSpace.removeFriendConfirm'),
+        cancelLabel: t('common.cancel'),
+        confirmLabel: t('common.delete'),
+      });
+      if (!ok) return;
+      const result = await space.removeFriend(friendId);
       if (activeFriendId === friendId) setActiveFriendId(null);
+      if (!result.ok) {
+        toast({
+          variant: 'destructive',
+          title: t('privateSpace.removeFriendFailed'),
+          description: t('privateSpace.removeFriendFailedHint'),
+        });
+        return;
+      }
       toast({
         variant: 'success',
         title: t('privateSpace.friendRemoved'),
@@ -281,6 +324,30 @@ export default function PrivateScreen() {
     },
     [space, activeFriendId, toast, t]
   );
+
+  const onClearChat = useCallback(async () => {
+    if (!activeFriend) return;
+    const ok = await confirmAction({
+      title: t('privateSpace.clearChatTitle'),
+      message: t('privateSpace.clearChatConfirm'),
+      cancelLabel: t('common.cancel'),
+      confirmLabel: t('common.delete'),
+    });
+    if (!ok) return;
+    const result = await space.clearChat(activeFriend.id);
+    if (!result.ok) {
+      toast({
+        variant: 'destructive',
+        title: t('privateSpace.clearChatFailed'),
+        description: t('privateSpace.removeFriendFailedHint'),
+      });
+      return;
+    }
+    toast({
+      variant: 'success',
+      title: t('privateSpace.chatCleared'),
+    });
+  }, [activeFriend, space, toast, t]);
 
   const onRemoveSaved = useCallback(
     async (itemId: string) => {
@@ -426,7 +493,12 @@ export default function PrivateScreen() {
                         color={theme.colors.accent}
                       />
                     </Pressable>
-                    <Pressable onPress={() => void onRemoveFriend(u.id)} hitSlop={6}>
+                    <Pressable
+                      onPress={() => void onRemoveFriend(u.id)}
+                      hitSlop={6}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('privateSpace.removeFriendTitle')}
+                    >
                       <Ionicons
                         name="person-remove-outline"
                         size={20}
@@ -491,11 +563,27 @@ export default function PrivateScreen() {
                 }}
               />
               <Card style={styles.chatCard}>
-                <Muted>
-                  {t('privateSpace.privateWith', {
-                    name: activeFriend?.handle || activeFriend?.name || '',
-                  })}
-                </Muted>
+                <View style={styles.chatHead}>
+                  <Muted style={{ flex: 1 }}>
+                    {t('privateSpace.privateWith', {
+                      name: activeFriend?.handle || activeFriend?.name || '',
+                    })}
+                  </Muted>
+                  <Pressable
+                    onPress={() => void onClearChat()}
+                    disabled={!activeFriend || chatMessages.length === 0}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('privateSpace.clearChatTitle')}
+                    style={{ opacity: chatMessages.length ? 1 : 0.35 }}
+                  >
+                    <Ionicons
+                      name="trash-outline"
+                      size={18}
+                      color={theme.colors.danger}
+                    />
+                  </Pressable>
+                </View>
                 <View style={styles.chatList}>
                   {chatMessages.length === 0 ? (
                     <Muted>{t('privateSpace.noMessages')}</Muted>
@@ -532,11 +620,21 @@ export default function PrivateScreen() {
                   placeholder={t('privateSpace.messagePlaceholder')}
                   multiline
                 />
-                <Button
-                  label={t('common.send')}
-                  onPress={() => void onSend()}
-                  disabled={!draft.trim() || !activeFriend}
-                />
+                <View style={styles.chatActions}>
+                  <Button
+                    label={t('privateSpace.clearChat')}
+                    variant="ghost"
+                    size="sm"
+                    onPress={() => void onClearChat()}
+                    disabled={!activeFriend || chatMessages.length === 0}
+                  />
+                  <Button
+                    label={t('common.send')}
+                    onPress={() => void onSend()}
+                    disabled={!draft.trim() || !activeFriend}
+                    style={{ flex: 1 }}
+                  />
+                </View>
               </Card>
             </>
           )}
@@ -631,6 +729,16 @@ const styles = StyleSheet.create({
     maxWidth: 160,
   },
   chatCard: { gap: 10, minHeight: 280 },
+  chatHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  chatActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   chatList: { gap: 8, minHeight: 120 },
   bubble: {
     maxWidth: '82%',
