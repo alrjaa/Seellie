@@ -8,6 +8,7 @@ export const ar = {
     cancel: 'إلغاء',
     confirm: 'تأكيد',
     save: 'حفظ',
+    delete: 'حذف',
     search: 'بحث',
     logout: 'تسجيل الخروج',
     back: 'رجوع',

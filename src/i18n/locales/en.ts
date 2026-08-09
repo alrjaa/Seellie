@@ -6,6 +6,7 @@ export const en: TranslationTree = {
     cancel: 'Cancel',
     confirm: 'Confirm',
     save: 'Save',
+    delete: 'Delete',
     search: 'Search',
     logout: 'Log out',
     back: 'Back',
