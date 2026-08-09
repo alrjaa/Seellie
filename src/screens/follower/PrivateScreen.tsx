@@ -19,6 +19,7 @@ import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { useToast } from '@/providers/ToastProvider';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { LoadingState } from '@/components/feedback/LoadingState';
@@ -34,6 +35,7 @@ import { useListChrome } from '@/hooks/useListChrome';
 import { usePrivateSpace } from '@/hooks/usePrivateSpace';
 import { ensureSocialLists } from '@/utils/social-stats';
 import { formatArabicDate } from '@/utils';
+import { tabBarTotalHeight } from '@/theme/navigation';
 import type {
   PrivateChatMediaKind,
   PrivateContentItem,
@@ -275,6 +277,7 @@ export default function PrivateScreen() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const listChrome = useListChrome();
+  const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const space = usePrivateSpace(currentUser?.id);
   const [section, setSection] = useState<Section>('friends');
@@ -291,10 +294,10 @@ export default function PrivateScreen() {
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    const hideFab = section === 'chat';
-    setFloatingSuppressed(hideFab);
+    // أخفِ الأزرار العائمة في كل أقسام الخاصة (محادثة/أصدقاء/محفوظ)
+    setFloatingSuppressed(true);
     return () => setFloatingSuppressed(false);
-  }, [section]);
+  }, []);
 
   const me = useMemo(
     () => (currentUser ? ensureSocialLists(currentUser) : null),
@@ -396,20 +399,27 @@ export default function PrivateScreen() {
     ? space.chats[activeFriend.id] || []
     : [];
 
-  // ارتفاع ثابت لصندوق المحادثة حتى يبقى شريط الكتابة/الإرسال ظاهراً دائماً
+  // ارتفاع صندوق الرسائل فقط — شريط الكتابة ثابت فوق التبويب
+  const tabBarHeight = useMemo(
+    () => tabBarTotalHeight(insets.bottom),
+    [insets.bottom]
+  );
+  const composerBottomOffset = tabBarHeight + (Platform.OS === 'web' ? 8 : 4);
+  const composerReserve = 78;
+
   const chatShellHeight = useMemo(() => {
     const topChrome = 52;
-    // شريط تبويب التطبيق + شريط سفاري على الجوال
-    const bottomChrome = Platform.OS === 'web' ? 140 : 120;
-    return Math.max(280, windowHeight - topChrome - bottomChrome);
-  }, [windowHeight]);
+    return Math.max(
+      240,
+      windowHeight - topChrome - composerBottomOffset - composerReserve
+    );
+  }, [windowHeight, composerBottomOffset]);
 
   const chatMessagesHeight = useMemo(() => {
     const chips = 48;
-    const head = 32;
-    const composer = 64; // صف واحد: إرفاق + حقل + إرسال
-    const gaps = 20;
-    return Math.max(120, chatShellHeight - chips - head - composer - gaps);
+    const head = 34;
+    const gaps = 16;
+    return Math.max(140, chatShellHeight - chips - head - gaps);
   }, [chatShellHeight]);
 
   const onAddFriend = useCallback(
@@ -1014,9 +1024,15 @@ export default function PrivateScreen() {
                 <View
                   style={[
                     styles.composerDock,
+                    styles.composerFixed,
                     {
                       borderColor: theme.colors.border,
                       backgroundColor: theme.colors.card,
+                      bottom: composerBottomOffset,
+                      position:
+                        Platform.OS === 'web'
+                          ? ('fixed' as 'absolute')
+                          : 'absolute',
                     },
                   ]}
                 >
@@ -1437,6 +1453,16 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 8,
     paddingVertical: 8,
+  },
+  composerFixed: {
+    left: 12,
+    right: 12,
+    zIndex: 40,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
   },
   composerRow: {
     flexDirection: 'row',
