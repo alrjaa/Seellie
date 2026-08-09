@@ -588,6 +588,15 @@ export interface TournamentContextType {
     successMessage?: string,
     matchId?: string
   ) => Promise<boolean>;
+  /** حذف صورة/فيديو من مسابقة أو مباراة أو لاعب (منظّم فقط) */
+  removeCompetitionMedia: (input: {
+    competitionId: string;
+    mediaId: string;
+    type: 'photos' | 'videos';
+    matchId?: string;
+    playerId?: string;
+    successMessage?: string;
+  }) => Promise<boolean>;
   setUserAvatar: (url: string, successMessage?: string) => Promise<boolean>;
   /** متابعة / إلغاء متابعة حساب آخر */
   toggleFollowUser: (targetUserId: string) => boolean;
@@ -4682,7 +4691,133 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [competitions, currentUser, toast, t]
+    [competitions, currentUser, toast, t, syncCompetitions]
+  );
+
+  const removeCompetitionMedia = useCallback(
+    async (input: {
+      competitionId: string;
+      mediaId: string;
+      type: 'photos' | 'videos';
+      matchId?: string;
+      playerId?: string;
+      successMessage?: string;
+    }) => {
+      if (!currentUser) return false;
+      const owned = competitions.find(
+        (c) =>
+          c.id === input.competitionId && c.organizerId === currentUser.id
+      );
+      if (!owned) {
+        toast({
+          variant: 'destructive',
+          title: t('organizer.media.deleteFailed'),
+        });
+        return false;
+      }
+
+      let found = false;
+      let toUpsert: Competition = owned;
+
+      if (input.playerId) {
+        toUpsert = {
+          ...owned,
+          teams: owned.teams.map((team) => ({
+            ...team,
+            players: team.players.map((player) => {
+              if (player.id !== input.playerId) return player;
+              const media = player.media || { photos: [], videos: [] };
+              const before = (media[input.type] || []).length;
+              const nextList = (media[input.type] || []).filter(
+                (m) => m.id !== input.mediaId
+              );
+              if (nextList.length !== before) found = true;
+              return {
+                ...player,
+                media: { ...media, [input.type]: nextList },
+              };
+            }),
+          })),
+        };
+      } else if (input.matchId) {
+        toUpsert = {
+          ...owned,
+          matches: owned.matches.map((m) => {
+            if (m.id !== input.matchId) return m;
+            const media = m.media || { photos: [], videos: [] };
+            const before = (media[input.type] || []).length;
+            const nextList = (media[input.type] || []).filter(
+              (x) => x.id !== input.mediaId
+            );
+            if (nextList.length !== before) found = true;
+            return {
+              ...m,
+              media: { ...media, [input.type]: nextList },
+            };
+          }),
+        };
+      } else {
+        const media = owned.media || { photos: [], videos: [] };
+        const before = (media[input.type] || []).length;
+        const nextList = (media[input.type] || []).filter(
+          (m) => m.id !== input.mediaId
+        );
+        if (nextList.length !== before) found = true;
+        toUpsert = {
+          ...owned,
+          media: { ...media, [input.type]: nextList },
+        };
+      }
+
+      if (!found) {
+        toast({
+          variant: 'destructive',
+          title: t('organizer.media.deleteFailed'),
+          description: t('organizer.media.deleteNotFound'),
+        });
+        return false;
+      }
+
+      if (isSupabaseConfigured() && isUuid(currentUser.id)) {
+        const cloud = await requireCloudSession(currentUser.id);
+        if (!cloud.session) {
+          toast({
+            variant: 'destructive',
+            title: t('organizer.media.deleteFailed'),
+            description: cloudWriteErrorMessage(cloud.error),
+          });
+          return false;
+        }
+        const cloudUpsert = await upsertCompetitionCloud(toUpsert);
+        if (!cloudUpsert.ok) {
+          toast({
+            variant: 'destructive',
+            title: t('organizer.media.deleteFailed'),
+            description: cloudWriteErrorMessage(cloudUpsert.error),
+          });
+          return false;
+        }
+      }
+
+      setCompetitions((prev) => {
+        const next = prev.map((c) =>
+          c.id === input.competitionId ? toUpsert : c
+        );
+        void syncCompetitions(next);
+        return next;
+      });
+
+      toast({
+        variant: 'success',
+        title:
+          input.type === 'photos'
+            ? t('organizer.media.photoDeleted')
+            : t('organizer.media.videoDeleted'),
+        description: input.successMessage,
+      });
+      return true;
+    },
+    [competitions, currentUser, toast, t, syncCompetitions]
   );
 
   const setUserAvatar = useCallback(
@@ -4926,6 +5061,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       addUserMedia,
       removeUserMedia,
       addCompetitionMedia,
+      removeCompetitionMedia,
       setUserAvatar,
       toggleFollowUser,
       routeForRole,
@@ -5018,6 +5154,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       addUserMedia,
       removeUserMedia,
       addCompetitionMedia,
+      removeCompetitionMedia,
       setUserAvatar,
       toggleFollowUser,
       routeForRole,

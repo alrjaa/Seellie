@@ -1059,6 +1059,15 @@ export const en: TranslationTree = {
       videoAdded: 'Video added to competition',
       selectMatchOptional: 'Link to a match (for Highlights) — optional',
       wholeCompetition: 'Whole competition',
+      scopeCompetition: 'Competition',
+      deleteTitle: 'Delete media',
+      deleteConfirm:
+        'Delete this %{kind} from the competition? It will also disappear from Highlights.',
+      deleteA11y: 'Delete media',
+      photoDeleted: 'Photo deleted',
+      videoDeleted: 'Video deleted',
+      deleteFailed: 'Could not delete',
+      deleteNotFound: 'Item not found or already deleted',
     },
     comments: {
       title: 'Comments',

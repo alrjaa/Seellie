@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
@@ -23,17 +24,28 @@ import {
 
 type MediaItem = {
   id: string;
+  mediaId: string;
+  competitionId: string;
+  matchId?: string;
+  playerId?: string;
   url: string;
   kind: 'photo' | 'video';
   competitionName: string;
+  label?: string;
 };
 
 export default function MediaScreen() {
-  const { competitions, currentUser, addCompetitionMedia } = useTournament();
+  const {
+    competitions,
+    currentUser,
+    addCompetitionMedia,
+    removeCompetitionMedia,
+  } = useTournament();
   const theme = useAppTheme();
   const { t } = useTranslation();
   const { toast } = useToast();
   const [picking, setPicking] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
@@ -74,45 +86,126 @@ export default function MediaScreen() {
   const items = useMemo(() => {
     const media: MediaItem[] = [];
     myCompetitions.forEach((c) => {
-      c.media.photos.forEach((p) =>
+      (c.media?.photos || []).forEach((p) =>
         media.push({
-          id: p.id,
+          id: `comp-photo-${c.id}-${p.id}`,
+          mediaId: p.id,
+          competitionId: c.id,
           url: p.url,
           kind: 'photo',
           competitionName: c.name,
+          label: t('organizer.media.scopeCompetition'),
         })
       );
-      c.media.videos.forEach((v) =>
+      (c.media?.videos || []).forEach((v) =>
         media.push({
-          id: v.id,
+          id: `comp-video-${c.id}-${v.id}`,
+          mediaId: v.id,
+          competitionId: c.id,
           url: v.url,
           kind: 'video',
           competitionName: c.name,
+          label: t('organizer.media.scopeCompetition'),
         })
       );
+
+      c.matches.forEach((match) => {
+        const t1 = c.teams.find((x) => x.id === match.team1Id)?.name || '?';
+        const t2 = c.teams.find((x) => x.id === match.team2Id)?.name || '?';
+        const matchLabel = `${t1} × ${t2}`;
+        (match.media?.photos || []).forEach((p) =>
+          media.push({
+            id: `match-photo-${match.id}-${p.id}`,
+            mediaId: p.id,
+            competitionId: c.id,
+            matchId: match.id,
+            url: p.url,
+            kind: 'photo',
+            competitionName: c.name,
+            label: matchLabel,
+          })
+        );
+        (match.media?.videos || []).forEach((v) =>
+          media.push({
+            id: `match-video-${match.id}-${v.id}`,
+            mediaId: v.id,
+            competitionId: c.id,
+            matchId: match.id,
+            url: v.url,
+            kind: 'video',
+            competitionName: c.name,
+            label: matchLabel,
+          })
+        );
+      });
+
       c.teams.forEach((team) => {
         team.players.forEach((pl) => {
-          pl.media.photos.forEach((p) =>
+          (pl.media?.photos || []).forEach((p) =>
             media.push({
-              id: `${pl.id}-${p.id}`,
+              id: `player-photo-${pl.id}-${p.id}`,
+              mediaId: p.id,
+              competitionId: c.id,
+              playerId: pl.id,
               url: p.url,
               kind: 'photo',
               competitionName: c.name,
+              label: `${pl.name} · ${team.name}`,
             })
           );
-          pl.media.videos.forEach((v) =>
+          (pl.media?.videos || []).forEach((v) =>
             media.push({
-              id: `${pl.id}-${v.id}`,
+              id: `player-video-${pl.id}-${v.id}`,
+              mediaId: v.id,
+              competitionId: c.id,
+              playerId: pl.id,
               url: v.url,
               kind: 'video',
               competitionName: c.name,
+              label: `${pl.name} · ${team.name}`,
             })
           );
         });
       });
     });
     return media;
-  }, [myCompetitions]);
+  }, [myCompetitions, t]);
+
+  const confirmDelete = useCallback(
+    (item: MediaItem) => {
+      Alert.alert(
+        t('organizer.media.deleteTitle'),
+        t('organizer.media.deleteConfirm', {
+          kind:
+            item.kind === 'photo' ? t('common.photo') : t('common.video'),
+        }),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('common.delete'),
+            style: 'destructive',
+            onPress: () => {
+              void (async () => {
+                setDeletingId(item.id);
+                try {
+                  await removeCompetitionMedia({
+                    competitionId: item.competitionId,
+                    mediaId: item.mediaId,
+                    type: item.kind === 'photo' ? 'photos' : 'videos',
+                    matchId: item.matchId,
+                    playerId: item.playerId,
+                  });
+                } finally {
+                  setDeletingId(null);
+                }
+              })();
+            },
+          },
+        ]
+      );
+    },
+    [removeCompetitionMedia, t]
+  );
 
   const pickFromLibrary = useCallback(
     async (kind: 'photo' | 'video') => {
@@ -375,7 +468,7 @@ export default function MediaScreen() {
                     </Text>
                   </View>
                 )}
-                <View style={styles.mediaShare}>
+                <View style={styles.mediaActions}>
                   <TinyShareButton
                     onPress={() =>
                       setSharePayload({
@@ -386,12 +479,35 @@ export default function MediaScreen() {
                       })
                     }
                   />
+                  <Pressable
+                    onPress={() => confirmDelete(item)}
+                    disabled={deletingId === item.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('organizer.media.deleteA11y')}
+                    hitSlop={8}
+                    style={[
+                      styles.deleteBtn,
+                      {
+                        backgroundColor: 'rgba(0,0,0,0.55)',
+                        opacity: deletingId === item.id ? 0.5 : 1,
+                      },
+                    ]}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="#fff" />
+                  </Pressable>
                 </View>
               </View>
               <Subtitle>{item.competitionName}</Subtitle>
               <Muted>
                 {item.kind === 'photo' ? t('common.photo') : t('common.video')}
+                {item.label ? ` · ${item.label}` : ''}
               </Muted>
+              <Button
+                label={t('common.delete')}
+                variant="ghost"
+                onPress={() => confirmDelete(item)}
+                disabled={deletingId === item.id}
+              />
             </Card>
           ))}
         </View>
@@ -412,11 +528,21 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   tile: { width: '47%', gap: 6, flexGrow: 1, minWidth: 150 },
   mediaWrap: { position: 'relative' },
-  mediaShare: {
+  mediaActions: {
     position: 'absolute',
     top: 6,
     right: 6,
     zIndex: 2,
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+  },
+  deleteBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   image: { width: '100%', height: 120, borderRadius: 10 },
   videoPlaceholder: {
