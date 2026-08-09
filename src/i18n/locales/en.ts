@@ -524,13 +524,16 @@ export const en: TranslationTree = {
     messagePlaceholder: 'Private message…',
     attachContent: 'Attach content',
     attachFromApp:
-      'Pick a photo or video from Saved, Highlights, or app content.',
+      'Tap a photo or video to send it from Saved, Highlights, or app content.',
     attachSourceSaved: 'Saved',
     attachSourceHighlights: 'Highlights',
     attachSourceContent: 'Content',
     attachEmpty: 'Nothing here yet',
     attachEmptyDesc:
       'Double-tap to save clips in the app, or open the Highlights tab.',
+    attachSentAsLink: 'Sent as a text link',
+    attachMediaSqlHint:
+      'To show photo/video inside the chat, run supabase/PRIVATE-DM-MEDIA.sql then resend.',
     attachPhoto: 'Attach photo',
     attachVideo: 'Attach video',
     attachPhotoReady: 'Photo ready to send',

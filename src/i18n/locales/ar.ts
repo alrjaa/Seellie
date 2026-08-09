@@ -525,13 +525,17 @@ export const ar = {
     noMessages: 'لا رسائل بعد — اكتب أول رسالة.',
     messagePlaceholder: 'رسالة خاصة…',
     attachContent: 'إرفاق محتوى',
-    attachFromApp: 'اختر صورة أو فيديو من المحفوظ أو اللقطات أو محتوى التطبيق.',
+    attachFromApp:
+      'اضغط على صورة أو فيديو لإرساله فوراً من المحفوظ أو اللقطات أو المحتوى.',
     attachSourceSaved: 'محفوظ',
     attachSourceHighlights: 'اللقطات',
     attachSourceContent: 'محتوى',
     attachEmpty: 'لا يوجد محتوى هنا',
     attachEmptyDesc:
       'احفظ لقطات بنقرتين من التطبيق، أو اختر تبويب اللقطات إن وُجدت.',
+    attachSentAsLink: 'أُرسل كرابط نصي',
+    attachMediaSqlHint:
+      'لعرض الصورة/الفيديو داخل المحادثة نفّذ supabase/PRIVATE-DM-MEDIA.sql ثم أعد الإرسال.',
     attachPhoto: 'إرفاق صورة',
     attachVideo: 'إرفاق فيديو',
     attachPhotoReady: 'صورة جاهزة للإرسال',

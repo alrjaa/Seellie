@@ -527,14 +527,53 @@ export default function PrivateScreen() {
     contentAttachables,
   ]);
 
-  const onSelectAttachable = useCallback((item: AttachableItem) => {
-    setPendingMedia({
-      uri: item.uri,
-      kind: item.kind,
-      label: item.label,
-    });
-    setAttachOpen(false);
-  }, []);
+  const onSelectAttachable = useCallback(
+    async (item: AttachableItem) => {
+      if (!activeFriend || sending) return;
+      setAttachOpen(false);
+      const caption = draft.trim();
+      setDraft('');
+      setPendingMedia(null);
+      setSending(true);
+      try {
+        const result = await space.sendMessage(activeFriend.id, caption, {
+          uri: item.uri,
+          kind: item.kind,
+        });
+        if (!result.ok) {
+          setPendingMedia({
+            uri: item.uri,
+            kind: item.kind,
+            label: item.label,
+          });
+          if (caption) setDraft(caption);
+          toast({
+            variant: 'destructive',
+            title: t('privateSpace.sendFailed'),
+            description:
+              result.error === 'recipient_inbox_failed'
+                ? t('privateSpace.sendFailedRecipient')
+                : result.error === 'no_session'
+                  ? t('privateSpace.sendFailedSession')
+                  : result.error === 'upload_failed'
+                    ? t('privateSpace.attachUploadFailed')
+                    : t('privateSpace.sendFailedHint'),
+          });
+          return;
+        }
+        if (result.warning === 'media_schema_missing') {
+          toast({
+            variant: 'default',
+            title: t('privateSpace.attachSentAsLink'),
+            description: t('privateSpace.attachMediaSqlHint'),
+          });
+        }
+      } finally {
+        setSending(false);
+      }
+    },
+    [activeFriend, sending, draft, space, toast, t]
+  );
 
   const onSend = useCallback(async () => {
     if (!activeFriend || sending) return;
@@ -567,6 +606,14 @@ export default function PrivateScreen() {
                 : result.error === 'upload_failed'
                   ? t('privateSpace.attachUploadFailed')
                   : t('privateSpace.sendFailedHint'),
+        });
+        return;
+      }
+      if (result.warning === 'media_schema_missing') {
+        toast({
+          variant: 'default',
+          title: t('privateSpace.attachSentAsLink'),
+          description: t('privateSpace.attachMediaSqlHint'),
         });
       }
     } finally {
@@ -1075,55 +1122,57 @@ export default function PrivateScreen() {
                 icon="images-outline"
               />
             ) : (
-              <FlatList
-                data={attachables}
-                keyExtractor={(item) => item.id}
-                numColumns={3}
+              <ScrollView
                 style={styles.attachGrid}
-                contentContainerStyle={{ gap: 8, paddingBottom: 12 }}
-                columnWrapperStyle={{ gap: 8 }}
-                renderItem={({ item }) => (
-                  <Pressable
-                    onPress={() => onSelectAttachable(item)}
-                    style={[
-                      styles.attachCell,
-                      { backgroundColor: theme.colors.surfaceElevated },
-                    ]}
-                  >
-                    {item.kind === 'photo' ? (
-                      <Image
-                        source={{ uri: item.uri }}
-                        style={styles.attachThumb}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View
-                        style={[
-                          styles.attachThumb,
-                          styles.pendingVideo,
-                          { backgroundColor: theme.colors.border },
-                        ]}
-                      >
-                        <Ionicons
-                          name="play-circle"
-                          size={28}
-                          color={theme.colors.accent}
-                        />
-                      </View>
-                    )}
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        color: theme.colors.textMuted,
-                        fontSize: 10,
-                        marginTop: 4,
-                      }}
+                contentContainerStyle={styles.attachGridContent}
+                keyboardShouldPersistTaps="handled"
+              >
+                <View style={styles.attachWrap}>
+                  {attachables.map((item) => (
+                    <Pressable
+                      key={item.id}
+                      onPress={() => void onSelectAttachable(item)}
+                      disabled={sending || !activeFriend}
+                      style={[
+                        styles.attachCell,
+                        { backgroundColor: theme.colors.surfaceElevated },
+                      ]}
                     >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                )}
-              />
+                      {item.kind === 'photo' ? (
+                        <Image
+                          source={{ uri: item.uri }}
+                          style={styles.attachThumb}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View
+                          style={[
+                            styles.attachThumb,
+                            styles.pendingVideo,
+                            { backgroundColor: theme.colors.border },
+                          ]}
+                        >
+                          <Ionicons
+                            name="play-circle"
+                            size={28}
+                            color={theme.colors.accent}
+                          />
+                        </View>
+                      )}
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          color: theme.colors.textMuted,
+                          fontSize: 10,
+                          marginTop: 4,
+                        }}
+                      >
+                        {item.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
             )}
           </View>
         </View>
@@ -1252,12 +1301,20 @@ const styles = StyleSheet.create({
     minHeight: 180,
     maxHeight: 420,
   },
+  attachGridContent: {
+    paddingBottom: 12,
+  },
+  attachWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
   attachCell: {
-    flex: 1,
+    width: '31%',
+    flexGrow: 1,
     maxWidth: '33%',
     borderRadius: 10,
     padding: 4,
-    marginBottom: 4,
   },
   attachThumb: {
     width: '100%',

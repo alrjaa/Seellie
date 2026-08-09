@@ -116,7 +116,7 @@ export function usePrivateSpace(userId: string | undefined) {
         media
       );
       setState(result.state);
-      return { ok: result.ok, error: result.error };
+      return { ok: result.ok, error: result.error, warning: result.warning };
     },
     [userId]
   );
