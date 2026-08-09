@@ -558,10 +558,13 @@ export const ar = {
     personalityEmptyDesc:
       'عندما يضيف اللاعب الحر صوراً أو فيديوهات ستظهر هنا.',
     noHighlights: 'لا توجد لقطات حالياً',
-    noHighlightsDesc: 'ستظهر الوسائط هنا عند إضافتها للمباريات.',
-    highlightsHint: 'صور وفيديوهات من المباريات — اضغط الإعجاب للتفاعل',
+    noHighlightsDesc:
+      'ستظهر هنا صور وفيديوهات المسابقات والمباريات عند رفع المنظّم لها.',
+    highlightsHint: 'صور وفيديوهات من المسابقات والمباريات — اضغط الإعجاب للتفاعل',
     matchClipPhoto: 'لقطة مباراة · صورة',
     matchClipVideo: 'لقطة مباراة · فيديو',
+    competitionClipPhoto: 'لقطة مسابقة · صورة',
+    competitionClipVideo: 'لقطة مسابقة · فيديو',
     generalSubtitle: 'صور وفيديوهات · ساحات وتعليقات · منشورات وتحليلات',
     generalEmptyDesc: 'جرّب قسماً آخر أو أضف تعليقاً في الساحة.',
     typePost: 'منشور',

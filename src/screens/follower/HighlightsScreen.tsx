@@ -26,7 +26,9 @@ import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
 
 type MediaItem = {
   id: string;
-  matchId: string;
+  /** match id أو competition id حسب المصدر */
+  ownerId: string;
+  source: 'match' | 'competition';
   url: string;
   type: 'photo' | 'video';
   matchLabel: string;
@@ -81,10 +83,32 @@ export default function HighlightsScreen() {
   const listChrome = useListChrome();
   const saveToPrivate = useSaveToPrivateSpace();
 
-
   const media = useMemo(() => {
     const items: MediaItem[] = [];
     competitions.forEach((comp) => {
+      (comp.media?.photos || []).forEach((p) => {
+        items.push({
+          id: p.id,
+          ownerId: comp.id,
+          source: 'competition',
+          url: p.url,
+          type: 'photo',
+          matchLabel: comp.name,
+          likes: p.likes,
+        });
+      });
+      (comp.media?.videos || []).forEach((v) => {
+        items.push({
+          id: v.id,
+          ownerId: comp.id,
+          source: 'competition',
+          url: v.url,
+          type: 'video',
+          matchLabel: comp.name,
+          likes: v.likes,
+        });
+      });
+
       comp.matches.forEach((match) => {
         const team1 = comp.teams.find((t) => t.id === match.team1Id)?.name;
         const team2 = comp.teams.find((t) => t.id === match.team2Id)?.name;
@@ -92,7 +116,8 @@ export default function HighlightsScreen() {
         match.media?.photos?.forEach((p) => {
           items.push({
             id: p.id,
-            matchId: match.id,
+            ownerId: match.id,
+            source: 'match',
             url: p.url,
             type: 'photo',
             matchLabel: label,
@@ -102,7 +127,8 @@ export default function HighlightsScreen() {
         match.media?.videos?.forEach((v) => {
           items.push({
             id: v.id,
-            matchId: match.id,
+            ownerId: match.id,
+            source: 'match',
             url: v.url,
             type: 'video',
             matchLabel: label,
@@ -117,11 +143,18 @@ export default function HighlightsScreen() {
   const fullScreenData = useMemo<FullScreenContent[]>(
     () =>
       media.map((item) => ({
-        id: `${item.type}-${item.id}`,
+        id: `${item.source}-${item.type}-${item.id}`,
         kind: item.type,
         mediaUrl: item.url,
         authorName: item.matchLabel,
-        subtitle: item.type === 'photo' ? t('screens.matchClipPhoto') : t('screens.matchClipVideo'),
+        subtitle:
+          item.source === 'competition'
+            ? item.type === 'photo'
+              ? t('screens.competitionClipPhoto')
+              : t('screens.competitionClipVideo')
+            : item.type === 'photo'
+              ? t('screens.matchClipPhoto')
+              : t('screens.matchClipVideo'),
         likes: item.likes,
         liked: !!currentUser && item.likes.includes(currentUser.id),
       })),
@@ -130,9 +163,11 @@ export default function HighlightsScreen() {
 
   const onFullLike = useCallback(
     (item: FullScreenContent) => {
-      const source = media.find((m) => `${m.type}-${m.id}` === item.id);
+      const source = media.find(
+        (m) => `${m.source}-${m.type}-${m.id}` === item.id
+      );
       if (!source) return;
-      toggleMediaLike(source.matchId, source.id, source.type, 'match');
+      toggleMediaLike(source.ownerId, source.id, source.type, source.source);
     },
     [media, toggleMediaLike]
   );
@@ -145,7 +180,7 @@ export default function HighlightsScreen() {
           item={item}
           liked={liked}
           onLike={() =>
-            toggleMediaLike(item.matchId, item.id, item.type, 'match')
+            toggleMediaLike(item.ownerId, item.id, item.type, item.source)
           }
         />
       );
@@ -173,7 +208,7 @@ export default function HighlightsScreen() {
       <FlatList
         style={{ flex: 1 }}
         data={media}
-        keyExtractor={(item) => `${item.type}-${item.id}`}
+        keyExtractor={(item) => `${item.source}-${item.type}-${item.id}`}
         {...listChrome}
         contentContainerStyle={[styles.list, listChrome.contentContainerStyle]}
         ListHeaderComponent={

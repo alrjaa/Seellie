@@ -556,10 +556,13 @@ export const en: TranslationTree = {
     personalityEmptyDesc:
       'When freelancers add photos or videos they will appear here.',
     noHighlights: 'No highlights yet',
-    noHighlightsDesc: 'Media will appear here when added to matches.',
-    highlightsHint: 'Match photos and videos — tap like to engage',
+    noHighlightsDesc:
+      'Competition and match photos/videos appear here when organizers upload them.',
+    highlightsHint: 'Photos and videos from competitions and matches — tap like to engage',
     matchClipPhoto: 'Match clip · photo',
     matchClipVideo: 'Match clip · video',
+    competitionClipPhoto: 'Competition clip · photo',
+    competitionClipVideo: 'Competition clip · video',
     generalSubtitle: 'Photos & videos · forums & comments · posts & analysis',
     generalEmptyDesc: 'Try another section or add a forum comment.',
     typePost: 'Post',
