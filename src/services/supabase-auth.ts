@@ -3,6 +3,10 @@ import type { UserRole } from '@/types';
 import { ensureSocialLists } from '@/utils/social-stats';
 import { normalizeUserRoles } from '@/utils/roles';
 import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
+import {
+  applyContentPayload,
+  type UserContentPayload,
+} from '@/services/supabase-user-content';
 import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
@@ -23,6 +27,7 @@ export type ProfileRow = {
   country: string | null;
   status: string | null;
   mobile: string | null;
+  content?: UserContentPayload | null;
 };
 
 function defaultPermissions(role: UserRole): User['permissions'] {
@@ -70,7 +75,9 @@ export function profileToUser(row: ProfileRow): User {
     analysisContent: [],
     comments: [],
   };
-  return ensureSocialLists(normalizeUserRoles(draft));
+  return ensureSocialLists(
+    normalizeUserRoles(applyContentPayload(draft, row.content))
+  );
 }
 
 export async function fetchProfile(userId: string): Promise<User | null> {
@@ -105,6 +112,7 @@ export async function fetchAllProfiles(): Promise<User[]> {
 /**
  * دمج القائمة المحلية مع السحابة:
  * نفس الإيميل → الحساب السحابي (UUID) يفوز ويزيل المكرر المحلي.
+ * إن كان محتوى السحابة فارغاً نحتفظ بمحتوى محلي غير فارغ حتى لا يُمسَح بعد المزامنة.
  */
 export function mergeUsersPreferCloud(
   localUsers: User[],
@@ -119,7 +127,29 @@ export function mergeUsersPreferCloud(
   for (const u of cloudUsers) {
     const key = (u.email || '').trim().toLowerCase();
     if (!key) continue;
-    byEmail.set(key, u);
+    const local = byEmail.get(key);
+    if (!local) {
+      byEmail.set(key, u);
+      continue;
+    }
+    const cloudHasMedia =
+      (u.media?.photos?.length || 0) + (u.media?.videos?.length || 0) > 0;
+    const cloudHasPosts = (u.posts?.length || 0) > 0;
+    const cloudHasAnalysis = (u.analysisContent?.length || 0) > 0;
+    byEmail.set(key, {
+      ...u,
+      media: cloudHasMedia ? u.media : local.media || u.media,
+      posts: cloudHasPosts ? u.posts : local.posts || u.posts,
+      analysisContent: cloudHasAnalysis
+        ? u.analysisContent
+        : local.analysisContent || u.analysisContent,
+      personalityPhotos:
+        (u.personalityPhotos?.length || 0) > 0
+          ? u.personalityPhotos
+          : local.personalityPhotos || u.personalityPhotos,
+      followers: u.followers?.length ? u.followers : local.followers,
+      following: u.following?.length ? u.following : local.following,
+    });
   }
   // إن وُجد مشرف سحابي، أخفِ حساب المشرف التجريبي المحلي لتجنب التكرار البصري
   const hasCloudAdmin = cloudUsers.some((u) => u.role === 'superadmin');

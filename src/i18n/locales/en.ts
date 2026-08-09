@@ -1043,6 +1043,8 @@ export const en: TranslationTree = {
       noCompetitionsDesc: 'Create or request a competition to upload media.',
       photoAdded: 'Photo added to competition',
       videoAdded: 'Video added to competition',
+      selectMatchOptional: 'Link to a match (for Highlights) — optional',
+      wholeCompetition: 'Whole competition',
     },
     comments: {
       title: 'Comments',

@@ -1042,6 +1042,8 @@ export const ar = {
       noCompetitionsDesc: 'أنشئ أو اطلب مسابقة لتتمكن من رفع الوسائط.',
       photoAdded: 'تمت إضافة الصورة للمسابقة',
       videoAdded: 'تمت إضافة الفيديو للمسابقة',
+      selectMatchOptional: 'اربط بمباراة (للقطات) — اختياري',
+      wholeCompetition: 'المسابقة كلها',
     },
     comments: {
       title: 'التعليقات',

@@ -40,11 +40,11 @@ type Props = {
   /** When true, show add/remove controls (owner managing their account). */
   editable?: boolean;
   currentUserId?: string;
-  onAddPhoto?: (url: string) => boolean | void;
-  onAddVideo?: (url: string) => boolean | void;
-  onRemovePhoto?: (id: string) => void;
-  onRemoveVideo?: (id: string) => void;
-  onSetAvatar?: (url: string) => void;
+  onAddPhoto?: (url: string) => boolean | void | Promise<boolean | void>;
+  onAddVideo?: (url: string) => boolean | void | Promise<boolean | void>;
+  onRemovePhoto?: (id: string) => void | Promise<void | boolean>;
+  onRemoveVideo?: (id: string) => void | Promise<void | boolean>;
+  onSetAvatar?: (url: string) => void | Promise<void | boolean>;
   onTogglePhotoLike?: (id: string) => void;
   onToggleVideoLike?: (id: string) => void;
 };
@@ -139,8 +139,8 @@ function PlayerMediaSectionComponent({
           return;
         }
 
-        if (kind === 'video') onAddVideo?.(asset.uri);
-        else onAddPhoto?.(asset.uri);
+        if (kind === 'video') await onAddVideo?.(asset.uri);
+        else await onAddPhoto?.(asset.uri);
       } catch {
         toast({
           variant: 'destructive',
@@ -271,7 +271,10 @@ function PlayerMediaSectionComponent({
           <Button
             label={t('media.addPhoto')}
             onPress={() => {
-              if (onAddPhoto?.(photoUrl.trim())) setPhotoUrl('');
+              void (async () => {
+                const ok = await onAddPhoto?.(photoUrl.trim());
+                if (ok !== false) setPhotoUrl('');
+              })();
             }}
           />
         </Card>
@@ -359,7 +362,10 @@ function PlayerMediaSectionComponent({
           <Button
             label={t('media.addVideo')}
             onPress={() => {
-              if (onAddVideo?.(videoUrl.trim())) setVideoUrl('');
+              void (async () => {
+                const ok = await onAddVideo?.(videoUrl.trim());
+                if (ok !== false) setVideoUrl('');
+              })();
             }}
           />
         </Card>

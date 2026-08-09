@@ -4,11 +4,13 @@ const BUCKET = 'share-media';
 
 /**
  * يرفع ملفاً محلياً إلى Supabase Storage ويعيد رابطاً عاماً HTTPS.
+ * folder مثل: shares | competitions | matches | users | forums | avatars
  */
-export async function uploadShareMedia(
+export async function uploadAppMedia(
   localUri: string,
   kind: 'photo' | 'video',
-  userId: string
+  userId: string,
+  folder = 'uploads'
 ): Promise<string | null> {
   const sb = getSupabase();
   if (!sb || !localUri) return null;
@@ -17,9 +19,10 @@ export async function uploadShareMedia(
   try {
     const ext =
       kind === 'video'
-        ? (localUri.match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] || 'mp4')
-        : (localUri.match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] || 'jpg');
-    const path = `${userId}/${Date.now()}.${ext.toLowerCase()}`;
+        ? localUri.match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] || 'mp4'
+        : localUri.match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] || 'jpg';
+    const safeFolder = folder.replace(/[^a-z0-9/_-]/gi, '') || 'uploads';
+    const path = `${userId}/${safeFolder}/${Date.now()}.${ext.toLowerCase()}`;
     const response = await fetch(localUri);
     const blob = await response.blob();
     const contentType =
@@ -42,4 +45,13 @@ export async function uploadShareMedia(
     console.warn('[supabase] upload failed', e);
     return null;
   }
+}
+
+/** توافق مع المسارات القديمة (بطاقات المشاركة) */
+export async function uploadShareMedia(
+  localUri: string,
+  kind: 'photo' | 'video',
+  userId: string
+): Promise<string | null> {
+  return uploadAppMedia(localUri, kind, userId, 'shares');
 }

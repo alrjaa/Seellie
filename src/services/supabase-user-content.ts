@@ -1,0 +1,91 @@
+import type { Comment, User } from '@/data/initial-data';
+import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
+import { isUuid } from '@/services/supabase-messages';
+import { requireCloudSession } from '@/services/cloud-write';
+
+export type UserContentPayload = {
+  posts?: User['posts'];
+  media?: User['media'];
+  analysisContent?: User['analysisContent'];
+  personalityPhotos?: string[];
+};
+
+function reviveMediaItem<T extends { timestamp?: Date | string }>(
+  item: T
+): T {
+  if (item.timestamp == null) return item;
+  return {
+    ...item,
+    timestamp: new Date(item.timestamp as Date | string),
+  };
+}
+
+export function applyContentPayload(
+  user: User,
+  content: UserContentPayload | null | undefined
+): User {
+  if (!content || typeof content !== 'object') return user;
+  const media = content.media || user.media || { photos: [], videos: [] };
+  return {
+    ...user,
+    posts: Array.isArray(content.posts)
+      ? content.posts.map((p) => ({
+          ...p,
+          timestamp: new Date(p.timestamp as Date | string),
+        }))
+      : user.posts || [],
+    media: {
+      photos: (media.photos || []).map((p) => reviveMediaItem(p)),
+      videos: (media.videos || []).map((v) => reviveMediaItem(v)),
+    },
+    analysisContent: Array.isArray(content.analysisContent)
+      ? content.analysisContent.map((a) => ({
+          ...a,
+          timestamp: new Date(a.timestamp as Date | string),
+          comments: (a.comments || []) as Comment[],
+        }))
+      : user.analysisContent || [],
+    personalityPhotos: Array.isArray(content.personalityPhotos)
+      ? content.personalityPhotos
+      : user.personalityPhotos || [],
+  };
+}
+
+export function userToContentPayload(user: User): UserContentPayload {
+  return {
+    posts: user.posts || [],
+    media: user.media || { photos: [], videos: [] },
+    analysisContent: user.analysisContent || [],
+    personalityPhotos: user.personalityPhotos || [],
+  };
+}
+
+export async function upsertUserContentCloud(
+  user: User
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || !isUuid(user.id)) {
+    return { ok: false, error: 'not_cloud_user' };
+  }
+  const { session, error: sessionError } = await requireCloudSession(user.id);
+  if (!session) {
+    return { ok: false, error: sessionError || 'no_session' };
+  }
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: 'no_client' };
+
+  const { error } = await sb
+    .from('profiles')
+    .update({
+      content: userToContentPayload(user),
+      avatar: user.avatar || null,
+      bio: user.bio || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', user.id);
+
+  if (error) {
+    console.warn('[content] upsertUserContent', error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}

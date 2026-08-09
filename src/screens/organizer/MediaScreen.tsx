@@ -36,6 +36,7 @@ export default function MediaScreen() {
   const [picking, setPicking] = useState(false);
   const [photoUrl, setPhotoUrl] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [sharePayload, setSharePayload] = useState<ContentSharePayload | null>(
     null
   );
@@ -53,6 +54,22 @@ export default function MediaScreen() {
 
   const activeCompetitionId =
     selectedCompetitionId || myCompetitions[0]?.id || '';
+
+  const activeCompetition = useMemo(
+    () => myCompetitions.find((c) => c.id === activeCompetitionId) || null,
+    [myCompetitions, activeCompetitionId]
+  );
+
+  const matchOptions = useMemo(() => {
+    if (!activeCompetition) return [];
+    return activeCompetition.matches.map((m) => {
+      const t1 =
+        activeCompetition.teams.find((x) => x.id === m.team1Id)?.name || '؟';
+      const t2 =
+        activeCompetition.teams.find((x) => x.id === m.team2Id)?.name || '؟';
+      return { id: m.id, label: `${t1} × ${t2}` };
+    });
+  }, [activeCompetition]);
 
   const items = useMemo(() => {
     const media: MediaItem[] = [];
@@ -169,19 +186,21 @@ export default function MediaScreen() {
           return;
         }
         if (kind === 'video') {
-          addCompetitionMedia(
+          await addCompetitionMedia(
             activeCompetitionId,
             'videos',
             asset.uri,
-            t('organizer.media.videoAdded')
+            t('organizer.media.videoAdded'),
+            selectedMatchId || undefined
           );
           return;
         }
-        addCompetitionMedia(
+        await addCompetitionMedia(
           activeCompetitionId,
           'photos',
           asset.uri,
-          t('organizer.media.photoAdded')
+          t('organizer.media.photoAdded'),
+          selectedMatchId || undefined
         );
       } catch {
         toast({
@@ -193,7 +212,7 @@ export default function MediaScreen() {
         setPicking(false);
       }
     },
-    [activeCompetitionId, addCompetitionMedia, t, toast]
+    [activeCompetitionId, addCompetitionMedia, selectedMatchId, t, toast]
   );
 
   return (
@@ -220,10 +239,34 @@ export default function MediaScreen() {
                   key={c.id}
                   label={c.name}
                   active={c.id === activeCompetitionId}
-                  onPress={() => setSelectedCompetitionId(c.id)}
+                  onPress={() => {
+                    setSelectedCompetitionId(c.id);
+                    setSelectedMatchId(null);
+                  }}
                 />
               ))}
             </View>
+
+            {matchOptions.length > 0 ? (
+              <>
+                <Muted>{t('organizer.media.selectMatchOptional')}</Muted>
+                <View style={styles.chips}>
+                  <Chip
+                    label={t('organizer.media.wholeCompetition')}
+                    active={!selectedMatchId}
+                    onPress={() => setSelectedMatchId(null)}
+                  />
+                  {matchOptions.map((m) => (
+                    <Chip
+                      key={m.id}
+                      label={m.label}
+                      active={selectedMatchId === m.id}
+                      onPress={() => setSelectedMatchId(m.id)}
+                    />
+                  ))}
+                </View>
+              </>
+            ) : null}
 
             <MediaUploadSpecs
               kind="photo"
@@ -253,16 +296,16 @@ export default function MediaScreen() {
             <Button
               label={t('media.addPhoto')}
               onPress={() => {
-                if (
-                  addCompetitionMedia(
+                void (async () => {
+                  const ok = await addCompetitionMedia(
                     activeCompetitionId,
                     'photos',
                     photoUrl.trim(),
-                    t('organizer.media.photoAdded')
-                  )
-                ) {
-                  setPhotoUrl('');
-                }
+                    t('organizer.media.photoAdded'),
+                    selectedMatchId || undefined
+                  );
+                  if (ok) setPhotoUrl('');
+                })();
               }}
             />
 
@@ -289,16 +332,16 @@ export default function MediaScreen() {
             <Button
               label={t('media.addVideo')}
               onPress={() => {
-                if (
-                  addCompetitionMedia(
+                void (async () => {
+                  const ok = await addCompetitionMedia(
                     activeCompetitionId,
                     'videos',
                     videoUrl.trim(),
-                    t('organizer.media.videoAdded')
-                  )
-                ) {
-                  setVideoUrl('');
-                }
+                    t('organizer.media.videoAdded'),
+                    selectedMatchId || undefined
+                  );
+                  if (ok) setVideoUrl('');
+                })();
               }}
             />
           </>

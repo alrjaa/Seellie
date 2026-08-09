@@ -320,17 +320,19 @@ export default function UniqueScreen() {
 
   const publish = useCallback(() => {
     if (!canPublish) return;
-    const ok = addAnalysis({
-      title,
-      content,
-      videoUrl: videoUrl.trim() || undefined,
-    });
-    if (ok) {
-      setTitle('');
-      setContent('');
-      setVideoUrl('');
-      setShowGatePanel(false);
-    }
+    void (async () => {
+      const ok = await addAnalysis({
+        title,
+        content,
+        videoUrl: videoUrl.trim() || undefined,
+      });
+      if (ok) {
+        setTitle('');
+        setContent('');
+        setVideoUrl('');
+        setShowGatePanel(false);
+      }
+    })();
   }, [addAnalysis, canPublish, content, title, videoUrl]);
 
   const onFullLike = useCallback(

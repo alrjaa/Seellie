@@ -65,17 +65,19 @@ export default function CreateAnalysisScreen() {
   }, [toast, t]);
 
   const submit = () => {
-    const ok = addAnalysis({
-      title,
-      content,
-      videoUrl: videoUrl.trim() || undefined,
-    });
-    if (ok) {
-      setTitle('');
-      setContent('');
-      setVideoUrl('');
-      router.back();
-    }
+    void (async () => {
+      const ok = await addAnalysis({
+        title,
+        content,
+        videoUrl: videoUrl.trim() || undefined,
+      });
+      if (ok) {
+        setTitle('');
+        setContent('');
+        setVideoUrl('');
+        router.back();
+      }
+    })();
   };
 
   return (

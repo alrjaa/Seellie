@@ -29,6 +29,12 @@ import {
 } from '@/utils/password';
 import { isSupabaseConfigured } from '@/services/supabase';
 import {
+  cloudWriteErrorMessage,
+  requireCloudSession,
+  resolvePublicMediaUrl,
+} from '@/services/cloud-write';
+import { upsertUserContentCloud } from '@/services/supabase-user-content';
+import {
   fetchAllProfiles,
   mergeUsersPreferCloud,
   restoreSupabaseSession,
@@ -462,7 +468,7 @@ export interface TournamentContextType {
     content: string;
     videoUrl?: string;
     matchId?: string;
-  }) => boolean;
+  }) => Promise<boolean>;
   /** طلب الانضمام كمحلل من صفحة الفريد بعد الموافقة على الشروط */
   applyAsAnalyst: (termsAccepted: boolean) => boolean;
   /** موافقة الإدارة على طلب المحلل + إرسال رمز عبر البريد */
@@ -496,19 +502,20 @@ export interface TournamentContextType {
     type: 'photos' | 'videos',
     url: string,
     successMessage?: string
-  ) => boolean;
+  ) => Promise<boolean>;
   removeUserMedia: (
     type: 'photos' | 'videos',
     mediaId: string,
     successMessage?: string
-  ) => boolean;
+  ) => Promise<boolean>;
   addCompetitionMedia: (
     competitionId: string,
     type: 'photos' | 'videos',
     url: string,
-    successMessage?: string
-  ) => boolean;
-  setUserAvatar: (url: string, successMessage?: string) => boolean;
+    successMessage?: string,
+    matchId?: string
+  ) => Promise<boolean>;
+  setUserAvatar: (url: string, successMessage?: string) => Promise<boolean>;
   /** متابعة / إلغاء متابعة حساب آخر */
   toggleFollowUser: (targetUserId: string) => boolean;
   routeForRole: (role: UserRole) => string;
@@ -1434,7 +1441,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         };
         await setJson(USER_CREDENTIAL_OVERRIDES_KEY, next);
       })();
-      // مزامنة الملف السحابي (حالة/أدوار) دون تعطيل الحسابات المحلية
+      // مزامنة الملف السحابي (حالة/أدوار) + محتوى المنشورات/الوسائط
       if (isSupabaseConfigured() && isUuid(normalized.id)) {
         void updateProfileAdminCloud({
           id: normalized.id,
@@ -1447,6 +1454,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           activeRole: normalized.activeRole || normalized.role,
           status: normalized.status || 'active',
         });
+        void upsertUserContentCloud(normalized);
       }
       if (successMessage) {
         toast({ variant: 'success', title: t('toasts.t013_5a42a9'), description: successMessage });
@@ -1931,43 +1939,42 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         isUuid(currentUser.id)
       ) {
         void (async () => {
+          let finalVideoUrl = videoUrl;
+          if (finalVideoUrl) {
+            const resolved = await resolvePublicMediaUrl({
+              uri: finalVideoUrl,
+              kind: 'video',
+              folder: 'forums',
+              userId: currentUser.id,
+              requireCloud: true,
+            });
+            if (!resolved.url) {
+              toast({
+                variant: 'destructive',
+                title: t('forums.cloudSyncFailed'),
+                description: cloudWriteErrorMessage(resolved.error),
+              });
+              return;
+            }
+            finalVideoUrl = resolved.url;
+          }
           const remote = await insertForumComment({
             authorId: currentUser.id,
             authorName: currentUser.name,
             authorAvatar: currentUser.avatar,
             text: trimmed,
-            videoUrl,
+            videoUrl: finalVideoUrl,
             videoDurationSec: extras?.videoDurationSec,
           });
           if (remote.comment) {
             publishLocal(remote.comment);
             return;
           }
-          // فشل السحابة → محلي مؤقتاً مع تنبيه
-          const local: Comment = {
-            id: createId(),
-            text: trimmed,
-            authorId: currentUser.id,
-            authorName: currentUser.name,
-            authorAvatar: currentUser.avatar || '',
-            timestamp: new Date(),
-            likes: [],
-            replies: [],
-            ...(videoUrl
-              ? {
-                  videoUrl,
-                  videoDurationSec: extras?.videoDurationSec,
-                }
-              : null),
-          };
-          publishLocal(local);
-          if (remote.error && remote.error !== 'no_session') {
-            toast({
-              variant: 'destructive',
-              title: t('forums.cloudSyncFailed'),
-              description: remote.error,
-            });
-          }
+          toast({
+            variant: 'destructive',
+            title: t('forums.cloudSyncFailed'),
+            description: remote.error || cloudWriteErrorMessage('no_session'),
+          });
         })();
         return;
       }
@@ -3170,7 +3177,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const addAnalysis = useCallback(
-    (data: {
+    async (data: {
       title: string;
       content: string;
       videoUrl?: string;
@@ -3184,14 +3191,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         toast({
           variant: 'destructive',
           title: t('toasts.t039_ceb90c'),
-          description:
-            t('toasts.t094_fa723f'),
+          description: t('toasts.t094_fa723f'),
         });
         return false;
       }
       const title = data.title.trim();
       const content = data.content.trim();
-      const videoUrl = data.videoUrl?.trim() || undefined;
+      let videoUrl = data.videoUrl?.trim() || undefined;
       if (!title || (!content && !videoUrl)) {
         toast({
           variant: 'destructive',
@@ -3200,6 +3206,34 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
         return false;
       }
+
+      const cloud = await requireCloudSession(currentUser.id);
+      if (videoUrl && cloud.session) {
+        const resolved = await resolvePublicMediaUrl({
+          uri: videoUrl,
+          kind: 'video',
+          folder: 'analysis',
+          userId: cloud.session.userId,
+          requireCloud: true,
+        });
+        if (!resolved.url) {
+          toast({
+            variant: 'destructive',
+            title: t('toasts.t036_3a814a'),
+            description: cloudWriteErrorMessage(resolved.error),
+          });
+          return false;
+        }
+        videoUrl = resolved.url;
+      } else if (videoUrl && !cloud.session) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t036_3a814a'),
+          description: cloudWriteErrorMessage(cloud.error),
+        });
+        return false;
+      }
+
       const analysis = {
         id: createId(),
         matchId: data.matchId,
@@ -3211,22 +3245,30 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         comments: [] as Comment[],
         status: 'active' as const,
       };
+      const updated: User = {
+        ...currentUser,
+        analysisContent: [analysis, ...currentUser.analysisContent],
+      };
       setUsers((prev) =>
-        prev.map((u) =>
-          u.id === currentUser.id
-            ? { ...u, analysisContent: [analysis, ...u.analysisContent] }
-            : u
-        )
+        prev.map((u) => (u.id === updated.id ? updated : u))
       );
-      setCurrentUser((prev) =>
-        prev
-          ? { ...prev, analysisContent: [analysis, ...prev.analysisContent] }
-          : prev
-      );
+      setCurrentUser(updated);
+      void setJson(USER_STORAGE_KEY, updated);
+      if (cloud.session) {
+        const sync = await upsertUserContentCloud(updated);
+        if (!sync.ok) {
+          toast({
+            variant: 'destructive',
+            title: t('toasts.t036_3a814a'),
+            description: cloudWriteErrorMessage(sync.error),
+          });
+          return false;
+        }
+      }
       toast({ variant: 'success', title: t('toasts.t040_286629') });
       return true;
     },
-    [currentUser, toast]
+    [currentUser, toast, t]
   );
 
   const persistUser = useCallback(
@@ -4182,10 +4224,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
     setCurrentUser(updated);
     void setJson(USER_STORAGE_KEY, updated);
+    if (isUuid(updated.id) && isSupabaseConfigured()) {
+      void upsertUserContentCloud(updated);
+    }
   }, []);
 
   const addUserMedia = useCallback(
-    (
+    async (
       type: 'photos' | 'videos',
       url: string,
       successMessage?: string
@@ -4200,9 +4245,36 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
         return false;
       }
+
+      const cloud = await requireCloudSession(currentUser.id);
+      if (!cloud.session) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t071_355b33'),
+          description: cloudWriteErrorMessage(cloud.error),
+        });
+        return false;
+      }
+
+      const resolved = await resolvePublicMediaUrl({
+        uri: trimmed,
+        kind: type === 'photos' ? 'photo' : 'video',
+        folder: 'users',
+        userId: cloud.session.userId,
+        requireCloud: true,
+      });
+      if (!resolved.url) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t071_355b33'),
+          description: cloudWriteErrorMessage(resolved.error),
+        });
+        return false;
+      }
+
       const item = {
         id: createId(),
-        url: trimmed,
+        url: resolved.url,
         timestamp: new Date(),
         likes: [] as string[],
         comments: [] as Comment[],
@@ -4216,6 +4288,15 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         },
       };
       persistCurrentUser(updated);
+      const sync = await upsertUserContentCloud(updated);
+      if (!sync.ok) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t071_355b33'),
+          description: cloudWriteErrorMessage(sync.error),
+        });
+        return false;
+      }
       toast({
         variant: 'success',
         title: type === 'photos' ? t('common.photoAdded') : t('common.videoAdded'),
@@ -4223,11 +4304,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [currentUser, persistCurrentUser, toast]
+    [currentUser, persistCurrentUser, toast, t]
   );
 
   const removeUserMedia = useCallback(
-    (
+    async (
       type: 'photos' | 'videos',
       mediaId: string,
       successMessage?: string
@@ -4242,20 +4323,32 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         },
       };
       persistCurrentUser(updated);
+      if (isUuid(updated.id)) {
+        const sync = await upsertUserContentCloud(updated);
+        if (!sync.ok) {
+          toast({
+            variant: 'destructive',
+            title: t('toasts.t071_355b33'),
+            description: cloudWriteErrorMessage(sync.error),
+          });
+          return false;
+        }
+      }
       if (successMessage) {
         toast({ title: t('toasts.t014_3569a8'), description: successMessage });
       }
       return true;
     },
-    [currentUser, persistCurrentUser, toast]
+    [currentUser, persistCurrentUser, toast, t]
   );
 
   const addCompetitionMedia = useCallback(
-    (
+    async (
       competitionId: string,
       type: 'photos' | 'videos',
       url: string,
-      successMessage?: string
+      successMessage?: string,
+      matchId?: string
     ) => {
       if (!currentUser) return false;
       const trimmed = url.trim();
@@ -4277,28 +4370,83 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
         return false;
       }
+
+      const cloud = await requireCloudSession(currentUser.id);
+      if (!cloud.session) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t071_355b33'),
+          description: cloudWriteErrorMessage(cloud.error),
+        });
+        return false;
+      }
+
+      const resolved = await resolvePublicMediaUrl({
+        uri: trimmed,
+        kind: type === 'photos' ? 'photo' : 'video',
+        folder: matchId ? 'matches' : 'competitions',
+        userId: cloud.session.userId,
+        requireCloud: true,
+      });
+      if (!resolved.url) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t071_355b33'),
+          description: cloudWriteErrorMessage(resolved.error),
+        });
+        return false;
+      }
+
       const item = {
         id: createId(),
-        url: trimmed,
+        url: resolved.url,
         timestamp: new Date(),
         likes: [] as string[],
         comments: [] as Comment[],
       };
-      setCompetitions((prev) => {
-        const next = prev.map((c) => {
-          if (c.id !== competitionId) return c;
-          const media = c.media || { photos: [], videos: [] };
-          return {
-            ...c,
+
+      const toUpsert: Competition = matchId
+        ? {
+            ...owned,
+            matches: owned.matches.map((m) => {
+              if (m.id !== matchId) return m;
+              const media = m.media || { photos: [], videos: [] };
+              return {
+                ...m,
+                media: {
+                  ...media,
+                  [type]: [item, ...(media[type] || [])],
+                },
+              };
+            }),
+          }
+        : {
+            ...owned,
             media: {
-              ...media,
-              [type]: [item, ...(media[type] || [])],
+              ...(owned.media || { photos: [], videos: [] }),
+              [type]: [
+                item,
+                ...((owned.media || { photos: [], videos: [] })[type] || []),
+              ],
             },
           };
-        });
+
+      setCompetitions((prev) => {
+        const next = prev.map((c) => (c.id === competitionId ? toUpsert : c));
         void saveCompetitions(next);
         return next;
       });
+
+      const cloudUpsert = await upsertCompetitionCloud(toUpsert);
+      if (!cloudUpsert.ok) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t071_355b33'),
+          description: cloudWriteErrorMessage(cloudUpsert.error),
+        });
+        return false;
+      }
+
       toast({
         variant: 'success',
         title: type === 'photos' ? t('common.photoAdded') : t('common.videoAdded'),
@@ -4310,12 +4458,44 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const setUserAvatar = useCallback(
-    (url: string, successMessage?: string) => {
+    async (url: string, successMessage?: string) => {
       if (!currentUser) return false;
       const trimmed = url.trim();
       if (!trimmed) return false;
-      const updated: User = { ...currentUser, avatar: trimmed };
+
+      const cloud = await requireCloudSession(currentUser.id);
+      let finalUrl = trimmed;
+      if (cloud.session) {
+        const resolved = await resolvePublicMediaUrl({
+          uri: trimmed,
+          kind: 'photo',
+          folder: 'avatars',
+          userId: cloud.session.userId,
+          requireCloud: true,
+        });
+        if (!resolved.url) {
+          toast({
+            variant: 'destructive',
+            title: t('toasts.t071_355b33'),
+            description: cloudWriteErrorMessage(resolved.error),
+          });
+          return false;
+        }
+        finalUrl = resolved.url;
+      } else if (!/^https?:\/\//i.test(trimmed)) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t071_355b33'),
+          description: cloudWriteErrorMessage(cloud.error),
+        });
+        return false;
+      }
+
+      const updated: User = { ...currentUser, avatar: finalUrl };
       persistCurrentUser(updated);
+      if (cloud.session) {
+        await upsertUserContentCloud(updated);
+      }
       toast({
         variant: 'success',
         title: t('toasts.t072_2a81f2'),
@@ -4323,7 +4503,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [currentUser, persistCurrentUser, toast]
+    [currentUser, persistCurrentUser, toast, t]
   );
 
   const toggleFollowUser = useCallback(
