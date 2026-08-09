@@ -10,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -55,14 +56,19 @@ function resolveChatMedia(message: {
   mediaKind?: PrivateChatMediaKind;
   caption: string;
 } {
-  if (message.mediaUrl && message.mediaKind) {
+  if (message.mediaUrl) {
+    const kind =
+      message.mediaKind ||
+      (/\.(?:mp4|mov|webm)(?:\?\S*)?$/i.test(message.mediaUrl)
+        ? 'video'
+        : 'photo');
     const caption =
       message.text && message.text.trim() !== message.mediaUrl.trim()
         ? message.text
         : '';
     return {
       mediaUrl: message.mediaUrl,
-      mediaKind: message.mediaKind,
+      mediaKind: kind,
       caption,
     };
   }
@@ -362,17 +368,18 @@ export default function PrivateScreen() {
 
   // ارتفاع ثابت لصندوق المحادثة حتى يبقى شريط الكتابة/الإرسال ظاهراً دائماً
   const chatShellHeight = useMemo(() => {
-    const topChrome = 56; // تبويبات الخاصة فقط (بدون عنوان طويل)
-    const bottomChrome = Platform.OS === 'web' ? 118 : 108;
-    return Math.max(320, windowHeight - topChrome - bottomChrome);
+    const topChrome = 52;
+    // شريط تبويب التطبيق + شريط سفاري على الجوال
+    const bottomChrome = Platform.OS === 'web' ? 140 : 120;
+    return Math.max(280, windowHeight - topChrome - bottomChrome);
   }, [windowHeight]);
 
   const chatMessagesHeight = useMemo(() => {
-    const chips = 52;
-    const head = 36;
-    const composer = 168; // حقل + أزرار الإرفاق/الإرسال
-    const panelPad = 24;
-    return Math.max(100, chatShellHeight - chips - head - composer - panelPad);
+    const chips = 48;
+    const head = 32;
+    const composer = 64; // صف واحد: إرفاق + حقل + إرسال
+    const gaps = 20;
+    return Math.max(120, chatShellHeight - chips - head - composer - gaps);
   }, [chatShellHeight]);
 
   const onAddFriend = useCallback(
@@ -1011,7 +1018,7 @@ export default function PrivateScreen() {
                   style={[
                     styles.composerDock,
                     {
-                      borderTopColor: theme.colors.border,
+                      borderColor: theme.colors.border,
                       backgroundColor: theme.colors.card,
                     },
                   ]}
@@ -1044,7 +1051,7 @@ export default function PrivateScreen() {
                           />
                         </View>
                       )}
-                      <Muted style={{ flex: 1 }} numberOfLines={2}>
+                      <Muted style={{ flex: 1 }} numberOfLines={1}>
                         {pendingMedia.label ||
                           (pendingMedia.kind === 'photo'
                             ? t('privateSpace.attachPhotoReady')
@@ -1064,13 +1071,7 @@ export default function PrivateScreen() {
                       </Pressable>
                     </View>
                   ) : null}
-                  <Input
-                    value={draft}
-                    onChangeText={setDraft}
-                    placeholder={t('privateSpace.messagePlaceholder')}
-                    multiline
-                  />
-                  <View style={styles.chatActions}>
+                  <View style={styles.composerRow}>
                     <Pressable
                       onPress={() => {
                         setAttachSource(
@@ -1086,7 +1087,10 @@ export default function PrivateScreen() {
                       hitSlop={8}
                       accessibilityRole="button"
                       accessibilityLabel={t('privateSpace.attachContent')}
-                      style={{ opacity: activeFriend ? 1 : 0.35 }}
+                      style={[
+                        styles.composerIconBtn,
+                        { opacity: activeFriend ? 1 : 0.35 },
+                      ]}
                     >
                       <Ionicons
                         name="attach-outline"
@@ -1094,27 +1098,52 @@ export default function PrivateScreen() {
                         color={theme.colors.accent}
                       />
                     </Pressable>
-                    <Button
-                      label={t('privateSpace.clearChat')}
-                      variant="ghost"
-                      size="sm"
-                      onPress={() => void onClearChat()}
-                      disabled={!activeFriend || chatMessages.length === 0}
+                    <TextInput
+                      value={draft}
+                      onChangeText={setDraft}
+                      placeholder={t('privateSpace.messagePlaceholder')}
+                      placeholderTextColor={theme.colors.textMuted}
+                      editable={!!activeFriend && !sending}
+                      onSubmitEditing={() => void onSend()}
+                      returnKeyType="send"
+                      blurOnSubmit={false}
+                      style={[
+                        styles.composerInput,
+                        {
+                          color: theme.colors.text,
+                          backgroundColor: theme.colors.surfaceElevated,
+                          borderColor: theme.colors.border,
+                        },
+                      ]}
                     />
-                    <Button
-                      label={
-                        sending
-                          ? t('privateSpace.sending')
-                          : t('common.send')
-                      }
+                    <Pressable
                       onPress={() => void onSend()}
                       disabled={
                         sending ||
                         !activeFriend ||
                         (!draft.trim() && !pendingMedia)
                       }
-                      style={{ flex: 1 }}
-                    />
+                      accessibilityRole="button"
+                      accessibilityLabel={t('common.send')}
+                      style={[
+                        styles.sendBtn,
+                        {
+                          backgroundColor: theme.colors.accent,
+                          opacity:
+                            sending ||
+                            !activeFriend ||
+                            (!draft.trim() && !pendingMedia)
+                              ? 0.45
+                              : 1,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="send"
+                        size={18}
+                        color={theme.colors.textInverse}
+                      />
+                    </Pressable>
                   </View>
                 </View>
             </>
@@ -1405,10 +1434,38 @@ const styles = StyleSheet.create({
   composerDock: {
     gap: 8,
     flexShrink: 0,
-    borderTopWidth: StyleSheet.hairlineWidth,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 14,
-    padding: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
+  composerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  composerIconBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  composerInput: {
+    flex: 1,
+    minWidth: 0,
+    height: 42,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 15,
+  },
+  sendBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chatActions: {
     flexDirection: 'row',
@@ -1443,6 +1500,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     overflow: 'hidden',
     alignSelf: 'center',
+    backgroundColor: '#111',
   },
   bubbleMedia: {
     width: 200,
