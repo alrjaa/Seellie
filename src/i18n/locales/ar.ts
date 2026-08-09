@@ -547,7 +547,7 @@ export const ar = {
       'ظهرَت عندك فقط — نفّذ supabase/PRIVATE-DM-FIX.sql ثم أعد الإرسال.',
     sendFailedSession: 'أعد تسجيل الدخول بحساب Sign up سحابي.',
     sendFailedHint:
-      'تحقق من الاتصال ونفّذ PRIVATE-DM-FIX.sql في Supabase إن لم تُنفَّذ.',
+      'تحقق من الاتصال ونفّذ PRIVATE-DM-FIX.sql ثم PRIVATE-DM-MEDIA.sql في Supabase.',
     savedWithAuthorHint:
       'يمكنك إضافة رافع المحتوى كصديق من المحفوظ أو قائمة الأصدقاء.',
     savedHint:

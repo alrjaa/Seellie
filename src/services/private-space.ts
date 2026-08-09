@@ -448,23 +448,22 @@ export async function sendPrivateChatMessage(
     }
   }
 
-  const isRpcSuccess = (rpcData: unknown, rpcError: { message?: string } | null) =>
+  const legacyBody =
+    trimmed ||
+    (mediaUrl
+      ? mediaKind === 'video'
+        ? `🎬 ${mediaUrl}`
+        : `🖼️ ${mediaUrl}`
+      : '');
+
+  const isRpcSuccess = (
+    rpcData: unknown,
+    rpcError: { message?: string } | null
+  ) =>
     !rpcError &&
     rpcData &&
     typeof rpcData === 'object' &&
     (rpcData as { ok?: boolean }).ok === true;
-
-  const isMissingFn = (message?: string) =>
-    !!message &&
-    (/could not find the function/i.test(message) ||
-      /schema cache/i.test(message) ||
-      /PGRST202/i.test(message));
-
-  const isMissingColumn = (message?: string) =>
-    !!message &&
-    (/media_url|media_kind/i.test(message) ||
-      /column .* does not exist/i.test(message) ||
-      /schema cache/i.test(message));
 
   if (canUseCloud(userId) && isUuid(friendId)) {
     const sb = getSupabase();
@@ -478,69 +477,47 @@ export async function sendPrivateChatMessage(
         };
       }
 
-      // 1) RPC مع وسائط (إن وُجدت الدالة المحدّثة)
-      const { data: rpcData, error: rpcError } = await sb.rpc(
-        'send_private_message',
-        {
-          p_friend_id: friendId,
-          p_body: trimmed,
-          p_media_url: mediaUrl || null,
-          p_media_kind: mediaKind || null,
-        }
-      );
-      if (isRpcSuccess(rpcData, rpcError)) {
-        return { state: await loadPrivateSpace(userId), ok: true };
-      }
-      if (rpcError) {
-        console.warn('[private-space] send rpc', rpcError.message);
-      } else if (rpcData && typeof rpcData === 'object') {
-        console.warn(
-          '[private-space] send rpc',
-          (rpcData as { error?: string }).error
-        );
-      }
-
       await sb.rpc('add_private_friend', { p_friend_id: friendId });
 
-      // 2) إدراج مباشر مع أعمدة الوسائط
-      const rowWithMedia = {
-        sender_id: userId,
-        body: trimmed,
-        media_url: mediaUrl || null,
-        media_kind: mediaKind || null,
-      };
-      const { error: mediaInsertError } = await sb
-        .from('private_messages')
-        .insert([
-          { owner_id: userId, friend_id: friendId, ...rowWithMedia },
-          { owner_id: friendId, friend_id: userId, ...rowWithMedia },
-        ]);
-      if (!mediaInsertError) {
-        return { state: await loadPrivateSpace(userId), ok: true };
+      // 1) RPC وسائط (إن وُجدت الدالة + الأعمدة)
+      if (mediaUrl && mediaKind) {
+        const { data, error } = await sb.rpc('send_private_message', {
+          p_friend_id: friendId,
+          p_body: trimmed,
+          p_media_url: mediaUrl,
+          p_media_kind: mediaKind,
+        });
+        if (isRpcSuccess(data, error)) {
+          return { state: await loadPrivateSpace(userId), ok: true };
+        }
+        if (error) console.warn('[private-space] send media rpc', error.message);
       }
-      console.warn('[private-space] send message', mediaInsertError.message);
 
-      // 3) إن أعمدة الوسائط غير موجودة أو RPC قديمة: أرسل الرابط كنص عبر RPC القديمة
-      if (mediaUrl && (isMissingFn(rpcError?.message) || isMissingColumn(mediaInsertError.message))) {
-        const legacyBody =
-          trimmed ||
-          (mediaKind === 'video' ? `🎬 ${mediaUrl}` : `🖼️ ${mediaUrl}`);
-        const { data: legacyData, error: legacyError } = await sb.rpc(
-          'send_private_message',
-          {
-            p_friend_id: friendId,
-            p_body: legacyBody,
-          }
-        );
-        if (isRpcSuccess(legacyData, legacyError)) {
+      // 2) RPC نص فقط (متوافق مع الدالة القديمة والجديدة)
+      {
+        const { data, error } = await sb.rpc('send_private_message', {
+          p_friend_id: friendId,
+          p_body: legacyBody,
+        });
+        if (isRpcSuccess(data, error)) {
           return {
             state: await loadPrivateSpace(userId),
             ok: true,
-            warning: 'media_schema_missing',
+            warning: mediaUrl ? 'media_schema_missing' : undefined,
           };
         }
+        if (error) console.warn('[private-space] send text rpc', error.message);
+        else if (data && typeof data === 'object') {
+          console.warn(
+            '[private-space] send text rpc',
+            (data as { error?: string }).error
+          );
+        }
+      }
 
-        const { error: textInsertError } = await sb.from('private_messages').insert([
+      // 3) إدراج صفّين — نص فقط (بدون أعمدة وسائط؛ يعمل دائماً على المخطط القديم)
+      {
+        const { error } = await sb.from('private_messages').insert([
           {
             owner_id: userId,
             friend_id: friendId,
@@ -554,36 +531,54 @@ export async function sendPrivateChatMessage(
             body: legacyBody,
           },
         ]);
-        if (!textInsertError) {
+        if (!error) {
           return {
             state: await loadPrivateSpace(userId),
             ok: true,
-            warning: 'media_schema_missing',
+            warning: mediaUrl ? 'media_schema_missing' : undefined,
           };
         }
+        console.warn('[private-space] send text insert', error.message);
+
+        // 4) صف المرسل فقط (نص)
+        const { error: ownErr } = await sb.from('private_messages').insert({
+          owner_id: userId,
+          friend_id: friendId,
+          sender_id: userId,
+          body: legacyBody,
+        });
+        if (!ownErr) {
+          return {
+            state: await loadPrivateSpace(userId),
+            ok: false,
+            error: 'recipient_inbox_failed',
+          };
+        }
+        console.warn('[private-space] send own text', ownErr.message);
       }
 
-      // 4) صف المرسل فقط مع وسائط
-      const { error: ownOnlyErr } = await sb.from('private_messages').insert({
-        owner_id: userId,
-        friend_id: friendId,
-        ...rowWithMedia,
-      });
-      if (!ownOnlyErr) {
-        return {
-          state: await loadPrivateSpace(userId),
-          ok: false,
-          error: 'recipient_inbox_failed',
+      // 5) محاولة أخيرة مع أعمدة الوسائط إن وُجدت
+      if (mediaUrl && mediaKind) {
+        const row = {
+          sender_id: userId,
+          body: trimmed,
+          media_url: mediaUrl,
+          media_kind: mediaKind,
         };
+        const { error } = await sb.from('private_messages').insert([
+          { owner_id: userId, friend_id: friendId, ...row },
+          { owner_id: friendId, friend_id: userId, ...row },
+        ]);
+        if (!error) {
+          return { state: await loadPrivateSpace(userId), ok: true };
+        }
+        console.warn('[private-space] send media insert', error.message);
       }
 
       return {
         state: await loadPrivateSpace(userId),
         ok: false,
-        error:
-          rpcError?.message ||
-          mediaInsertError.message ||
-          'cloud_send_failed',
+        error: 'cloud_send_failed',
       };
     }
   }

@@ -527,6 +527,21 @@ export default function PrivateScreen() {
     contentAttachables,
   ]);
 
+  const sendErrorDescription = useCallback(
+    (error?: string) => {
+      if (error === 'recipient_inbox_failed') {
+        return t('privateSpace.sendFailedRecipient');
+      }
+      if (error === 'no_session') return t('privateSpace.sendFailedSession');
+      if (error === 'upload_failed') return t('privateSpace.attachUploadFailed');
+      if (error === 'cloud_unavailable' || error === 'local_only') {
+        return t('privateSpace.sendFailedSession');
+      }
+      return t('privateSpace.sendFailedHint');
+    },
+    [t]
+  );
+
   const onSelectAttachable = useCallback(
     async (item: AttachableItem) => {
       if (!activeFriend || sending) return;
@@ -550,14 +565,7 @@ export default function PrivateScreen() {
           toast({
             variant: 'destructive',
             title: t('privateSpace.sendFailed'),
-            description:
-              result.error === 'recipient_inbox_failed'
-                ? t('privateSpace.sendFailedRecipient')
-                : result.error === 'no_session'
-                  ? t('privateSpace.sendFailedSession')
-                  : result.error === 'upload_failed'
-                    ? t('privateSpace.attachUploadFailed')
-                    : t('privateSpace.sendFailedHint'),
+            description: sendErrorDescription(result.error),
           });
           return;
         }
@@ -572,7 +580,7 @@ export default function PrivateScreen() {
         setSending(false);
       }
     },
-    [activeFriend, sending, draft, space, toast, t]
+    [activeFriend, sending, draft, space, toast, t, sendErrorDescription]
   );
 
   const onSend = useCallback(async () => {
@@ -598,14 +606,7 @@ export default function PrivateScreen() {
         toast({
           variant: 'destructive',
           title: t('privateSpace.sendFailed'),
-          description:
-            result.error === 'recipient_inbox_failed'
-              ? t('privateSpace.sendFailedRecipient')
-              : result.error === 'no_session'
-                ? t('privateSpace.sendFailedSession')
-                : result.error === 'upload_failed'
-                  ? t('privateSpace.attachUploadFailed')
-                  : t('privateSpace.sendFailedHint'),
+          description: sendErrorDescription(result.error),
         });
         return;
       }
@@ -619,7 +620,16 @@ export default function PrivateScreen() {
     } finally {
       setSending(false);
     }
-  }, [activeFriend, draft, pendingMedia, sending, space, toast, t]);
+  }, [
+    activeFriend,
+    draft,
+    pendingMedia,
+    sending,
+    space,
+    toast,
+    t,
+    sendErrorDescription,
+  ]);
 
   if (loading || !space.ready) return <LoadingState />;
   if (!currentUser) return null;

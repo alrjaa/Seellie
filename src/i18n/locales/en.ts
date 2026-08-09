@@ -545,7 +545,7 @@ export const en: TranslationTree = {
       'Saved on your side only — run supabase/PRIVATE-DM-FIX.sql then send again.',
     sendFailedSession: 'Sign in again with a cloud Sign-up account.',
     sendFailedHint:
-      'Check your connection and run PRIVATE-DM-FIX.sql in Supabase if needed.',
+      'Check your connection and run PRIVATE-DM-FIX.sql then PRIVATE-DM-MEDIA.sql in Supabase.',
     savedWithAuthorHint:
       'You can add the uploader as a friend from Saved or the friends list.',
     savedHint:
