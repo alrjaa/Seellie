@@ -259,6 +259,17 @@ export default function PrivateScreen() {
     [space, activeFriendId, toast, t]
   );
 
+  const onRemoveSaved = useCallback(
+    async (itemId: string) => {
+      await space.removeContent(itemId);
+      toast({
+        variant: 'success',
+        title: t('privateSpace.savedRemoved'),
+      });
+    },
+    [space, toast, t]
+  );
+
   const onSend = useCallback(async () => {
     if (!activeFriend || !draft.trim()) return;
     await space.sendMessage(activeFriend.id, draft);
@@ -530,7 +541,7 @@ export default function PrivateScreen() {
                 item={item}
                 canAddFriend={!!author && !isFriend}
                 isFriend={isFriend}
-                onRemove={() => void space.removeContent(item.id)}
+                onRemove={() => void onRemoveSaved(item.id)}
                 onAddFriend={
                   author
                     ? () => void onAddFriend(author.id)

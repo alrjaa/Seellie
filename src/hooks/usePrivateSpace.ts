@@ -65,6 +65,10 @@ export function usePrivateSpace(userId: string | undefined) {
   const removeFriend = useCallback(
     async (friendId: string) => {
       if (!userId) return;
+      setState((prev) => ({
+        ...prev,
+        friendIds: prev.friendIds.filter((id) => id !== friendId),
+      }));
       setState(await removePrivateFriend(userId, friendId));
     },
     [userId]
@@ -93,6 +97,11 @@ export function usePrivateSpace(userId: string | undefined) {
   const removeContent = useCallback(
     async (itemId: string) => {
       if (!userId) return;
+      // تحديث فوري في الواجهة ثم مزامنة
+      setState((prev) => ({
+        ...prev,
+        items: prev.items.filter((x) => x.id !== itemId),
+      }));
       setState(await removePrivateContent(userId, itemId));
     },
     [userId]

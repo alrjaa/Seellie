@@ -515,6 +515,7 @@ export const ar = {
     unknownAuthor: 'حساب غير معروف',
     savedToast: 'حُفظ في الخاصة',
     alreadySaved: 'هذا المحتوى محفوظ مسبقاً',
+    savedRemoved: 'تم حذف المحفوظ',
     saveA11y: 'حفظ في المساحة الخاصة',
     cloudHint:
       'للحفظ السحابي نفّذ supabase/private-space.sql في SQL Editor مرة واحدة.',

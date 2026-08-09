@@ -277,6 +277,13 @@ export async function removePrivateFriend(
   userId: string,
   friendId: string
 ): Promise<PrivateSpaceState> {
+  // احذف محلياً أولاً حتى لا يعيد الدمج مع السحابة الصديق بعد الحذف
+  const local = await loadLocal(userId);
+  local.friendIds = local.friendIds.filter((id) => id !== friendId);
+  const { [friendId]: _removed, ...restChats } = local.chats;
+  local.chats = restChats;
+  await saveLocal(userId, local);
+
   if (canUseCloud(userId)) {
     const sb = getSupabase();
     if (sb) {
@@ -285,14 +292,12 @@ export async function removePrivateFriend(
         .delete()
         .eq('owner_id', userId)
         .eq('friend_id', friendId);
-      if (!error) return loadPrivateSpace(userId);
-      console.warn('[private-space] remove friend', error.message);
+      if (error) {
+        console.warn('[private-space] remove friend', error.message);
+      }
     }
   }
-  const state = await loadLocal(userId);
-  state.friendIds = state.friendIds.filter((id) => id !== friendId);
-  await saveLocal(userId, state);
-  return state;
+  return loadPrivateSpace(userId);
 }
 
 export async function sendPrivateChatMessage(
@@ -426,20 +431,36 @@ export async function removePrivateContent(
   userId: string,
   itemId: string
 ): Promise<PrivateSpaceState> {
-  if (canUseCloud(userId) && isUuid(itemId)) {
+  // احذف محلياً أولاً — وإلا loadPrivateSpace يعيد دمج العنصر من AsyncStorage
+  const local = await loadLocal(userId);
+  const removed = local.items.find((x) => x.id === itemId);
+  local.items = local.items.filter((x) => x.id !== itemId);
+  await saveLocal(userId, local);
+
+  if (canUseCloud(userId)) {
     const sb = getSupabase();
     if (sb) {
-      const { error } = await sb
-        .from('private_saved')
-        .delete()
-        .eq('owner_id', userId)
-        .eq('id', itemId);
-      if (!error) return loadPrivateSpace(userId);
-      console.warn('[private-space] remove saved', error.message);
+      if (isUuid(itemId)) {
+        const { error } = await sb
+          .from('private_saved')
+          .delete()
+          .eq('owner_id', userId)
+          .eq('id', itemId);
+        if (error) {
+          console.warn('[private-space] remove saved by id', error.message);
+        }
+      }
+      if (removed?.sourceId) {
+        const { error } = await sb
+          .from('private_saved')
+          .delete()
+          .eq('owner_id', userId)
+          .eq('source_id', removed.sourceId);
+        if (error) {
+          console.warn('[private-space] remove saved by source', error.message);
+        }
+      }
     }
   }
-  const state = await loadLocal(userId);
-  state.items = state.items.filter((x) => x.id !== itemId);
-  await saveLocal(userId, state);
-  return state;
+  return loadPrivateSpace(userId);
 }

@@ -513,6 +513,7 @@ export const en: TranslationTree = {
     unknownAuthor: 'Unknown account',
     savedToast: 'Saved to Private',
     alreadySaved: 'Already saved',
+    savedRemoved: 'Removed from saved',
     saveA11y: 'Save to private space',
     cloudHint:
       'For cloud sync, run supabase/private-space.sql once in the SQL Editor.',
