@@ -1,4 +1,4 @@
--- Private DM media — paste once in SQL Editor after PRIVATE-DM-FIX.sql
+-- Private DM media: paste once in SQL Editor after PRIVATE-DM-FIX.sql
 
 alter table public.private_messages
   add column if not exists media_url text;

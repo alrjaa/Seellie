@@ -1,4 +1,4 @@
--- Private DM fix — paste once in SQL Editor (no fancy headers)
+-- Private DM fix: paste once in SQL Editor
 
 -- 1) Message policies: sender can write into recipient inbox
 drop policy if exists "private_messages_own" on public.private_messages;
