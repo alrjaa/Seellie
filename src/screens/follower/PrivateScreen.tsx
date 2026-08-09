@@ -615,44 +615,30 @@ export default function PrivateScreen() {
   );
 
   const onSelectAttachable = useCallback(
-    async (item: AttachableItem) => {
-      if (!activeFriend || sending) return;
-      setAttachOpen(false);
-      const caption = draft.trim();
-      setDraft('');
-      setPendingMedia(null);
-      setSending(true);
-      try {
-        const result = await space.sendMessage(activeFriend.id, caption, {
-          uri: item.uri,
-          kind: item.kind,
+    (item: AttachableItem) => {
+      if (!activeFriend) {
+        toast({
+          variant: 'destructive',
+          title: t('privateSpace.chatNeedFriend'),
         });
-        if (!result.ok) {
-          setPendingMedia({
-            uri: item.uri,
-            kind: item.kind,
-            label: item.label,
-          });
-          if (caption) setDraft(caption);
-          toast({
-            variant: 'destructive',
-            title: t('privateSpace.sendFailed'),
-            description: sendErrorDescription(result.error),
-          });
-          return;
-        }
-        if (result.warning === 'media_schema_missing') {
-          toast({
-            variant: 'default',
-            title: t('privateSpace.attachSentAsLink'),
-            description: t('privateSpace.attachMediaSqlHint'),
-          });
-        }
-      } finally {
-        setSending(false);
+        return;
       }
+      setPendingMedia({
+        uri: item.uri,
+        kind: item.kind,
+        label: item.label,
+      });
+      setAttachOpen(false);
+      toast({
+        variant: 'success',
+        title:
+          item.kind === 'photo'
+            ? t('privateSpace.attachPhotoReady')
+            : t('privateSpace.attachVideoReady'),
+        description: t('privateSpace.attachReadyHint'),
+      });
     },
-    [activeFriend, sending, draft, space, toast, t, sendErrorDescription]
+    [activeFriend, toast, t]
   );
 
   const onSend = useCallback(async () => {
@@ -1201,13 +1187,15 @@ export default function PrivateScreen() {
       <Modal
         visible={attachOpen}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setAttachOpen(false)}
       >
         <View style={styles.attachBackdrop}>
           <Pressable
-            style={StyleSheet.absoluteFillObject}
+            style={styles.attachDismiss}
             onPress={() => setAttachOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.cancel')}
           />
           <View
             style={[
@@ -1302,8 +1290,8 @@ export default function PrivateScreen() {
                   {attachables.map((item) => (
                     <Pressable
                       key={item.id}
-                      onPress={() => void onSelectAttachable(item)}
-                      disabled={sending || !activeFriend}
+                      onPress={() => onSelectAttachable(item)}
+                      disabled={!activeFriend}
                       style={[
                         styles.attachCell,
                         { backgroundColor: theme.colors.surfaceElevated },
@@ -1535,10 +1523,16 @@ const styles = StyleSheet.create({
   },
   attachBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  attachDismiss: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
   },
   attachSheet: {
+    zIndex: 2,
+    elevation: 8,
     maxHeight: '78%',
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,

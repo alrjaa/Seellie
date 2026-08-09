@@ -524,7 +524,7 @@ export const en: TranslationTree = {
     messagePlaceholder: 'Private message…',
     attachContent: 'Attach content',
     attachFromApp:
-      'Tap a photo or video to send it from Saved, Highlights, or app content.',
+      'Pick a photo or video to attach, then tap Send.',
     attachSourceSaved: 'Saved',
     attachSourceHighlights: 'Highlights',
     attachSourceContent: 'Content',
@@ -538,6 +538,7 @@ export const en: TranslationTree = {
     attachVideo: 'Attach video',
     attachPhotoReady: 'Photo ready to send',
     attachVideoReady: 'Video ready to send',
+    attachReadyHint: 'Tap Send to deliver the attachment now.',
     attachUploadFailed: 'Could not upload the attachment',
     sending: 'Sending…',
     sendFailed: 'Could not deliver the message to your friend',

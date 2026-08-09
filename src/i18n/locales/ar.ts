@@ -526,7 +526,7 @@ export const ar = {
     messagePlaceholder: 'رسالة خاصة…',
     attachContent: 'إرفاق محتوى',
     attachFromApp:
-      'اضغط على صورة أو فيديو لإرساله فوراً من المحفوظ أو اللقطات أو المحتوى.',
+      'اختر صورة أو فيديو — سيُرفق بالمحادثة ثم اضغط إرسال.',
     attachSourceSaved: 'محفوظ',
     attachSourceHighlights: 'اللقطات',
     attachSourceContent: 'محتوى',
@@ -540,6 +540,7 @@ export const ar = {
     attachVideo: 'إرفاق فيديو',
     attachPhotoReady: 'صورة جاهزة للإرسال',
     attachVideoReady: 'فيديو جاهز للإرسال',
+    attachReadyHint: 'اضغط زر الإرسال لإرسال المرفق الآن.',
     attachUploadFailed: 'تعذّر رفع المرفق للسحابة',
     sending: 'جارٍ الإرسال…',
     sendFailed: 'تعذّر إرسال الرسالة للصديق',
