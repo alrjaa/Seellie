@@ -39,9 +39,9 @@ export default function AccountScreen() {
     );
   };
 
-  const savePassword = () => {
+  const savePassword = async () => {
     if (nextPassword !== confirmPassword) return;
-    const ok = changePassword(currentPassword, nextPassword);
+    const ok = await changePassword(currentPassword, nextPassword);
     if (ok) {
       setCurrentPassword('');
       setNextPassword('');

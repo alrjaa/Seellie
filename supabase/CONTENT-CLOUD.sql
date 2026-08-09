@@ -1,7 +1,3 @@
-/* Seellie CONTENT-CLOUD — run once in SQL Editor
-   Syncs user content (posts/media/analysis) + ensures storage for all app media.
-*/
-
 alter table public.profiles
   add column if not exists content jsonb not null default '{}'::jsonb;
 
@@ -11,7 +7,6 @@ comment on column public.profiles.content is
 create index if not exists profiles_content_gin
   on public.profiles using gin (content);
 
-/* Ensure public share-media bucket (photos/videos for all features) */
 insert into storage.buckets (id, name, public)
 values ('share-media', 'share-media', true)
 on conflict (id) do update set public = true;

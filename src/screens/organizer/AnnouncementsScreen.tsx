@@ -10,6 +10,8 @@ import { Button, Card, Input, Muted, Subtitle, Title } from '@/components/ui';
 import { formatArabicDate } from '@/utils';
 import { createId } from '@/utils/id';
 import { getJson, setJson } from '@/services/storage';
+import { fetchAppBlob, upsertAppBlob } from '@/services/supabase-app-blobs';
+import { isUuid } from '@/services/supabase-messages';
 
 type Announcement = {
   id: string;
@@ -20,7 +22,7 @@ type Announcement = {
   competitionId?: string;
 };
 
-const STORAGE_KEY = 'seellie.organizer.announcements.v1';
+const STORAGE_PREFIX = 'seellie.organizer.announcements.v1';
 
 export default function AnnouncementsScreen() {
   const { toast } = useToast();
@@ -32,6 +34,10 @@ export default function AnnouncementsScreen() {
   const [body, setBody] = useState('');
   const [hydrated, setHydrated] = useState(false);
 
+  const storageKey = currentUser?.id
+    ? `${STORAGE_PREFIX}.${currentUser.id}`
+    : STORAGE_PREFIX;
+
   const myCompetitionId = competitions.find(
     (c) => c.organizerId === currentUser?.id
   )?.id;
@@ -39,20 +45,42 @@ export default function AnnouncementsScreen() {
   useEffect(() => {
     let active = true;
     (async () => {
-      const stored = await getJson<Announcement[]>(STORAGE_KEY);
+      const stored = await getJson<Announcement[]>(storageKey);
+      let next = Array.isArray(stored) ? stored : [];
+      if (currentUser?.id && isUuid(currentUser.id)) {
+        const cloud = await fetchAppBlob<Announcement[]>(
+          `announcements:${currentUser.id}`
+        );
+        if (Array.isArray(cloud.data) && cloud.data.length) {
+          next = cloud.data;
+        }
+      }
       if (!active) return;
-      if (Array.isArray(stored)) setItems(stored);
+      setItems(next);
       setHydrated(true);
     })();
     return () => {
       active = false;
     };
-  }, []);
+  }, [currentUser?.id, storageKey]);
 
   useEffect(() => {
     if (!hydrated) return;
-    void setJson(STORAGE_KEY, items);
-  }, [items, hydrated]);
+    void setJson(storageKey, items);
+    if (currentUser?.id && isUuid(currentUser.id)) {
+      void upsertAppBlob(`announcements:${currentUser.id}`, items).then(
+        (res) => {
+          if (!res.ok) {
+            toast({
+              variant: 'destructive',
+              title: t('cloud.competitionSyncFailed'),
+              description: res.error,
+            });
+          }
+        }
+      );
+    }
+  }, [items, hydrated, currentUser?.id, storageKey, toast, t]);
 
   const mine = items.filter((a) => a.organizerId === currentUser?.id);
 
@@ -124,7 +152,7 @@ export default function AnnouncementsScreen() {
                     styles.body,
                     {
                       color: theme.colors.text,
-                      textAlign: isRTL ? 'right' : 'left',
+                      textAlign: 'left',
                     },
                   ]}
                 >

@@ -275,6 +275,9 @@ export const ar = {
     cloudSyncFailed: 'تعذّر النشر السحابي — ظهر محلياً فقط على هذا الجهاز',
     saveHint: 'احفظ أي مساهمة في الخاصة عبر أيقونة الإشارة أو بنقرتين على البطاقة.',
   },
+  cloud: {
+    competitionSyncFailed: 'تعذّر مزامنة المسابقة مع السحابة',
+  },
   media: {
     permissionDenied: 'الإذن مرفوض',
     permissionRequired: 'الإذن مطلوب',

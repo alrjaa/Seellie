@@ -110,6 +110,32 @@ export async function insertForumComment(input: {
   return { comment: rowToForumComment(data as ForumCommentRow) };
 }
 
+export async function updateForumCommentStatusRemote(
+  commentId: string,
+  status: Comment['status'],
+  statusReason?: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || !isUuid(commentId)) {
+    return { ok: false, error: 'not_cloud' };
+  }
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: 'no_client' };
+  const { data: sessionData } = await sb.auth.getSession();
+  if (!sessionData.session) return { ok: false, error: 'no_session' };
+  const { error } = await sb
+    .from('forum_comments')
+    .update({
+      status: status || 'active',
+      status_reason: statusReason || null,
+    })
+    .eq('id', commentId);
+  if (error) {
+    console.warn('[forum] status', error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
 export async function toggleForumCommentLikeRemote(
   commentId: string,
   userId: string

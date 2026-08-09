@@ -273,6 +273,9 @@ export const en: TranslationTree = {
     cloudSyncFailed: 'Cloud publish failed — shown locally on this device only',
     saveHint: 'Save any post to Private via the bookmark icon or a double-tap on the card.',
   },
+  cloud: {
+    competitionSyncFailed: 'Could not sync competition to the cloud',
+  },
   media: {
     permissionDenied: 'Permission denied',
     permissionRequired: 'Permission required',

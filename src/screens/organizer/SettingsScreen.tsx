@@ -108,8 +108,8 @@ export default function OrganizerSettingsScreen() {
         />
         <Button
           label={t('account.changePassword')}
-          onPress={() => {
-            const ok = changePassword(currentPassword, nextPassword);
+          onPress={async () => {
+            const ok = await changePassword(currentPassword, nextPassword);
             if (ok) {
               setCurrentPassword('');
               setNextPassword('');

@@ -26,6 +26,9 @@ import {
   certificateImageSource,
   certificateImageUri,
 } from '@/theme/certificates';
+import { resolvePublicMediaUrl, cloudWriteErrorMessage } from '@/services/cloud-write';
+import { isSupabaseConfigured } from '@/services/supabase';
+import { isUuid } from '@/services/supabase-messages';
 
 type Tab = 'levels' | 'beneficiaries' | 'freelancers' | 'distribution';
 
@@ -52,8 +55,14 @@ function levelPreviewSource(level: SupportLevel) {
 }
 
 export default function SupportScreen() {
-  const { supportLevels, supporters, users, giftTransactions, updateSupportLevels } =
-    useTournament();
+  const {
+    supportLevels,
+    supporters,
+    users,
+    giftTransactions,
+    updateSupportLevels,
+    currentUser,
+  } = useTournament();
   const theme = useAppTheme();
   const { toast } = useToast();
   const { t } = useTranslation();
@@ -220,7 +229,31 @@ export default function SupportScreen() {
           allowsEditing: false,
         });
         if (result.canceled || !result.assets?.[0]?.uri) return;
-        const saved = await persistCertificateImage(result.assets[0].uri);
+        let saved = result.assets[0].uri;
+        if (
+          currentUser &&
+          isUuid(currentUser.id) &&
+          isSupabaseConfigured()
+        ) {
+          const resolved = await resolvePublicMediaUrl({
+            uri: saved,
+            kind: 'photo',
+            folder: 'certificates',
+            userId: currentUser.id,
+            requireCloud: true,
+          });
+          if (!resolved.url) {
+            toast({
+              variant: 'destructive',
+              title: t('superadmin.support.imageFailed'),
+              description: cloudWriteErrorMessage(resolved.error),
+            });
+            return;
+          }
+          saved = resolved.url;
+        } else {
+          saved = await persistCertificateImage(saved);
+        }
         updateLevel(id, 'imageUrl', saved);
         toast({
           variant: 'success',
@@ -235,7 +268,7 @@ export default function SupportScreen() {
         setPickingId(null);
       }
     },
-    [t, toast]
+    [t, toast, currentUser]
   );
 
   const restoreBundledImage = (id: string, name: string) => {

@@ -151,27 +151,28 @@ function reviveCompetitions(items: Competition[]): Competition[] {
 export async function saveCompetitions(
   items: Competition[],
   options?: { fromCloud?: boolean }
-): Promise<void> {
+): Promise<{ ok: boolean; error?: string }> {
   await setJson(COMPETITIONS_KEY, items);
 
   if (isSupabaseConfigured()) {
-    // من سحب السحابة: نخزّن محلياً فقط لتفادي حلقة realtime
-    if (!options?.fromCloud) {
-      void pushCompetitionsToSupabase(items);
+    if (options?.fromCloud) {
+      return { ok: true };
     }
-    return;
+    return pushCompetitionsToSupabase(items);
   }
 
   const db = getDb();
-  if (!db) return;
+  if (!db) return { ok: true };
 
   try {
     await setDoc(doc(db, ...COMPETITIONS_DOC_PATH), {
       items,
       updatedAt: new Date().toISOString(),
     });
+    return { ok: true };
   } catch (error) {
     console.warn('[competition-sync] save competitions failed', error);
+    return { ok: false, error: String(error) };
   }
 }
 
@@ -180,22 +181,41 @@ function isSeedCompetitionId(id: string): boolean {
   return /^comp-\d+$/i.test(id);
 }
 
-async function pushCompetitionsToSupabase(items: Competition[]): Promise<void> {
+async function pushCompetitionsToSupabase(
+  items: Competition[]
+): Promise<{ ok: boolean; error?: string }> {
   try {
     const { upsertCompetitionCloud } = await import(
       '@/services/supabase-competitions'
     );
     const targets = items.filter((c) => c?.id && !isSeedCompetitionId(c.id));
-    await Promise.all(
+    if (!targets.length) return { ok: true };
+
+    const results = await Promise.all(
       targets.map(async (c) => {
         const res = await upsertCompetitionCloud(c);
         if (!res.ok && res.error && res.error !== 'no_session') {
           console.warn('[competition-sync] cloud upsert', c.id, res.error);
         }
+        return res;
       })
     );
+    const failed = results.find(
+      (r) => !r.ok && r.error && r.error !== 'no_session'
+    );
+    if (failed) {
+      return { ok: false, error: failed.error };
+    }
+    const noSession = results.every(
+      (r) => !r.ok && r.error === 'no_session'
+    );
+    if (noSession && targets.length) {
+      return { ok: false, error: 'no_session' };
+    }
+    return { ok: true };
   } catch (error) {
     console.warn('[competition-sync] push to supabase failed', error);
+    return { ok: false, error: String(error) };
   }
 }
 

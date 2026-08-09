@@ -35,12 +35,17 @@ import {
 } from '@/services/cloud-write';
 import { upsertUserContentCloud } from '@/services/supabase-user-content';
 import {
+  fetchAppBlob,
+  upsertAppBlob,
+} from '@/services/supabase-app-blobs';
+import {
   fetchAllProfiles,
   mergeUsersPreferCloud,
   restoreSupabaseSession,
   supabaseSignIn,
   supabaseSignOut,
   supabaseSignUp,
+  supabaseUpdatePassword,
   updateProfileRolesCloud,
   updateProfileAdminCloud,
 } from '@/services/supabase-auth';
@@ -80,6 +85,7 @@ import {
   mergeCommentsById,
   subscribeForumComments,
   toggleForumCommentLikeRemote,
+  updateForumCommentStatusRemote,
 } from '@/services/supabase-forum-comments';
 import { generateAnalystAccessCode } from '@/utils/analyst';
 import {
@@ -206,7 +212,11 @@ function mergeRefereesById(base: Referee[], stored: Referee[]): Referee[] {
 
 async function saveReferees(items: Referee[]) {
   await setJson(REFEREES_STORAGE_KEY, items);
+  if (isSupabaseConfigured()) {
+    void upsertAppBlob('referees', items);
+  }
 }
+
 const APP_LOGO_KEY = 'seellie.appLogo.v3';
 const APP_NAME_KEY = 'seellie.appName';
 const SUPPORT_LEVELS_KEY = 'seellie.supportLevels.v1';
@@ -228,6 +238,66 @@ function normalizeSupportLevels(levels: SupportLevel[]): SupportLevel[] {
 
 async function saveSupportLevels(levels: SupportLevel[]) {
   await setJson(SUPPORT_LEVELS_KEY, levels);
+  if (isSupabaseConfigured()) {
+    void upsertAppBlob('support_levels', levels);
+  }
+}
+
+async function saveOffersCloud(items: Offer[]) {
+  if (isSupabaseConfigured()) {
+    void upsertAppBlob('offers', items);
+  }
+}
+
+async function saveGiftsCloud(items: GiftTransaction[]) {
+  if (isSupabaseConfigured()) {
+    void upsertAppBlob('gift_transactions', items);
+  }
+}
+
+async function saveBrandingCloud(appName: string, appLogo: string) {
+  if (isSupabaseConfigured()) {
+    void upsertAppBlob('app_branding', { appName, appLogo });
+  }
+}
+
+type GlobalAppBlobs = {
+  referees: Referee[] | null;
+  offers: Offer[] | null;
+  levels: SupportLevel[] | null;
+  gifts: GiftTransaction[] | null;
+  branding: { appName?: string; appLogo?: string } | null;
+};
+
+async function fetchGlobalAppBlobs(): Promise<GlobalAppBlobs> {
+  const empty: GlobalAppBlobs = {
+    referees: null,
+    offers: null,
+    levels: null,
+    gifts: null,
+    branding: null,
+  };
+  if (!isSupabaseConfigured()) return empty;
+  const [
+    cloudReferees,
+    cloudOffers,
+    cloudLevels,
+    cloudGifts,
+    cloudBrand,
+  ] = await Promise.all([
+    fetchAppBlob<Referee[]>('referees'),
+    fetchAppBlob<Offer[]>('offers'),
+    fetchAppBlob<SupportLevel[]>('support_levels'),
+    fetchAppBlob<GiftTransaction[]>('gift_transactions'),
+    fetchAppBlob<{ appName?: string; appLogo?: string }>('app_branding'),
+  ]);
+  return {
+    referees: Array.isArray(cloudReferees.data) ? cloudReferees.data : null,
+    offers: Array.isArray(cloudOffers.data) ? cloudOffers.data : null,
+    levels: Array.isArray(cloudLevels.data) ? cloudLevels.data : null,
+    gifts: Array.isArray(cloudGifts.data) ? cloudGifts.data : null,
+    branding: cloudBrand.data || null,
+  };
 }
 
 export interface TournamentContextType {
@@ -497,7 +567,10 @@ export interface TournamentContextType {
     mediaType: 'photo' | 'video',
     source?: 'user' | 'player' | 'match' | 'competition'
   ) => void;
-  changePassword: (currentPassword: string, nextPassword: string) => boolean;
+  changePassword: (
+    currentPassword: string,
+    nextPassword: string
+  ) => Promise<boolean>;
   addUserMedia: (
     type: 'photos' | 'videos',
     url: string,
@@ -586,6 +659,30 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { toast } = useToast();
   const { addNotification } = useNotifications();
+
+  /** مزامنة مسابقات مع إشعار عند فشل السحابة لحساب سحابي */
+  const syncCompetitions = useCallback(
+    async (next: Competition[], options?: { fromCloud?: boolean }) => {
+      const res = await saveCompetitions(next, options);
+      if (
+        !options?.fromCloud &&
+        !res.ok &&
+        res.error &&
+        res.error !== 'no_session' &&
+        res.error !== 'not_configured' &&
+        currentUser &&
+        isUuid(currentUser.id)
+      ) {
+        toast({
+          variant: 'destructive',
+          title: t('cloud.competitionSyncFailed'),
+          description: cloudWriteErrorMessage(res.error),
+        });
+      }
+      return res.ok;
+    },
+    [currentUser, t, toast]
+  );
 
   useEffect(() => {
     let active = true;
@@ -788,6 +885,26 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
                 mergeMessagesById(remoteMessagesResult.messages, prev)
               );
             }
+
+            // تحميل نطاقات التطبيق من app_blobs
+            const blobs = await fetchGlobalAppBlobs();
+            if (blobs.referees?.length) {
+              setReferees((prev) => mergeRefereesById(prev, blobs.referees!));
+            }
+            if (blobs.offers) setOffers(blobs.offers);
+            if (blobs.levels?.length) {
+              setSupportLevels(normalizeSupportLevels(blobs.levels));
+            }
+            if (blobs.gifts) {
+              setGiftTransactions(
+                blobs.gifts.map((g) => ({
+                  ...g,
+                  timestamp: new Date(g.timestamp as Date | string),
+                }))
+              );
+            }
+            if (blobs.branding?.appName) setAppNameState(blobs.branding.appName);
+            if (blobs.branding?.appLogo) setAppLogoState(blobs.branding.appLogo);
           }
         }
       } catch (error) {
@@ -894,17 +1011,20 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const setAppName = useCallback((name: string) => {
     setAppNameState(name);
     void setJson(APP_NAME_KEY, name);
-  }, []);
+    void saveBrandingCloud(name, appLogo);
+  }, [appLogo]);
 
   const setAppLogo = useCallback((logo: string) => {
     if (!logo.trim()) {
       setAppLogoState(DEFAULT_LOGO);
       void removeJson(APP_LOGO_KEY);
+      void saveBrandingCloud(appName, DEFAULT_LOGO);
       return;
     }
     setAppLogoState(logo);
     void setJson(APP_LOGO_KEY, logo);
-  }, []);
+    void saveBrandingCloud(appName, logo);
+  }, [appName]);
 
   const login = useCallback(
     async (
@@ -1020,6 +1140,24 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
               mergeMessagesById(remoteMessagesResult.messages, prev)
             );
           }
+          const blobs = await fetchGlobalAppBlobs();
+          if (blobs.referees?.length) {
+            setReferees((prev) => mergeRefereesById(prev, blobs.referees!));
+          }
+          if (blobs.offers) setOffers(blobs.offers);
+          if (blobs.levels?.length) {
+            setSupportLevels(normalizeSupportLevels(blobs.levels));
+          }
+          if (blobs.gifts) {
+            setGiftTransactions(
+              blobs.gifts.map((g) => ({
+                ...g,
+                timestamp: new Date(g.timestamp as Date | string),
+              }))
+            );
+          }
+          if (blobs.branding?.appName) setAppNameState(blobs.branding.appName);
+          if (blobs.branding?.appLogo) setAppLogoState(blobs.branding.appLogo);
           toast({
             variant: 'success',
             title: t('toasts.t002_202a45'),
@@ -1454,13 +1592,15 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           activeRole: normalized.activeRole || normalized.role,
           status: normalized.status || 'active',
         });
-        void upsertUserContentCloud(normalized);
+        void upsertUserContentCloud(normalized, {
+          allowCrossUser: normalized.id !== currentUser?.id,
+        });
       }
       if (successMessage) {
         toast({ variant: 'success', title: t('toasts.t013_5a42a9'), description: successMessage });
       }
     },
-    [toast, t]
+    [toast, t, currentUser?.id]
   );
 
   const togglePinnedCompetition = useCallback(
@@ -1560,7 +1700,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             refereeIds: [...new Set([...c.refereeIds, referee.id])],
           };
         });
-        if (found) void saveCompetitions(next);
+        if (found) void syncCompetitions(next);
         return next;
       });
       if (!found) {
@@ -1908,8 +2048,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
       const publishLocal = (comment: Comment) => {
         if (target?.type === 'match') {
-          setCompetitions((prev) =>
-            prev.map((c) => {
+          setCompetitions((prev) => {
+            const next = prev.map((c) => {
               if (c.id !== target.competitionId) return c;
               return {
                 ...c,
@@ -1919,8 +2059,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
                     : m
                 ),
               };
-            })
-          );
+            });
+            void syncCompetitions(next);
+            return next;
+          });
           toast({ title: t('toasts.t019_7b77aa') });
           return;
         }
@@ -2017,8 +2159,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
       setComments(toggle);
       setQuickComments(toggle);
-      setCompetitions((prev) =>
-        prev.map((comp) => ({
+      setCompetitions((prev) => {
+        const next = prev.map((comp) => ({
           ...comp,
           matches: comp.matches.map((m) => ({
             ...m,
@@ -2032,8 +2174,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
               comments: toggle(p.comments || []),
             })),
           })),
-        }))
-      );
+        }));
+        void syncCompetitions(next);
+        return next;
+      });
       if (isUuid(commentId) && isUuid(userId) && isSupabaseConfigured()) {
         void toggleForumCommentLikeRemote(commentId, userId).then((remote) => {
           if (remote.error) return;
@@ -2045,7 +2189,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [currentUser]
+    [currentUser, syncCompetitions]
   );
 
   const updateDiscussionStatus = useCallback(
@@ -2082,6 +2226,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
               : c
           )
         );
+        if (isUuid(payload.id) && isSupabaseConfigured()) {
+          void updateForumCommentStatusRemote(
+            payload.id,
+            payload.status,
+            reason
+          );
+        }
       } else {
         if (!payload.authorId) {
           toast({
@@ -2091,8 +2242,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           });
           return;
         }
-        setUsers((prev) =>
-          prev.map((user) => {
+        setUsers((prev) => {
+          const next = prev.map((user) => {
             if (user.id !== payload.authorId) return user;
             return {
               ...user,
@@ -2102,8 +2253,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
                   : a
               ),
             };
-          })
-        );
+          });
+          const author = next.find((u) => u.id === payload.authorId);
+          if (author && isUuid(author.id) && isSupabaseConfigured()) {
+            void upsertUserContentCloud(author, { allowCrossUser: true });
+          }
+          return next;
+        });
       }
 
       if (successMessage) {
@@ -2117,7 +2273,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [toast]
+    [toast, t]
   );
 
   const updateSupportLevels = useCallback((levels: SupportLevel[]) => {
@@ -2180,7 +2336,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         status: 'pending_demo',
       };
 
-      setGiftTransactions((prev) => [gift, ...prev]);
+      setGiftTransactions((prev) => {
+        const next = [gift, ...prev];
+        void saveGiftsCloud(next);
+        return next;
+      });
       toast({
         title: t('toasts.giftDemoPendingTitle'),
         description: t('toasts.giftDemoPendingDesc', {
@@ -2199,7 +2359,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         const next = prev.map((c) =>
           c.id === competition.id ? competition : c
         );
-        void saveCompetitions(next);
+        void syncCompetitions(next);
         return next;
       });
       if (successMessage) {
@@ -2231,7 +2391,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           found = true;
           return { ...c, name: trimmed };
         });
-        if (found) void saveCompetitions(next);
+        if (found) void syncCompetitions(next);
         return next;
       });
       if (!found) return false;
@@ -2278,7 +2438,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
       setCompetitions((prev) => {
         const next = prev.filter((c) => c.id !== competitionId);
-        void saveCompetitions(next);
+        void syncCompetitions(next);
         return next;
       });
       toast({
@@ -2364,7 +2524,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
               }
             : c
         );
-        void saveCompetitions(next);
+        void syncCompetitions(next);
         return next;
       });
       if (options?.successMessage) {
@@ -2406,7 +2566,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
               : undefined,
           };
         });
-        if (found) void saveCompetitions(next);
+        if (found) void syncCompetitions(next);
         return next;
       });
 
@@ -2468,7 +2628,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             }),
           };
         });
-        void saveCompetitions(next);
+        void syncCompetitions(next);
         return next;
       });
 
@@ -2529,7 +2689,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         const next = prev.map((c) =>
           c.id === competitionId ? { ...c, matches: fixtures } : c
         );
-        void saveCompetitions(next);
+        void syncCompetitions(next);
         return next;
       });
       toast({
@@ -2571,7 +2731,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
                 ),
               }
         );
-        void saveCompetitions(next);
+        void syncCompetitions(next);
         return next;
       });
     },
@@ -2589,7 +2749,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
               }
             : c
         );
-        void saveCompetitions(next);
+        void syncCompetitions(next);
         return next;
       });
       if (successMessage) {
@@ -2614,7 +2774,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
               }
             : c
         );
-        void saveCompetitions(next);
+        void syncCompetitions(next);
         return next;
       });
       if (successMessage) {
@@ -2630,9 +2790,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       status: 'accepted' | 'declined',
       successMessage?: string
     ) => {
-      setOffers((prev) =>
-        prev.map((o) => (o.id === offerId ? { ...o, status } : o))
-      );
+      setOffers((prev) => {
+        const next = prev.map((o) =>
+          o.id === offerId ? { ...o, status } : o
+        );
+        void saveOffersCloud(next);
+        return next;
+      });
       if (successMessage) {
         toast({
           variant: status === 'accepted' ? 'success' : 'default',
@@ -2672,7 +2836,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         status: 'pending',
         timestamp: new Date(),
       };
-      setOffers((prev) => [offer, ...prev]);
+      setOffers((prev) => {
+        const next = [offer, ...prev];
+        void saveOffersCloud(next);
+        return next;
+      });
       toast({ variant: 'success', title: t('toasts.t035_af963d') });
       return true;
     },
@@ -2885,7 +3053,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
               }),
             };
           });
-          void saveCompetitions(next);
+          void syncCompetitions(next);
           return next;
         });
       }
@@ -2914,6 +3082,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             : c
         )
       );
+      if (isUuid(cardId) && isSupabaseConfigured()) {
+        void updateShareCardRemote(cardId, { read: true });
+      }
     },
     [currentUser]
   );
@@ -2945,7 +3116,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             ],
           };
         });
-        void saveCompetitions(next);
+        void syncCompetitions(next);
         return next;
       });
       if (successMessage) {
@@ -2984,7 +3155,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             }),
           };
         });
-        if (found) void saveCompetitions(next);
+        if (found) void syncCompetitions(next);
         return next;
       });
       if (!found) return false;
@@ -3019,7 +3190,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             ),
           };
         });
-        if (found) void saveCompetitions(next);
+        if (found) void syncCompetitions(next);
         return next;
       });
       if (!found) return false;
@@ -3082,7 +3253,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             }),
           };
         });
-        if (added) void saveCompetitions(next);
+        if (added) void syncCompetitions(next);
         return next;
       });
       if (jerseyTaken) {
@@ -3136,7 +3307,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             ],
           };
         });
-        if (found) void saveCompetitions(next);
+        if (found) void syncCompetitions(next);
         return next;
       });
       if (!found) return false;
@@ -3162,7 +3333,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           found = true;
           return { ...c, staff };
         });
-        if (found) void saveCompetitions(next);
+        if (found) void syncCompetitions(next);
         return next;
       });
       if (!found) return false;
@@ -3277,6 +3448,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setCurrentUser((prev) => (prev?.id === updated.id ? updated : prev));
       if (updated.id === currentUser?.id) {
         void setJson(USER_STORAGE_KEY, updated);
+      }
+      if (isUuid(updated.id) && isSupabaseConfigured()) {
+        void upsertUserContentCloud(updated, {
+          allowCrossUser: updated.id !== currentUser?.id,
+        });
       }
     },
     [currentUser?.id]
@@ -3558,7 +3734,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
       setCompetitions((prev) => {
         const next = mergeCloudCompetitions([competition], prev);
-        void saveCompetitions(next);
+        void syncCompetitions(next);
         return next;
       });
       setCompetitionRequests((prev) => {
@@ -3677,75 +3853,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     [competitionRequests, toast, t, currentUser]
   );
 
-  const approveAnalystApplication = useCallback(
-    (userId: string) => {
-      const target = users.find((u) => u.id === userId);
-      if (!target || target.analyst?.status !== 'pending') {
-        toast({
-          variant: 'destructive',
-          title: t('toasts.t049_edb446'),
-        });
-        return false;
-      }
-      const accessCode = generateAnalystAccessCode(10);
-      const updated: User = {
-        ...target,
-        analyst: {
-          ...target.analyst,
-          status: 'approved',
-          reviewedAt: new Date(),
-          accessCode,
-          accessCodeSentAt: new Date(),
-        },
-      };
-      setUsers((prev) => prev.map((u) => (u.id === userId ? updated : u)));
-      setCurrentUser((prev) => (prev?.id === userId ? updated : prev));
-      if (currentUser?.id === userId) {
-        void setJson(USER_STORAGE_KEY, updated);
-      }
-      toast({
-        variant: 'success',
-        title: t('toasts.t052_01e592'),
-        description: t('toasts.codeEmailed', { email: target.email, code: accessCode }),
-      });
-      return true;
-    },
-    [users, currentUser?.id, toast]
-  );
-
-  const rejectAnalystApplication = useCallback(
-    (userId: string, reason?: string) => {
-      const target = users.find((u) => u.id === userId);
-      if (!target || target.analyst?.status !== 'pending') {
-        toast({
-          variant: 'destructive',
-          title: t('toasts.t049_edb446'),
-        });
-        return false;
-      }
-      const updated: User = {
-        ...target,
-        analyst: {
-          ...target.analyst,
-          status: 'rejected',
-          reviewedAt: new Date(),
-          rejectionReason: reason?.trim() || t('toasts.requirementsNotMet'),
-          accessCode: undefined,
-        },
-        permissions: { ...target.permissions, canCreateContent: false },
-      };
-      setUsers((prev) => prev.map((u) => (u.id === userId ? updated : u)));
-      setCurrentUser((prev) => (prev?.id === userId ? updated : prev));
-      toast({
-        variant: 'success',
-        title: t('toasts.t051_c3e138'),
-        description: t('toasts.emailNotified', { email: target.email }),
-      });
-      return true;
-    },
-    [users, toast]
-  );
-
   const patchAnalystUser = useCallback(
     (userId: string, updater: (u: User) => User | null) => {
       const target = users.find((u) => u.id === userId);
@@ -3757,9 +3864,83 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       if (currentUser?.id === userId) {
         void setJson(USER_STORAGE_KEY, updated);
       }
+      if (isUuid(updated.id) && isSupabaseConfigured()) {
+        void upsertUserContentCloud(updated, {
+          allowCrossUser: updated.id !== currentUser?.id,
+        });
+      }
       return updated;
     },
     [users, currentUser?.id]
+  );
+
+  const approveAnalystApplication = useCallback(
+    (userId: string) => {
+      const accessCode = generateAnalystAccessCode(10);
+      const updated = patchAnalystUser(userId, (target) => {
+        if (target.analyst?.status !== 'pending') return null;
+        return {
+          ...target,
+          analyst: {
+            ...target.analyst,
+            status: 'approved',
+            reviewedAt: new Date(),
+            accessCode,
+            accessCodeSentAt: new Date(),
+          },
+        };
+      });
+      if (!updated) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t049_edb446'),
+        });
+        return false;
+      }
+      toast({
+        variant: 'success',
+        title: t('toasts.t052_01e592'),
+        description: t('toasts.codeEmailed', {
+          email: updated.email,
+          code: accessCode,
+        }),
+      });
+      return true;
+    },
+    [patchAnalystUser, toast, t]
+  );
+
+  const rejectAnalystApplication = useCallback(
+    (userId: string, reason?: string) => {
+      const updated = patchAnalystUser(userId, (target) => {
+        if (target.analyst?.status !== 'pending') return null;
+        return {
+          ...target,
+          analyst: {
+            ...target.analyst,
+            status: 'rejected',
+            reviewedAt: new Date(),
+            rejectionReason: reason?.trim() || t('toasts.requirementsNotMet'),
+            accessCode: undefined,
+          },
+          permissions: { ...target.permissions, canCreateContent: false },
+        };
+      });
+      if (!updated) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t049_edb446'),
+        });
+        return false;
+      }
+      toast({
+        variant: 'success',
+        title: t('toasts.t051_c3e138'),
+        description: t('toasts.emailNotified', { email: updated.email }),
+      });
+      return true;
+    },
+    [patchAnalystUser, toast, t]
   );
 
   const warnAnalyst = useCallback(
@@ -4040,7 +4221,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         if (!prev || prev.id !== authorId) return prev;
         const updated = apply(prev);
         void setJson(USER_STORAGE_KEY, updated);
+        if (isUuid(updated.id)) void upsertUserContentCloud(updated);
         return updated;
+      });
+      // إن أعجب بمحتوى مستخدم آخر — ارفع ملفه أيضاً إن أمكن
+      setUsers((prev) => {
+        const author = prev.find((u) => u.id === authorId);
+        if (author && isUuid(author.id)) {
+          void upsertUserContentCloud(apply(author), { allowCrossUser: true });
+        }
+        return prev;
       });
     },
     [currentUser]
@@ -4071,7 +4261,15 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         if (!prev || prev.id !== authorId) return prev;
         const updated = apply(prev);
         void setJson(USER_STORAGE_KEY, updated);
+        if (isUuid(updated.id)) void upsertUserContentCloud(updated);
         return updated;
+      });
+      setUsers((prev) => {
+        const author = prev.find((u) => u.id === authorId);
+        if (author && isUuid(author.id)) {
+          void upsertUserContentCloud(apply(author), { allowCrossUser: true });
+        }
+        return prev;
       });
     },
     [currentUser]
@@ -4123,13 +4321,28 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             media: { ...media, [key]: toggleList(media[key] || []) },
           };
           void setJson(USER_STORAGE_KEY, updated);
+          if (isUuid(updated.id)) void upsertUserContentCloud(updated);
           return updated;
+        });
+        setUsers((prev) => {
+          const author = prev.find((u) => u.id === authorId);
+          if (author && isUuid(author.id)) {
+            const media = author.media || { photos: [], videos: [] };
+            void upsertUserContentCloud(
+              {
+                ...author,
+                media: { ...media, [key]: toggleList(media[key] || []) },
+              },
+              { allowCrossUser: true }
+            );
+          }
+          return prev;
         });
         return;
       }
 
-      setCompetitions((prev) =>
-        prev.map((comp) => {
+      setCompetitions((prev) => {
+        const next = prev.map((comp) => {
           if (source === 'competition') {
             if (comp.id !== authorId) return comp;
             const media = comp.media || { photos: [], videos: [] };
@@ -4167,14 +4380,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
               }),
             })),
           };
-        })
-      );
+        });
+        void syncCompetitions(next);
+        return next;
+      });
     },
-    [currentUser]
+    [currentUser, syncCompetitions]
   );
 
   const changePassword = useCallback(
-    (currentPassword: string, nextPassword: string) => {
+    async (currentPassword: string, nextPassword: string) => {
       if (!currentUser) return false;
       if (!verifyPassword(currentPassword, currentUser.passwordHash)) {
         toast({
@@ -4191,6 +4406,19 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
         return false;
       }
+
+      if (isUuid(currentUser.id) && isSupabaseConfigured()) {
+        const cloud = await supabaseUpdatePassword(nextPassword);
+        if (!cloud.ok) {
+          toast({
+            variant: 'destructive',
+            title: t('toasts.t069_c382f9'),
+            description: cloud.error || cloudWriteErrorMessage('no_session'),
+          });
+          return false;
+        }
+      }
+
       const updated = {
         ...currentUser,
         passwordHash: hashPassword(nextPassword),
@@ -4217,7 +4445,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       toast({ variant: 'success', title: t('toasts.t070_104895') });
       return true;
     },
-    [currentUser, toast]
+    [currentUser, toast, t]
   );
 
   const persistCurrentUser = useCallback((updated: User) => {
@@ -4433,7 +4661,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
       setCompetitions((prev) => {
         const next = prev.map((c) => (c.id === competitionId ? toUpsert : c));
-        void saveCompetitions(next);
+        void syncCompetitions(next);
         return next;
       });
 
@@ -4546,6 +4774,24 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       // تحديث followers على الهدف في currentUser غير مطلوب؛ نحدّث فقط following
       setCurrentUser(updated);
       void setJson(USER_STORAGE_KEY, updated);
+      if (isUuid(updated.id)) void upsertUserContentCloud(updated);
+      // حدّث ملف المتابَع سحابياً إن أمكن
+      setUsers((prev) => {
+        const target = prev.find((u) => u.id === targetUserId);
+        if (target && isUuid(target.id)) {
+          const ensured = ensureSocialLists(target);
+          void upsertUserContentCloud(
+            {
+              ...ensured,
+              followers: isFollowing
+                ? (ensured.followers || []).filter((id) => id !== me.id)
+                : [...(ensured.followers || []), me.id],
+            },
+            { allowCrossUser: true }
+          );
+        }
+        return prev;
+      });
 
       toast({
         variant: 'success',

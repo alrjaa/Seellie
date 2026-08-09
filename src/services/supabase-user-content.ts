@@ -8,6 +8,15 @@ export type UserContentPayload = {
   media?: User['media'];
   analysisContent?: User['analysisContent'];
   personalityPhotos?: string[];
+  pinnedCompetitionIds?: string[];
+  following?: string[];
+  followers?: string[];
+  analyst?: User['analyst'];
+  permissions?: User['permissions'];
+  city?: string;
+  region?: string;
+  country?: string;
+  mobile?: string;
 };
 
 function reviveMediaItem<T extends { timestamp?: Date | string }>(
@@ -48,6 +57,23 @@ export function applyContentPayload(
     personalityPhotos: Array.isArray(content.personalityPhotos)
       ? content.personalityPhotos
       : user.personalityPhotos || [],
+    pinnedCompetitionIds: Array.isArray(content.pinnedCompetitionIds)
+      ? content.pinnedCompetitionIds
+      : user.pinnedCompetitionIds || [],
+    following: Array.isArray(content.following)
+      ? content.following
+      : user.following || [],
+    followers: Array.isArray(content.followers)
+      ? content.followers
+      : user.followers || [],
+    analyst: content.analyst ?? user.analyst,
+    permissions: content.permissions
+      ? { ...user.permissions, ...content.permissions }
+      : user.permissions,
+    city: content.city ?? user.city,
+    region: content.region ?? user.region,
+    country: content.country ?? user.country,
+    mobile: content.mobile ?? user.mobile,
   };
 }
 
@@ -57,35 +83,86 @@ export function userToContentPayload(user: User): UserContentPayload {
     media: user.media || { photos: [], videos: [] },
     analysisContent: user.analysisContent || [],
     personalityPhotos: user.personalityPhotos || [],
+    pinnedCompetitionIds: user.pinnedCompetitionIds || [],
+    following: user.following || [],
+    followers: user.followers || [],
+    analyst: user.analyst,
+    permissions: user.permissions,
+    city: user.city,
+    region: user.region,
+    country: user.country,
+    mobile: user.mobile,
   };
 }
 
+/**
+ * يكتب profiles.content.
+ * - مالك الحساب: تحديث مباشر (+ حقول الملف).
+ * - مستخدم آخر (إعجاب/متابعة/مشرف محللين): RPC replace_profile_content.
+ */
 export async function upsertUserContentCloud(
-  user: User
+  user: User,
+  options?: { allowCrossUser?: boolean }
 ): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseConfigured() || !isUuid(user.id)) {
     return { ok: false, error: 'not_cloud_user' };
   }
-  const { session, error: sessionError } = await requireCloudSession(user.id);
+  const allowCross = options?.allowCrossUser === true;
+  const { session, error: sessionError } = await requireCloudSession(
+    allowCross ? undefined : user.id
+  );
   if (!session) {
     return { ok: false, error: sessionError || 'no_session' };
   }
   const sb = getSupabase();
   if (!sb) return { ok: false, error: 'no_client' };
 
-  const { error } = await sb
-    .from('profiles')
-    .update({
-      content: userToContentPayload(user),
-      avatar: user.avatar || null,
-      bio: user.bio || null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', user.id);
+  const content = userToContentPayload(user);
+  const isOwner = session.userId === user.id;
 
-  if (error) {
-    console.warn('[content] upsertUserContent', error.message);
-    return { ok: false, error: error.message };
+  if (isOwner) {
+    const { error } = await sb
+      .from('profiles')
+      .update({
+        content,
+        avatar: user.avatar || null,
+        bio: user.bio || null,
+        city: user.city || null,
+        region: user.region || null,
+        country: user.country || null,
+        mobile: user.mobile || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.id);
+    if (error) {
+      console.warn('[content] upsertUserContent', error.message);
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  }
+
+  // مشرف يعدّل محللاً / إعجاب على منشور غيرك — عبر RPC (نفّذ CONTENT-CLOUD-RPC.sql)
+  const { error: rpcError } = await sb.rpc('replace_profile_content', {
+    p_id: user.id,
+    p_content: content,
+  });
+  if (rpcError) {
+    // احتياطي: سياسة profiles_update_admin إن وُجدت
+    const { error } = await sb
+      .from('profiles')
+      .update({
+        content,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.id);
+    if (error) {
+      console.warn(
+        '[content] upsert cross-user',
+        rpcError.message,
+        error.message
+      );
+      return { ok: false, error: rpcError.message || error.message };
+    }
   }
   return { ok: true };
 }

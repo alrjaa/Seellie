@@ -180,8 +180,8 @@ export default function SettingsScreen() {
         />
         <Button
           label={t('account.changePassword')}
-          onPress={() => {
-            if (changePassword(currentPassword, newPassword)) {
+          onPress={async () => {
+            if (await changePassword(currentPassword, newPassword)) {
               setCurrentPassword('');
               setNewPassword('');
             }

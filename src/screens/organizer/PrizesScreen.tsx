@@ -9,6 +9,8 @@ import { EmptyState } from '@/components/feedback/EmptyState';
 import { Button, Card, Input, Muted, Subtitle, Title } from '@/components/ui';
 import { createId } from '@/utils/id';
 import { getJson, setJson } from '@/services/storage';
+import { fetchAppBlob, upsertAppBlob } from '@/services/supabase-app-blobs';
+import { isUuid } from '@/services/supabase-messages';
 
 type Prize = {
   id: string;
@@ -19,7 +21,7 @@ type Prize = {
   competitionId?: string;
 };
 
-const STORAGE_KEY = 'seellie.organizer.prizes.v1';
+const STORAGE_PREFIX = 'seellie.organizer.prizes.v1';
 
 export default function PrizesScreen() {
   const theme = useAppTheme();
@@ -32,6 +34,10 @@ export default function PrizesScreen() {
   const [value, setValue] = useState('');
   const [hydrated, setHydrated] = useState(false);
 
+  const storageKey = currentUser?.id
+    ? `${STORAGE_PREFIX}.${currentUser.id}`
+    : STORAGE_PREFIX;
+
   const myCompetitionId = competitions.find(
     (c) => c.organizerId === currentUser?.id
   )?.id;
@@ -39,20 +45,38 @@ export default function PrizesScreen() {
   useEffect(() => {
     let active = true;
     (async () => {
-      const stored = await getJson<Prize[]>(STORAGE_KEY);
+      const stored = await getJson<Prize[]>(storageKey);
+      let next = Array.isArray(stored) ? stored : [];
+      if (currentUser?.id && isUuid(currentUser.id)) {
+        const cloud = await fetchAppBlob<Prize[]>(`prizes:${currentUser.id}`);
+        if (Array.isArray(cloud.data) && cloud.data.length) {
+          next = cloud.data;
+        }
+      }
       if (!active) return;
-      if (Array.isArray(stored)) setPrizes(stored);
+      setPrizes(next);
       setHydrated(true);
     })();
     return () => {
       active = false;
     };
-  }, []);
+  }, [currentUser?.id, storageKey]);
 
   useEffect(() => {
     if (!hydrated) return;
-    void setJson(STORAGE_KEY, prizes);
-  }, [prizes, hydrated]);
+    void setJson(storageKey, prizes);
+    if (currentUser?.id && isUuid(currentUser.id)) {
+      void upsertAppBlob(`prizes:${currentUser.id}`, prizes).then((res) => {
+        if (!res.ok) {
+          toast({
+            variant: 'destructive',
+            title: t('cloud.competitionSyncFailed'),
+            description: res.error,
+          });
+        }
+      });
+    }
+  }, [prizes, hydrated, currentUser?.id, storageKey, toast, t]);
 
   const mine = prizes.filter((p) => p.organizerId === currentUser?.id);
 
@@ -105,7 +129,7 @@ export default function PrizesScreen() {
                     styles.prizeTitle,
                     {
                       color: theme.colors.text,
-                      textAlign: isRTL ? 'right' : 'left',
+                      textAlign: 'left',
                     },
                   ]}
                 >
