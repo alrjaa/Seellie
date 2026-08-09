@@ -4704,6 +4704,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       successMessage?: string;
     }) => {
       if (!currentUser) return false;
+
       const owned = competitions.find(
         (c) =>
           c.id === input.competitionId && c.organizerId === currentUser.id
@@ -4778,27 +4779,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      if (isSupabaseConfigured() && isUuid(currentUser.id)) {
-        const cloud = await requireCloudSession(currentUser.id);
-        if (!cloud.session) {
-          toast({
-            variant: 'destructive',
-            title: t('organizer.media.deleteFailed'),
-            description: cloudWriteErrorMessage(cloud.error),
-          });
-          return false;
-        }
-        const cloudUpsert = await upsertCompetitionCloud(toUpsert);
-        if (!cloudUpsert.ok) {
-          toast({
-            variant: 'destructive',
-            title: t('organizer.media.deleteFailed'),
-            description: cloudWriteErrorMessage(cloudUpsert.error),
-          });
-          return false;
-        }
-      }
-
+      // حدّث الواجهة فوراً ثم ارفع للسحابة
       setCompetitions((prev) => {
         const next = prev.map((c) =>
           c.id === input.competitionId ? toUpsert : c
@@ -4806,6 +4787,34 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         void syncCompetitions(next);
         return next;
       });
+
+      if (isSupabaseConfigured() && isUuid(currentUser.id)) {
+        const cloud = await requireCloudSession(currentUser.id);
+        if (!cloud.session) {
+          toast({
+            variant: 'success',
+            title:
+              input.type === 'photos'
+                ? t('organizer.media.photoDeleted')
+                : t('organizer.media.videoDeleted'),
+            description: cloudWriteErrorMessage(cloud.error),
+          });
+          return true;
+        }
+        const cloudUpsert = await upsertCompetitionCloud(toUpsert);
+        if (!cloudUpsert.ok) {
+          toast({
+            variant: 'success',
+            title:
+              input.type === 'photos'
+                ? t('organizer.media.photoDeleted')
+                : t('organizer.media.videoDeleted'),
+            description:
+              cloudUpsert.error || t('cloud.competitionSyncFailed'),
+          });
+          return true;
+        }
+      }
 
       toast({
         variant: 'success',

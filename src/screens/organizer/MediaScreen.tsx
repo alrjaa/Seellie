@@ -1,5 +1,13 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTournament } from '@/providers/TournamentProvider';
@@ -33,6 +41,32 @@ type MediaItem = {
   competitionName: string;
   label?: string;
 };
+
+async function confirmDeleteDialog(input: {
+  title: string;
+  message: string;
+  cancelLabel: string;
+  deleteLabel: string;
+}): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    if (typeof window === 'undefined') return false;
+    return window.confirm(`${input.title}\n\n${input.message}`);
+  }
+  return await new Promise<boolean>((resolve) => {
+    Alert.alert(input.title, input.message, [
+      {
+        text: input.cancelLabel,
+        style: 'cancel',
+        onPress: () => resolve(false),
+      },
+      {
+        text: input.deleteLabel,
+        style: 'destructive',
+        onPress: () => resolve(true),
+      },
+    ]);
+  });
+}
 
 export default function MediaScreen() {
   const {
@@ -172,37 +206,30 @@ export default function MediaScreen() {
   }, [myCompetitions, t]);
 
   const confirmDelete = useCallback(
-    (item: MediaItem) => {
-      Alert.alert(
-        t('organizer.media.deleteTitle'),
-        t('organizer.media.deleteConfirm', {
+    async (item: MediaItem) => {
+      const ok = await confirmDeleteDialog({
+        title: t('organizer.media.deleteTitle'),
+        message: t('organizer.media.deleteConfirm', {
           kind:
             item.kind === 'photo' ? t('common.photo') : t('common.video'),
         }),
-        [
-          { text: t('common.cancel'), style: 'cancel' },
-          {
-            text: t('common.delete'),
-            style: 'destructive',
-            onPress: () => {
-              void (async () => {
-                setDeletingId(item.id);
-                try {
-                  await removeCompetitionMedia({
-                    competitionId: item.competitionId,
-                    mediaId: item.mediaId,
-                    type: item.kind === 'photo' ? 'photos' : 'videos',
-                    matchId: item.matchId,
-                    playerId: item.playerId,
-                  });
-                } finally {
-                  setDeletingId(null);
-                }
-              })();
-            },
-          },
-        ]
-      );
+        cancelLabel: t('common.cancel'),
+        deleteLabel: t('common.delete'),
+      });
+      if (!ok) return;
+
+      setDeletingId(item.id);
+      try {
+        await removeCompetitionMedia({
+          competitionId: item.competitionId,
+          mediaId: item.mediaId,
+          type: item.kind === 'photo' ? 'photos' : 'videos',
+          matchId: item.matchId,
+          playerId: item.playerId,
+        });
+      } finally {
+        setDeletingId(null);
+      }
     },
     [removeCompetitionMedia, t]
   );
@@ -480,7 +507,7 @@ export default function MediaScreen() {
                     }
                   />
                   <Pressable
-                    onPress={() => confirmDelete(item)}
+                    onPress={() => void confirmDelete(item)}
                     disabled={deletingId === item.id}
                     accessibilityRole="button"
                     accessibilityLabel={t('organizer.media.deleteA11y')}
@@ -503,10 +530,16 @@ export default function MediaScreen() {
                 {item.label ? ` · ${item.label}` : ''}
               </Muted>
               <Button
-                label={t('common.delete')}
-                variant="ghost"
-                onPress={() => confirmDelete(item)}
+                label={
+                  deletingId === item.id
+                    ? t('common.loading')
+                    : t('common.delete')
+                }
+                variant="danger"
+                size="sm"
+                onPress={() => void confirmDelete(item)}
                 disabled={deletingId === item.id}
+                loading={deletingId === item.id}
               />
             </Card>
           ))}
