@@ -3,6 +3,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -20,7 +21,6 @@ import { useToast } from '@/providers/ToastProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { LoadingState } from '@/components/feedback/LoadingState';
-import { InlineVideoPlayer } from '@/components/media/InlineVideoPlayer';
 import {
   Avatar,
   Button,
@@ -43,6 +43,47 @@ import { setFloatingSuppressed } from '@/services/floating-scroll-bus';
 
 function isHttpUrl(url?: string) {
   return !!url && /^https?:\/\//i.test(url.trim());
+}
+
+/** رسائل وصلت كنص رابط قبل أعمدة الوسائط */
+function resolveChatMedia(message: {
+  text: string;
+  mediaUrl?: string;
+  mediaKind?: PrivateChatMediaKind;
+}): {
+  mediaUrl?: string;
+  mediaKind?: PrivateChatMediaKind;
+  caption: string;
+} {
+  if (message.mediaUrl && message.mediaKind) {
+    const caption =
+      message.text && message.text.trim() !== message.mediaUrl.trim()
+        ? message.text
+        : '';
+    return {
+      mediaUrl: message.mediaUrl,
+      mediaKind: message.mediaKind,
+      caption,
+    };
+  }
+  const raw = (message.text || '').trim();
+  const match = raw.match(/^(?:🖼️|🎬)\s*(https?:\/\/\S+)/i);
+  if (match?.[1]) {
+    return {
+      mediaUrl: match[1],
+      mediaKind: raw.startsWith('🎬') ? 'video' : 'photo',
+      caption: '',
+    };
+  }
+  if (/^https?:\/\/\S+\.(?:png|jpe?g|gif|webp|mp4|mov|webm)(?:\?\S*)?$/i.test(raw)) {
+    const isVideo = /\.(?:mp4|mov|webm)(?:\?\S*)?$/i.test(raw);
+    return {
+      mediaUrl: raw,
+      mediaKind: isVideo ? 'video' : 'photo',
+      caption: '',
+    };
+  }
+  return { caption: message.text || '' };
 }
 
 type AttachSource = 'saved' | 'highlights' | 'content';
@@ -328,9 +369,10 @@ export default function PrivateScreen() {
 
   const chatMessagesHeight = useMemo(() => {
     const chips = 52;
-    const head = 34;
-    const composer = 128;
-    return Math.max(120, chatShellHeight - chips - head - composer);
+    const head = 36;
+    const composer = 168; // حقل + أزرار الإرفاق/الإرسال
+    const panelPad = 24;
+    return Math.max(100, chatShellHeight - chips - head - composer - panelPad);
   }, [chatShellHeight]);
 
   const onAddFriend = useCallback(
@@ -897,11 +939,17 @@ export default function PrivateScreen() {
                   {chatMessages.length === 0 ? (
                     <Muted>{t('privateSpace.noMessages')}</Muted>
                   ) : (
-                    chatMessages.map((m) => (
+                    chatMessages.map((m) => {
+                      const resolved = resolveChatMedia(m);
+                      const mediaUrl = resolved.mediaUrl;
+                      const mediaKind = resolved.mediaKind;
+                      const caption = resolved.caption;
+                      return (
                       <View
                         key={m.id}
                         style={[
                           styles.bubble,
+                          mediaUrl ? styles.bubbleWithMedia : null,
                           {
                             alignSelf: m.fromMe ? 'flex-end' : 'flex-start',
                             backgroundColor: m.fromMe
@@ -910,25 +958,38 @@ export default function PrivateScreen() {
                           },
                         ]}
                       >
-                        {m.mediaUrl && m.mediaKind === 'photo' ? (
+                        {mediaUrl && mediaKind === 'photo' ? (
                           <View style={styles.bubbleMediaWrap}>
                             <Image
-                              source={{ uri: m.mediaUrl }}
+                              source={{ uri: mediaUrl }}
                               style={styles.bubbleMedia}
                               resizeMode="cover"
                             />
                           </View>
                         ) : null}
-                        {m.mediaUrl && m.mediaKind === 'video' ? (
-                          <View style={styles.bubbleMediaWrap}>
-                            <InlineVideoPlayer
-                              uri={m.mediaUrl}
-                              height={120}
-                              style={styles.bubbleVideo}
+                        {mediaUrl && mediaKind === 'video' ? (
+                          <Pressable
+                            style={[
+                              styles.bubbleMediaWrap,
+                              styles.videoThumb,
+                              { backgroundColor: theme.colors.border },
+                            ]}
+                            onPress={() => {
+                              void Linking.openURL(mediaUrl).catch(
+                                () => undefined
+                              );
+                            }}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('common.video')}
+                          >
+                            <Ionicons
+                              name="play-circle"
+                              size={44}
+                              color={theme.colors.accent}
                             />
-                          </View>
+                          </Pressable>
                         ) : null}
-                        {m.text ? (
+                        {caption ? (
                           <Text
                             style={{
                               color: m.fromMe
@@ -936,18 +997,23 @@ export default function PrivateScreen() {
                                 : theme.colors.text,
                             }}
                           >
-                            {m.text}
+                            {caption}
                           </Text>
                         ) : null}
                       </View>
-                    ))
+                      );
+                    })
                   )}
                 </ScrollView>
+              </View>
 
                 <View
                   style={[
                     styles.composerDock,
-                    { borderTopColor: theme.colors.border },
+                    {
+                      borderTopColor: theme.colors.border,
+                      backgroundColor: theme.colors.card,
+                    },
                   ]}
                 >
                   {pendingMedia ? (
@@ -1051,7 +1117,6 @@ export default function PrivateScreen() {
                     />
                   </View>
                 </View>
-              </View>
             </>
           )}
         </View>
@@ -1341,13 +1406,15 @@ const styles = StyleSheet.create({
     gap: 8,
     flexShrink: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    padding: 10,
   },
   chatActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     flexShrink: 0,
   },
   chatListScroll: {
@@ -1357,13 +1424,18 @@ const styles = StyleSheet.create({
   },
   chatList: { gap: 8, paddingBottom: 8 },
   bubble: {
-    maxWidth: '82%',
-    minWidth: 120,
+    maxWidth: '85%',
+    minWidth: 56,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 14,
     gap: 8,
     overflow: 'hidden',
+  },
+  bubbleWithMedia: {
+    width: 224,
+    maxWidth: 224,
+    minWidth: 224,
   },
   bubbleMediaWrap: {
     width: 200,
@@ -1381,6 +1453,10 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 10,
     overflow: 'hidden',
+  },
+  videoThumb: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pendingMedia: {
     flexDirection: 'row',

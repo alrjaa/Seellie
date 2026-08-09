@@ -16,7 +16,10 @@ import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { useFloatingVisibility } from '@/hooks/useFloatingVisibility';
-import { forceFloatingVisible } from '@/services/floating-scroll-bus';
+import {
+  forceFloatingVisible,
+  isFloatingSuppressed,
+} from '@/services/floating-scroll-bus';
 import { cairoText } from '@/theme/fonts';
 import { useResponsive } from '@/hooks/useResponsive';
 
@@ -80,46 +83,54 @@ function FloatingActionMenuComponent() {
   const [pressedKey, setPressedKey] = useState<string | null>(null);
 
   useEffect(() => {
+    if (isFloatingSuppressed()) {
+      opacity.setValue(0);
+      translateY.setValue(18);
+      return;
+    }
     forceFloatingVisible();
     opacity.setValue(1);
     translateY.setValue(0);
   }, [pathname, opacity, translateY]);
 
   useEffect(() => {
-    if (Platform.OS === 'web') forceFloatingVisible();
+    if (Platform.OS === 'web' && !isFloatingSuppressed()) {
+      forceFloatingVisible();
+    }
   }, []);
 
   useEffect(() => {
-    if (visible) {
-      opacity.setValue(1);
-      translateY.setValue(0);
+    if (!visible || isFloatingSuppressed()) {
+      opacity.setValue(0);
       Animated.parallel([
         Animated.timing(opacity, {
-          toValue: 1,
-          duration: 180,
-          easing: Easing.out(Easing.cubic),
+          toValue: 0,
+          duration: 120,
+          easing: Easing.in(Easing.cubic),
           useNativeDriver,
         }),
         Animated.timing(translateY, {
-          toValue: 0,
-          duration: 180,
-          easing: Easing.out(Easing.cubic),
+          toValue: 18,
+          duration: 120,
+          easing: Easing.in(Easing.cubic),
           useNativeDriver,
         }),
       ]).start();
       return;
     }
+    opacity.setValue(1);
+    translateY.setValue(0);
     Animated.parallel([
       Animated.timing(opacity, {
-        toValue: 0,
-        duration: 140,
-        easing: Easing.in(Easing.cubic),
+        toValue: 1,
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver,
       }),
       Animated.timing(translateY, {
-        toValue: 18,
-        duration: 140,
-        easing: Easing.in(Easing.cubic),
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver,
       }),
     ]).start();
@@ -139,8 +150,14 @@ function FloatingActionMenuComponent() {
     return ACTIONS.map((a) => ({ ...a, label: t(a.labelKey) }));
   }, [currentUser, t]);
 
+  const onPrivateSpace =
+    !!pathname &&
+    (pathname.includes('/private') || pathname.includes('(follower)/private'));
+
   if (!currentUser || actions.length === 0) return null;
   if (desktop) return null;
+  if (!visible || isFloatingSuppressed()) return null;
+  if (onPrivateSpace) return null;
   if (
     pathname?.includes('(auth)') ||
     pathname?.includes('(superadmin)') ||
