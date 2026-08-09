@@ -177,18 +177,41 @@ export default function PrivateScreen() {
         following.has(u.id) &&
         !space.friendIds.includes(u.id)
     );
-    // أيضاً أصحاب المحتوى المحفوظ (حتى لو لم تتابعهم)
-    const fromSavedIds = new Set(
-      space.items
-        .map((item) => resolveAuthorId(item, users, me?.id))
-        .filter((id): id is string => !!id && id !== me.id)
-    );
-    const fromSaved = users.filter(
-      (u) => fromSavedIds.has(u.id) && !space.friendIds.includes(u.id)
-    );
-    // أضف أصحاب المحفوظ غير الموجودين في users كمرشّحين وهميين عبر ids فقط — يُعالج عبر SavedCard
     const byId = new Map<string, (typeof users)[number]>();
-    [...fromFollowing, ...fromSaved].forEach((u) => byId.set(u.id, u));
+    fromFollowing.forEach((u) => byId.set(u.id, u));
+
+    // أصحاب المحتوى المحفوظ — حتى لو لم يُحمَّل ملفهم في users بعد
+    for (const item of space.items) {
+      const id = resolveAuthorId(item, users, me.id);
+      if (!id || id === me.id || space.friendIds.includes(id)) continue;
+      if (byId.has(id)) continue;
+      const known = users.find((u) => u.id === id);
+      if (known) {
+        byId.set(id, known);
+        continue;
+      }
+      byId.set(id, {
+        id,
+        name: item.authorName || item.authorHandle || id,
+        handle: item.authorHandle || '',
+        email: '',
+        passwordHash: '',
+        role: 'follower',
+        status: 'active',
+        visibleId: '',
+        permissions: {
+          canComment: true,
+          canUseVoice: true,
+          canCreateContent: false,
+          canNominateToPersonality: false,
+        },
+        posts: [],
+        media: { photos: [], videos: [] },
+        personalityPhotos: [],
+        analysisContent: [],
+        comments: [],
+      });
+    }
     return [...byId.values()];
   }, [me, users, space.friendIds, space.items]);
 

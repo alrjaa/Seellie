@@ -508,6 +508,8 @@ export const en: TranslationTree = {
     privateWith: 'Private chat with %{name}',
     noMessages: 'No messages yet — write the first one.',
     messagePlaceholder: 'Private message…',
+    savedWithAuthorHint:
+      'You can add the uploader as a friend from Saved or the friends list.',
     savedHint:
       'Content you saved with a double-tap — you can add the author as a friend here.',
     noSaved: 'No saved content',

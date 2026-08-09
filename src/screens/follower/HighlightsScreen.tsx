@@ -35,6 +35,7 @@ type MediaItem = {
   likes: string[];
   organizerId?: string;
   organizerName?: string;
+  organizerHandle?: string;
 };
 
 const MediaRow = memo(function MediaRow({
@@ -78,7 +79,7 @@ const MediaRow = memo(function MediaRow({
 });
 
 export default function HighlightsScreen() {
-  const { competitions, currentUser, toggleMediaLike } = useTournament();
+  const { competitions, currentUser, toggleMediaLike, users } = useTournament();
   const { t } = useTranslation();
   const router = useRouter();
   const { tablet } = useResponsive();
@@ -88,9 +89,9 @@ export default function HighlightsScreen() {
   const media = useMemo(() => {
     const items: MediaItem[] = [];
     competitions.forEach((comp) => {
-      const organizerName =
-        /* يُعرض كصاحب الحساب القابل للإضافة كصديق */
-        comp.name;
+      const organizer = users.find((u) => u.id === comp.organizerId);
+      const organizerName = organizer?.name || comp.name;
+      const organizerHandle = organizer?.handle;
       (comp.media?.photos || []).forEach((p) => {
         items.push({
           id: p.id,
@@ -102,6 +103,7 @@ export default function HighlightsScreen() {
           likes: p.likes,
           organizerId: comp.organizerId,
           organizerName,
+          organizerHandle,
         });
       });
       (comp.media?.videos || []).forEach((v) => {
@@ -115,6 +117,7 @@ export default function HighlightsScreen() {
           likes: v.likes,
           organizerId: comp.organizerId,
           organizerName,
+          organizerHandle,
         });
       });
 
@@ -132,7 +135,8 @@ export default function HighlightsScreen() {
             matchLabel: label,
             likes: p.likes,
             organizerId: comp.organizerId,
-            organizerName: comp.name,
+            organizerName,
+            organizerHandle,
           });
         });
         match.media?.videos?.forEach((v) => {
@@ -145,13 +149,14 @@ export default function HighlightsScreen() {
             matchLabel: label,
             likes: v.likes,
             organizerId: comp.organizerId,
-            organizerName: comp.name,
+            organizerName,
+            organizerHandle,
           });
         });
       });
     });
     return items;
-  }, [competitions]);
+  }, [competitions, users]);
 
   const fullScreenData = useMemo<FullScreenContent[]>(
     () =>
@@ -161,6 +166,7 @@ export default function HighlightsScreen() {
         mediaUrl: item.url,
         authorId: item.organizerId,
         authorName: item.organizerName || item.matchLabel,
+        authorHandle: item.organizerHandle,
         title: item.matchLabel,
         subtitle:
           item.source === 'competition'

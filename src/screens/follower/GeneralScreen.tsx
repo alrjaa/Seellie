@@ -271,13 +271,20 @@ export default function GeneralFeedScreen() {
     });
 
     competitions.forEach((comp) => {
+      const organizer = users.find((u) => u.id === comp.organizerId);
+      const uploaderId = comp.organizerId;
+      const uploaderName = organizer?.name || comp.name;
+      const uploaderHandle = organizer?.handle;
+      const uploaderAvatar = organizer?.avatar || comp.logo;
+
       (comp.media?.photos || []).forEach((photo) => {
         items.push({
           id: `photo-comp-${photo.id}`,
           type: 'photo',
-          authorId: comp.id,
-          authorName: comp.name,
-          authorAvatar: comp.logo,
+          authorId: uploaderId,
+          authorName: uploaderName,
+          authorHandle: uploaderHandle,
+          authorAvatar: uploaderAvatar,
           mediaUrl: photo.url,
           mediaId: photo.id,
           likes: photo.likes,
@@ -290,9 +297,10 @@ export default function GeneralFeedScreen() {
         items.push({
           id: `video-comp-${video.id}`,
           type: 'video',
-          authorId: comp.id,
-          authorName: comp.name,
-          authorAvatar: comp.logo,
+          authorId: uploaderId,
+          authorName: uploaderName,
+          authorHandle: uploaderHandle,
+          authorAvatar: uploaderAvatar,
           mediaUrl: video.url,
           mediaId: video.id,
           likes: video.likes,
@@ -308,30 +316,32 @@ export default function GeneralFeedScreen() {
             items.push({
               id: `photo-player-${player.id}-${photo.id}`,
               type: 'photo',
-              authorId: player.id,
-              authorName: player.name,
-              authorAvatar: player.avatar,
+              authorId: uploaderId,
+              authorName: uploaderName,
+              authorHandle: uploaderHandle,
+              authorAvatar: player.avatar || uploaderAvatar,
               mediaUrl: photo.url,
               mediaId: photo.id,
               likes: photo.likes,
               timestamp: new Date(photo.timestamp || Date.now()),
               mediaSource: 'player',
-              subtitle: team.name,
+              subtitle: `${team.name} · ${player.name}`,
             });
           });
           (player.media?.videos || []).forEach((video) => {
             items.push({
               id: `video-player-${player.id}-${video.id}`,
               type: 'video',
-              authorId: player.id,
-              authorName: player.name,
-              authorAvatar: player.avatar,
+              authorId: uploaderId,
+              authorName: uploaderName,
+              authorHandle: uploaderHandle,
+              authorAvatar: player.avatar || uploaderAvatar,
               mediaUrl: video.url,
               mediaId: video.id,
               likes: video.likes,
               timestamp: new Date(video.timestamp || Date.now()),
               mediaSource: 'player',
-              subtitle: team.name,
+              subtitle: `${team.name} · ${player.name}`,
             });
           });
         });
@@ -345,30 +355,32 @@ export default function GeneralFeedScreen() {
           items.push({
             id: `photo-match-${photo.id}`,
             type: 'photo',
-            authorId: match.id,
-            authorName: label,
-            authorAvatar: photo.url,
+            authorId: uploaderId,
+            authorName: uploaderName,
+            authorHandle: uploaderHandle,
+            authorAvatar: uploaderAvatar,
             mediaUrl: photo.url,
             mediaId: photo.id,
             likes: photo.likes,
             timestamp: new Date(photo.timestamp || match.date),
             mediaSource: 'match',
-            subtitle: comp.name,
+            subtitle: `${comp.name} · ${label}`,
           });
         });
         (match.media?.videos || []).forEach((video) => {
           items.push({
             id: `video-match-${video.id}`,
             type: 'video',
-            authorId: match.id,
-            authorName: label,
-            authorAvatar: comp.logo,
+            authorId: uploaderId,
+            authorName: uploaderName,
+            authorHandle: uploaderHandle,
+            authorAvatar: uploaderAvatar,
             mediaUrl: video.url,
             mediaId: video.id,
             likes: video.likes,
             timestamp: new Date(video.timestamp || match.date),
             mediaSource: 'match',
-            subtitle: comp.name,
+            subtitle: `${comp.name} · ${label}`,
           });
         });
       });
