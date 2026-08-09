@@ -1,4 +1,12 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  createElement,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Alert,
   FlatList,
@@ -15,6 +23,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ResizeMode, Video } from 'expo-av';
+import type { AVPlaybackStatus, Video as VideoType } from 'expo-av';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
@@ -49,6 +58,10 @@ function isHttpUrl(url?: string) {
 }
 
 /** رسائل وصلت كنص رابط قبل أعمدة الوسائط */
+function isVideoUrl(url: string) {
+  return /\.(?:mp4|mov|webm|m4v)(?:\?\S*)?$/i.test(url.trim());
+}
+
 function resolveChatMedia(message: {
   text: string;
   mediaUrl?: string;
@@ -59,11 +72,10 @@ function resolveChatMedia(message: {
   caption: string;
 } {
   if (message.mediaUrl) {
-    const kind =
-      message.mediaKind ||
-      (/\.(?:mp4|mov|webm)(?:\?\S*)?$/i.test(message.mediaUrl)
-        ? 'video'
-        : 'photo');
+    let kind: PrivateChatMediaKind =
+      message.mediaKind || (isVideoUrl(message.mediaUrl) ? 'video' : 'photo');
+    // تصحيح إن وُسمت صورة بالخطأ وهي فيديو
+    if (kind === 'photo' && isVideoUrl(message.mediaUrl)) kind = 'video';
     const caption =
       message.text && message.text.trim() !== message.mediaUrl.trim()
         ? message.text
@@ -79,15 +91,14 @@ function resolveChatMedia(message: {
   if (match?.[1]) {
     return {
       mediaUrl: match[1],
-      mediaKind: raw.startsWith('🎬') ? 'video' : 'photo',
+      mediaKind: raw.startsWith('🎬') || isVideoUrl(match[1]) ? 'video' : 'photo',
       caption: '',
     };
   }
-  if (/^https?:\/\/\S+\.(?:png|jpe?g|gif|webp|mp4|mov|webm)(?:\?\S*)?$/i.test(raw)) {
-    const isVideo = /\.(?:mp4|mov|webm)(?:\?\S*)?$/i.test(raw);
+  if (/^https?:\/\/\S+\.(?:png|jpe?g|gif|webp|mp4|mov|webm|m4v)(?:\?\S*)?$/i.test(raw)) {
     return {
       mediaUrl: raw,
-      mediaKind: isVideo ? 'video' : 'photo',
+      mediaKind: isVideoUrl(raw) ? 'video' : 'photo',
       caption: '',
     };
   }
@@ -104,31 +115,84 @@ type AttachableItem = {
 };
 
 const ChatVideoBubble = memo(function ChatVideoBubble({ uri }: { uri: string }) {
+  const videoRef = useRef<VideoType | null>(null);
   const [playing, setPlaying] = useState(false);
+
+  // على الويب: عنصر video أصلي يعرض أول إطار + أزرار التشغيل بوضوح
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.bubbleMediaWrap}>
+        {createElement('video', {
+          src: uri,
+          controls: true,
+          playsInline: true,
+          preload: 'metadata',
+          style: {
+            width: 200,
+            height: 120,
+            objectFit: 'cover',
+            borderRadius: 10,
+            backgroundColor: '#0b1220',
+            display: 'block',
+          },
+        })}
+      </View>
+    );
+  }
+
+  const onStatus = useCallback((status: AVPlaybackStatus) => {
+    if (!status.isLoaded) return;
+    setPlaying(status.isPlaying);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const warm = async () => {
+      try {
+        const player = videoRef.current;
+        if (!player) return;
+        // تحميل أول إطار ثم إيقاف — حتى لا يبقى صندوق فارغ
+        await player.setPositionAsync(0);
+        await player.playAsync();
+        await new Promise((r) => setTimeout(r, 120));
+        if (!cancelled) await player.pauseAsync();
+      } catch {
+        // تجاهل فشل التحميل الأولي
+      }
+    };
+    void warm();
+    return () => {
+      cancelled = true;
+    };
+  }, [uri]);
+
   return (
     <View style={styles.bubbleMediaWrap}>
       <Video
+        ref={videoRef}
         source={{ uri }}
         style={styles.bubbleMedia}
         resizeMode={ResizeMode.COVER}
-        useNativeControls={false}
-        shouldPlay={playing}
-        isLooping
-        isMuted={!playing}
-        {...(Platform.OS === 'web' ? ({ playsInline: true } as object) : null)}
+        useNativeControls
+        shouldPlay={false}
+        isLooping={false}
+        isMuted={false}
+        onPlaybackStatusUpdate={onStatus}
       />
-      <Pressable
-        style={styles.videoPlayOverlay}
-        onPress={() => setPlaying((v) => !v)}
-        accessibilityRole="button"
-        accessibilityLabel={playing ? 'إيقاف' : 'تشغيل'}
-      >
-        {!playing ? (
+      {!playing ? (
+        <Pressable
+          style={styles.videoPlayOverlay}
+          onPress={() => {
+            void videoRef.current?.playAsync();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="تشغيل"
+        >
           <View style={styles.videoPlayBtn}>
             <Ionicons name="play" size={28} color="#fff" />
           </View>
-        ) : null}
-      </Pressable>
+        </Pressable>
+      ) : null}
     </View>
   );
 });
