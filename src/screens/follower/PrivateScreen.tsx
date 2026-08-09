@@ -312,11 +312,19 @@ export default function PrivateScreen() {
     ? space.chats[activeFriend.id] || []
     : [];
 
-  // على الويب ScrollView يتمدّد مع المحتوى ما لم يُحدَّد maxHeight صراحة
-  const chatMessagesMaxHeight = useMemo(() => {
-    const reserved = Platform.OS === 'web' ? 390 : 360;
-    return Math.max(140, Math.min(280, windowHeight - reserved));
+  // ارتفاع ثابت لصندوق المحادثة حتى يبقى شريط الكتابة/الإرسال ظاهراً دائماً
+  const chatShellHeight = useMemo(() => {
+    const topChrome = 56; // تبويبات الخاصة فقط (بدون عنوان طويل)
+    const bottomChrome = Platform.OS === 'web' ? 118 : 108;
+    return Math.max(320, windowHeight - topChrome - bottomChrome);
   }, [windowHeight]);
+
+  const chatMessagesHeight = useMemo(() => {
+    const chips = 52;
+    const head = 34;
+    const composer = 128;
+    return Math.max(120, chatShellHeight - chips - head - composer);
+  }, [chatShellHeight]);
 
   const onAddFriend = useCallback(
     async (friendId: string) => {
@@ -688,14 +696,17 @@ export default function PrivateScreen() {
         ...(section === 'chat' ? styles.contentChat : null),
       }}
       hasTabBar
-      scroll={section !== 'saved'}
+      scroll={section === 'friends'}
       keyboard={section === 'chat'}
+      fabClearance={section !== 'chat'}
     >
-      <Subtitle style={{ width: '100%' }}>
-        {t('privateSpace.title')}
-      </Subtitle>
       {section === 'chat' ? null : (
-        <Muted>{t('privateSpace.subtitle')}</Muted>
+        <>
+          <Subtitle style={{ width: '100%' }}>
+            {t('privateSpace.title')}
+          </Subtitle>
+          <Muted>{t('privateSpace.subtitle')}</Muted>
+        </>
       )}
       {sectionBar}
 
@@ -784,7 +795,7 @@ export default function PrivateScreen() {
       ) : null}
 
       {section === 'chat' ? (
-        <View style={styles.chatBlock}>
+        <View style={[styles.chatShell, { height: chatShellHeight }]}>
           {friends.length === 0 ? (
             <EmptyState
               title={t('privateSpace.noFriends')}
@@ -798,6 +809,7 @@ export default function PrivateScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.friendChips}
                 keyboardShouldPersistTaps="handled"
+                style={styles.friendChipsScroll}
               >
                 {friends.filter(Boolean).map((u) => {
                   if (!u) return null;
@@ -836,7 +848,16 @@ export default function PrivateScreen() {
                   );
                 })}
               </ScrollView>
-              <Card style={styles.chatCard}>
+
+              <View
+                style={[
+                  styles.chatPanel,
+                  {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
                 <View style={styles.chatHead}>
                   <Muted style={{ flex: 1 }}>
                     {t('privateSpace.privateWith', {
@@ -858,11 +879,9 @@ export default function PrivateScreen() {
                     />
                   </Pressable>
                 </View>
+
                 <ScrollView
-                  style={[
-                    styles.chatListScroll,
-                    { maxHeight: chatMessagesMaxHeight, height: chatMessagesMaxHeight },
-                  ]}
+                  style={[styles.chatListScroll, { height: chatMessagesHeight }]}
                   contentContainerStyle={styles.chatList}
                   keyboardShouldPersistTaps="handled"
                   nestedScrollEnabled
@@ -894,7 +913,7 @@ export default function PrivateScreen() {
                         {m.mediaUrl && m.mediaKind === 'video' ? (
                           <InlineVideoPlayer
                             uri={m.mediaUrl}
-                            height={140}
+                            height={120}
                             style={styles.bubbleVideo}
                           />
                         ) : null}
@@ -913,109 +932,115 @@ export default function PrivateScreen() {
                     ))
                   )}
                 </ScrollView>
-                <View style={styles.composerDock}>
-                {pendingMedia ? (
-                  <View
-                    style={[
-                      styles.pendingMedia,
-                      { borderColor: theme.colors.border },
-                    ]}
-                  >
-                    {pendingMedia.kind === 'photo' ? (
-                      <Image
-                        source={{ uri: pendingMedia.uri }}
-                        style={styles.pendingThumb}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View
-                        style={[
-                          styles.pendingThumb,
-                          styles.pendingVideo,
-                          { backgroundColor: theme.colors.surfaceElevated },
-                        ]}
+
+                <View
+                  style={[
+                    styles.composerDock,
+                    { borderTopColor: theme.colors.border },
+                  ]}
+                >
+                  {pendingMedia ? (
+                    <View
+                      style={[
+                        styles.pendingMedia,
+                        { borderColor: theme.colors.border },
+                      ]}
+                    >
+                      {pendingMedia.kind === 'photo' ? (
+                        <Image
+                          source={{ uri: pendingMedia.uri }}
+                          style={styles.pendingThumb}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View
+                          style={[
+                            styles.pendingThumb,
+                            styles.pendingVideo,
+                            { backgroundColor: theme.colors.surfaceElevated },
+                          ]}
+                        >
+                          <Ionicons
+                            name="videocam"
+                            size={22}
+                            color={theme.colors.accent}
+                          />
+                        </View>
+                      )}
+                      <Muted style={{ flex: 1 }} numberOfLines={2}>
+                        {pendingMedia.label ||
+                          (pendingMedia.kind === 'photo'
+                            ? t('privateSpace.attachPhotoReady')
+                            : t('privateSpace.attachVideoReady'))}
+                      </Muted>
+                      <Pressable
+                        onPress={() => setPendingMedia(null)}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('common.cancel')}
                       >
                         <Ionicons
-                          name="videocam"
+                          name="close-circle"
                           size={22}
-                          color={theme.colors.accent}
+                          color={theme.colors.danger}
                         />
-                      </View>
-                    )}
-                    <Muted style={{ flex: 1 }} numberOfLines={2}>
-                      {pendingMedia.label ||
-                        (pendingMedia.kind === 'photo'
-                          ? t('privateSpace.attachPhotoReady')
-                          : t('privateSpace.attachVideoReady'))}
-                    </Muted>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                  <Input
+                    value={draft}
+                    onChangeText={setDraft}
+                    placeholder={t('privateSpace.messagePlaceholder')}
+                    multiline
+                  />
+                  <View style={styles.chatActions}>
                     <Pressable
-                      onPress={() => setPendingMedia(null)}
+                      onPress={() => {
+                        setAttachSource(
+                          savedAttachables.length
+                            ? 'saved'
+                            : highlightAttachables.length
+                              ? 'highlights'
+                              : 'content'
+                        );
+                        setAttachOpen(true);
+                      }}
+                      disabled={!activeFriend || sending}
                       hitSlop={8}
                       accessibilityRole="button"
-                      accessibilityLabel={t('common.cancel')}
+                      accessibilityLabel={t('privateSpace.attachContent')}
+                      style={{ opacity: activeFriend ? 1 : 0.35 }}
                     >
                       <Ionicons
-                        name="close-circle"
-                        size={22}
-                        color={theme.colors.danger}
+                        name="attach-outline"
+                        size={24}
+                        color={theme.colors.accent}
                       />
                     </Pressable>
-                  </View>
-                ) : null}
-                <Input
-                  value={draft}
-                  onChangeText={setDraft}
-                  placeholder={t('privateSpace.messagePlaceholder')}
-                  multiline
-                />
-                <View style={styles.chatActions}>
-                  <Pressable
-                    onPress={() => {
-                      setAttachSource(
-                        savedAttachables.length
-                          ? 'saved'
-                          : highlightAttachables.length
-                            ? 'highlights'
-                            : 'content'
-                      );
-                      setAttachOpen(true);
-                    }}
-                    disabled={!activeFriend || sending}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('privateSpace.attachContent')}
-                    style={{ opacity: activeFriend ? 1 : 0.35 }}
-                  >
-                    <Ionicons
-                      name="attach-outline"
-                      size={24}
-                      color={theme.colors.accent}
+                    <Button
+                      label={t('privateSpace.clearChat')}
+                      variant="ghost"
+                      size="sm"
+                      onPress={() => void onClearChat()}
+                      disabled={!activeFriend || chatMessages.length === 0}
                     />
-                  </Pressable>
-                  <Button
-                    label={t('privateSpace.clearChat')}
-                    variant="ghost"
-                    size="sm"
-                    onPress={() => void onClearChat()}
-                    disabled={!activeFriend || chatMessages.length === 0}
-                  />
-                  <Button
-                    label={
-                      sending
-                        ? t('privateSpace.sending')
-                        : t('common.send')
-                    }
-                    onPress={() => void onSend()}
-                    disabled={
-                      sending ||
-                      !activeFriend ||
-                      (!draft.trim() && !pendingMedia)
-                    }
-                    style={{ flex: 1 }}
-                  />
+                    <Button
+                      label={
+                        sending
+                          ? t('privateSpace.sending')
+                          : t('common.send')
+                      }
+                      onPress={() => void onSend()}
+                      disabled={
+                        sending ||
+                        !activeFriend ||
+                        (!draft.trim() && !pendingMedia)
+                      }
+                      style={{ flex: 1 }}
+                    />
+                  </View>
                 </View>
-                </View>
-              </Card>
+              </View>
             </>
           )}
         </View>
@@ -1228,12 +1253,14 @@ const styles = StyleSheet.create({
   contentChat: {
     flex: 1,
     minHeight: 0,
-    paddingBottom: 8,
+    paddingBottom: 0,
+    gap: 8,
   },
   sections: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+    flexShrink: 0,
   },
   sectionChip: {
     flexDirection: 'row',
@@ -1245,6 +1272,11 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   block: { gap: 10 },
+  chatShell: {
+    width: '100%',
+    gap: 8,
+    overflow: 'hidden',
+  },
   chatBlock: {
     flex: 1,
     minHeight: 0,
@@ -1256,6 +1288,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  friendChipsScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+    maxHeight: 48,
   },
   friendChips: { gap: 8, paddingVertical: 4, flexGrow: 0 },
   friendChip: {
@@ -1269,6 +1306,15 @@ const styles = StyleSheet.create({
     marginRight: 8,
     maxWidth: 160,
   },
+  chatPanel: {
+    flex: 1,
+    minHeight: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    padding: 12,
+    gap: 8,
+    overflow: 'hidden',
+  },
   chatCard: {
     flexGrow: 0,
     gap: 10,
@@ -1281,8 +1327,10 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   composerDock: {
-    gap: 10,
+    gap: 8,
     flexShrink: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 8,
   },
   chatActions: {
     flexDirection: 'row',
@@ -1294,6 +1342,7 @@ const styles = StyleSheet.create({
   chatListScroll: {
     flexGrow: 0,
     flexShrink: 0,
+    width: '100%',
   },
   chatList: { gap: 8, paddingBottom: 8 },
   bubble: {
@@ -1305,14 +1354,14 @@ const styles = StyleSheet.create({
   },
   bubbleMedia: {
     width: '100%',
-    maxWidth: 220,
-    height: 140,
-    maxHeight: 140,
+    maxWidth: 200,
+    height: 120,
+    maxHeight: 120,
     borderRadius: 10,
   },
   bubbleVideo: {
     width: '100%',
-    maxWidth: 220,
+    maxWidth: 200,
     borderRadius: 10,
     overflow: 'hidden',
   },
