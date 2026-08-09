@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { ResizeMode, Video } from 'expo-av';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
@@ -100,6 +101,36 @@ type AttachableItem = {
   kind: PrivateChatMediaKind;
   label: string;
 };
+
+const ChatVideoBubble = memo(function ChatVideoBubble({ uri }: { uri: string }) {
+  const [playing, setPlaying] = useState(false);
+  return (
+    <View style={styles.bubbleMediaWrap}>
+      <Video
+        source={{ uri }}
+        style={styles.bubbleMedia}
+        resizeMode={ResizeMode.COVER}
+        useNativeControls={false}
+        shouldPlay={playing}
+        isLooping
+        isMuted={!playing}
+        {...(Platform.OS === 'web' ? ({ playsInline: true } as object) : null)}
+      />
+      <Pressable
+        style={styles.videoPlayOverlay}
+        onPress={() => setPlaying((v) => !v)}
+        accessibilityRole="button"
+        accessibilityLabel={playing ? 'إيقاف' : 'تشغيل'}
+      >
+        {!playing ? (
+          <View style={styles.videoPlayBtn}>
+            <Ionicons name="play" size={28} color="#fff" />
+          </View>
+        ) : null}
+      </Pressable>
+    </View>
+  );
+});
 
 async function confirmAction(input: {
   title: string;
@@ -961,26 +992,7 @@ export default function PrivateScreen() {
                           </View>
                         ) : null}
                         {mediaUrl && mediaKind === 'video' ? (
-                          <Pressable
-                            style={[
-                              styles.bubbleMediaWrap,
-                              styles.videoThumb,
-                              { backgroundColor: theme.colors.border },
-                            ]}
-                            onPress={() => {
-                              void Linking.openURL(mediaUrl).catch(
-                                () => undefined
-                              );
-                            }}
-                            accessibilityRole="button"
-                            accessibilityLabel={t('common.video')}
-                          >
-                            <Ionicons
-                              name="play-circle"
-                              size={44}
-                              color={theme.colors.accent}
-                            />
-                          </Pressable>
+                          <ChatVideoBubble uri={mediaUrl} />
                         ) : null}
                         {caption ? (
                           <Text
@@ -1488,7 +1500,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     overflow: 'hidden',
     alignSelf: 'center',
-    backgroundColor: '#111',
+    backgroundColor: '#0b1220',
   },
   bubbleMedia: {
     width: 200,
@@ -1503,6 +1515,20 @@ const styles = StyleSheet.create({
   videoThumb: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  videoPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoPlayBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 3,
   },
   pendingMedia: {
     flexDirection: 'row',
