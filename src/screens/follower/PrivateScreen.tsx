@@ -673,7 +673,16 @@ export default function PrivateScreen() {
   );
 
   return (
-    <Screen style={styles.screen} contentStyle={styles.content} hasTabBar>
+    <Screen
+      style={styles.screen}
+      contentStyle={{
+        ...styles.content,
+        ...(section === 'chat' ? styles.contentChat : null),
+      }}
+      hasTabBar
+      scroll={section !== 'chat' && section !== 'saved'}
+      keyboard={section === 'chat'}
+    >
       <Subtitle style={{ width: '100%' }}>
         {t('privateSpace.title')}
       </Subtitle>
@@ -765,7 +774,7 @@ export default function PrivateScreen() {
       ) : null}
 
       {section === 'chat' ? (
-        <View style={styles.block}>
+        <View style={styles.chatBlock}>
           {friends.length === 0 ? (
             <EmptyState
               title={t('privateSpace.noFriends')}
@@ -774,17 +783,18 @@ export default function PrivateScreen() {
             />
           ) : (
             <>
-              <FlatList
+              <ScrollView
                 horizontal
-                data={friends.filter(Boolean)}
-                keyExtractor={(u) => u!.id}
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.friendChips}
-                renderItem={({ item: u }) => {
+                keyboardShouldPersistTaps="handled"
+              >
+                {friends.filter(Boolean).map((u) => {
                   if (!u) return null;
                   const active = activeFriend?.id === u.id;
                   return (
                     <Pressable
+                      key={u.id}
                       onPress={() => {
                         setActiveFriendId(u.id);
                         setPendingMedia(null);
@@ -814,8 +824,8 @@ export default function PrivateScreen() {
                       </Text>
                     </Pressable>
                   );
-                }}
-              />
+                })}
+              </ScrollView>
               <Card style={styles.chatCard}>
                 <View style={styles.chatHead}>
                   <Muted style={{ flex: 1 }}>
@@ -838,7 +848,12 @@ export default function PrivateScreen() {
                     />
                   </Pressable>
                 </View>
-                <View style={styles.chatList}>
+                <ScrollView
+                  style={styles.chatListScroll}
+                  contentContainerStyle={styles.chatList}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
+                >
                   {chatMessages.length === 0 ? (
                     <Muted>{t('privateSpace.noMessages')}</Muted>
                   ) : (
@@ -883,7 +898,7 @@ export default function PrivateScreen() {
                       </View>
                     ))
                   )}
-                </View>
+                </ScrollView>
                 {pendingMedia ? (
                   <View
                     style={[
@@ -1194,6 +1209,11 @@ export default function PrivateScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { paddingTop: 12, gap: 12, paddingBottom: 24 },
+  contentChat: {
+    flex: 1,
+    minHeight: 0,
+    paddingBottom: 8,
+  },
   sections: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1209,6 +1229,11 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   block: { gap: 10 },
+  chatBlock: {
+    flex: 1,
+    minHeight: 0,
+    gap: 10,
+  },
   pickCard: { gap: 10 },
   friendCard: { gap: 0 },
   friendRow: {
@@ -1216,7 +1241,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  friendChips: { gap: 8, paddingVertical: 4 },
+  friendChips: { gap: 8, paddingVertical: 4, flexGrow: 0 },
   friendChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1228,7 +1253,11 @@ const styles = StyleSheet.create({
     marginRight: 8,
     maxWidth: 160,
   },
-  chatCard: { gap: 10, minHeight: 280 },
+  chatCard: {
+    flex: 1,
+    minHeight: 0,
+    gap: 10,
+  },
   chatHead: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1238,8 +1267,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexWrap: 'wrap',
   },
-  chatList: { gap: 8, minHeight: 120 },
+  chatListScroll: {
+    flex: 1,
+    minHeight: 120,
+  },
+  chatList: { gap: 8, paddingBottom: 8, flexGrow: 1 },
   bubble: {
     maxWidth: '82%',
     paddingHorizontal: 12,
