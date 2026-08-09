@@ -89,6 +89,14 @@ import {
 } from '@/services/supabase-forum-comments';
 import { generateAnalystAccessCode } from '@/utils/analyst';
 import {
+  clearSeedUserContent,
+  filterSeedComments,
+  filterSeedCompetitionRequests,
+  filterSeedCompetitions,
+  filterSeedGifts,
+  filterSeedOffers,
+} from '@/utils/seed-data';
+import {
   initialComments,
   initialCompetitions,
   initialCompetitionRequests,
@@ -692,6 +700,22 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     },
     [currentUser, t, toast]
   );
+
+  /** عند الحساب السحابي: أخفِ مسابقات/محتوى الحسابات التجريبية */
+  const purgeDemoSeedForCloudUser = useCallback(() => {
+    setCompetitions((prev) => filterSeedCompetitions(prev));
+    setComments((prev) => filterSeedComments(prev));
+    setQuickComments((prev) => filterSeedComments(prev));
+    setUsers((prev) => prev.map(clearSeedUserContent));
+    setOffers((prev) => filterSeedOffers(prev));
+    setGiftTransactions((prev) => filterSeedGifts(prev));
+    setCompetitionRequests((prev) => filterSeedCompetitionRequests(prev));
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser || !isUuid(currentUser.id)) return;
+    purgeDemoSeedForCloudUser();
+  }, [currentUser?.id, purgeDemoSeedForCloudUser]);
 
   useEffect(() => {
     let active = true;

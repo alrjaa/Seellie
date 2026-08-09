@@ -1,6 +1,7 @@
 import type { Competition } from '@/data/initial-data';
 import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
 import { mergeCompetitionsById } from '@/services/competition-sync';
+import { isSeedCompetitionId } from '@/utils/seed-data';
 
 type CompetitionCloudRow = {
   id: string;
@@ -130,18 +131,18 @@ export function mergeCloudCompetitions(
 }
 
 /**
- * السحابة مصدر الحقيقة للمسابقات السحابية:
- * يزيل محلياً أي مسابقة سحابية حُذفت من Supabase، ويحتفظ بالبذرة التجريبية فقط.
+ * السحابة مصدر الحقيقة للمسابقات السحابية.
+ * لا تُبقى مسابقات البذرة التجريبية (comp-1…) عند الدمج مع السحابة.
  */
 export function reconcileCompetitionsWithCloud(
   local: Competition[],
   cloud: Competition[]
 ): Competition[] {
   const cloudIds = new Set(cloud.map((c) => c.id));
-  const keepLocalDemo = local.filter(
-    (c) => /^comp-\d+$/i.test(c.id) && !cloudIds.has(c.id)
+  const keepLocalLive = local.filter(
+    (c) => !isSeedCompetitionId(c.id) && cloudIds.has(c.id)
   );
-  return mergeCompetitionsById(keepLocalDemo, cloud);
+  return mergeCompetitionsById(keepLocalLive, cloud);
 }
 
 export function subscribeCompetitionsCloud(

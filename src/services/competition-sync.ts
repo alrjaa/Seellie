@@ -9,6 +9,7 @@ import type { Competition, CompetitionRequest } from '@/data/initial-data';
 import { getDb } from '@/services/firebase';
 import { getJson, setJson } from '@/services/storage';
 import { isSupabaseConfigured } from '@/services/supabase';
+import { isSeedCompetitionId } from '@/utils/seed-data';
 
 export const COMPETITION_REQUESTS_KEY = 'seellie.competitionRequests';
 export const COMPETITIONS_KEY = 'seellie.competitions';
@@ -177,10 +178,6 @@ export async function saveCompetitions(
 }
 
 /** مسابقات البذرة التجريبية تبقى محلية؛ الباقي يُرفع للسحابة */
-function isSeedCompetitionId(id: string): boolean {
-  return /^comp-\d+$/i.test(id);
-}
-
 async function pushCompetitionsToSupabase(
   items: Competition[]
 ): Promise<{ ok: boolean; error?: string }> {
