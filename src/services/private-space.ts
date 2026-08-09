@@ -100,8 +100,12 @@ async function loadCloud(userId: string): Promise<PrivateSpaceState | null> {
     return null;
   }
 
-  const friendIds = ((friendsRes.data || []) as { friend_id: string }[]).map(
-    (r) => r.friend_id
+  const friendIds = Array.from(
+    new Set([
+      ...((friendsRes.data || []) as { friend_id: string }[]).map(
+        (r) => r.friend_id
+      ),
+    ])
   );
 
   const items: PrivateContentItem[] = (
@@ -146,6 +150,10 @@ async function loadCloud(userId: string): Promise<PrivateSpaceState | null> {
       at: row.created_at,
     });
     chats[row.friend_id] = list;
+    // رسالة واردة ⇒ أظهر المرسل في الأصدقاء حتى لو فشلت صداقة الاتجاه المعاكس
+    if (!friendIds.includes(row.friend_id)) {
+      friendIds.push(row.friend_id);
+    }
   }
 
   return { friendIds, chats, items };
@@ -304,27 +312,48 @@ export async function sendPrivateChatMessage(
   userId: string,
   friendId: string,
   text: string
-): Promise<PrivateSpaceState> {
+): Promise<{ state: PrivateSpaceState; ok: boolean; error?: string }> {
   const trimmed = text.trim();
-  if (!trimmed) return loadPrivateSpace(userId);
+  if (!trimmed) {
+    return { state: await loadPrivateSpace(userId), ok: false, error: 'empty' };
+  }
 
   if (canUseCloud(userId) && isUuid(friendId)) {
     const sb = getSupabase();
     if (sb) {
-      // صداقة ثنائية عبر الدالة إن وُجدت، وإلا صفوف مباشرة
-      const { error: rpcError } = await sb.rpc('add_private_friend', {
-        p_friend_id: friendId,
-      });
-      if (rpcError) {
-        await sb.from('private_friends').upsert(
-          { owner_id: userId, friend_id: friendId },
-          { onConflict: 'owner_id,friend_id' }
-        );
-        await sb.from('private_friends').upsert(
-          { owner_id: friendId, friend_id: userId },
-          { onConflict: 'owner_id,friend_id' }
-        );
+      const { data: sessionData } = await sb.auth.getSession();
+      if (!sessionData.session) {
+        return {
+          state: await loadPrivateSpace(userId),
+          ok: false,
+          error: 'no_session',
+        };
       }
+
+      // المسار الموثوق: RPC يكتب في صندوقَي الطرفين + صداقة ثنائية
+      const { data: rpcData, error: rpcError } = await sb.rpc(
+        'send_private_message',
+        {
+          p_friend_id: friendId,
+          p_body: trimmed,
+        }
+      );
+      const rpcOk =
+        !rpcError &&
+        rpcData &&
+        typeof rpcData === 'object' &&
+        (rpcData as { ok?: boolean }).ok === true;
+
+      if (rpcOk) {
+        return { state: await loadPrivateSpace(userId), ok: true };
+      }
+
+      if (rpcError) {
+        console.warn('[private-space] send rpc', rpcError.message);
+      }
+
+      // احتياطي: إدراج صفّين مباشرة (يتطلب سياسة insert_thread)
+      await sb.rpc('add_private_friend', { p_friend_id: friendId });
       const { error } = await sb.from('private_messages').insert([
         {
           owner_id: userId,
@@ -339,11 +368,38 @@ export async function sendPrivateChatMessage(
           body: trimmed,
         },
       ]);
-      if (!error) return loadPrivateSpace(userId);
+      if (!error) {
+        return { state: await loadPrivateSpace(userId), ok: true };
+      }
       console.warn('[private-space] send message', error.message);
+
+      // صف المرسل فقط — أفضل من لا شيء، مع خطأ واضح أن الطرف الآخر قد لا يرى
+      const { error: ownOnlyErr } = await sb.from('private_messages').insert({
+        owner_id: userId,
+        friend_id: friendId,
+        sender_id: userId,
+        body: trimmed,
+      });
+      if (!ownOnlyErr) {
+        return {
+          state: await loadPrivateSpace(userId),
+          ok: false,
+          error: 'recipient_inbox_failed',
+        };
+      }
+
+      return {
+        state: await loadPrivateSpace(userId),
+        ok: false,
+        error:
+          rpcError?.message ||
+          error.message ||
+          'cloud_send_failed',
+      };
     }
   }
 
+  // حساب غير سحابي فقط — محلي
   const state = await loadLocal(userId);
   if (!state.friendIds.includes(friendId)) {
     state.friendIds = [friendId, ...state.friendIds];
@@ -357,7 +413,46 @@ export async function sendPrivateChatMessage(
   });
   state.chats[friendId] = list;
   await saveLocal(userId, state);
-  return state;
+  return {
+    state,
+    ok: false,
+    error: isUuid(userId) ? 'cloud_unavailable' : 'local_only',
+  };
+}
+
+export function subscribePrivateSpace(
+  userId: string,
+  onChange: () => void
+): (() => void) | null {
+  if (!canUseCloud(userId)) return null;
+  const sb = getSupabase();
+  if (!sb) return null;
+  const channel = sb
+    .channel(`private-space-${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'private_messages',
+        filter: `owner_id=eq.${userId}`,
+      },
+      () => onChange()
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'private_friends',
+        filter: `owner_id=eq.${userId}`,
+      },
+      () => onChange()
+    )
+    .subscribe();
+  return () => {
+    void sb.removeChannel(channel);
+  };
 }
 
 export async function addPrivateContent(

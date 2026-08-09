@@ -513,6 +513,12 @@ export const ar = {
     privateWith: 'محادثة خاصة مع %{name}',
     noMessages: 'لا رسائل بعد — اكتب أول رسالة.',
     messagePlaceholder: 'رسالة خاصة…',
+    sendFailed: 'تعذّر إرسال الرسالة للصديق',
+    sendFailedRecipient:
+      'ظهرَت عندك فقط — نفّذ supabase/PRIVATE-DM-FIX.sql ثم أعد الإرسال.',
+    sendFailedSession: 'أعد تسجيل الدخول بحساب Sign up سحابي.',
+    sendFailedHint:
+      'تحقق من الاتصال ونفّذ PRIVATE-DM-FIX.sql في Supabase إن لم تُنفَّذ.',
     savedWithAuthorHint:
       'يمكنك إضافة رافع المحتوى كصديق من المحفوظ أو قائمة الأصدقاء.',
     savedHint:

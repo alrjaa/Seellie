@@ -10,6 +10,7 @@
    - `supabase/private-space.sql`
    - `supabase/private-space-dm-sync.sql`
    - `supabase/private-space-friends-fix.sql`
+   - **`supabase/PRIVATE-DM-FIX.sql`** ← رسائل الخاصة تصل للطرفين (مهم)
    - **`supabase/CONTENT-CLOUD.sql`** ← user posts/media/analysis + storage
    - **`supabase/CONTENT-CLOUD-RPC.sql`** ← likes/follows/analyst admin writes across users
    - **`supabase/APP-BLOBS.sql`** ← referees, offers, gifts, branding, announcements, prizes

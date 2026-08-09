@@ -511,6 +511,12 @@ export const en: TranslationTree = {
     privateWith: 'Private chat with %{name}',
     noMessages: 'No messages yet — write the first one.',
     messagePlaceholder: 'Private message…',
+    sendFailed: 'Could not deliver the message to your friend',
+    sendFailedRecipient:
+      'Saved on your side only — run supabase/PRIVATE-DM-FIX.sql then send again.',
+    sendFailedSession: 'Sign in again with a cloud Sign-up account.',
+    sendFailedHint:
+      'Check your connection and run PRIVATE-DM-FIX.sql in Supabase if needed.',
     savedWithAuthorHint:
       'You can add the uploader as a friend from Saved or the friends list.',
     savedHint:

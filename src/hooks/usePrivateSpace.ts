@@ -7,6 +7,7 @@ import {
   removePrivateContent,
   removePrivateFriend,
   sendPrivateChatMessage,
+  subscribePrivateSpace,
   type PrivateContentItem,
   type PrivateSpaceState,
 } from '@/services/private-space';
@@ -37,16 +38,23 @@ export function usePrivateSpace(userId: string | undefined) {
     void reload();
   }, [reload]);
 
-  // مزامنة دورية حتى تظهر رسائل الطرف الآخر بدون إعادة تشغيل التطبيق
   useEffect(() => {
     if (!userId) return;
     const timer = setInterval(() => {
       void reload();
-    }, 8000);
+    }, 5000);
     return () => clearInterval(timer);
   }, [userId, reload]);
 
-  // عند الرجوع لتبويب الخاصة أعد التحميل (بعد الحفظ من خلاصة أخرى)
+  useEffect(() => {
+    if (!userId) return;
+    return (
+      subscribePrivateSpace(userId, () => {
+        void reload();
+      }) || undefined
+    );
+  }, [userId, reload]);
+
   useFocusEffect(
     useCallback(() => {
       if (!userId) return;
@@ -76,8 +84,12 @@ export function usePrivateSpace(userId: string | undefined) {
 
   const sendMessage = useCallback(
     async (friendId: string, text: string) => {
-      if (!userId) return;
-      setState(await sendPrivateChatMessage(userId, friendId, text));
+      if (!userId) {
+        return { ok: false, error: 'no_user' as string };
+      }
+      const result = await sendPrivateChatMessage(userId, friendId, text);
+      setState(result.state);
+      return { ok: result.ok, error: result.error };
     },
     [userId]
   );
@@ -97,7 +109,6 @@ export function usePrivateSpace(userId: string | undefined) {
   const removeContent = useCallback(
     async (itemId: string) => {
       if (!userId) return;
-      // تحديث فوري في الواجهة ثم مزامنة
       setState((prev) => ({
         ...prev,
         items: prev.items.filter((x) => x.id !== itemId),

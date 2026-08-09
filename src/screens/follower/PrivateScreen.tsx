@@ -295,9 +295,23 @@ export default function PrivateScreen() {
 
   const onSend = useCallback(async () => {
     if (!activeFriend || !draft.trim()) return;
-    await space.sendMessage(activeFriend.id, draft);
+    const text = draft.trim();
     setDraft('');
-  }, [activeFriend, draft, space]);
+    const result = await space.sendMessage(activeFriend.id, text);
+    if (!result.ok) {
+      toast({
+        variant: 'destructive',
+        title: t('privateSpace.sendFailed'),
+        description:
+          result.error === 'recipient_inbox_failed'
+            ? t('privateSpace.sendFailedRecipient')
+            : result.error === 'no_session'
+              ? t('privateSpace.sendFailedSession')
+              : t('privateSpace.sendFailedHint'),
+      });
+      return;
+    }
+  }, [activeFriend, draft, space, toast, t]);
 
   if (loading || !space.ready) return <LoadingState />;
   if (!currentUser) return null;
