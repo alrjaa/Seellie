@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ResizeMode, Video } from 'expo-av';
-import type { AVPlaybackStatus, Video as VideoType } from 'expo-av';
+import type { Video as VideoType } from 'expo-av';
 import { useIsFocused } from '@react-navigation/native';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
@@ -145,42 +145,17 @@ type AttachableItem = {
 const CHAT_VIDEO_W = 200;
 const CHAT_VIDEO_H = 120;
 
-const ChatVideoBubble = memo(function ChatVideoBubble({ uri }: { uri: string }) {
-  const focused = useIsFocused();
+const ChatMediaThumb = memo(function ChatMediaThumb({
+  uri,
+  kind,
+  onOpen,
+}: {
+  uri: string;
+  kind: PrivateChatMediaKind;
+  onOpen: () => void;
+}) {
   const { t } = useTranslation();
-  const videoRef = useRef<VideoType | null>(null);
   const htmlRef = useRef<HTMLVideoElement | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  const stop = useCallback(() => {
-    void videoRef.current?.pauseAsync().catch(() => undefined);
-    const el = htmlRef.current;
-    if (el) {
-      el.pause();
-    }
-    setPlaying(false);
-  }, []);
-
-  useEffect(() => {
-    if (!focused) stop();
-    return () => stop();
-  }, [focused, uri, stop]);
-
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') stop();
-    });
-    return () => sub.remove();
-  }, [stop]);
-
-  const onStatus = useCallback((status: AVPlaybackStatus) => {
-    if (!status.isLoaded) {
-      if (status.error) setFailed(true);
-      return;
-    }
-    setPlaying(status.isPlaying);
-  }, []);
 
   const wrapStyle = {
     width: CHAT_VIDEO_W,
@@ -193,28 +168,28 @@ const ChatVideoBubble = memo(function ChatVideoBubble({ uri }: { uri: string }) 
     backgroundColor: '#0b1220',
   };
 
-  if (!focused) {
-    return <View style={wrapStyle} />;
-  }
-
-  if (failed) {
-    return (
-      <View style={[wrapStyle, { alignItems: 'center', justifyContent: 'center' }]}>
-        <Ionicons name="alert-circle-outline" size={28} color="#fff" />
-      </View>
-    );
-  }
-
-  // ويب: عنصر video أصلي بأبعاد ثابتة (expo-av ينهار إلى شريط رفيع على سطح المكتب)
-  if (Platform.OS === 'web') {
-    return (
-      <View style={wrapStyle}>
-        {createElement('video', {
+  return (
+    <Pressable
+      onPress={onOpen}
+      accessibilityRole="button"
+      accessibilityLabel={
+        kind === 'photo' ? t('common.photo') : t('media.play')
+      }
+      style={({ pressed }) => [wrapStyle, { opacity: pressed ? 0.88 : 1 }]}
+    >
+      {kind === 'photo' ? (
+        <Image
+          source={{ uri }}
+          style={{ width: CHAT_VIDEO_W, height: CHAT_VIDEO_H }}
+          resizeMode="cover"
+        />
+      ) : Platform.OS === 'web' ? (
+        createElement('video', {
           ref: (node: HTMLVideoElement | null) => {
             htmlRef.current = node;
           },
           src: uri,
-          controls: true,
+          muted: true,
           playsInline: true,
           preload: 'metadata',
           style: {
@@ -224,10 +199,8 @@ const ChatVideoBubble = memo(function ChatVideoBubble({ uri }: { uri: string }) 
             borderRadius: 10,
             backgroundColor: '#0b1220',
             display: 'block',
+            pointerEvents: 'none',
           },
-          onPlay: () => setPlaying(true),
-          onPause: () => setPlaying(false),
-          onError: () => setFailed(true),
           onLoadedData: (e: { target: HTMLVideoElement }) => {
             try {
               const v = e.target;
@@ -236,40 +209,131 @@ const ChatVideoBubble = memo(function ChatVideoBubble({ uri }: { uri: string }) 
               // ignore
             }
           },
-        })}
-      </View>
-    );
-  }
-
-  return (
-    <View style={wrapStyle}>
-      <Video
-        ref={videoRef}
-        source={{ uri }}
-        style={{ width: CHAT_VIDEO_W, height: CHAT_VIDEO_H }}
-        resizeMode={ResizeMode.COVER}
-        useNativeControls
-        shouldPlay={false}
-        isLooping={false}
-        isMuted={false}
-        onPlaybackStatusUpdate={onStatus}
-        onError={() => setFailed(true)}
-      />
-      {!playing ? (
-        <Pressable
-          style={styles.videoPlayOverlay}
-          onPress={() => {
-            void videoRef.current?.playAsync().catch(() => setFailed(true));
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={t('media.play')}
-        >
+        })
+      ) : (
+        <Video
+          source={{ uri }}
+          style={{ width: CHAT_VIDEO_W, height: CHAT_VIDEO_H }}
+          resizeMode={ResizeMode.COVER}
+          useNativeControls={false}
+          shouldPlay={false}
+          isMuted
+          isLooping={false}
+        />
+      )}
+      {kind === 'video' ? (
+        <View style={styles.videoPlayOverlay} pointerEvents="none">
           <View style={styles.videoPlayBtn}>
             <Ionicons name="play" size={28} color="#fff" />
           </View>
+        </View>
+      ) : (
+        <View style={styles.photoExpandHint} pointerEvents="none">
+          <Ionicons name="expand-outline" size={16} color="#fff" />
+        </View>
+      )}
+    </Pressable>
+  );
+});
+
+const ChatMediaLightbox = memo(function ChatMediaLightbox({
+  uri,
+  kind,
+  onClose,
+}: {
+  uri: string;
+  kind: PrivateChatMediaKind;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const focused = useIsFocused();
+  const videoRef = useRef<VideoType | null>(null);
+  const htmlRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (!focused) onClose();
+  }, [focused, onClose]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        void videoRef.current?.pauseAsync().catch(() => undefined);
+        htmlRef.current?.pause();
+      }
+    });
+    return () => {
+      sub.remove();
+      void videoRef.current?.pauseAsync().catch(() => undefined);
+      htmlRef.current?.pause();
+    };
+  }, []);
+
+  return (
+    <Modal
+      visible
+      animationType="fade"
+      transparent={false}
+      supportedOrientations={['portrait', 'landscape']}
+      onRequestClose={onClose}
+    >
+      <View style={styles.lightboxRoot}>
+        <Pressable
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.close')}
+          style={[
+            styles.lightboxClose,
+            { top: Math.max(insets.top, 12) + 8 },
+          ]}
+          hitSlop={12}
+        >
+          <Ionicons name="close" size={26} color="#fff" />
         </Pressable>
-      ) : null}
-    </View>
+
+        {kind === 'photo' ? (
+          <Pressable style={styles.lightboxMediaWrap} onPress={onClose}>
+            <Image
+              source={{ uri }}
+              style={styles.lightboxImage}
+              resizeMode="contain"
+            />
+          </Pressable>
+        ) : Platform.OS === 'web' ? (
+          <View style={styles.lightboxMediaWrap}>
+            {createElement('video', {
+              ref: (node: HTMLVideoElement | null) => {
+                htmlRef.current = node;
+                if (node) {
+                  void node.play().catch(() => undefined);
+                }
+              },
+              src: uri,
+              controls: true,
+              autoPlay: true,
+              playsInline: true,
+              style: {
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                backgroundColor: '#000',
+              },
+            })}
+          </View>
+        ) : (
+          <Video
+            ref={videoRef}
+            source={{ uri }}
+            style={styles.lightboxVideo}
+            resizeMode={ResizeMode.CONTAIN}
+            useNativeControls
+            shouldPlay
+            isLooping={false}
+            isMuted={false}
+          />
+        )}
+      </View>
+    </Modal>
   );
 });
 
@@ -438,6 +502,10 @@ export default function PrivateScreen() {
   const [attachSource, setAttachSource] = useState<AttachSource>('saved');
   const [sending, setSending] = useState(false);
   const [addingFriendId, setAddingFriendId] = useState<string | null>(null);
+  const [mediaViewer, setMediaViewer] = useState<{
+    uri: string;
+    kind: PrivateChatMediaKind;
+  } | null>(null);
 
   useEffect(() => {
     // أخفِ الأزرار العائمة في كل أقسام الخاصة (محادثة/أصدقاء/محفوظ)
@@ -1155,33 +1223,34 @@ export default function PrivateScreen() {
                         ]}
                       >
                         {mediaUrl && mediaKind === 'photo' ? (
-                          <View
-                            style={{
-                              width: CHAT_VIDEO_W,
-                              height: CHAT_VIDEO_H,
-                              minWidth: CHAT_VIDEO_W,
-                              minHeight: CHAT_VIDEO_H,
-                              borderRadius: 10,
-                              overflow: 'hidden',
-                              alignSelf: 'center',
-                              backgroundColor: '#0b1220',
-                            }}
-                          >
-                            <Image
-                              source={{ uri: mediaUrl }}
-                              style={{
-                                width: CHAT_VIDEO_W,
-                                height: CHAT_VIDEO_H,
-                              }}
-                              resizeMode="cover"
-                            />
-                          </View>
+                          <ChatMediaThumb
+                            uri={mediaUrl}
+                            kind="photo"
+                            onOpen={() =>
+                              setMediaViewer({ uri: mediaUrl, kind: 'photo' })
+                            }
+                          />
                         ) : null}
                         {mediaUrl && mediaKind === 'video' ? (
-                          <ChatVideoBubble uri={mediaUrl} />
+                          <ChatMediaThumb
+                            uri={mediaUrl}
+                            kind="video"
+                            onOpen={() =>
+                              setMediaViewer({ uri: mediaUrl, kind: 'video' })
+                            }
+                          />
                         ) : null}
                         {mediaUrl && !mediaKind ? (
-                          <ChatVideoBubble uri={mediaUrl} />
+                          <ChatMediaThumb
+                            uri={mediaUrl}
+                            kind={inferMediaKind(mediaUrl)}
+                            onOpen={() =>
+                              setMediaViewer({
+                                uri: mediaUrl,
+                                kind: inferMediaKind(mediaUrl),
+                              })
+                            }
+                          />
                         ) : null}
                         {caption ? (
                           <Text
@@ -1550,6 +1619,14 @@ export default function PrivateScreen() {
           </View>
         </View>
       </Modal>
+
+      {mediaViewer ? (
+        <ChatMediaLightbox
+          uri={mediaViewer.uri}
+          kind={mediaViewer.kind}
+          onClose={() => setMediaViewer(null)}
+        />
+      ) : null}
     </Screen>
   );
 }
@@ -1732,6 +1809,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
   },
   videoPlayBtn: {
     width: 52,
@@ -1741,6 +1819,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingLeft: 3,
+  },
+  photoExpandHint: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  lightboxRoot: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+  },
+  lightboxMediaWrap: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxImage: {
+    width: '100%',
+    height: '100%',
+  },
+  lightboxVideo: {
+    width: '100%',
+    height: '100%',
+  },
+  lightboxClose: {
+    position: 'absolute',
+    right: 16,
+    zIndex: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   pendingMedia: {
     flexDirection: 'row',

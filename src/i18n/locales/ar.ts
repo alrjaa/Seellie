@@ -28,6 +28,7 @@ export const ar = {
     subject: 'الموضوع',
     searchPlaceholder: 'بحث...',
     done: 'تم',
+    close: 'إغلاق',
     enableLight: 'تفعيل الوضع الفاتح',
     enableDark: 'تفعيل الوضع الداكن',
   },

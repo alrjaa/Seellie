@@ -26,6 +26,7 @@ export const en: TranslationTree = {
     subject: 'Subject',
     searchPlaceholder: 'Search...',
     done: 'Done',
+    close: 'Close',
     enableLight: 'Switch to light mode',
     enableDark: 'Switch to dark mode',
   },
