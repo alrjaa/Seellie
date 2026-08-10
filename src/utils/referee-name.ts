@@ -29,3 +29,17 @@ export function pickRefereeDedupWinner<
     return a.id.localeCompare(b.id);
   })[0];
 }
+
+/** قائمة حكام بلا تكرار اسم */
+export function uniqueRefereesByName<
+  T extends { id: string; name: string; avatar?: string; status?: string },
+>(refs: T[]): T[] {
+  const groups = new Map<string, T[]>();
+  for (const ref of refs) {
+    const key = normalizeRefereeName(ref.name) || ref.id;
+    const list = groups.get(key) || [];
+    list.push(ref);
+    groups.set(key, list);
+  }
+  return Array.from(groups.values()).map((g) => pickRefereeDedupWinner(g));
+}

@@ -93,9 +93,54 @@ export async function upsertRefereeInBlob(
     p_referee: referee,
   });
   if (error) {
-    // الدالة غير موجودة بعد → لا نفشل بصمت؛ المستدعي يجرّب upsertAppBlob
     return { ok: false, error: error.message };
   }
+  if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
+    return {
+      ok: false,
+      error: (data as { error?: string }).error || 'rpc_failed',
+    };
+  }
+  return { ok: true };
+}
+
+/** استبدال كامل لقائمة الحكام — مشرف فقط (حذف/إزالة المكرر) */
+export async function replaceRefereesBlob(
+  items: unknown[]
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) return { ok: false, error: 'not_configured' };
+  const { session, error: sessionError } = await requireCloudSession();
+  if (!session) return { ok: false, error: sessionError || 'no_session' };
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: 'no_client' };
+
+  const { data, error } = await sb.rpc('replace_referees_blob', {
+    p_items: items,
+  });
+  if (error) return { ok: false, error: error.message };
+  if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
+    return {
+      ok: false,
+      error: (data as { error?: string }).error || 'rpc_failed',
+    };
+  }
+  return { ok: true };
+}
+
+/** حذف حكم من السحابة — مشرف فقط */
+export async function deleteRefereeFromBlob(
+  refereeId: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) return { ok: false, error: 'not_configured' };
+  const { session, error: sessionError } = await requireCloudSession();
+  if (!session) return { ok: false, error: sessionError || 'no_session' };
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: 'no_client' };
+
+  const { data, error } = await sb.rpc('delete_referee_from_blob', {
+    p_id: refereeId,
+  });
+  if (error) return { ok: false, error: error.message };
   if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
     return {
       ok: false,

@@ -48,6 +48,8 @@ import {
   upsertAppBlob,
   upsertOfferInBlob,
   upsertRefereeInBlob,
+  replaceRefereesBlob,
+  deleteRefereeFromBlob,
 } from '@/services/supabase-app-blobs';
 import {
   DEFAULT_FAB_ICONS,
@@ -244,11 +246,87 @@ function mergeRefereesById(base: Referee[], stored: Referee[]): Referee[] {
   return Array.from(map.values());
 }
 
-async function saveReferees(items: Referee[]) {
+/** إزالة معرفات يتيمة + طي المكرر بالاسم داخل refereeIds للمسابقة */
+function sanitizeCompetitionRefereeIds(
+  refereeIds: string[] | undefined,
+  refs: Referee[]
+): string[] {
+  if (!refereeIds?.length) return [];
+  const byId = new Map(refs.map((r) => [r.id, r]));
+  const seenNames = new Set<string>();
+  const out: string[] = [];
+  for (const id of refereeIds) {
+    const ref = byId.get(id);
+    if (!ref) continue;
+    const key = normalizeRefereeName(ref.name);
+    if (!key || seenNames.has(key)) continue;
+    seenNames.add(key);
+    out.push(id);
+  }
+  return out;
+}
+
+function sanitizeCompetitionsRefereeIds(
+  competitions: Competition[],
+  refs: Referee[]
+): Competition[] {
+  let changed = false;
+  const next = competitions.map((c) => {
+    const cleaned = sanitizeCompetitionRefereeIds(c.refereeIds, refs);
+    if (
+      cleaned.length !== c.refereeIds.length ||
+      cleaned.some((id, i) => id !== c.refereeIds[i])
+    ) {
+      changed = true;
+      return { ...c, refereeIds: cleaned };
+    }
+    return c;
+  });
+  return changed ? next : competitions;
+}
+
+/** طي المكرر بالاسم عند الهيدرات من السحابة */
+function collapseDuplicateReferees(refs: Referee[]): Referee[] {
+  const groups = new Map<string, Referee[]>();
+  for (const ref of refs) {
+    const key = normalizeRefereeName(ref.name);
+    if (!key) {
+      groups.set(ref.id, [ref]);
+      continue;
+    }
+    const list = groups.get(key) || [];
+    list.push(ref);
+    groups.set(key, list);
+  }
+  return Array.from(groups.values()).map((group) =>
+    pickRefereeDedupWinner(group)
+  );
+}
+
+function applyRefereesFromCloud(
+  prev: Referee[],
+  incoming: Referee[]
+): Referee[] {
+  return collapseDuplicateReferees(mergeRefereesById(prev, incoming));
+}
+
+async function saveReferees(
+  items: Referee[],
+  options?: { replaceCloud?: boolean }
+) {
   await setJson(REFEREES_STORAGE_KEY, items);
   if (!isSupabaseConfigured()) return;
 
-  // دمج فردي عبر RPC فقط (PHASE3/4) — لا استبدال كامل من العميل
+  if (options?.replaceCloud) {
+    const replaced = await replaceRefereesBlob(items);
+    if (replaced.ok) return;
+    console.warn(
+      '[referees] replace blob failed — run SECURITY-PHASE4-REFEREES-REPLACE.sql',
+      replaced.error
+    );
+  }
+
+  // دمج فردي عبر RPC (إضافة/تحديث)
   let mergedOk = 0;
   for (const ref of items) {
     const result = await upsertRefereeInBlob(ref);
@@ -940,7 +1018,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           );
         }
         if (storedReferees && storedReferees.length > 0) {
-          setReferees((prev) => mergeRefereesById(prev, storedReferees));
+          setReferees((prev) =>
+            collapseDuplicateReferees(mergeRefereesById(prev, storedReferees))
+          );
         }
         if (storedSupportLevels && storedSupportLevels.length > 0) {
           setSupportLevels(normalizeSupportLevels(storedSupportLevels));
@@ -1022,7 +1102,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             // تحميل نطاقات التطبيق من app_blobs
             const blobs = await fetchGlobalAppBlobs();
             if (blobs.referees?.length) {
-              setReferees((prev) => mergeRefereesById(prev, blobs.referees!));
+              setReferees((prev) => {
+                const next = applyRefereesFromCloud(prev, blobs.referees!);
+                setCompetitions((cprev) =>
+                  sanitizeCompetitionsRefereeIds(cprev, next)
+                );
+                return next;
+              });
             }
             if (blobs.offers) setOffers(blobs.offers);
             if (blobs.levels?.length) {
@@ -1288,7 +1374,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           }
           const blobs = await fetchGlobalAppBlobs();
           if (blobs.referees?.length) {
-            setReferees((prev) => mergeRefereesById(prev, blobs.referees!));
+            setReferees((prev) => {
+              const next = applyRefereesFromCloud(prev, blobs.referees!);
+              setCompetitions((cprev) =>
+                sanitizeCompetitionsRefereeIds(cprev, next)
+              );
+              return next;
+            });
           }
           if (blobs.offers) setOffers(blobs.offers);
           if (blobs.levels?.length) {
@@ -2059,7 +2151,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     (refereeId: string, successMessage?: string) => {
       setReferees((prev) => {
         const next = prev.filter((r) => r.id !== refereeId);
-        void saveReferees(next);
+        void (async () => {
+          await setJson(REFEREES_STORAGE_KEY, next);
+          const deleted = await deleteRefereeFromBlob(refereeId);
+          if (!deleted.ok) {
+            // احتياطي: استبدال كامل بالقائمة المتبقية (مشرف)
+            await saveReferees(next, { replaceCloud: true });
+          }
+        })();
         return next;
       });
       setCompetitions((prev) => {
@@ -2111,21 +2210,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       return 0;
     }
 
-    setReferees((prev) => {
-      const next = prev.filter((r) => keep.has(r.id));
-      void saveReferees(next);
-      return next;
-    });
+    const keptList = referees.filter((r) => keep.has(r.id));
+    setReferees(keptList);
+    void saveReferees(keptList, { replaceCloud: true });
+
     setCompetitions((prev) => {
       const next = prev.map((c) => ({
         ...c,
-        refereeIds: [
-          ...new Set(
-            c.refereeIds
-              .map((id) => remap.get(id) || id)
-              .filter((id) => keep.has(id))
-          ),
-        ],
+        refereeIds: sanitizeCompetitionRefereeIds(
+          c.refereeIds.map((id) => remap.get(id) || id),
+          keptList
+        ),
       }));
       void syncCompetitions(next);
       return next;

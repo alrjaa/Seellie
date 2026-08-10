@@ -22,6 +22,7 @@ import {
   Subtitle,
   Title,
 } from '@/components/ui';
+import { uniqueRefereesByName } from '@/utils/referee-name';
 
 const REFEREE_ROLE_OPTIONS: {
   value: Referee['role'];
@@ -78,7 +79,8 @@ export default function OrganizerRefereesScreen() {
 
   const assignedRefs = useMemo(() => {
     if (!selected) return [];
-    return referees.filter((r) => selected.refereeIds.includes(r.id));
+    const ids = new Set(selected.refereeIds);
+    return uniqueRefereesByName(referees.filter((r) => ids.has(r.id)));
   }, [referees, selected]);
 
   if (myCompetitions.length === 0) {

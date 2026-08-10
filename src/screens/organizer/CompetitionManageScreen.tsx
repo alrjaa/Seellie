@@ -45,6 +45,7 @@ import {
 } from '@/components/account/EntityAvatarField';
 import { formatArabicDate, formatArabicTime } from '@/utils';
 import { MEDIA_SPECS, validatePickerAsset } from '@/utils/media-limits';
+import { uniqueRefereesByName } from '@/utils/referee-name';
 import {
   cloudWriteErrorMessage,
   requireCloudSession,
@@ -159,7 +160,10 @@ export default function CompetitionManageScreen() {
   }, [competition, selectedTeamId]);
 
   const assignedRefs = useMemo(
-    () => referees.filter((r) => competition?.refereeIds.includes(r.id)),
+    () =>
+      uniqueRefereesByName(
+        referees.filter((r) => competition?.refereeIds.includes(r.id))
+      ),
     [referees, competition]
   );
 
