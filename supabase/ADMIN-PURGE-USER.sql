@@ -1,18 +1,6 @@
--- ============================================================
--- ADMIN-PURGE-USER.sql  (run once in Supabase SQL Editor)
--- ============================================================
--- Makes admin "Delete user" remove the account from Authentication
--- so the same email can Sign up again.
---
--- Requires: public.is_app_superadmin() (from FIX-CLOUD-SYNC.sql)
---
--- AFTER running this file: use Delete in the admin Users screen.
---
--- If an email is STUCK right now, also run (replace the email):
---   select public.admin_purge_user_by_email('user@example.com');
--- Or as postgres:
---   delete from auth.users where lower(email) = lower('user@example.com');
--- ============================================================
+-- Admin purge user: paste once in SQL Editor
+-- After this, admin Delete removes Auth so the email can sign up again.
+-- Requires: public.is_app_superadmin() from FIX-CLOUD-SYNC.sql
 
 create or replace function public.admin_purge_user(p_id uuid)
 returns jsonb
@@ -69,11 +57,9 @@ begin
     'prizes:' || p_id::text
   );
 
-  -- Auth first (profiles cascade via FK on delete)
   delete from auth.users where id = p_id;
   get diagnostics deleted_auth = row_count;
 
-  -- Orphan profile (no auth row)
   delete from public.profiles where id = p_id;
 
   return jsonb_build_object(
@@ -128,3 +114,6 @@ $$;
 
 revoke all on function public.admin_purge_user_by_email(text) from public;
 grant execute on function public.admin_purge_user_by_email(text) to authenticated;
+
+-- Optional now: free one stuck email (replace then uncomment and run)
+-- select public.admin_purge_user_by_email('user@example.com');
