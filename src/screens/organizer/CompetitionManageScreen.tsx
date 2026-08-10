@@ -44,6 +44,11 @@ import {
 } from '@/components/account/EntityAvatarField';
 import { formatArabicDate, formatArabicTime } from '@/utils';
 import { MEDIA_SPECS, validatePickerAsset } from '@/utils/media-limits';
+import {
+  cloudWriteErrorMessage,
+  requireCloudSession,
+  resolvePublicMediaUrl,
+} from '@/services/cloud-write';
 
 const POSITION_OPTIONS: {
   value: Player['position'];
@@ -411,32 +416,49 @@ export default function CompetitionManageScreen() {
                 height: asset.height,
                 fileSize: asset.fileSize,
               });
-              if (!check.ok) {
+              // لا نرفض بالأبعاد بعد القصّ (مثل الأفاتار) — الحجم فقط
+              if (!check.ok && check.reason === 'size') {
                 toast({
                   variant: 'destructive',
-                  title:
-                    check.reason === 'size'
-                      ? t('media.fileTooLarge')
-                      : t('media.imageTooSmall'),
-                  description:
-                    check.reason === 'size'
-                      ? t('media.fileTooLargeDesc', {
-                          mb: MEDIA_SPECS.logo.maxMb,
-                        })
-                      : t('media.imageTooSmallDesc', {
-                          w: (MEDIA_SPECS.logo as { width: number }).width,
-                        }),
+                  title: t('media.fileTooLarge'),
+                  description: t('media.fileTooLargeDesc', {
+                    mb: MEDIA_SPECS.logo.maxMb,
+                  }),
                 });
                 return;
               }
-              updateCompetition({
-                ...competition,
-                logo: asset.uri,
+
+              // لا نحفظ file:// في السحابة — نرفع أولاً ثم نحدّث مرة واحدة
+              const cloud = await requireCloudSession(currentUser?.id);
+              if (!cloud.session) {
+                toast({
+                  variant: 'destructive',
+                  title: t('media.uploadFailedKeepLocal'),
+                  description: cloudWriteErrorMessage(cloud.error),
+                });
+                return;
+              }
+
+              const resolved = await resolvePublicMediaUrl({
+                uri: asset.uri,
+                kind: 'photo',
+                folder: 'competitions',
+                userId: cloud.session.userId,
+                requireCloud: true,
               });
-              toast({
-                variant: 'success',
-                title: t('organizer.competitionManage.logoUpdated'),
-              });
+              if (!resolved.url) {
+                toast({
+                  variant: 'destructive',
+                  title: t('media.uploadFailedKeepLocal'),
+                  description: cloudWriteErrorMessage(resolved.error),
+                });
+                return;
+              }
+
+              updateCompetition(
+                { ...competition, logo: resolved.url },
+                t('organizer.competitionManage.logoUpdated')
+              );
             } catch {
               toast({
                 variant: 'destructive',
