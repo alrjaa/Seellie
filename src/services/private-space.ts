@@ -268,60 +268,89 @@ export async function loadPrivateSpace(
   return local;
 }
 
+function parsePrivateRpcResult(data: unknown): {
+  ok: boolean;
+  error?: string;
+} {
+  let parsed: unknown = data;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return { ok: false, error: 'bad_rpc_payload' };
+    }
+  }
+  if (parsed === true) return { ok: true };
+  if (parsed && typeof parsed === 'object') {
+    const obj = parsed as { ok?: boolean; error?: string };
+    if (obj.ok === true) return { ok: true };
+    return { ok: false, error: obj.error || 'rpc_failed' };
+  }
+  return { ok: false, error: 'rpc_failed' };
+}
+
 export async function addPrivateFriend(
   userId: string,
   friendId: string
-): Promise<PrivateSpaceState> {
+): Promise<{ state: PrivateSpaceState; ok: boolean; error?: string }> {
+  if (!userId || !friendId || friendId === userId) {
+    return {
+      state: userId ? await loadPrivateSpace(userId) : emptyState(),
+      ok: false,
+      error: 'invalid_friend',
+    };
+  }
+
+  // تفاؤلي محلياً أولاً حتى يظهر الصديق فوراً في الواجهة
+  const local = await loadLocal(userId);
+  if (!local.friendIds.includes(friendId)) {
+    local.friendIds = [friendId, ...local.friendIds];
+    if (!local.chats[friendId]) local.chats[friendId] = [];
+    await saveLocal(userId, local);
+  }
+
   if (canUseCloud(userId) && isUuid(friendId)) {
     const sb = getSupabase();
     if (sb) {
-      // 1) دالة السحابة (موثوقة — تضيف الطرفين)
       const { data: rpcData, error: rpcError } = await sb.rpc(
         'add_private_friend',
         { p_friend_id: friendId }
       );
-      const rpcOk =
-        !rpcError &&
-        (rpcData === true ||
-          (rpcData &&
-            typeof rpcData === 'object' &&
-            (rpcData as { ok?: boolean }).ok === true));
-      if (rpcOk) {
-        return loadPrivateSpace(userId);
-      }
-      if (rpcError) {
-        console.warn('[private-space] add friend rpc', rpcError.message);
-      } else if (rpcData && typeof rpcData === 'object') {
-        console.warn(
-          '[private-space] add friend rpc',
-          (rpcData as { error?: string }).error
-        );
+      const rpc = parsePrivateRpcResult(rpcData);
+      if (!rpcError && rpc.ok) {
+        return { state: await loadPrivateSpace(userId), ok: true };
       }
 
-      // 2) احتياطي: صف واحد على الأقل (صاحبي → الصديق)
+      const rpcFailReason =
+        rpcError?.message || rpc.error || 'add_friend_failed';
+      console.warn('[private-space] add friend rpc', rpcFailReason);
+
       const { error: ownErr } = await sb.from('private_friends').upsert(
         { owner_id: userId, friend_id: friendId },
         { onConflict: 'owner_id,friend_id' }
       );
       if (!ownErr) {
-        // محاولة الصف المعاكس (قد تفشل بالـ RLS القديم — لا بأس)
         await sb.from('private_friends').upsert(
           { owner_id: friendId, friend_id: userId },
           { onConflict: 'owner_id,friend_id' }
         );
-        return loadPrivateSpace(userId);
+        return { state: await loadPrivateSpace(userId), ok: true };
       }
+
       console.warn('[private-space] add friend', ownErr.message);
+      return {
+        state: await loadPrivateSpace(userId),
+        ok: false,
+        error:
+          rpcFailReason.includes('friend_not_in_profiles') ||
+          ownErr.message.includes('foreign key')
+            ? 'friend_not_in_profiles'
+            : ownErr.message || rpcFailReason,
+      };
     }
   }
 
-  const state = await loadLocal(userId);
-  if (!state.friendIds.includes(friendId)) {
-    state.friendIds = [friendId, ...state.friendIds];
-    if (!state.chats[friendId]) state.chats[friendId] = [];
-    await saveLocal(userId, state);
-  }
-  return state;
+  return { state: await loadLocal(userId), ok: true };
 }
 
 export async function removePrivateFriend(

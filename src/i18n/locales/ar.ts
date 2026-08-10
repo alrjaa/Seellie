@@ -552,20 +552,23 @@ export const ar = {
     noFriends: 'لا أصدقاء بعد',
     noFriendsDesc: 'أضف أصدقاء من المتابَعين أو من المحتوى المحفوظ.',
     friendAdded: 'تمت إضافة الصديق',
+    friendAddedFromSaved: 'يمكنك مراسلته من تبويب المحادثة',
+    addFriendFailed: 'تعذّر إضافة الصديق',
+    addFriendFailedHint: 'تحقق من الاتصال ثم أعد المحاولة.',
+    addFriendNotFound:
+      'هذا الحساب غير متاح للإضافة حالياً. جرّب حساباً آخر من المتابَعين.',
     friendRemoved: 'تمت إزالة الصديق',
     removeFriendTitle: 'إزالة الصديق',
     removeFriendConfirm:
       'سيتم حذف الصداقة ومسح المحادثة بينكما من الخاصة. هل تريد المتابعة؟',
     removeFriendFailed: 'تعذّر إزالة الصديق',
-    removeFriendFailedHint:
-      'نفّذ supabase/PRIVATE-DM-FIX.sql ثم أعد المحاولة.',
+    removeFriendFailedHint: 'تحقق من الاتصال ثم أعد المحاولة.',
     clearChat: 'مسح المحادثة',
     clearChatTitle: 'مسح المحادثة',
     clearChatConfirm: 'هل تريد حذف كل رسائل هذه المحادثة من عندك؟',
     clearChatFailed: 'تعذّر مسح المحادثة',
     chatCleared: 'تم مسح المحادثة',
-    friendCloudHint:
-      'إن اختفى الصديق بعد التحديث: نفّذ supabase/private-space-friends-fix.sql مرة واحدة.',
+    friendCloudHint: 'سيظهر الصديق في قائمة الأصدقاء ويمكنك فتح محادثة معه.',
     addAuthorFriend: 'إضافة كصديق',
     alreadyFriend: 'صديق بالفعل',
     chatNeedFriend: 'أضف صديقاً أولاً لبدء محادثة خاصة.',

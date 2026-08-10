@@ -300,6 +300,36 @@ function resolveAuthorId(
   return undefined;
 }
 
+function friendStub(input: {
+  id: string;
+  name?: string;
+  handle?: string;
+  avatar?: string;
+}): User {
+  return {
+    id: input.id,
+    name: input.name || input.handle || input.id,
+    handle: input.handle || '',
+    email: '',
+    passwordHash: '',
+    role: 'follower',
+    status: 'active',
+    visibleId: '',
+    avatar: input.avatar,
+    permissions: {
+      canComment: true,
+      canUseVoice: true,
+      canCreateContent: false,
+      canNominateToPersonality: false,
+    },
+    posts: [],
+    media: { photos: [], videos: [] },
+    personalityPhotos: [],
+    analysisContent: [],
+    comments: [],
+  };
+}
+
 const SECTIONS: { key: Section; labelKey: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: 'friends', labelKey: 'privateSpace.friends', icon: 'people-outline' },
   { key: 'chat', labelKey: 'privateSpace.chat', icon: 'chatbubbles-outline' },
@@ -312,12 +342,14 @@ const SavedCard = memo(function SavedCard({
   isFriend,
   onRemove,
   onAddFriend,
+  adding,
 }: {
   item: PrivateContentItem;
   canAddFriend: boolean;
   isFriend: boolean;
   onRemove: () => void;
   onAddFriend?: () => void;
+  adding?: boolean;
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
@@ -352,19 +384,26 @@ const SavedCard = memo(function SavedCard({
         ) : canAddFriend && onAddFriend ? (
           <Pressable
             onPress={onAddFriend}
+            disabled={!!adding}
             accessibilityRole="button"
             accessibilityLabel={t('privateSpace.addAuthorFriend')}
             style={({ pressed }) => [
               styles.addFriendBtn,
               {
                 borderColor: theme.colors.accent,
-                opacity: pressed ? 0.7 : 1,
+                opacity: adding ? 0.5 : pressed ? 0.7 : 1,
               },
             ]}
           >
-            <Ionicons name="person-add-outline" size={14} color={theme.colors.accent} />
+            <Ionicons
+              name={adding ? 'hourglass-outline' : 'person-add-outline'}
+              size={14}
+              color={theme.colors.accent}
+            />
             <Text style={{ color: theme.colors.accent, fontSize: 12, fontWeight: '700' }}>
-              {t('privateSpace.addAuthorFriend')}
+              {adding
+                ? t('common.loading')
+                : t('privateSpace.addAuthorFriend')}
             </Text>
           </Pressable>
         ) : null}
@@ -398,6 +437,7 @@ export default function PrivateScreen() {
   const [attachOpen, setAttachOpen] = useState(false);
   const [attachSource, setAttachSource] = useState<AttachSource>('saved');
   const [sending, setSending] = useState(false);
+  const [addingFriendId, setAddingFriendId] = useState<string | null>(null);
 
   useEffect(() => {
     // أخفِ الأزرار العائمة في كل أقسام الخاصة (محادثة/أصدقاء/محفوظ)
@@ -410,13 +450,26 @@ export default function PrivateScreen() {
     [currentUser]
   );
 
-  const friends = useMemo(
-    () =>
-      space.friendIds
-        .map((id) => users.find((u) => u.id === id))
-        .filter(Boolean),
-    [space.friendIds, users]
-  );
+  const friends = useMemo(() => {
+    return space.friendIds
+      .map((id) => {
+        const known = users.find((u) => u.id === id);
+        if (known) return known;
+        // منظّم/مؤلف محفوظ غير محمّل في users — لا نخفيه من القائمة
+        const fromSaved = space.items.find(
+          (item) => resolveAuthorId(item, users, me?.id) === id
+        );
+        if (fromSaved) {
+          return friendStub({
+            id,
+            name: fromSaved.authorName,
+            handle: fromSaved.authorHandle,
+          });
+        }
+        return friendStub({ id, name: id.slice(0, 8) });
+      })
+      .filter(Boolean) as User[];
+  }, [space.friendIds, space.items, users, me?.id]);
 
   const candidates = useMemo(() => {
     if (!me) return [];
@@ -427,7 +480,7 @@ export default function PrivateScreen() {
         following.has(u.id) &&
         !space.friendIds.includes(u.id)
     );
-    const byId = new Map<string, (typeof users)[number]>();
+    const byId = new Map<string, User>();
     fromFollowing.forEach((u) => byId.set(u.id, u));
 
     // أصحاب المحتوى المحفوظ — حتى لو لم يُحمَّل ملفهم في users بعد
@@ -440,27 +493,14 @@ export default function PrivateScreen() {
         byId.set(id, known);
         continue;
       }
-      byId.set(id, {
+      byId.set(
         id,
-        name: item.authorName || item.authorHandle || id,
-        handle: item.authorHandle || '',
-        email: '',
-        passwordHash: '',
-        role: 'follower',
-        status: 'active',
-        visibleId: '',
-        permissions: {
-          canComment: true,
-          canUseVoice: true,
-          canCreateContent: false,
-          canNominateToPersonality: false,
-        },
-        posts: [],
-        media: { photos: [], videos: [] },
-        personalityPhotos: [],
-        analysisContent: [],
-        comments: [],
-      });
+        friendStub({
+          id,
+          name: item.authorName || item.authorHandle || id,
+          handle: item.authorHandle || '',
+        })
+      );
     }
     return [...byId.values()];
   }, [me, users, space.friendIds, space.items]);
@@ -470,27 +510,12 @@ export default function PrivateScreen() {
       const id = resolveAuthorId(item, users, currentUser?.id);
       if (!id || id === currentUser?.id) return null;
       return (
-        users.find((u) => u.id === id) || {
+        users.find((u) => u.id === id) ||
+        friendStub({
           id,
           name: item.authorName || item.authorHandle || id,
           handle: item.authorHandle,
-          email: '',
-          passwordHash: '',
-          role: 'follower' as const,
-          status: 'active' as const,
-          visibleId: '',
-          permissions: {
-            canComment: true,
-            canUseVoice: true,
-            canCreateContent: false,
-            canNominateToPersonality: false,
-          },
-          posts: [],
-          media: { photos: [], videos: [] },
-          personalityPhotos: [],
-          analysisContent: [],
-          comments: [],
-        }
+        })
       );
     },
     [users, currentUser?.id]
@@ -532,18 +557,39 @@ export default function PrivateScreen() {
   }, [chatShellHeight, composerBlockHeight]);
 
   const onAddFriend = useCallback(
-    async (friendId: string) => {
-      await space.addFriend(friendId);
-      setActiveFriendId(friendId);
-      setPickOpen(false);
-      setSection('friends');
-      toast({
-        variant: 'success',
-        title: t('privateSpace.friendAdded'),
-        description: t('privateSpace.friendCloudHint'),
-      });
+    async (friendId: string, opts?: { stayOnSaved?: boolean }) => {
+      if (!friendId || addingFriendId) return;
+      setAddingFriendId(friendId);
+      try {
+        const result = await space.addFriend(friendId);
+        setActiveFriendId(friendId);
+        setPickOpen(false);
+        if (!opts?.stayOnSaved) {
+          setSection('friends');
+        }
+        if (!result.ok) {
+          const notInProfiles = result.error === 'friend_not_in_profiles';
+          toast({
+            variant: 'destructive',
+            title: t('privateSpace.addFriendFailed'),
+            description: notInProfiles
+              ? t('privateSpace.addFriendNotFound')
+              : t('privateSpace.addFriendFailedHint'),
+          });
+          return;
+        }
+        toast({
+          variant: 'success',
+          title: t('privateSpace.friendAdded'),
+          description: opts?.stayOnSaved
+            ? t('privateSpace.friendAddedFromSaved')
+            : undefined,
+        });
+      } finally {
+        setAddingFriendId(null);
+      }
     },
-    [space, toast, t]
+    [space, toast, t, addingFriendId]
   );
 
   const onRemoveFriend = useCallback(
@@ -1328,6 +1374,8 @@ export default function PrivateScreen() {
             const isFriend = !!(
               author && space.friendIds.includes(author.id)
             );
+            const busy =
+              !!author && addingFriendId === author.id;
             return (
               <SavedCard
                 item={item}
@@ -1336,9 +1384,11 @@ export default function PrivateScreen() {
                 onRemove={() => void onRemoveSaved(item.id)}
                 onAddFriend={
                   author
-                    ? () => void onAddFriend(author.id)
+                    ? () =>
+                        void onAddFriend(author.id, { stayOnSaved: true })
                     : undefined
                 }
+                adding={busy}
               />
             );
           }}

@@ -551,20 +551,23 @@ export const en: TranslationTree = {
     noFriends: 'No friends yet',
     noFriendsDesc: 'Add friends from following or from saved content authors.',
     friendAdded: 'Friend added',
+    friendAddedFromSaved: 'You can message them from the Chat tab',
+    addFriendFailed: 'Could not add friend',
+    addFriendFailedHint: 'Check your connection and try again.',
+    addFriendNotFound:
+      'This account cannot be added right now. Try someone you follow.',
     friendRemoved: 'Friend removed',
     removeFriendTitle: 'Remove friend',
     removeFriendConfirm:
       'This removes the friendship and clears the private chat between you. Continue?',
     removeFriendFailed: 'Could not remove friend',
-    removeFriendFailedHint:
-      'Run supabase/PRIVATE-DM-FIX.sql then try again.',
+    removeFriendFailedHint: 'Check your connection and try again.',
     clearChat: 'Clear chat',
     clearChatTitle: 'Clear chat',
     clearChatConfirm: 'Delete all messages in this chat on your side?',
     clearChatFailed: 'Could not clear chat',
     chatCleared: 'Chat cleared',
-    friendCloudHint:
-      'If friends disappear after refresh: run supabase/private-space-friends-fix.sql once.',
+    friendCloudHint: 'They will appear in Friends and you can open a chat.',
     addAuthorFriend: 'Add as friend',
     alreadyFriend: 'Already a friend',
     chatNeedFriend: 'Add a friend first to start a private chat.',

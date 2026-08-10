@@ -66,8 +66,22 @@ export function usePrivateSpace(userId: string | undefined) {
 
   const addFriend = useCallback(
     async (friendId: string) => {
-      if (!userId) return;
-      setState(await addPrivateFriend(userId, friendId));
+      if (!userId) return { ok: false, error: 'no_user' as string };
+      // تحديث فوري في الواجهة قبل انتظار السحابة
+      setState((prev) => {
+        if (prev.friendIds.includes(friendId)) return prev;
+        return {
+          ...prev,
+          friendIds: [friendId, ...prev.friendIds],
+          chats: {
+            ...prev.chats,
+            [friendId]: prev.chats[friendId] || [],
+          },
+        };
+      });
+      const result = await addPrivateFriend(userId, friendId);
+      setState(result.state);
+      return { ok: result.ok, error: result.error };
     },
     [userId]
   );
