@@ -75,12 +75,20 @@ export async function upsertCompetitionCloud(
   if (!sessionData.session) {
     return { ok: false, error: 'no_session' };
   }
+  // JSON صريح حتى تتحول التواريخ إلى ISO ولا يفشل jsonb
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(JSON.stringify(competition)) as Record<string, unknown>;
+  } catch (e) {
+    console.warn('[supabase] upsertCompetition serialize', e);
+    return { ok: false, error: 'serialize_failed' };
+  }
   const { error } = await sb.from('app_competitions').upsert(
     {
       id: competition.id,
       organizer_id: competition.organizerId,
       name: competition.name,
-      payload: competition,
+      payload,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'id' }

@@ -7,6 +7,13 @@ const SHARE_DIR = `${FileSystem.documentDirectory || ''}seellie-share/`;
  * ينسخ URI مؤقتاً من الملتقط إلى مجلد دائم داخل التطبيق
  * حتى لا يختفي بعد تنظيف الكاش. المشاركة بين جهازين ما زالت تحتاج رفعاً سحابياً.
  */
+export function isEphemeralMediaUri(uri?: string | null): boolean {
+  if (!uri) return false;
+  return /^(blob:|file:|ph:|content:|assets-library:|data:)/i.test(
+    uri.trim()
+  );
+}
+
 export async function persistLocalMediaUri(
   uri: string,
   kind: 'photo' | 'video'

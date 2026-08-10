@@ -20,8 +20,10 @@ import {
   saveCompetitions,
   subscribeCompetitionRequests,
   subscribeCompetitions,
+  COMPETITIONS_KEY,
 } from '@/services/competition-sync';
 import { isValidEmail, normalizeEmail, allocateUniqueHandle, ensureAccountIdentity, nextRegistrationId, formatArabicDate } from '@/utils';
+import { isEphemeralMediaUri } from '@/utils/persist-media';
 import {
   ensurePasswordHashed,
   hashPassword,
@@ -3418,7 +3420,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             ),
           };
         });
-        void syncCompetitions(next);
+        // معاينة محلية مؤقتة (blob/file) — لا تدفع للسحابة حتى يكتمل الرفع HTTPS
+        if (logo && isEphemeralMediaUri(logo)) {
+          void setJson(COMPETITIONS_KEY, next);
+        } else {
+          void syncCompetitions(next);
+        }
         return next;
       });
     },

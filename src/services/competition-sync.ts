@@ -177,15 +177,45 @@ export async function saveCompetitions(
   }
 }
 
-/** مسابقات البذرة التجريبية تبقى محلية؛ الباقي يُرفع للسحابة */
+/** مسابقات البذرة التجريبية تبقى محلية؛ يُرفع فقط ما يملكه المستخدم (أو الكل للمشرف) */
 async function pushCompetitionsToSupabase(
   items: Competition[]
 ): Promise<{ ok: boolean; error?: string }> {
   try {
+    const { getSupabase } = await import('@/services/supabase');
     const { upsertCompetitionCloud } = await import(
       '@/services/supabase-competitions'
     );
-    const targets = items.filter((c) => c?.id && !isSeedCompetitionId(c.id));
+    const sb = getSupabase();
+    if (!sb) return { ok: false, error: 'no_client' };
+
+    const { data: sessionData } = await sb.auth.getSession();
+    const uid = sessionData.session?.user?.id;
+    if (!uid) return { ok: false, error: 'no_session' };
+
+    let isAdmin = false;
+    try {
+      const { data: profile } = await sb
+        .from('profiles')
+        .select('role, active_role, roles')
+        .eq('id', uid)
+        .maybeSingle();
+      const roles = Array.isArray(profile?.roles) ? profile!.roles : [];
+      isAdmin =
+        profile?.role === 'superadmin' ||
+        profile?.active_role === 'superadmin' ||
+        roles.includes('superadmin');
+    } catch {
+      isAdmin = false;
+    }
+
+    // لا تحاول upsert مسابقات الآخرين — RLS ترفضها وتظهر «اعتذار المزامنة» بالخطأ
+    const targets = items.filter(
+      (c) =>
+        !!c?.id &&
+        !isSeedCompetitionId(c.id) &&
+        (isAdmin || c.organizerId === uid)
+    );
     if (!targets.length) return { ok: true };
 
     const results = await Promise.all(

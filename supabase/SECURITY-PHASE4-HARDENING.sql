@@ -88,7 +88,8 @@ as $$
     select 1
     from public.profiles p
     where p.id = auth.uid()
-      and coalesce(p.status, 'active') = 'active'
+      -- الموقوف/المحظور فقط يُمنعون؛ warned يبقى قادراً على العمل
+      and coalesce(p.status, 'active') not in ('blocked', 'suspended')
   );
 $$;
 

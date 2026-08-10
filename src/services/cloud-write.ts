@@ -81,7 +81,17 @@ export function cloudWriteErrorMessage(error?: CloudWriteError): string {
       return 'تعذّر رفع الملف للسحابة';
     case 'no_client':
       return 'تعذّر الاتصال بالسحابة';
-    default:
+    case 'serialize_failed':
+      return 'تعذّر تجهيز بيانات المسابقة للحفظ';
+    default: {
+      const msg = (error || '').toLowerCase();
+      if (msg.includes('row-level security') || msg.includes('rls')) {
+        return 'رُفض الحفظ من السحابة (صلاحيات). تأكد أنك منظم هذه المسابقة وأن حسابك غير موقوف.';
+      }
+      if (msg.includes('account_not_active')) {
+        return 'الحساب موقوف أو محظور — لا يمكن المزامنة.';
+      }
       return error || 'تعذّر الحفظ السحابي';
+    }
   }
 }
