@@ -154,18 +154,43 @@ async function loadCloud(userId: string): Promise<PrivateSpaceState | null> {
     media_kind?: string | null;
     created_at: string;
   }>) {
-    const mediaKind =
+    let mediaUrl = row.media_url || undefined;
+    let mediaKind: PrivateChatMediaKind | undefined =
       row.media_kind === 'photo' || row.media_kind === 'video'
         ? row.media_kind
         : undefined;
+
+    // رسائل قديمة: الرابط داخل النص فقط
+    if (!mediaUrl && row.body) {
+      const legacy = row.body.trim().match(/^(?:🖼️|🎬)\s*(https?:\/\/\S+)/i);
+      if (legacy?.[1]) {
+        mediaUrl = legacy[1];
+        mediaKind =
+          row.body.trim().startsWith('🎬') ||
+          /\.(?:mp4|mov|webm|m4v)(?:\?\S*)?$/i.test(legacy[1])
+            ? 'video'
+            : 'photo';
+      }
+    }
+
+    if (mediaUrl && !mediaKind) {
+      mediaKind = /\.(?:mp4|mov|webm|m4v)(?:\?\S*)?$/i.test(mediaUrl)
+        ? 'video'
+        : /\/(?:videos?|highlights|analysis)\//i.test(mediaUrl) ||
+            (/video|mp4|webm|mov/i.test(mediaUrl) &&
+              /supabase|storage|share-media/i.test(mediaUrl))
+          ? 'video'
+          : 'photo';
+    }
+
     const list = chats[row.friend_id] || [];
     list.push({
       id: row.id,
       fromMe: row.sender_id === userId,
       text: row.body || '',
       at: row.created_at,
-      mediaUrl: row.media_url || undefined,
-      mediaKind: row.media_url ? mediaKind : undefined,
+      mediaUrl,
+      mediaKind: mediaUrl ? mediaKind : undefined,
     });
     chats[row.friend_id] = list;
     // رسالة واردة ⇒ أظهر المرسل في الأصدقاء حتى لو فشلت صداقة الاتجاه المعاكس

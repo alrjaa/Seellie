@@ -1,4 +1,5 @@
 import React, {
+  createElement,
   memo,
   useCallback,
   useEffect,
@@ -95,9 +96,11 @@ const Slide = memo(function Slide({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const videoRef = useRef<Video>(null);
+  const htmlVideoRef = useRef<HTMLVideoElement | null>(null);
   /** ابدأ متوقفاً — الضغط يشغّل (مطلوب لسياسات المتصفح + أوضح للمستخدم) */
   const [paused, setPaused] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [frameReady, setFrameReady] = useState(false);
   const lastTapRef = useRef(0);
   const handleLabel =
     item.authorHandle?.trim() ||
@@ -118,23 +121,86 @@ const Slide = memo(function Slide({
   useEffect(() => {
     setPaused(true);
     setLoadError(false);
+    setFrameReady(false);
     void videoRef.current?.pauseAsync().catch(() => undefined);
+    const el = htmlVideoRef.current;
+    if (el) {
+      el.pause();
+      el.currentTime = 0;
+    }
   }, [item.id, item.mediaUrl]);
 
   useEffect(() => {
     if (!active) {
       setPaused(true);
       void videoRef.current?.pauseAsync().catch(() => undefined);
-      // على الويب: تفريغ المصدر يوقف الصوت عند مغادرة التبويب
+      const el = htmlVideoRef.current;
+      if (el) {
+        el.pause();
+        // أوقف التحميل/الصوت دون تدمير العنصر حتى يبقى الإطار عند العودة
+        try {
+          el.removeAttribute('src');
+          el.load();
+        } catch {
+          // ignore
+        }
+      }
       if (Platform.OS === 'web') {
         void videoRef.current?.unloadAsync().catch(() => undefined);
       }
     }
   }, [active]);
 
+  // ويب: حمّل أول إطار صامتاً حتى لا تبقى شاشة سوداء
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !active || !playableUri || loadError) return;
+    const el = htmlVideoRef.current;
+    if (!el || !item.mediaUrl) return;
+    if (el.getAttribute('src') !== item.mediaUrl) {
+      el.src = item.mediaUrl;
+    }
+    el.muted = true;
+    el.playsInline = true;
+    const warm = el.play();
+    if (warm && typeof warm.then === 'function') {
+      void warm
+        .then(() => {
+          el.pause();
+          el.muted = false;
+          if (el.currentTime < 0.05) {
+            try {
+              el.currentTime = 0.05;
+            } catch {
+              // ignore
+            }
+          }
+          setFrameReady(true);
+        })
+        .catch(() => {
+          // المتصفح منع التشغيل — يكفي preload/metadata
+          setFrameReady(true);
+        });
+    } else {
+      setFrameReady(true);
+    }
+  }, [active, playableUri, loadError, item.mediaUrl]);
+
   const toggleVideoPlayback = useCallback(async () => {
     if (!playableUri || loadError) return;
     try {
+      if (Platform.OS === 'web') {
+        const el = htmlVideoRef.current;
+        if (!el) return;
+        if (paused) {
+          el.muted = false;
+          await el.play();
+          setPaused(false);
+        } else {
+          el.pause();
+          setPaused(true);
+        }
+        return;
+      }
       if (paused) {
         setPaused(false);
         await videoRef.current?.playAsync();
@@ -183,28 +249,54 @@ const Slide = memo(function Slide({
           onPress={handleContentPress}
           style={styles.videoFill}
         >
-          {playableUri && !loadError && active ? (
+          {playableUri && !loadError && active && Platform.OS === 'web'
+            ? createElement('video', {
+                ref: (node: HTMLVideoElement | null) => {
+                  htmlVideoRef.current = node;
+                },
+                src: item.mediaUrl,
+                playsInline: true,
+                preload: 'auto',
+                loop: true,
+                controls: false,
+                poster: item.posterUrl || undefined,
+                style: {
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  backgroundColor: '#000',
+                },
+                onError: () => {
+                  setLoadError(true);
+                  setPaused(true);
+                },
+                onLoadedData: () => setFrameReady(true),
+              })
+            : null}
+
+          {playableUri && !loadError && active && Platform.OS !== 'web' ? (
             <Video
               ref={videoRef}
               source={{ uri: item.mediaUrl! }}
               style={StyleSheet.absoluteFill}
-              resizeMode={ResizeMode.CONTAIN}
+              resizeMode={ResizeMode.COVER}
               shouldPlay={!paused}
               isLooping
               isMuted={false}
               useNativeControls={false}
               pointerEvents="none"
+              onReadyForDisplay={() => setFrameReady(true)}
               onError={() => {
                 setLoadError(true);
                 setPaused(true);
               }}
-              {...(Platform.OS === 'web'
-                ? ({ playsInline: true } as object)
-                : null)}
             />
           ) : null}
 
-          {item.posterUrl && (paused || loadError || !playableUri || !active) ? (
+          {item.posterUrl &&
+          (paused || loadError || !playableUri || !active || !frameReady) ? (
             <Image
               source={{ uri: item.posterUrl }}
               style={StyleSheet.absoluteFill}

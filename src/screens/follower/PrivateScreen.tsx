@@ -1,4 +1,5 @@
 import React, {
+  createElement,
   memo,
   useCallback,
   useEffect,
@@ -63,11 +64,17 @@ function isHttpUrl(url?: string) {
 function isVideoUrl(url: string) {
   const u = url.trim();
   if (/\.(?:mp4|mov|webm|m4v|mkv)(?:\?\S*)?$/i.test(u)) return true;
-  // مسارات تخزين بدون امتداد واضح غالباً فيديو عند وجود /video أو content-type في المسار
-  if (/\/(?:video|videos|highlights|private-dm)[/_-]/i.test(u) && !/\.(?:png|jpe?g|gif|webp|svg)(?:\?\S*)?$/i.test(u)) {
-    return /video|mp4|mov|webm/i.test(u);
+  if (/\.(?:png|jpe?g|gif|webp|svg|heic)(?:\?\S*)?$/i.test(u)) return false;
+  if (/\/(?:videos?|highlights|analysis|forums)\//i.test(u)) return true;
+  if (/[?&](?:type|content.?type)=video/i.test(u)) return true;
+  if (/video|mp4|webm|mov/i.test(u) && /supabase|storage|share-media/i.test(u)) {
+    return true;
   }
   return false;
+}
+
+function inferMediaKind(url: string): PrivateChatMediaKind {
+  return isVideoUrl(url) ? 'video' : 'photo';
 }
 
 function resolveChatMedia(message: {
@@ -81,11 +88,14 @@ function resolveChatMedia(message: {
 } {
   if (message.mediaUrl) {
     let kind: PrivateChatMediaKind =
-      message.mediaKind || (isVideoUrl(message.mediaUrl) ? 'video' : 'photo');
-    // تصحيح إن وُسمت صورة بالخطأ وهي فيديو
+      message.mediaKind === 'photo' || message.mediaKind === 'video'
+        ? message.mediaKind
+        : inferMediaKind(message.mediaUrl);
     if (kind === 'photo' && isVideoUrl(message.mediaUrl)) kind = 'video';
     const caption =
-      message.text && message.text.trim() !== message.mediaUrl.trim()
+      message.text &&
+      message.text.trim() !== message.mediaUrl.trim() &&
+      !/^(?:🖼️|🎬)\s*https?:\/\//i.test(message.text.trim())
         ? message.text
         : '';
     return {
@@ -110,6 +120,15 @@ function resolveChatMedia(message: {
       caption: '',
     };
   }
+  // رابط سحابي بدون امتداد ظاهر في نص الرسالة
+  const bare = raw.match(/^(https?:\/\/\S+)/i);
+  if (bare?.[1] && /supabase|storage|share-media/i.test(bare[1])) {
+    return {
+      mediaUrl: bare[1],
+      mediaKind: inferMediaKind(bare[1]),
+      caption: '',
+    };
+  }
   return { caption: message.text || '' };
 }
 
@@ -122,16 +141,21 @@ type AttachableItem = {
   label: string;
 };
 
+const CHAT_VIDEO_W = 200;
+const CHAT_VIDEO_H = 120;
+
 const ChatVideoBubble = memo(function ChatVideoBubble({ uri }: { uri: string }) {
   const focused = useIsFocused();
   const videoRef = useRef<VideoType | null>(null);
+  const htmlRef = useRef<HTMLVideoElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [failed, setFailed] = useState(false);
 
   const stop = useCallback(() => {
     void videoRef.current?.pauseAsync().catch(() => undefined);
-    if (Platform.OS === 'web') {
-      void videoRef.current?.unloadAsync().catch(() => undefined);
+    const el = htmlRef.current;
+    if (el) {
+      el.pause();
     }
     setPlaying(false);
   }, []);
@@ -156,31 +180,71 @@ const ChatVideoBubble = memo(function ChatVideoBubble({ uri }: { uri: string }) 
     setPlaying(status.isPlaying);
   }, []);
 
+  const wrapStyle = {
+    width: CHAT_VIDEO_W,
+    height: CHAT_VIDEO_H,
+    minWidth: CHAT_VIDEO_W,
+    minHeight: CHAT_VIDEO_H,
+    borderRadius: 10,
+    overflow: 'hidden' as const,
+    alignSelf: 'center' as const,
+    backgroundColor: '#0b1220',
+  };
+
   if (!focused) {
-    return <View style={[styles.bubbleMediaWrap, styles.bubbleMedia, { backgroundColor: '#0b1220' }]} />;
+    return <View style={wrapStyle} />;
   }
 
   if (failed) {
     return (
-      <View
-        style={[
-          styles.bubbleMediaWrap,
-          styles.bubbleMedia,
-          styles.pendingVideo,
-          { backgroundColor: '#0b1220' },
-        ]}
-      >
+      <View style={[wrapStyle, { alignItems: 'center', justifyContent: 'center' }]}>
         <Ionicons name="alert-circle-outline" size={28} color="#fff" />
       </View>
     );
   }
 
+  // ويب: عنصر video أصلي بأبعاد ثابتة (expo-av ينهار إلى شريط رفيع على سطح المكتب)
+  if (Platform.OS === 'web') {
+    return (
+      <View style={wrapStyle}>
+        {createElement('video', {
+          ref: (node: HTMLVideoElement | null) => {
+            htmlRef.current = node;
+          },
+          src: uri,
+          controls: true,
+          playsInline: true,
+          preload: 'metadata',
+          style: {
+            width: CHAT_VIDEO_W,
+            height: CHAT_VIDEO_H,
+            objectFit: 'cover',
+            borderRadius: 10,
+            backgroundColor: '#0b1220',
+            display: 'block',
+          },
+          onPlay: () => setPlaying(true),
+          onPause: () => setPlaying(false),
+          onError: () => setFailed(true),
+          onLoadedData: (e: { target: HTMLVideoElement }) => {
+            try {
+              const v = e.target;
+              if (v.currentTime < 0.05) v.currentTime = 0.05;
+            } catch {
+              // ignore
+            }
+          },
+        })}
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.bubbleMediaWrap}>
+    <View style={wrapStyle}>
       <Video
         ref={videoRef}
         source={{ uri }}
-        style={styles.bubbleMedia}
+        style={{ width: CHAT_VIDEO_W, height: CHAT_VIDEO_H }}
         resizeMode={ResizeMode.COVER}
         useNativeControls
         shouldPlay={false}
@@ -188,7 +252,6 @@ const ChatVideoBubble = memo(function ChatVideoBubble({ uri }: { uri: string }) 
         isMuted={false}
         onPlaybackStatusUpdate={onStatus}
         onError={() => setFailed(true)}
-        {...(Platform.OS === 'web' ? ({ playsInline: true } as object) : null)}
       />
       {!playing ? (
         <Pressable
@@ -1058,15 +1121,32 @@ export default function PrivateScreen() {
                         ]}
                       >
                         {mediaUrl && mediaKind === 'photo' ? (
-                          <View style={styles.bubbleMediaWrap}>
+                          <View
+                            style={{
+                              width: CHAT_VIDEO_W,
+                              height: CHAT_VIDEO_H,
+                              minWidth: CHAT_VIDEO_W,
+                              minHeight: CHAT_VIDEO_H,
+                              borderRadius: 10,
+                              overflow: 'hidden',
+                              alignSelf: 'center',
+                              backgroundColor: '#0b1220',
+                            }}
+                          >
                             <Image
                               source={{ uri: mediaUrl }}
-                              style={styles.bubbleMedia}
+                              style={{
+                                width: CHAT_VIDEO_W,
+                                height: CHAT_VIDEO_H,
+                              }}
                               resizeMode="cover"
                             />
                           </View>
                         ) : null}
                         {mediaUrl && mediaKind === 'video' ? (
+                          <ChatVideoBubble uri={mediaUrl} />
+                        ) : null}
+                        {mediaUrl && !mediaKind ? (
                           <ChatVideoBubble uri={mediaUrl} />
                         ) : null}
                         {caption ? (
