@@ -823,6 +823,9 @@ export const en: TranslationTree = {
     staffFieldsRequired: 'Enter staff member name and role.',
     refereeFieldsRequired: 'Enter the referee name and choose a role.',
     refereeRegisterFailed: 'Could not register the referee for this competition.',
+    refereeNameExists: 'Referee "%{name}" already exists — duplicate names are not allowed.',
+    refereeAlreadyOnCompetition:
+      'Referee "%{name}" is already assigned to this competition.',
     fixturesSuspendReasonRequired:
       'Enter a reason for suspending the fixtures (at least 3 characters).',
     fixturesSuspended: 'Fixtures schedule suspended.',
@@ -1572,6 +1575,13 @@ export const en: TranslationTree = {
       deleteConfirm: 'Delete referee %{name}?',
       statusUpdated: 'Updated status for %{name}',
       deleted: 'Deleted %{name}',
+      duplicateBadge: 'Duplicate ×%{count}',
+      removeDuplicates: 'Remove duplicate names',
+      removeDuplicatesConfirm:
+        'Keep one record per duplicate name (preferring those with a photo) and remove the rest from the list and competitions. Continue?',
+      noDuplicates: 'No duplicate names found',
+      duplicatesRemoved: 'Duplicates removed',
+      duplicatesRemovedDesc: 'Removed %{count} duplicate record(s).',
     },
     support: {
       subtitle: 'Tiers, distribution, and customer records',

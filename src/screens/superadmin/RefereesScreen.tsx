@@ -6,17 +6,20 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { EntityAvatarEditModal } from '@/components/account/EntityAvatarField';
-import { Avatar, Card, Muted, SearchBar, Subtitle } from '@/components/ui';
+import { Avatar, Button, Card, Muted, SearchBar, Subtitle } from '@/components/ui';
 import { matchesSearchQuery } from '@/utils/search';
 import { confirmDestructive } from '@/utils/confirm';
+import { normalizeRefereeName } from '@/utils/referee-name';
 
 const RefereeRow = memo(function RefereeRow({
   item,
+  duplicateCount,
   onToggle,
   onDelete,
   onChangePhoto,
 }: {
   item: Referee;
+  duplicateCount: number;
   onToggle: () => void;
   onDelete: () => void;
   onChangePhoto: () => void;
@@ -36,6 +39,11 @@ const RefereeRow = memo(function RefereeRow({
         <Avatar uri={item.avatar} name={item.name} size={44} />
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={[styles.name, { color: theme.colors.text }]}>{item.name}</Text>
+          {duplicateCount > 1 ? (
+            <Muted style={{ color: theme.colors.danger }}>
+              {t('superadmin.referees.duplicateBadge', { count: duplicateCount })}
+            </Muted>
+          ) : null}
           <Muted>
             {t('superadmin.referees.ratingLine', { rating: item.rating })}
           </Muted>
@@ -68,7 +76,8 @@ const RefereeRow = memo(function RefereeRow({
 });
 
 export default function RefereesScreen() {
-  const { referees, updateReferee, deleteReferee } = useTournament();
+  const { referees, updateReferee, deleteReferee, dedupeRefereesByName } =
+    useTournament();
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [avatarEdit, setAvatarEdit] = useState<{
@@ -76,6 +85,24 @@ export default function RefereesScreen() {
     name: string;
     value?: string;
   } | null>(null);
+
+  const duplicateCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const ref of referees) {
+      const key = normalizeRefereeName(ref.name);
+      if (!key) continue;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return counts;
+  }, [referees]);
+
+  const duplicateTotal = useMemo(() => {
+    let extra = 0;
+    for (const count of duplicateCounts.values()) {
+      if (count > 1) extra += count - 1;
+    }
+    return extra;
+  }, [duplicateCounts]);
 
   const data = useMemo(
     () =>
@@ -89,6 +116,9 @@ export default function RefereesScreen() {
     ({ item }: { item: Referee }) => (
       <RefereeRow
         item={item}
+        duplicateCount={
+          duplicateCounts.get(normalizeRefereeName(item.name)) || 1
+        }
         onChangePhoto={() =>
           setAvatarEdit({
             id: item.id,
@@ -124,7 +154,7 @@ export default function RefereesScreen() {
         }}
       />
     ),
-    [updateReferee, deleteReferee, t]
+    [updateReferee, deleteReferee, t, duplicateCounts]
   );
 
   return (
@@ -145,6 +175,24 @@ export default function RefereesScreen() {
               autoCapitalize="none"
               autoCorrect={false}
             />
+            {duplicateTotal > 0 ? (
+              <Button
+                label={t('superadmin.referees.removeDuplicates')}
+                variant="danger"
+                onPress={() => {
+                  void (async () => {
+                    const ok = await confirmDestructive({
+                      title: t('common.confirm'),
+                      message: t('superadmin.referees.removeDuplicatesConfirm'),
+                      cancelLabel: t('common.cancel'),
+                      confirmLabel: t('superadmin.referees.removeDuplicates'),
+                    });
+                    if (!ok) return;
+                    dedupeRefereesByName();
+                  })();
+                }}
+              />
+            ) : null}
           </View>
         }
         ListEmptyComponent={

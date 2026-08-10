@@ -25,6 +25,11 @@ import {
 import { isValidEmail, normalizeEmail, allocateUniqueHandle, ensureAccountIdentity, nextRegistrationId, formatArabicDate } from '@/utils';
 import { isEphemeralMediaUri } from '@/utils/persist-media';
 import {
+  findRefereeByName,
+  normalizeRefereeName,
+  pickRefereeDedupWinner,
+} from '@/utils/referee-name';
+import {
   ensurePasswordHashed,
   hashPassword,
   verifyPassword,
@@ -430,6 +435,8 @@ export interface TournamentContextType {
   ) => boolean;
   updateReferee: (referee: Referee, successMessage?: string) => void;
   deleteReferee: (refereeId: string, successMessage?: string) => void;
+  /** حذف المكرر بالاسم مع الإبقاء على سجل واحد وربطه بالمسابقات */
+  dedupeRefereesByName: () => number;
   markMessageAsRead: (messageId: string) => void;
   deleteQuickComment: (commentId: string, successMessage?: string) => void;
   addQuickComment: (text: string) => void;
@@ -1878,7 +1885,25 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   const addReferee = useCallback(
     (data: Omit<Referee, 'id'>, successMessage?: string) => {
-      const referee: Referee = { ...data, id: createId() };
+      const name = String(data.name || '').trim();
+      if (!name) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t045_e1da8e'),
+          description: t('toasts.refereeFieldsRequired'),
+        });
+        return null;
+      }
+      const dup = findRefereeByName(referees, name);
+      if (dup) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t045_e1da8e'),
+          description: t('toasts.refereeNameExists', { name: dup.name }),
+        });
+        return null;
+      }
+      const referee: Referee = { ...data, name, id: createId() };
       setReferees((prev) => {
         const next = [...prev, referee];
         void saveReferees(next);
@@ -1893,7 +1918,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
       return referee.id;
     },
-    [toast, t]
+    [referees, toast, t]
   );
 
   const registerRefereeForCompetition = useCallback(
@@ -1917,6 +1942,28 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
         return false;
       }
+
+      const existing = findRefereeByName(referees, name);
+      if (existing) {
+        const competition = competitions.find((c) => c.id === competitionId);
+        if (competition?.refereeIds.includes(existing.id)) {
+          toast({
+            variant: 'destructive',
+            title: t('toasts.t045_e1da8e'),
+            description: t('toasts.refereeAlreadyOnCompetition', {
+              name: existing.name,
+            }),
+          });
+          return false;
+        }
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t045_e1da8e'),
+          description: t('toasts.refereeNameExists', { name: existing.name }),
+        });
+        return false;
+      }
+
       let found = false;
       const referee: Referee = {
         id: createId(),
@@ -1929,6 +1976,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         status: 'active',
       };
       setReferees((prev) => {
+        // حماية سباق: إن وُجد الاسم أثناء التحديث لا نُضِف
+        if (findRefereeByName(prev, name)) return prev;
         const next = [...prev, referee];
         void saveReferees(next);
         return next;
@@ -1962,13 +2011,36 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [toast, t]
+    [referees, competitions, toast, t, syncCompetitions]
   );
 
   const updateReferee = useCallback(
     (referee: Referee, successMessage?: string) => {
+      const name = referee.name.trim();
+      if (!name) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t045_e1da8e'),
+          description: t('toasts.refereeFieldsRequired'),
+        });
+        return;
+      }
+      const clash = findRefereeByName(
+        referees.filter((r) => r.id !== referee.id),
+        name
+      );
+      if (clash) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t045_e1da8e'),
+          description: t('toasts.refereeNameExists', { name: clash.name }),
+        });
+        return;
+      }
       setReferees((prev) => {
-        const next = prev.map((r) => (r.id === referee.id ? referee : r));
+        const next = prev.map((r) =>
+          r.id === referee.id ? { ...referee, name } : r
+        );
         void saveReferees(next);
         return next;
       });
@@ -1980,7 +2052,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [toast, t]
+    [referees, toast, t]
   );
 
   const deleteReferee = useCallback(
@@ -1990,12 +2062,84 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         void saveReferees(next);
         return next;
       });
+      setCompetitions((prev) => {
+        const next = prev.map((c) => ({
+          ...c,
+          refereeIds: c.refereeIds.filter((id) => id !== refereeId),
+        }));
+        void syncCompetitions(next);
+        return next;
+      });
       if (successMessage) {
         toast({ title: t('toasts.t014_3569a8'), description: successMessage });
       }
     },
-    [toast, t]
+    [toast, t, syncCompetitions]
   );
+
+  const dedupeRefereesByName = useCallback(() => {
+    const groups = new Map<string, Referee[]>();
+    for (const ref of referees) {
+      const key = normalizeRefereeName(ref.name);
+      if (!key) continue;
+      const list = groups.get(key) || [];
+      list.push(ref);
+      groups.set(key, list);
+    }
+
+    const remap = new Map<string, string>();
+    const keep = new Set<string>();
+    let removed = 0;
+
+    for (const group of groups.values()) {
+      if (group.length === 1) {
+        keep.add(group[0].id);
+        continue;
+      }
+      const winner = pickRefereeDedupWinner(group);
+      keep.add(winner.id);
+      for (const ref of group) {
+        remap.set(ref.id, winner.id);
+        if (ref.id !== winner.id) removed += 1;
+      }
+    }
+
+    if (removed === 0) {
+      toast({
+        title: t('superadmin.referees.noDuplicates'),
+      });
+      return 0;
+    }
+
+    setReferees((prev) => {
+      const next = prev.filter((r) => keep.has(r.id));
+      void saveReferees(next);
+      return next;
+    });
+    setCompetitions((prev) => {
+      const next = prev.map((c) => ({
+        ...c,
+        refereeIds: [
+          ...new Set(
+            c.refereeIds
+              .map((id) => remap.get(id) || id)
+              .filter((id) => keep.has(id))
+          ),
+        ],
+      }));
+      void syncCompetitions(next);
+      return next;
+    });
+
+    toast({
+      variant: 'success',
+      title: t('superadmin.referees.duplicatesRemoved'),
+      description: t('superadmin.referees.duplicatesRemovedDesc', {
+        count: removed,
+      }),
+    });
+    return removed;
+  }, [referees, toast, t, syncCompetitions]);
 
   const markMessageAsRead = useCallback((messageId: string) => {
     setMessages((prev) =>
@@ -5392,6 +5536,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       registerRefereeForCompetition,
       updateReferee,
       deleteReferee,
+      dedupeRefereesByName,
       markMessageAsRead,
       deleteQuickComment,
       addQuickComment,
@@ -5491,6 +5636,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       registerRefereeForCompetition,
       updateReferee,
       deleteReferee,
+      dedupeRefereesByName,
       markMessageAsRead,
       deleteQuickComment,
       addQuickComment,

@@ -824,6 +824,9 @@ export const ar = {
     staffFieldsRequired: 'أدخل اسم عضو الطاقم ومهمته.',
     refereeFieldsRequired: 'أدخل اسم الحكم واختر دوره.',
     refereeRegisterFailed: 'تعذر تسجيل الحكم في هذه المسابقة.',
+    refereeNameExists: 'الحكم «%{name}» مسجّل مسبقاً — لا يمكن تكرار الاسم.',
+    refereeAlreadyOnCompetition:
+      'الحكم «%{name}» منضم مسبقاً لهذه المسابقة.',
     fixturesSuspendReasonRequired: 'اكتب سبب إيقاف جدول المباريات (٣ أحرف على الأقل).',
     fixturesSuspended: 'تم إيقاف جدول المباريات.',
     fixturesResumed: 'تم تفعيل جدول المباريات مجدداً.',
@@ -1814,6 +1817,13 @@ export const ar = {
       deleteConfirm: 'حذف الحكم %{name}؟',
       statusUpdated: 'تم تحديث حالة %{name}',
       deleted: 'تم حذف %{name}',
+      duplicateBadge: 'مكرر ×%{count}',
+      removeDuplicates: 'حذف الأسماء المكررة',
+      removeDuplicatesConfirm:
+        'سيتم الإبقاء على سجل واحد لكل اسم مكرر (يُفضَّل من لديه صورة) وحذف الباقي من القائمة والمسابقات. المتابعة؟',
+      noDuplicates: 'لا توجد أسماء مكررة',
+      duplicatesRemoved: 'تم حذف المكرر',
+      duplicatesRemovedDesc: 'أُزيل %{count} سجلاً مكرراً.',
     },
     support: {
       subtitle: 'المستويات والتوزيع وسجل العملاء',
