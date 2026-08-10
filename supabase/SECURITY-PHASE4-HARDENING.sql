@@ -13,6 +13,67 @@
 -- Safe to re-run.
 
 -- ═══════════════════════════════════════════════════════════
+-- 0a) Status self-change lock (cannot unlock suspended/blocked self)
+-- ═══════════════════════════════════════════════════════════
+
+create or replace function public.profiles_guard_roles()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  caller_is_admin boolean;
+  new_is_admin boolean;
+  old_was_admin boolean;
+begin
+  if auth.uid() is null
+     and current_user in ('postgres', 'supabase_admin')
+  then
+    return NEW;
+  end if;
+
+  caller_is_admin := public.is_app_superadmin();
+
+  if caller_is_admin then
+    return NEW;
+  end if;
+
+  new_is_admin :=
+    NEW.role = 'superadmin'
+    or coalesce(NEW.active_role, '') = 'superadmin'
+    or coalesce(NEW.roles, array[]::text[]) && array['superadmin']::text[];
+
+  old_was_admin :=
+    TG_OP = 'UPDATE'
+    and (
+      OLD.role = 'superadmin'
+      or coalesce(OLD.active_role, '') = 'superadmin'
+      or coalesce(OLD.roles, array[]::text[]) && array['superadmin']::text[]
+    );
+
+  if new_is_admin and not old_was_admin then
+    raise exception 'privilege_escalation_denied';
+  end if;
+
+  -- Non-admin cannot change own status in any direction (lock or unlock)
+  if TG_OP = 'UPDATE'
+     and NEW.id = auth.uid()
+     and NEW.status is distinct from OLD.status
+  then
+    raise exception 'status_self_change_denied';
+  end if;
+
+  return NEW;
+end;
+$$;
+
+drop trigger if exists profiles_guard_roles_trg on public.profiles;
+create trigger profiles_guard_roles_trg
+  before insert or update on public.profiles
+  for each row execute function public.profiles_guard_roles();
+
+-- ═══════════════════════════════════════════════════════════
 -- 0) Helpers
 -- ═══════════════════════════════════════════════════════════
 

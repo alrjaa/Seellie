@@ -7,7 +7,8 @@
 | `forum_comments` UPDATE | any auth user could rewrite any row | no direct UPDATE; likes/status via RPC |
 | `offers` blob | any auth user could wipe/replace | `upsert_offer_in_blob` / `set_offer_status` |
 | `referees` blob | open write after PHASE3 | RPC only (`upsert_referee_in_blob`) |
-| Suspended/blocked writes | client-only checks | `account_is_active()` on inserts + RPCs |
+| Suspended/blocked writes | client-only checks | `account_is_active()` on inserts + RPCs; status self-change denied |
+| PHASE3 gift RLS regression | re-opened `gift_transactions` | PHASE3 fixed; PHASE4 policies exclude gifts/offers/referees |
 | Messages UPDATE | party could alter body/ids | trigger allows `read` only |
 | Share cards UPDATE | content forgery possible | immutable fields restored |
 | Social merge likes/followers | non-owner could replace arrays | toggle own id only |

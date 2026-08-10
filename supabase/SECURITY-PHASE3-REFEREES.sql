@@ -1,14 +1,19 @@
 -- Seellie · SECURITY-PHASE3-REFEREES
--- Paste in SQL Editor AFTER SECURITY-PHASE1.sql
+-- Paste in SQL Editor AFTER SECURITY-PHASE2-BLOBS.sql
 --
 -- Problem: PHASE1 made `referees` blob superadmin-only.
 -- Organizers register referees + avatars, but upsertAppBlob('referees')
 -- fails under RLS — photos never sync to the cloud.
 --
 -- Fix:
--- 1) Allow authenticated users to write the `referees` key (like offers).
--- 2) Provide upsert_referee_in_blob RPC for safer per-referee merges.
+-- 1) Provide upsert_referee_in_blob RPC (security definer) — no open blob write.
+-- 2) Do NOT re-open gift_transactions (that was a PHASE2 regression risk).
+-- 3) Keep offers writable here only if PHASE4 is not applied yet;
+--    SECURITY-PHASE4-HARDENING.sql closes offers behind RPCs.
+--
+-- Prefer also running SECURITY-PHASE4-HARDENING.sql after this file.
 
+-- Keep PHASE2-scoped policies (no gift_transactions; no referees open write)
 drop policy if exists "app_blobs_insert_scoped" on public.app_blobs;
 drop policy if exists "app_blobs_update_scoped" on public.app_blobs;
 drop policy if exists "app_blobs_delete_scoped" on public.app_blobs;
@@ -20,7 +25,7 @@ create policy "app_blobs_insert_scoped"
     public.is_app_superadmin()
     or key = 'announcements:' || auth.uid()::text
     or key = 'prizes:' || auth.uid()::text
-    or key in ('offers', 'gift_transactions', 'referees')
+    or key = 'offers'
   );
 
 create policy "app_blobs_update_scoped"
@@ -30,13 +35,13 @@ create policy "app_blobs_update_scoped"
     public.is_app_superadmin()
     or key = 'announcements:' || auth.uid()::text
     or key = 'prizes:' || auth.uid()::text
-    or key in ('offers', 'gift_transactions', 'referees')
+    or key = 'offers'
   )
   with check (
     public.is_app_superadmin()
     or key = 'announcements:' || auth.uid()::text
     or key = 'prizes:' || auth.uid()::text
-    or key in ('offers', 'gift_transactions', 'referees')
+    or key = 'offers'
   );
 
 create policy "app_blobs_delete_scoped"

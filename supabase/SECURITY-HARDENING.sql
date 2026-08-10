@@ -45,13 +45,12 @@ begin
     raise exception 'privilege_escalation_denied';
   end if;
 
-  -- لا يحق لغير المشرف تعديل حالة حسابه إلى محظور/موقوف عبر التلاعب
+  -- لا يحق لغير المشرف تعديل حالة حسابه بأي اتجاه (قفل أو فك قفل)
   if TG_OP = 'UPDATE'
      and NEW.id = auth.uid()
      and NEW.status is distinct from OLD.status
-     and NEW.status in ('suspended', 'blocked')
   then
-    raise exception 'status_self_lock_denied';
+    raise exception 'status_self_change_denied';
   end if;
 
   return NEW;
