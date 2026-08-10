@@ -62,14 +62,29 @@ export const en: TranslationTree = {
     appLogin: 'App sign in',
     adminTagline: 'Platform admin console',
     adminDemoHint:
-      'Cloud admin only: Sign up then promote-admin.sql, or set-admin-password.sql',
+      'Cloud admin only — use a promoted admin account at /admin.',
     adminPortalOnlyTitle: 'Admin only',
     adminPortalOnlyDesc: 'This screen is for the admin account only.',
+    adminNotPromotedDesc:
+      'This account is not an admin. Ask platform management to promote it, then try again.',
+    adminCloudLoginFailedTitle: 'Cloud sign-in failed',
+    adminCloudLoginHint:
+      'Create an account via Sign up, ask for admin promotion, or reset the password from authentication.',
+    adminBadCredentialsHint:
+      'Email or password is incorrect. Reset it from authentication, then try again.',
+    adminEmailUnconfirmedHint:
+      'Email is not confirmed. Confirm the account in authentication, then try again.',
+    adminNetworkHint: 'Network issue. Make sure the device is online.',
+    adminSupabaseMissingTitle: 'Cloud service not configured',
+    adminSupabaseMissingDesc:
+      'Admin sign-in requires cloud setup. Configure cloud connection settings for this app.',
+    emailUnconfirmedDesc:
+      'Email is not confirmed. Confirm the account or disable email confirmation while testing.',
     useAdminLoginTitle: 'Use the admin portal',
     useAdminLoginDesc: 'Admin accounts sign in at /admin, not the app login.',
     logoA11y: 'Seellie logo',
     invalidEmail: 'Enter a valid email address',
-    demoHint: 'Demo: follower@test.com / password123',
+    demoHint: '',
     forgotPassword: 'Forgot password?',
     forgotPasswordTitle: 'Reset password',
     forgotPasswordHint:
@@ -232,6 +247,34 @@ export const en: TranslationTree = {
     enterRole: 'Enter as %{role} now',
     enterAdmin: 'Admin sign in',
   },
+  messages: {
+    support: {
+      defaultSubject: 'Support request',
+      subjectPrefix: '[Support]',
+      localAccountTitle: 'Local account',
+      localAccountDesc: 'Sign in with a Sign up account to send a support message.',
+      localAccountBanner:
+        'Local account — sign out and Sign up so admin messages appear.',
+      cloudAccountOk: 'Cloud account ✓ %{email}',
+      adminUnavailableTitle: 'Admin unavailable',
+      adminUnavailableDesc:
+        'No cloud admin account found. Promote an admin in profiles.',
+      incompleteTitle: 'Complete the message',
+      incompleteDesc: 'Enter a subject and support request body.',
+      cardTitle: 'Support message to admin',
+      cardHint:
+        'Send a request or issue directly to app management. The admin replies from the messages panel.',
+      adminName: 'Admin: %{name}',
+      adminSearching: 'Looking up the admin account…',
+      writeButton: 'Write support message',
+      subjectLabel: 'Subject',
+      bodyLabel: 'Message',
+      bodyPlaceholder: 'Describe the issue or request…',
+      sendButton: 'Send to admin',
+      refreshInbox: 'Refresh inbox',
+      inboxTitle: 'Inbox',
+    },
+  },
   nav: {
     home: 'Home',
     settings: 'Settings',
@@ -276,6 +319,12 @@ export const en: TranslationTree = {
   },
   cloud: {
     competitionSyncFailed: 'Could not sync competition to the cloud',
+    messageSendFailed:
+      'Could not send the message via the cloud. Make sure messaging is set up, then try again.',
+    localAccountCannotMessage:
+      'Your account is local, not cloud. Sign out and Sign up; if you are an admin, get promoted then sign in at /admin.',
+    bothNeedCloudAccounts:
+      'Sending between devices requires cloud Sign up accounts for both sender and recipient — not demo accounts.',
   },
   media: {
     permissionDenied: 'Permission denied',
@@ -406,7 +455,7 @@ export const en: TranslationTree = {
     positionHint: 'GK / Defense / Midfield / Attack',
     joinMessage: 'Request message',
     send: 'Send card',
-    cloudSendFailed: 'Cloud send failed — make sure Supabase tables are set up',
+    cloudSendFailed: 'Cloud send failed — make sure sharing is set up, then try again',
     sent: 'Share card sent',
     empty: 'No cards yet',
     emptyDesc: 'Create a card to share content or request to join.',
@@ -448,7 +497,7 @@ export const en: TranslationTree = {
   },
   notifications: {
     title: 'Notifications',
-    unreadCount: '%{count} unread',
+    unreadCount: '%{count} unread notification(s)',
     allRead: 'No new notifications',
     markAllRead: 'Mark all as read',
     clear: 'Clear all',
@@ -1405,7 +1454,7 @@ export const en: TranslationTree = {
       topFollowed: 'Most followed',
     },
     icons: {
-      subtitle: 'Manage FAB shortcuts for followers (local state)',
+      subtitle: 'Manage FAB shortcuts — changes apply to the floating menu',
       addIcon: 'Add icon',
       newIcon: 'New icon',
       labelField: 'Label',
@@ -1604,6 +1653,15 @@ export const en: TranslationTree = {
       emailTaken: 'This email is already used by another account.',
       newPassword: 'New password (optional)',
       newPasswordHint: 'Leave blank to keep the current password',
+      localDemoTitle: 'Local demo account',
+      localDemoToastDesc:
+        'This is a local account. Sign out and use /admin with a promoted cloud account.',
+      localDemoHint:
+        'Local demo only (does not sync across devices). Do not change the email here. For cloud admin: sign out, then sign in at /admin with a promoted account.',
+      cloudAccountBadge: 'Cloud account ✓ %{email}',
+      passwordUpdateFailedTitle: 'Could not update password',
+      passwordUpdateFailedDesc: 'Sign in again, then try once more.',
+      reloginCloud: 'Sign out, then cloud sign-in',
     },
   },
   freelancer: {
@@ -1814,6 +1872,7 @@ export const en: TranslationTree = {
     played: 'Finished match',
     upcoming: 'Upcoming match',
     media: 'Match media',
+    mediaUnavailable: 'This media could not be displayed',
     comments: 'Comments',
     noComments: 'No comments',
     noCommentsDesc: 'Be the first to comment on this match.',

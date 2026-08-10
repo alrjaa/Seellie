@@ -120,7 +120,7 @@ export default function ShareCardsScreen() {
 
   const myCompetitions = useMemo(() => {
     if (!currentUser) return [];
-    if (currentUser.role === 'organizer') {
+    if ((currentUser.activeRole || currentUser.role) === 'organizer') {
       return competitions.filter((c) => c.organizerId === currentUser.id);
     }
     return competitions;
@@ -151,7 +151,9 @@ export default function ShareCardsScreen() {
   if (!currentUser) return <Redirect href="/(auth)/login" />;
 
   const goHome = () => {
-    router.replace(routeForRole(currentUser.role) as any);
+    router.replace(
+      routeForRole(currentUser.activeRole || currentUser.role) as any
+    );
   };
 
   const pickMedia = async (type: 'photo' | 'video') => {

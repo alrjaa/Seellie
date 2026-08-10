@@ -103,7 +103,7 @@ export default function PrizesScreen() {
   };
 
   return (
-    <Screen scroll contentStyle={styles.content}>
+    <Screen scroll keyboard contentStyle={styles.content}>
       <Title>{t('organizer.prizes.title')}</Title>
       <Muted>{t('organizer.prizes.subtitle')}</Muted>
 

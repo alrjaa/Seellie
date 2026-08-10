@@ -1,11 +1,12 @@
 import React, { memo } from 'react';
-import { Linking, Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { AppText, Muted, Subtitle } from '@/components/ui';
 import { Avatar } from '@/components/ui/Avatar';
+import { InlineVideoPlayer } from '@/components/media/InlineVideoPlayer';
 import type { ShareCard } from '@/data/initial-data';
 import { formatArabicDate } from '@/utils';
 
@@ -105,24 +106,9 @@ function ShareCardPreviewComponent({ card, compact }: Props) {
             />
           ) : null}
           {card.mediaUrl && card.mediaKind === 'video' ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('common.video')}
-              onPress={() => {
-                void Linking.openURL(card.mediaUrl!).catch(() => undefined);
-              }}
-              style={[
-                styles.videoBox,
-                { backgroundColor: theme.colors.inputBg },
-              ]}
-            >
-              <Ionicons
-                name="play-circle-outline"
-                size={36}
-                color={theme.colors.accent}
-              />
-              <Muted>{t('common.video')}</Muted>
-            </Pressable>
+            <View style={styles.videoBox}>
+              <InlineVideoPlayer uri={card.mediaUrl} />
+            </View>
           ) : null}
         </View>
       )}
@@ -168,11 +154,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   videoBox: {
-    height: 120,
+    width: '100%',
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
+    overflow: 'hidden',
     marginTop: 4,
   },
   footer: {

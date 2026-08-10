@@ -1,68 +1,26 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useToast } from '@/providers/ToastProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
+import { useTournament } from '@/providers/TournamentProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Button, Card, Input, Muted, Subtitle, Title } from '@/components/ui';
-
-type FabIcon = {
-  id: string;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  href: string;
-};
-
-const SEED_ICONS: {
-  id: string;
-  labelKey: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  href: string;
-}[] = [
-  {
-    id: 'fab-1',
-    labelKey: 'menu.unique',
-    icon: 'diamond-outline',
-    href: '/unique',
-  },
-  {
-    id: 'fab-2',
-    labelKey: 'menu.forums',
-    icon: 'chatbox-ellipses-outline',
-    href: '/forums',
-  },
-  {
-    id: 'fab-3',
-    labelKey: 'menu.shares',
-    icon: 'share-social-outline',
-    href: '/shares',
-  },
-  {
-    id: 'fab-4',
-    labelKey: 'menu.search',
-    icon: 'search-outline',
-    href: '/search',
-  },
-];
+import { confirmDestructive } from '@/utils/confirm';
+import type { FabIconConfig } from '@/types/fab-icons';
 
 export default function IconsScreen() {
   const theme = useAppTheme();
   const { toast } = useToast();
   const { t } = useTranslation();
-  const [icons, setIcons] = useState<FabIcon[]>(() =>
-    SEED_ICONS.map((item) => ({
-      id: item.id,
-      label: t(item.labelKey),
-      icon: item.icon,
-      href: item.href,
-    }))
-  );
-  const [editing, setEditing] = useState<FabIcon | null>(null);
+  const { fabIcons, setFabIcons } = useTournament();
+  const [editing, setEditing] = useState<FabIconConfig | null>(null);
   const [label, setLabel] = useState('');
   const [iconName, setIconName] = useState('');
   const [href, setHref] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const isFormOpen = editing !== null || label.length > 0;
 
@@ -78,7 +36,7 @@ export default function IconsScreen() {
     setEditing({ id: '', label: '', icon: 'add-outline', href: '' });
   };
 
-  const openEdit = (item: FabIcon) => {
+  const openEdit = (item: FabIconConfig) => {
     setEditing(item);
     setLabel(item.label);
     setIconName(item.icon);
@@ -86,6 +44,7 @@ export default function IconsScreen() {
   };
 
   const save = () => {
+    if (saving) return;
     if (!label.trim() || !iconName.trim() || !href.trim()) {
       toast({
         variant: 'destructive',
@@ -95,48 +54,49 @@ export default function IconsScreen() {
       return;
     }
 
-    const entry: FabIcon = {
-      id: editing?.id && editing.id !== '' ? editing.id : `fab-${Date.now()}`,
-      label: label.trim(),
-      icon: iconName.trim() as keyof typeof Ionicons.glyphMap,
-      href: href.trim(),
-    };
+    setSaving(true);
+    try {
+      const entry: FabIconConfig = {
+        id: editing?.id && editing.id !== '' ? editing.id : `fab-${Date.now()}`,
+        label: label.trim(),
+        icon: iconName.trim(),
+        href: href.trim(),
+      };
 
-    if (editing?.id) {
-      setIcons((prev) =>
-        prev.map((i) => (i.id === editing.id ? entry : i))
-      );
-      toast({
-        variant: 'success',
-        title: t('toasts.t016_71326f'),
-        description: t('superadmin.icons.saved'),
-      });
-    } else {
-      setIcons((prev) => [...prev, entry]);
-      toast({
-        variant: 'success',
-        title: t('toasts.t015_937bdd'),
-        description: t('superadmin.icons.added'),
-      });
+      if (editing?.id) {
+        setFabIcons(fabIcons.map((i) => (i.id === editing.id ? entry : i)));
+        toast({
+          variant: 'success',
+          title: t('toasts.t016_71326f'),
+          description: t('superadmin.icons.saved'),
+        });
+      } else {
+        setFabIcons([...fabIcons, entry]);
+        toast({
+          variant: 'success',
+          title: t('toasts.t015_937bdd'),
+          description: t('superadmin.icons.added'),
+        });
+      }
+      resetForm();
+    } finally {
+      setSaving(false);
     }
-    resetForm();
   };
 
-  const remove = (id: string) => {
-    Alert.alert(t('superadmin.icons.deleteTitle'), t('superadmin.icons.deleteConfirm'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('superadmin.actions.delete'),
-        style: 'destructive',
-        onPress: () => {
-          setIcons((prev) => prev.filter((i) => i.id !== id));
-          toast({
-            title: t('toasts.t014_3569a8'),
-            description: t('superadmin.icons.removed'),
-          });
-        },
-      },
-    ]);
+  const remove = async (id: string) => {
+    const ok = await confirmDestructive({
+      title: t('superadmin.icons.deleteTitle'),
+      message: t('superadmin.icons.deleteConfirm'),
+      cancelLabel: t('common.cancel'),
+      confirmLabel: t('superadmin.actions.delete'),
+    });
+    if (!ok) return;
+    setFabIcons(fabIcons.filter((i) => i.id !== id));
+    toast({
+      title: t('toasts.t014_3569a8'),
+      description: t('superadmin.icons.removed'),
+    });
   };
 
   const header = useMemo(
@@ -169,11 +129,18 @@ export default function IconsScreen() {
               ltr
             />
             <View style={styles.formActions}>
-              <Button label={t('common.save')} onPress={save} style={{ flex: 1 }} />
+              <Button
+                label={t('common.save')}
+                onPress={save}
+                disabled={saving}
+                loading={saving}
+                style={{ flex: 1 }}
+              />
               <Button
                 label={t('common.cancel')}
                 variant="ghost"
                 onPress={resetForm}
+                disabled={saving}
                 style={{ flex: 1 }}
               />
             </View>
@@ -181,13 +148,13 @@ export default function IconsScreen() {
         ) : null}
       </View>
     ),
-    [isFormOpen, editing, label, iconName, href, t]
+    [isFormOpen, editing, label, iconName, href, saving, t, fabIcons]
   );
 
   return (
     <Screen>
       <FlatList
-        data={icons}
+        data={fabIcons}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         ListHeaderComponent={header}
@@ -204,7 +171,11 @@ export default function IconsScreen() {
                 ]}
               >
                 <Ionicons
-                  name={item.icon}
+                  name={
+                    (item.icon in Ionicons.glyphMap
+                      ? item.icon
+                      : 'ellipse-outline') as keyof typeof Ionicons.glyphMap
+                  }
                   size={22}
                   color={theme.colors.accent}
                 />

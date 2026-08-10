@@ -120,7 +120,7 @@ export default function AnalyticsScreen() {
                 styles.value,
                 {
                   color: theme.colors.accent,
-                  textAlign: isRTL ? 'right' : 'left',
+                  textAlign: 'left',
                 },
               ]}
             >

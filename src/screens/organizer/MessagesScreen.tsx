@@ -1,5 +1,15 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useTournament, type Message, type User } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
@@ -178,84 +188,92 @@ export default function OrganizerMessagesScreen() {
       </Modal>
 
       <Modal visible={composeOpen} transparent animationType="fade">
-        <Pressable
-          style={styles.overlay}
-          onPress={() => setComposeOpen(false)}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <Pressable
-            style={[
-              styles.modal,
-              {
-                backgroundColor: theme.colors.surfaceElevated,
-                borderColor: theme.colors.border,
-              },
-            ]}
-            onPress={(e) => e.stopPropagation()}
+            style={styles.overlay}
+            onPress={() => setComposeOpen(false)}
           >
-            <ScrollView contentContainerStyle={{ gap: 12 }}>
-              <Subtitle>{t('organizer.messages.newMessage')}</Subtitle>
-              <Muted>{t('organizer.messages.chooseRecipient')}</Muted>
-              {contacts.map((u: User) => (
-                <Pressable
-                  key={u.id}
-                  onPress={() => setRecipientId(u.id)}
-                  style={[
-                    styles.contactPick,
-                    {
-                      borderColor:
-                        recipientId === u.id
-                          ? theme.colors.accent
-                          : theme.colors.border,
-                      backgroundColor:
-                        recipientId === u.id
-                          ? theme.colors.accentSoft
-                          : theme.colors.inputBg,
-                    },
-                  ]}
-                >
-                  <Avatar uri={u.avatar} name={u.name} size={32} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.subject, { color: theme.colors.text }]}>
-                      {u.name}
-                    </Text>
-                    <Muted>{u.role}</Muted>
-                  </View>
-                </Pressable>
-              ))}
-              <Input
-                label={t('common.subject')}
-                value={subject}
-                onChangeText={setSubject}
-              />
-              <Input
-                label={t('organizer.messages.messageBody')}
-                value={body}
-                onChangeText={setBody}
-                multiline
-              />
-              <View style={styles.headerRow}>
-                <Button
-                  label={t('common.cancel')}
-                  variant="ghost"
-                  onPress={() => setComposeOpen(false)}
-                  style={{ flex: 1 }}
+            <Pressable
+              style={[
+                styles.modal,
+                {
+                  backgroundColor: theme.colors.surfaceElevated,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <ScrollView
+                contentContainerStyle={{ gap: 12 }}
+                keyboardShouldPersistTaps="handled"
+              >
+                <Subtitle>{t('organizer.messages.newMessage')}</Subtitle>
+                <Muted>{t('organizer.messages.chooseRecipient')}</Muted>
+                {contacts.map((u: User) => (
+                  <Pressable
+                    key={u.id}
+                    onPress={() => setRecipientId(u.id)}
+                    style={[
+                      styles.contactPick,
+                      {
+                        borderColor:
+                          recipientId === u.id
+                            ? theme.colors.accent
+                            : theme.colors.border,
+                        backgroundColor:
+                          recipientId === u.id
+                            ? theme.colors.accentSoft
+                            : theme.colors.inputBg,
+                      },
+                    ]}
+                  >
+                    <Avatar uri={u.avatar} name={u.name} size={32} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.subject, { color: theme.colors.text }]}>
+                        {u.name}
+                      </Text>
+                      <Muted>{u.role}</Muted>
+                    </View>
+                  </Pressable>
+                ))}
+                <Input
+                  label={t('common.subject')}
+                  value={subject}
+                  onChangeText={setSubject}
                 />
-                <Button
-                  label={t('common.send')}
-                  onPress={() => {
-                    if (!recipientId) return;
-                    void sendMessage({ recipientId, subject, body }).then(
-                      (ok) => {
-                        if (ok) setComposeOpen(false);
-                      }
-                    );
-                  }}
-                  style={{ flex: 1 }}
+                <Input
+                  label={t('organizer.messages.messageBody')}
+                  value={body}
+                  onChangeText={setBody}
+                  multiline
                 />
-              </View>
-            </ScrollView>
+                <View style={styles.headerRow}>
+                  <Button
+                    label={t('common.cancel')}
+                    variant="ghost"
+                    onPress={() => setComposeOpen(false)}
+                    style={{ flex: 1 }}
+                  />
+                  <Button
+                    label={t('common.send')}
+                    onPress={() => {
+                      if (!recipientId) return;
+                      void sendMessage({ recipientId, subject, body }).then(
+                        (ok) => {
+                          if (ok) setComposeOpen(false);
+                        }
+                      );
+                    }}
+                    style={{ flex: 1 }}
+                  />
+                </View>
+              </ScrollView>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );

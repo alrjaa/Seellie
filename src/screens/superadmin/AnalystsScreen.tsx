@@ -1,6 +1,5 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -13,6 +12,7 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { confirmDestructive } from '@/utils/confirm';
 import {
   Avatar,
   Button,
@@ -280,40 +280,37 @@ export default function AnalystsScreen() {
       <RequestCard
         user={item}
         onApprove={() => approveAnalystApplication(item.id)}
-        onReject={() =>
-          Alert.alert(
-            t('superadmin.analysts.rejectAlertTitle'),
-            t('superadmin.analysts.rejectAlertMessage'),
-            [
-              { text: t('common.cancel'), style: 'cancel' },
-              {
-                text: t('common.decline'),
-                style: 'destructive',
-                onPress: () =>
-                  rejectAnalystApplication(
-                    item.id,
-                    t('superadmin.analysts.rejectDefaultReason')
-                  ),
-              },
-            ]
-          )
-        }
+        onReject={() => {
+          void (async () => {
+            const ok = await confirmDestructive({
+              title: t('superadmin.analysts.rejectAlertTitle'),
+              message: t('superadmin.analysts.rejectAlertMessage'),
+              cancelLabel: t('common.cancel'),
+              confirmLabel: t('common.decline'),
+            });
+            if (!ok) return;
+            rejectAnalystApplication(
+              item.id,
+              t('superadmin.analysts.rejectDefaultReason')
+            );
+          })();
+        }}
         onWarn={() => openModeration(item, 'warn')}
         onSuspend={() => openModeration(item, 'suspend')}
         onBan={() => openModeration(item, 'ban')}
-        onReinstate={() =>
-          Alert.alert(
-            t('superadmin.analysts.reinstateAlertTitle'),
-            t('superadmin.analysts.reinstateAlertMessage'),
-            [
-              { text: t('common.cancel'), style: 'cancel' },
-              {
-                text: t('superadmin.actions.activate'),
-                onPress: () => reinstateAnalyst(item.id),
-              },
-            ]
-          )
-        }
+        onReinstate={() => {
+          void (async () => {
+            const ok = await confirmDestructive({
+              title: t('superadmin.analysts.reinstateAlertTitle'),
+              message: t('superadmin.analysts.reinstateAlertMessage'),
+              cancelLabel: t('common.cancel'),
+              confirmLabel: t('superadmin.actions.activate'),
+              destructive: false,
+            });
+            if (!ok) return;
+            reinstateAnalyst(item.id);
+          })();
+        }}
       />
     ),
     [

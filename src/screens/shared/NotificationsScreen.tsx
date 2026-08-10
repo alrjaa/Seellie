@@ -54,7 +54,9 @@ export default function NotificationsScreen() {
 
   const goHome = () => {
     if (currentUser) {
-      router.replace(routeForRole(currentUser.role) as any);
+      router.replace(
+        routeForRole(currentUser.activeRole || currentUser.role) as any
+      );
       return;
     }
     router.replace('/(auth)/login');

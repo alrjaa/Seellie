@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTournament, type Competition } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
@@ -11,6 +11,7 @@ import { formatVenueAddress } from '@/utils/competition';
 import { matchesSearchQuery } from '@/utils/search';
 import { statusToneColor } from '@/utils/status-tone';
 import { isSupabaseConfigured } from '@/services/supabase';
+import { confirmDestructive } from '@/utils/confirm';
 
 const CompetitionRow = memo(function CompetitionRow({
   item,
@@ -113,21 +114,15 @@ export default function CompetitionsScreen() {
   );
 
   const confirmDelete = useCallback(
-    (item: Competition) => {
-      Alert.alert(
-        t('organizer.competitionManage.deleteCompetition'),
-        t('organizer.competitionManage.deleteCompetitionConfirm'),
-        [
-          { text: t('common.cancel'), style: 'cancel' },
-          {
-            text: t('organizer.competitionManage.deleteCompetition'),
-            style: 'destructive',
-            onPress: () => {
-              void deleteCompetition(item.id);
-            },
-          },
-        ]
-      );
+    async (item: Competition) => {
+      const ok = await confirmDestructive({
+        title: t('organizer.competitionManage.deleteCompetition'),
+        message: t('organizer.competitionManage.deleteCompetitionConfirm'),
+        cancelLabel: t('common.cancel'),
+        confirmLabel: t('organizer.competitionManage.deleteCompetition'),
+      });
+      if (!ok) return;
+      void deleteCompetition(item.id);
     },
     [deleteCompetition, t]
   );

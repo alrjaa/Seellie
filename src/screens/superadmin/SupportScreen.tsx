@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   FlatList,
   Image,
   Pressable,
@@ -22,6 +21,7 @@ import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
 import { createId } from '@/utils/id';
 import { matchesSearchQuery } from '@/utils/search';
 import { useResponsive } from '@/hooks/useResponsive';
+import { confirmDestructive } from '@/utils/confirm';
 import {
   certificateImageSource,
   certificateImageUri,
@@ -191,23 +191,18 @@ export default function SupportScreen() {
     ]);
   };
 
-  const removeLevel = (id: string) => {
+  const removeLevel = async (id: string) => {
     const target = levels.find((l) => l.id === id);
-    Alert.alert(
-      t('superadmin.support.deleteTitle'),
-      t('superadmin.support.deleteConfirm', {
+    const ok = await confirmDestructive({
+      title: t('superadmin.support.deleteTitle'),
+      message: t('superadmin.support.deleteConfirm', {
         name: target?.name || '',
       }),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('common.confirm'),
-          style: 'destructive',
-          onPress: () =>
-            setLevels((prev) => prev.filter((l) => l.id !== id)),
-        },
-      ]
-    );
+      cancelLabel: t('common.cancel'),
+      confirmLabel: t('common.confirm'),
+    });
+    if (!ok) return;
+    setLevels((prev) => prev.filter((l) => l.id !== id));
   };
 
   const pickImage = useCallback(

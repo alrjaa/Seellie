@@ -7,6 +7,7 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { InlineVideoPlayer } from '@/components/media/InlineVideoPlayer';
 import {
   Avatar,
   Card,
@@ -70,20 +71,7 @@ export default function AnalysisDetailScreen() {
       <Title>{analysis.title}</Title>
 
       {analysis.videoUrl ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('unique.playAnalysisVideoA11y')}
-          onPress={() => {
-            void Linking.openURL(analysis.videoUrl!).catch(() => undefined);
-          }}
-          style={[
-            styles.videoBox,
-            { backgroundColor: theme.colors.surfaceElevated },
-          ]}
-        >
-          <Ionicons name="play-circle" size={56} color={theme.colors.accent} />
-          <Muted>{t('media.analysisVideoTapPlay')}</Muted>
-        </Pressable>
+        <InlineVideoPlayer uri={analysis.videoUrl} height={240} />
       ) : null}
 
       <Card style={styles.body}>

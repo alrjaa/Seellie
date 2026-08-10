@@ -62,18 +62,18 @@ export default function SearchScreen() {
     null
   );
 
-  const homeHref = currentUser ? routeForRole(currentUser.role) : '/';
-  const isOrganizer =
-    !!currentUser &&
-    (currentUser.activeRole === 'organizer' ||
-      currentUser.role === 'organizer');
+  const effectiveRole = currentUser
+    ? currentUser.activeRole || currentUser.role
+    : undefined;
+  const homeHref = effectiveRole ? routeForRole(effectiveRole) : '/';
+  const isOrganizer = effectiveRole === 'organizer';
 
   const hits = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (q.length < 1) return [] as Hit[];
 
     const results: Hit[] = [];
-    const role = currentUser?.role;
+    const role = effectiveRole;
 
     const competitionHref = (id: string) => {
       if (role === 'organizer') return `/(organizer)/competitions/${id}`;
@@ -262,6 +262,7 @@ export default function SearchScreen() {
     comments,
     referees,
     currentUser,
+    effectiveRole,
     homeHref,
     isOrganizer,
     t,

@@ -22,55 +22,23 @@ import {
 } from '@/services/floating-scroll-bus';
 import { cairoText } from '@/theme/fonts';
 import { useResponsive } from '@/hooks/useResponsive';
-
-type SideAction = {
-  key: string;
-  labelKey: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  href: string;
-};
-
-const ACTIONS: SideAction[] = [
-  {
-    key: 'unique',
-    labelKey: 'menu.unique',
-    icon: 'diamond-outline',
-    href: '/unique',
-  },
-  {
-    key: 'forums',
-    labelKey: 'menu.forums',
-    icon: 'chatbox-ellipses-outline',
-    href: '/forums',
-  },
-  {
-    key: 'shares',
-    labelKey: 'menu.shares',
-    icon: 'share-social-outline',
-    href: '/shares',
-  },
-  {
-    key: 'search',
-    labelKey: 'menu.search',
-    icon: 'search-outline',
-    href: '/search',
-  },
-  {
-    key: 'notifications',
-    labelKey: 'notifications.title',
-    icon: 'notifications-outline',
-    href: '/notifications',
-  },
-];
+import type { FabIconConfig } from '@/types/fab-icons';
 
 const useNativeDriver = Platform.OS !== 'web';
+
+function isIoniconName(
+  name: string
+): name is keyof typeof Ionicons.glyphMap {
+  return name in Ionicons.glyphMap;
+}
 
 /**
  * أزرار تنقل عائمة — على الجوال ومتصفح الجوال.
  * تُخفى فقط في تخطيط سطح المكتب الواسع (شريط جانبي).
+ * الأيقونات من TournamentProvider (شاشة Icons للمشرف).
  */
 function FloatingActionMenuComponent() {
-  const { currentUser } = useTournament();
+  const { currentUser, fabIcons } = useTournament();
   const theme = useAppTheme();
   const { t } = useTranslation();
   const router = useRouter();
@@ -142,13 +110,37 @@ function FloatingActionMenuComponent() {
     if (active === 'superadmin' || currentUser.role === 'superadmin') {
       return [];
     }
+
+    const labelForHref = (href: string, fallback: string) => {
+      if (href.includes('unique')) return t('menu.unique');
+      if (href.includes('forums')) return t('menu.forums');
+      if (href.includes('shares')) return t('menu.shares');
+      if (href.includes('search')) return t('menu.search');
+      if (href.includes('notifications')) return t('notifications.title');
+      return fallback;
+    };
+
+    const fromStore: FabIconConfig[] = Array.isArray(fabIcons) ? fabIcons : [];
+    const mapped = fromStore
+      .filter((a) => a.href && a.icon)
+      .map((a) => ({
+        key: a.id,
+        label: labelForHref(a.href, a.label || a.href),
+        icon: (isIoniconName(a.icon)
+          ? a.icon
+          : 'ellipse-outline') as keyof typeof Ionicons.glyphMap,
+        href: a.href,
+      }));
+
     if (active === 'organizer' || currentUser.role === 'organizer') {
-      return ACTIONS.filter((a) =>
-        ['search', 'notifications'].includes(a.key)
-      ).map((a) => ({ ...a, label: t(a.labelKey) }));
+      return mapped.filter((a) =>
+        ['search', 'notifications', '/search', '/notifications'].some(
+          (k) => a.key.includes(k) || a.href.includes(k)
+        )
+      );
     }
-    return ACTIONS.map((a) => ({ ...a, label: t(a.labelKey) }));
-  }, [currentUser, t]);
+    return mapped;
+  }, [currentUser, fabIcons, t]);
 
   const onPrivateSpace =
     !!pathname &&

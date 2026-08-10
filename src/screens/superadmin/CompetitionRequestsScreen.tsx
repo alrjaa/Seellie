@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
-import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useTournament, type CompetitionRequest } from '@/providers/TournamentProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
@@ -12,6 +12,7 @@ import { matchesSearchQuery } from '@/utils/search';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { statusToneColor } from '@/utils/status-tone';
 import { isSupabaseConfigured } from '@/services/supabase';
+import { confirmDestructive } from '@/utils/confirm';
 
 const RequestCard = memo(function RequestCard({
   item,
@@ -160,22 +161,20 @@ export default function CompetitionRequestsScreen() {
         item={item}
         organizerName={organizerName(item.organizerId)}
         onApprove={() => {
-          Alert.alert(
-            t('superadmin.competitionRequests.approveAlertTitle'),
-            t('superadmin.competitionRequests.approveAlertMessage', {
-              name: item.name,
-              count: MIN_COMPETITION_TEAMS,
-            }),
-            [
-              { text: t('common.cancel'), style: 'cancel' },
-              {
-                text: t('superadmin.actions.accept'),
-                onPress: () => {
-                  void approveCompetitionRequest(item.id);
-                },
-              },
-            ]
-          );
+          void (async () => {
+            const ok = await confirmDestructive({
+              title: t('superadmin.competitionRequests.approveAlertTitle'),
+              message: t('superadmin.competitionRequests.approveAlertMessage', {
+                name: item.name,
+                count: MIN_COMPETITION_TEAMS,
+              }),
+              cancelLabel: t('common.cancel'),
+              confirmLabel: t('superadmin.actions.accept'),
+              destructive: false,
+            });
+            if (!ok) return;
+            void approveCompetitionRequest(item.id);
+          })();
         }}
         onReject={() => {
           setRejectId(item.id);

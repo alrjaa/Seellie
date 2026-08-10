@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTournament, type Referee } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
@@ -7,6 +7,7 @@ import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Avatar, Card, Muted, SearchBar, Subtitle } from '@/components/ui';
 import { matchesSearchQuery } from '@/utils/search';
+import { confirmDestructive } from '@/utils/confirm';
 
 const RefereeRow = memo(function RefereeRow({
   item,
@@ -84,17 +85,23 @@ export default function RefereesScreen() {
             t('superadmin.referees.statusUpdated', { name: item.name })
           )
         }
-        onDelete={() =>
-          Alert.alert(t('common.confirm'), t('superadmin.referees.deleteConfirm', { name: item.name }), [
-            { text: t('common.cancel'), style: 'cancel' },
-            {
-              text: t('superadmin.actions.delete'),
-              style: 'destructive',
-              onPress: () =>
-                deleteReferee(item.id, t('superadmin.referees.deleted', { name: item.name })),
-            },
-          ])
-        }
+        onDelete={() => {
+          void (async () => {
+            const ok = await confirmDestructive({
+              title: t('common.confirm'),
+              message: t('superadmin.referees.deleteConfirm', {
+                name: item.name,
+              }),
+              cancelLabel: t('common.cancel'),
+              confirmLabel: t('superadmin.actions.delete'),
+            });
+            if (!ok) return;
+            deleteReferee(
+              item.id,
+              t('superadmin.referees.deleted', { name: item.name })
+            );
+          })();
+        }}
       />
     ),
     [updateReferee, deleteReferee, t]

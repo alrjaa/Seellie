@@ -68,7 +68,7 @@ export default function SettingsScreen() {
         <Subtitle style={styles.cardTitle}>{t('settings.appearance')}</Subtitle>
         <View style={styles.row}>
           <Muted style={styles.meta}>
-            {t('settings.currentTheme')}: {preference}
+            {t('settings.currentTheme')}: {t(`common.${preference}`)}
           </Muted>
           <ThemeToggle />
         </View>
@@ -116,7 +116,7 @@ export default function SettingsScreen() {
         title={t('notifications.title')}
         subtitle={
           unreadNotifs > 0
-            ? `${unreadNotifs} إشعار غير مقروء`
+            ? t('notifications.unreadCount', { count: unreadNotifs })
             : t('notifications.emptyDesc')
         }
         icon="notifications-outline"

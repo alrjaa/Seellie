@@ -26,6 +26,7 @@ import {
   FullScreenFeed,
   type FullScreenContent,
 } from '@/components/media/FullScreenFeed';
+import { InlineVideoPlayer } from '@/components/media/InlineVideoPlayer';
 import {
   ShareTargetModal,
   TinyShareButton,
@@ -127,20 +128,7 @@ const AnalysisCard = memo(function AnalysisCard({
 
       {hasVideo ? (
         <View style={styles.mediaWrap}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('unique.playAnalysisVideoA11y')}
-            onPress={() => {
-              void Linking.openURL(item.videoUrl!).catch(() => undefined);
-            }}
-            style={[
-              styles.videoBox,
-              { backgroundColor: theme.colors.surfaceElevated },
-            ]}
-          >
-            <Ionicons name="play-circle" size={56} color={theme.colors.accent} />
-            <Muted>{t('unique.analysisVideoTap')}</Muted>
-          </Pressable>
+          <InlineVideoPlayer uri={item.videoUrl!} height={220} />
           {onShare ? (
             <View style={styles.mediaShare}>
               <TinyShareButton onPress={onShare} />

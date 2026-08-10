@@ -146,19 +146,19 @@ export async function insertMessage(input: {
     if (/relation .*messages.* does not exist/i.test(msg)) {
       return {
         message: null,
-        error: 'جدول الرسائل غير موجود. نفّذ supabase/messages.sql',
+        error: 'خدمة الرسائل غير مهيأة بعد. أعد المحاولة لاحقاً أو تواصل مع الدعم.',
       };
     }
     if (/row-level security|rls|policy/i.test(msg)) {
       return {
         message: null,
-        error: 'رفض RLS. أعد تنفيذ messages.sql وتأكد من تسجيل الدخول السحابي.',
+        error: 'تعذّر الإرسال بسبب صلاحيات الحساب. سجّل دخولاً سحابياً ثم أعد المحاولة.',
       };
     }
     if (/foreign key|violates/i.test(msg)) {
       return {
         message: null,
-        error: 'المستلم غير موجود في profiles. تأكد أنه سجّل عبر Sign up.',
+        error: 'المستلم غير موجود. تأكد أنه سجّل عبر التسجيل السحابي.',
       };
     }
     return { message: null, error: msg };

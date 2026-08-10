@@ -24,6 +24,7 @@ import {
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { PlayerMediaSection } from '@/components/media/PlayerMediaSection';
+import { InlineVideoPlayer } from '@/components/media/InlineVideoPlayer';
 import {
   ShareTargetModal,
   TinyShareButton,
@@ -152,18 +153,7 @@ const ShareCard = memo(function ShareCard({
 
       {item.kind === 'video' && item.mediaUrl ? (
         <View style={styles.mediaWrap}>
-          <Pressable
-            onPress={() => {
-              void Linking.openURL(item.mediaUrl!).catch(() => undefined);
-            }}
-            style={[
-              styles.videoBox,
-              { backgroundColor: theme.colors.surfaceElevated },
-            ]}
-          >
-            <Ionicons name="play-circle" size={48} color={theme.colors.accent} />
-            <Muted>{t('sharesUi.playPlayerVideo')}</Muted>
-          </Pressable>
+          <InlineVideoPlayer uri={item.mediaUrl} height={220} />
           {onShare ? (
             <View style={styles.mediaShare}>
               <TinyShareButton onPress={onShare} />
@@ -392,14 +382,16 @@ export default function SharesScreen() {
     [filtered, togglePostLike, toggleMediaLike]
   );
 
+  const activeRole = currentUser?.activeRole || currentUser?.role;
+
   const onPressAuthor = useCallback(
     (item: FullScreenContent) => {
-      if (currentUser?.role !== 'follower') return;
+      if (activeRole !== 'follower') return;
       const source = filtered.find((f) => f.id === item.id);
       if (!source) return;
       router.push(`/(follower)/players/${source.authorId}` as any);
     },
-    [currentUser, filtered, router]
+    [activeRole, filtered, router]
   );
 
   const renderItem = useCallback(
@@ -423,7 +415,7 @@ export default function SharesScreen() {
           liked={liked}
           onLike={onLike}
           onOpenPlayer={
-            currentUser?.role === 'follower'
+            activeRole === 'follower'
               ? () => router.push(`/(follower)/players/${item.authorId}` as any)
               : undefined
           }
@@ -444,7 +436,7 @@ export default function SharesScreen() {
         />
       );
     },
-    [currentUser, router, togglePostLike, toggleMediaLike]
+    [activeRole, currentUser, router, togglePostLike, toggleMediaLike]
   );
 
   if (loading) return <LoadingState />;
@@ -589,7 +581,7 @@ export default function SharesScreen() {
           data={fullScreenData}
           onLike={onFullLike}
           onPressAuthor={
-            currentUser.role === 'follower' ? onPressAuthor : undefined
+            activeRole === 'follower' ? onPressAuthor : undefined
           }
           onDoubleTap={(item) => void saveToPrivate(item)}
           emptyTitle={t('sharesUi.emptyTitle')}

@@ -181,6 +181,10 @@ grant execute on function public.merge_profile_social_json(jsonb, jsonb) to auth
 grant execute on function public.replace_profile_content(uuid, jsonb) to authenticated;
 
 -- Restrict app_blobs writes
+-- Remaining open keys (`offers`, `gift_transactions`): any authenticated user can
+-- overwrite the shared blob. Mitigate gifts with SECURITY-PHASE2-BLOBS.sql
+-- (append_gift_transaction RPC). Offers stay open so organizers can send and
+-- freelancers can accept/decline without breaking the purchase flow.
 drop policy if exists "app_blobs_upsert_auth" on public.app_blobs;
 drop policy if exists "app_blobs_update_auth" on public.app_blobs;
 drop policy if exists "app_blobs_delete_auth" on public.app_blobs;

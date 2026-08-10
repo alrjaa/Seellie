@@ -201,10 +201,6 @@ export default function AdminLoginScreen() {
                     {t('auth.forgotPassword')}
                   </Text>
                 </Pressable>
-                <Muted>
-                  دخول المشرف سحابي فقط. أنشئ حساباً من Sign up ثم رقِّه بـ
-                  promote-admin.sql، أو استخدم set-admin-password.sql للحساب الحالي.
-                </Muted>
                 <Muted>{t('auth.adminDemoHint')}</Muted>
                 <Button
                   label={t('auth.adminLogin')}

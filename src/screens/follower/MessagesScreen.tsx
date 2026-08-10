@@ -80,7 +80,7 @@ export default function MessagesScreen() {
   const { toast } = useToast();
   const [refreshing, setRefreshing] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
-  const [subject, setSubject] = useState('طلب دعم');
+  const [subject, setSubject] = useState(() => t('messages.support.defaultSubject'));
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
   const [admin, setAdmin] = useState<{
@@ -89,6 +89,8 @@ export default function MessagesScreen() {
     email: string;
   } | null>(null);
   const cloudOk = !!currentUser && isUuid(currentUser.id);
+  const defaultSubject = t('messages.support.defaultSubject');
+  const supportPrefix = t('messages.support.subjectPrefix');
 
   useFocusEffect(
     useCallback(() => {
@@ -151,8 +153,8 @@ export default function MessagesScreen() {
     if (!cloudOk) {
       toast({
         variant: 'destructive',
-        title: 'حساب محلي',
-        description: 'سجّل دخولاً بحساب Sign up لإرسال رسالة دعم.',
+        title: t('messages.support.localAccountTitle'),
+        description: t('messages.support.localAccountDesc'),
       });
       return;
     }
@@ -164,38 +166,49 @@ export default function MessagesScreen() {
     if (!target) {
       toast({
         variant: 'destructive',
-        title: 'المشرف غير متاح',
-        description:
-          'لا يوجد حساب مشرف سحابي. تأكد من ترقية الأدمن في profiles.',
+        title: t('messages.support.adminUnavailableTitle'),
+        description: t('messages.support.adminUnavailableDesc'),
       });
       return;
     }
     if (!subject.trim() || !body.trim()) {
       toast({
         variant: 'destructive',
-        title: 'أكمل الرسالة',
-        description: 'اكتب الموضوع ونص طلب الدعم.',
+        title: t('messages.support.incompleteTitle'),
+        description: t('messages.support.incompleteDesc'),
       });
       return;
     }
     setSending(true);
     try {
+      const trimmed = subject.trim();
       const ok = await sendMessage({
         recipientId: target.id,
-        subject: subject.trim().startsWith('[دعم]')
-          ? subject.trim()
-          : `[دعم] ${subject.trim()}`,
+        subject: trimmed.startsWith(supportPrefix)
+          ? trimmed
+          : `${supportPrefix} ${trimmed}`,
         body: body.trim(),
       });
       if (ok) {
         setBody('');
-        setSubject('طلب دعم');
+        setSubject(defaultSubject);
         setSupportOpen(false);
       }
     } finally {
       setSending(false);
     }
-  }, [sending, cloudOk, admin, subject, body, sendMessage, toast]);
+  }, [
+    sending,
+    cloudOk,
+    admin,
+    subject,
+    body,
+    sendMessage,
+    toast,
+    t,
+    supportPrefix,
+    defaultSubject,
+  ]);
 
   const renderItem = useCallback(
     ({ item }: { item: Message }) => (
@@ -225,8 +238,10 @@ export default function MessagesScreen() {
           <View style={{ gap: 10, marginBottom: 8 }}>
             <Muted>
               {cloudOk
-                ? `حساب سحابي ✓ ${currentUser.email}`
-                : 'حساب محلي ✗ — اخرج وسجّل دخول Sign up لتظهر رسائل المشرف.'}
+                ? t('messages.support.cloudAccountOk', {
+                    email: currentUser.email,
+                  })
+                : t('messages.support.localAccountBanner')}
             </Muted>
             <Muted>
               {unread > 0
@@ -235,52 +250,56 @@ export default function MessagesScreen() {
             </Muted>
 
             <Card style={{ gap: 10 }}>
-              <Subtitle>رسالة دعم للمشرف</Subtitle>
-              <Muted>
-                أرسل طلباً أو مشكلة مباشرة إلى إدارة التطبيق. يرد المشرف من
-                لوحة الرسائل.
-              </Muted>
+              <Subtitle>{t('messages.support.cardTitle')}</Subtitle>
+              <Muted>{t('messages.support.cardHint')}</Muted>
               {admin ? (
-                <Muted>المشرف: {admin.name}</Muted>
+                <Muted>
+                  {t('messages.support.adminName', { name: admin.name })}
+                </Muted>
               ) : cloudOk ? (
-                <Muted>جاري البحث عن حساب المشرف…</Muted>
+                <Muted>{t('messages.support.adminSearching')}</Muted>
               ) : null}
               {!supportOpen ? (
                 <Button
-                  label="كتابة رسالة دعم"
+                  label={t('messages.support.writeButton')}
                   onPress={() => setSupportOpen(true)}
                   disabled={!cloudOk}
                 />
               ) : (
                 <>
                   <Input
-                    label="الموضوع"
+                    label={t('messages.support.subjectLabel')}
                     value={subject}
                     onChangeText={setSubject}
-                    placeholder="طلب دعم"
+                    placeholder={defaultSubject}
                   />
                   <Input
-                    label="نص الرسالة"
+                    label={t('messages.support.bodyLabel')}
                     value={body}
                     onChangeText={setBody}
                     multiline
-                    placeholder="اشرح المشكلة أو الطلب…"
+                    placeholder={t('messages.support.bodyPlaceholder')}
                   />
                   <View style={styles.actions}>
                     <Button
-                      label="إلغاء"
+                      label={t('common.cancel')}
                       variant="ghost"
                       onPress={() => {
                         setSupportOpen(false);
                         setBody('');
-                        setSubject('طلب دعم');
+                        setSubject(defaultSubject);
                       }}
                       style={{ flex: 1 }}
                     />
                     <Button
-                      label={sending ? '...' : 'إرسال للمشرف'}
+                      label={
+                        sending
+                          ? t('common.loading')
+                          : t('messages.support.sendButton')
+                      }
                       onPress={() => void onSendSupport()}
                       disabled={sending || !cloudOk}
+                      loading={sending}
                       style={{ flex: 1 }}
                     />
                   </View>
@@ -289,11 +308,11 @@ export default function MessagesScreen() {
             </Card>
 
             <Button
-              label="تحديث الوارد"
+              label={t('messages.support.refreshInbox')}
               variant="outline"
               onPress={() => void onRefresh()}
             />
-            <Subtitle>الوارد</Subtitle>
+            <Subtitle>{t('messages.support.inboxTitle')}</Subtitle>
           </View>
         }
         ListEmptyComponent={

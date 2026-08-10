@@ -1,6 +1,6 @@
 import { Redirect } from 'expo-router';
 
-/** الدردشة أُلغيت — نكتفي بالساحات. */
+/** Legacy chat route — inbox lives under messages. */
 export default function ChatRedirect() {
-  return <Redirect href="/forums" />;
+  return <Redirect href="/(follower)/messages" />;
 }

@@ -13,6 +13,11 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { isValidEmail, normalizeEmail } from '@/utils';
 import { hashPassword } from '@/utils/password';
 import { isUuid } from '@/services/supabase-messages';
+import {
+  supabaseUpdatePassword,
+  updateProfileAdminCloud,
+} from '@/services/supabase-auth';
+import { isSupabaseConfigured } from '@/services/supabase';
 
 export default function SettingsScreen() {
   const {
@@ -34,18 +39,18 @@ export default function SettingsScreen() {
   const [accountName, setAccountName] = useState(currentUser?.name || '');
   const [accountEmail, setAccountEmail] = useState(currentUser?.email || '');
   const [accountPassword, setAccountPassword] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const isLocalDemoAdmin = !!currentUser && !isUuid(currentUser.id);
 
-  const saveAdminAccount = () => {
+  const saveAdminAccount = async () => {
     if (!currentUser) return;
 
     if (isLocalDemoAdmin) {
       toast({
         variant: 'destructive',
-        title: 'حساب تجريبي محلي',
-        description:
-          'حسابك محلي وليست له صلاحية مشرف سحابية. اخرج وادخل من /admin بحساب Supabase مرقّى (promote-admin.sql أو set-admin-password.sql).',
+        title: t('superadmin.settings.localDemoTitle'),
+        description: t('superadmin.settings.localDemoToastDesc'),
       });
       return;
     }
@@ -54,17 +59,8 @@ export default function SettingsScreen() {
     if (!isValidEmail(email)) {
       toast({
         variant: 'destructive',
-        title: t('superadmin.settings.invalidEmail'),
-      });
-      return;
-    }
-    const taken = users.some(
-      (u) => u.id !== currentUser.id && normalizeEmail(u.email) === email
-    );
-    if (taken) {
-      toast({
-        variant: 'destructive',
-        title: t('superadmin.settings.emailTaken'),
+        title: t('toasts.t004_8fdbe1'),
+        description: t('auth.invalidEmail'),
       });
       return;
     }
@@ -77,18 +73,46 @@ export default function SettingsScreen() {
       });
       return;
     }
-    updateUser(
-      {
+
+    setSaving(true);
+    try {
+      if (nextPassword && isSupabaseConfigured() && isUuid(currentUser.id)) {
+        const cloud = await supabaseUpdatePassword(nextPassword);
+        if (!cloud.ok) {
+          toast({
+            variant: 'destructive',
+            title: t('superadmin.settings.passwordUpdateFailedTitle'),
+            description:
+              cloud.error || t('superadmin.settings.passwordUpdateFailedDesc'),
+          });
+          return;
+        }
+      }
+
+      const updated = {
         ...currentUser,
         name: accountName.trim() || currentUser.name,
         email,
         ...(nextPassword
-          ? { passwordHash: hashPassword(nextPassword) }
+          ? {
+              passwordHash: isUuid(currentUser.id)
+                ? 'supabase'
+                : hashPassword(nextPassword),
+            }
           : {}),
-      },
-      t('superadmin.settings.accountSaved')
-    );
-    setAccountPassword('');
+      };
+      updateUser(updated, t('superadmin.settings.accountSaved'));
+      if (isSupabaseConfigured() && isUuid(currentUser.id)) {
+        void updateProfileAdminCloud({
+          id: currentUser.id,
+          email,
+          name: updated.name,
+        });
+      }
+      setAccountPassword('');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -102,12 +126,13 @@ export default function SettingsScreen() {
         <Subtitle>{t('superadmin.settings.editAccount')}</Subtitle>
         <Muted>{t('superadmin.settings.editAccountHint')}</Muted>
         {!isUuid(currentUser?.id) ? (
-          <Muted>
-            حساب تجريبي محلي فقط (لا يعمل بين الأجهزة). لا تغيّر الإيميل هنا.
-            للمشرف السحابي: اخرج → /admin بحساب مرقّى عبر promote-admin.sql.
-          </Muted>
+          <Muted>{t('superadmin.settings.localDemoHint')}</Muted>
         ) : (
-          <Muted>حساب سحابي ✓ {currentUser?.email}</Muted>
+          <Muted>
+            {t('superadmin.settings.cloudAccountBadge', {
+              email: currentUser?.email || '',
+            })}
+          </Muted>
         )}
         <Muted>
           {t('settings.handle')}: {currentUser?.handle}
@@ -140,11 +165,12 @@ export default function SettingsScreen() {
         />
         <Button
           label={t('superadmin.settings.saveAccount')}
-          onPress={saveAdminAccount}
-          disabled={isLocalDemoAdmin}
+          onPress={() => void saveAdminAccount()}
+          disabled={isLocalDemoAdmin || saving}
+          loading={saving}
         />
         <Button
-          label="خروج ثم دخول سحابي"
+          label={t('superadmin.settings.reloginCloud')}
           variant="outline"
           onPress={() => logout()}
         />

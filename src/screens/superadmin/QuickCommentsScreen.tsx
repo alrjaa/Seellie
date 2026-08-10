@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTournament, type Comment } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
@@ -7,6 +7,7 @@ import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Avatar, Card, LikeButton, Muted, SearchBar, Subtitle } from '@/components/ui';
 import { matchesSearchQuery } from '@/utils/search';
+import { confirmDestructive } from '@/utils/confirm';
 
 const CommentRow = memo(function CommentRow({
   item,
@@ -68,17 +69,18 @@ export default function QuickCommentsScreen() {
         item={item}
         liked={!!currentUser && item.likes.includes(currentUser.id)}
         onLike={() => toggleCommentLike(item.id)}
-        onDelete={() =>
-          Alert.alert(t('common.confirm'), t('superadmin.quickComments.deleteConfirm'), [
-            { text: t('common.cancel'), style: 'cancel' },
-            {
-              text: t('superadmin.actions.delete'),
-              style: 'destructive',
-              onPress: () =>
-                deleteQuickComment(item.id, t('superadmin.quickComments.deleted')),
-            },
-          ])
-        }
+        onDelete={() => {
+          void (async () => {
+            const ok = await confirmDestructive({
+              title: t('common.confirm'),
+              message: t('superadmin.quickComments.deleteConfirm'),
+              cancelLabel: t('common.cancel'),
+              confirmLabel: t('superadmin.actions.delete'),
+            });
+            if (!ok) return;
+            deleteQuickComment(item.id, t('superadmin.quickComments.deleted'));
+          })();
+        }}
       />
     ),
     [currentUser, deleteQuickComment, toggleCommentLike, t]

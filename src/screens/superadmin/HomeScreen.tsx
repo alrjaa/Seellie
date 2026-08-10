@@ -189,7 +189,7 @@ export default function SuperAdminDashboardScreen() {
         <View key={group} style={styles.section}>
           <Subtitle
             style={{
-              textAlign: isRTL ? 'right' : 'left',
+              textAlign: 'left',
               writingDirection: isRTL ? 'rtl' : 'ltr',
               width: '100%',
             }}

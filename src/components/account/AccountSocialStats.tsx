@@ -42,10 +42,10 @@ function AccountSocialStatsComponent({ user, title }: Props) {
 
   return (
     <Card style={styles.card}>
-      <Subtitle style={{ textAlign: isRTL ? 'right' : 'left' }}>
+      <Subtitle style={{ textAlign: 'left' }}>
         {title ?? t('account.stats.title')}
       </Subtitle>
-      <Muted style={{ textAlign: isRTL ? 'right' : 'left' }}>
+      <Muted style={{ textAlign: 'left' }}>
         {t('account.stats.hint')}
       </Muted>
       <View

@@ -81,7 +81,7 @@ export default function CreateAnalysisScreen() {
   };
 
   return (
-    <Screen scroll contentStyle={styles.content}>
+    <Screen scroll keyboard contentStyle={styles.content}>
       <Title>{t('home.createAnalysis')}</Title>
       <Muted>{t('create.analysisSubtitle')}</Muted>
 

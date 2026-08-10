@@ -32,7 +32,7 @@ export default function OrganizerSettingsScreen() {
   };
 
   return (
-    <Screen scroll contentStyle={styles.content}>
+    <Screen scroll keyboard contentStyle={styles.content}>
       <Title>{t('settings.title')}</Title>
       <Muted>{t('settings.subtitle')}</Muted>
 
@@ -66,7 +66,7 @@ export default function OrganizerSettingsScreen() {
         <Subtitle>{t('settings.appearance')}</Subtitle>
         <View style={styles.row}>
           <Muted>
-            {t('settings.currentTheme')}: {preference}
+            {t('settings.currentTheme')}: {t(`common.${preference}`)}
           </Muted>
           <ThemeToggle />
         </View>

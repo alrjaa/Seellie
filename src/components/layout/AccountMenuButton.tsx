@@ -68,7 +68,7 @@ function AccountMenuButtonComponent({
   const router = useRouter();
   const rowDir = isRTL ? ('row-reverse' as const) : ('row' as const);
   const textStart = {
-    textAlign: (isRTL ? 'right' : 'left') as 'left' | 'right',
+    textAlign: 'left' as const,
     writingDirection: (isRTL ? 'rtl' : 'ltr') as 'rtl' | 'ltr',
   };
   const insets = useSafeAreaInsets();

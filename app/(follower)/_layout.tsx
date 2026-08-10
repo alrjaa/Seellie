@@ -322,7 +322,7 @@ export default function FollowerLayout() {
           />
           <Tabs.Screen
             name="content/create"
-            options={{ href: null, title: t('home.createAnalysis') }}
+            options={{ href: null, title: t('create.contentTitle') }}
           />
           <Tabs.Screen
             name="profile/[id]"

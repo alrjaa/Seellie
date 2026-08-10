@@ -107,7 +107,7 @@ export default function HighlightsScreen() {
       comp.matches.forEach((match) => {
         const team1 = comp.teams.find((t) => t.id === match.team1Id)?.name;
         const team2 = comp.teams.find((t) => t.id === match.team2Id)?.name;
-        const label = `${team1 || '?'} vs ${team2 || '?'}`;
+        const label = `${team1 || '?'} ${t('screens.vs')} ${team2 || '?'}`;
         match.media?.photos?.forEach((p) => {
           if (!isHttpUrl(p.url)) return;
           items.push({
@@ -141,7 +141,7 @@ export default function HighlightsScreen() {
       });
     });
     return items;
-  }, [competitions, users]);
+  }, [competitions, users, t]);
 
   const fullScreenData = useMemo<FullScreenContent[]>(
     () =>

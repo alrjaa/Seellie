@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -25,6 +24,7 @@ import {
   MIN_COMPETITION_TEAMS,
 } from '@/utils/competition-request';
 import { isSupabaseConfigured } from '@/services/supabase';
+import { confirmDestructive } from '@/utils/confirm';
 
 function PledgeRow({
   checked,
@@ -94,23 +94,17 @@ export default function RequestCompetitionScreen() {
   );
 
   const confirmDeleteRequest = useCallback(
-    (requestId: string, requestName: string) => {
-      Alert.alert(
-        t('organizer.requestCompetition.deleteRequest'),
-        `${t('organizer.requestCompetition.deleteRequestConfirm')}\n«${requestName}»`,
-        [
-          { text: t('common.cancel'), style: 'cancel' },
-          {
-            text: t('organizer.requestCompetition.deleteRequest'),
-            style: 'destructive',
-            onPress: () => {
-              void deleteCompetitionRequest(
-                requestId,
-                t('organizer.requestCompetition.requestDeleted')
-              );
-            },
-          },
-        ]
+    async (requestId: string, requestName: string) => {
+      const ok = await confirmDestructive({
+        title: t('organizer.requestCompetition.deleteRequest'),
+        message: `${t('organizer.requestCompetition.deleteRequestConfirm')}\n«${requestName}»`,
+        cancelLabel: t('common.cancel'),
+        confirmLabel: t('organizer.requestCompetition.deleteRequest'),
+      });
+      if (!ok) return;
+      void deleteCompetitionRequest(
+        requestId,
+        t('organizer.requestCompetition.requestDeleted')
       );
     },
     [deleteCompetitionRequest, t]

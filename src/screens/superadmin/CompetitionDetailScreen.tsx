@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,6 +21,7 @@ import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { ReasonModal } from '@/components/feedback/ReasonModal';
 import { Avatar, Button, Card, Input, Muted, Subtitle, Title } from '@/components/ui';
+import { confirmDestructive } from '@/utils/confirm';
 import {
   computeStandings,
   formatVenueAddress,
@@ -505,24 +505,22 @@ export default function CompetitionDetailScreen() {
           label={t('organizer.competitionManage.deleteCompetition')}
           variant="danger"
           onPress={() => {
-            Alert.alert(
-              t('organizer.competitionManage.deleteCompetition'),
-              t('organizer.competitionManage.deleteCompetitionConfirm'),
-              [
-                { text: t('common.cancel'), style: 'cancel' },
-                {
-                  text: t('organizer.competitionManage.deleteCompetition'),
-                  style: 'destructive',
-                  onPress: () => {
-                    void (async () => {
-                      if (await deleteCompetition(competition.id)) {
-                        router.replace('/(superadmin)/competitions' as any);
-                      }
-                    })();
-                  },
-                },
-              ]
-            );
+            void (async () => {
+              const ok = await confirmDestructive({
+                title: t('organizer.competitionManage.deleteCompetition'),
+                message: t(
+                  'organizer.competitionManage.deleteCompetitionConfirm'
+                ),
+                cancelLabel: t('common.cancel'),
+                confirmLabel: t(
+                  'organizer.competitionManage.deleteCompetition'
+                ),
+              });
+              if (!ok) return;
+              if (await deleteCompetition(competition.id)) {
+                router.replace('/(superadmin)/competitions' as any);
+              }
+            })();
           }}
           style={styles.actionBtn}
         />

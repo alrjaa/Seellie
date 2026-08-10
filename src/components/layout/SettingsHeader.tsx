@@ -69,7 +69,7 @@ function SettingsHeaderComponent({
               color: theme.colors.text,
               fontSize: titleSize,
               writingDirection: isRTL ? 'rtl' : 'ltr',
-              textAlign: isRTL ? 'right' : 'left',
+              textAlign: 'left',
             },
           ]}
           numberOfLines={1}

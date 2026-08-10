@@ -69,7 +69,7 @@ export default function HandleProfileScreen() {
               styles.name,
               {
                 color: theme.colors.text,
-                textAlign: isRTL ? 'right' : 'left',
+                textAlign: 'left',
               },
             ]}
           >
@@ -80,7 +80,7 @@ export default function HandleProfileScreen() {
               styles.handle,
               {
                 color: theme.colors.accent,
-                textAlign: isRTL ? 'right' : 'left',
+                textAlign: 'left',
               },
             ]}
           >

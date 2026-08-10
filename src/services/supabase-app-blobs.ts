@@ -41,6 +41,14 @@ export async function upsertAppBlob(
   const sb = getSupabase();
   if (!sb) return { ok: false, error: 'no_client' };
 
+  // gift_transactions: use appendGiftTransaction after SECURITY-PHASE2-BLOBS.sql
+  if (key === 'gift_transactions') {
+    console.warn(
+      '[app-blobs] refuse full upsert for gift_transactions — use appendGiftTransaction'
+    );
+    return { ok: false, error: 'use_append_gift_transaction' };
+  }
+
   const { error } = await sb.from('app_blobs').upsert(
     {
       key,
@@ -51,6 +59,26 @@ export async function upsertAppBlob(
   );
   if (error) {
     console.warn('[app-blobs] upsert', key, error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+/** Append one gift (SECURITY-PHASE2). Caller must be gifterId. */
+export async function appendGiftTransaction(
+  gift: unknown
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) return { ok: false, error: 'not_configured' };
+  const { session, error: sessionError } = await requireCloudSession();
+  if (!session) return { ok: false, error: sessionError || 'no_session' };
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: 'no_client' };
+
+  const { error } = await sb.rpc('append_gift_transaction', {
+    p_gift: gift,
+  });
+  if (error) {
+    console.warn('[app-blobs] append gift', error.message);
     return { ok: false, error: error.message };
   }
   return { ok: true };

@@ -35,9 +35,15 @@ import {
 } from '@/services/cloud-write';
 import { upsertUserContentCloud } from '@/services/supabase-user-content';
 import {
+  appendGiftTransaction,
   fetchAppBlob,
   upsertAppBlob,
 } from '@/services/supabase-app-blobs';
+import {
+  DEFAULT_FAB_ICONS,
+  FAB_ICONS_STORAGE_KEY,
+  type FabIconConfig,
+} from '@/types/fab-icons';
 import {
   fetchAllProfiles,
   mergeUsersPreferCloud,
@@ -259,10 +265,16 @@ async function saveOffersCloud(items: Offer[]) {
   }
 }
 
-async function saveGiftsCloud(items: GiftTransaction[]) {
-  if (isSupabaseConfigured()) {
-    void upsertAppBlob('gift_transactions', items);
-  }
+async function saveGiftCloudAppend(gift: GiftTransaction) {
+  if (!isSupabaseConfigured()) return;
+  const payload = {
+    ...gift,
+    timestamp:
+      gift.timestamp instanceof Date
+        ? gift.timestamp.toISOString()
+        : gift.timestamp,
+  };
+  void appendGiftTransaction(payload);
 }
 
 async function saveBrandingCloud(appName: string, appLogo: string) {
@@ -314,6 +326,8 @@ export interface TournamentContextType {
   loading: boolean;
   appName: string;
   appLogo: string;
+  fabIcons: FabIconConfig[];
+  setFabIcons: (icons: FabIconConfig[]) => void;
   personalitySectionBg: string;
   highlightsSectionBg: string;
   users: User[];
@@ -630,6 +644,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [appName, setAppNameState] = useState(APP_DISPLAY_NAME);
   const [appLogo, setAppLogoState] = useState(DEFAULT_LOGO);
+  const [fabIcons, setFabIconsState] =
+    useState<FabIconConfig[]>(DEFAULT_FAB_ICONS);
   const [personalitySectionBg] = useState(
     'https://storage.googleapis.com/stey-public/stey-studio-website/example-images/4bb4e045-b470-4f23-b78c-fd771b6c9c1e.jpg'
   );
@@ -739,6 +755,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           storedShareCards,
           storedMessages,
           storedCredentialOverrides,
+          storedFabIcons,
         ] = await Promise.all([
           getJson<User>(USER_STORAGE_KEY),
           getJson<string>(APP_LOGO_KEY),
@@ -752,8 +769,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           getJson<Record<string, UserCredentialOverride>>(
             USER_CREDENTIAL_OVERRIDES_KEY
           ),
+          getJson<FabIconConfig[]>(FAB_ICONS_STORAGE_KEY),
         ]);
         if (!active) return;
+        if (Array.isArray(storedFabIcons) && storedFabIcons.length > 0) {
+          setFabIconsState(
+            storedFabIcons.filter(
+              (i) => i?.id && i?.icon && i?.href
+            ) as FabIconConfig[]
+          );
+        }
         if (storedCredentialOverrides) {
           setUsers((prev) =>
             applyCredentialOverrides(prev, storedCredentialOverrides)
@@ -1066,6 +1091,19 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     void saveBrandingCloud(appName, logo);
   }, [appName]);
 
+  const setFabIcons = useCallback((icons: FabIconConfig[]) => {
+    const next = icons
+      .filter((i) => i?.id && String(i.icon || '').trim() && String(i.href || '').trim())
+      .map((i) => ({
+        id: String(i.id),
+        label: String(i.label || '').trim() || i.href,
+        icon: String(i.icon).trim(),
+        href: String(i.href).trim(),
+      }));
+    setFabIconsState(next.length ? next : DEFAULT_FAB_ICONS);
+    void setJson(FAB_ICONS_STORAGE_KEY, next.length ? next : DEFAULT_FAB_ICONS);
+  }, []);
+
   const login = useCallback(
     async (
       email: string,
@@ -1110,8 +1148,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             toast({
               variant: 'destructive',
               title: t('auth.adminPortalOnlyTitle'),
-              description:
-                'هذا الحساب ليس مشرفاً. رقِّه من SQL Editor عبر promote-admin.sql ثم أعد المحاولة.',
+              description: t('auth.adminNotPromotedDesc'),
             });
             return false;
           }
@@ -1220,8 +1257,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           toast({
             variant: 'destructive',
             title: t('toasts.t003_7a384c'),
-            description:
-              'البريد غير مؤكد. عطّل Confirm email في Supabase أثناء الاختبار.',
+            description: t('auth.emailUnconfirmedDesc'),
           });
           return false;
         }
@@ -1229,20 +1265,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         // بوابة المشرف: سحابة فقط — لا حساب محلي تجريبي
         if (portal === 'admin') {
           const err = (supabaseAuthError || '').toLowerCase();
-          let hint =
-            'أنشئ حساباً عبر Sign up ثم رقِّه بملف promote-admin.sql، أو أعد تعيين كلمة المرور من Authentication.';
+          let hint = t('auth.adminCloudLoginHint');
           if (/invalid login|invalid credentials|wrong/i.test(err)) {
-            hint =
-              'البريد أو كلمة المرور غير صحيحة. أعد التعيين من Supabase Authentication أو set-admin-password.sql.';
+            hint = t('auth.adminBadCredentialsHint');
           } else if (/confirm|confirmation|verify/i.test(err)) {
-            hint =
-              'البريد غير مؤكد. أكّد المستخدم من Authentication → Users.';
+            hint = t('auth.adminEmailUnconfirmedHint');
           } else if (/network|fetch|failed to fetch/i.test(err)) {
-            hint = 'مشكلة شبكة/اتصال بـ Supabase. تأكد أن الجهاز على الإنترنت.';
+            hint = t('auth.adminNetworkHint');
           }
           toast({
             variant: 'destructive',
-            title: 'تعذّر الدخول السحابي',
+            title: t('auth.adminCloudLoginFailedTitle'),
             description: hint,
           });
           return false;
@@ -1256,17 +1289,15 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             variant: 'destructive',
             title: t('toasts.t003_7a384c'),
             description:
-              supabaseAuthError ||
-              'تعذّر الدخول السحابي. تحقق من البريد وكلمة المرور.',
+              supabaseAuthError || t('auth.adminCloudLoginFailedTitle'),
           });
           return false;
         }
       } else if (portal === 'admin') {
         toast({
           variant: 'destructive',
-          title: 'Supabase غير مهيأ',
-          description:
-            'دخول المشرف سحابي فقط. اضبط EXPO_PUBLIC_SUPABASE_URL و ANON_KEY.',
+          title: t('auth.adminSupabaseMissingTitle'),
+          description: t('auth.adminSupabaseMissingDesc'),
         });
         return false;
       }
@@ -1275,9 +1306,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       if (isLegacyLocalDemoAdmin({ email: normalized })) {
         toast({
           variant: 'destructive',
-          title: 'حساب غير مسموح',
-          description:
-            'حساب المشرف التجريبي حُذف. ادخل من /admin بحساب سحابي مرقّى superadmin.',
+          title: t('toasts.t007_04edd0'),
+          description: t('superadmin.settings.localDemoToastDesc'),
         });
         return false;
       }
@@ -2072,10 +2102,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         }
         toast({
           variant: 'destructive',
-          title: t('toasts.t036_3a814a'),
-          description:
-            remote.error ||
-            'تعذّر إرسال الرسالة عبر السحابة. نفّذ supabase/messages.sql',
+          title: t('toasts.t034_8cbadf'),
+          description: remote.error || t('cloud.messageSendFailed'),
         });
         return false;
       }
@@ -2087,9 +2115,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       ) {
         toast({
           variant: 'destructive',
-          title: t('toasts.t036_3a814a'),
-          description:
-            'حسابك محلي وليس سحابياً. اخرج وسجّل عبر Sign up، وإن كنت مشرفاً رقِّه بـ promote-admin.sql ثم ادخل من /admin.',
+          title: t('toasts.t034_8cbadf'),
+          description: t('cloud.localAccountCannotMessage'),
         });
         return false;
       }
@@ -2097,9 +2124,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       if (!isUuid(currentUser.id) || !isUuid(payload.recipientId)) {
         toast({
           variant: 'destructive',
-          title: t('toasts.t036_3a814a'),
-          description:
-            'للإرسال بين جوالَين يجب أن يكون المرسل والمستلم حسابَي Sign up (سحابة)، وليس حساباً تجريبياً.',
+          title: t('toasts.t034_8cbadf'),
+          description: t('cloud.bothNeedCloudAccounts'),
         });
         return false;
       }
@@ -2479,7 +2505,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
       setGiftTransactions((prev) => {
         const next = [gift, ...prev];
-        void saveGiftsCloud(next);
+        void saveGiftCloudAppend(gift);
         return next;
       });
       toast({
@@ -5145,6 +5171,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       loading,
       appName,
       appLogo,
+      fabIcons,
       personalitySectionBg,
       highlightsSectionBg,
       users,
@@ -5167,6 +5194,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       switchActiveRole,
       setAppName,
       setAppLogo,
+      setFabIcons,
       updateUser,
       syncCloudUsers,
       refreshCloudCompetitionRequests,
@@ -5239,6 +5267,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       loading,
       appName,
       appLogo,
+      fabIcons,
       personalitySectionBg,
       highlightsSectionBg,
       users,
@@ -5261,6 +5290,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       switchActiveRole,
       setAppName,
       setAppLogo,
+      setFabIcons,
       updateUser,
       syncCloudUsers,
       refreshCloudCompetitionRequests,

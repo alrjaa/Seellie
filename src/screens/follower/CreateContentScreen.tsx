@@ -14,38 +14,45 @@ export default function CreateContentScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const [text, setText] = useState('');
+  const [saving, setSaving] = useState(false);
 
   if (!currentUser) return null;
 
   const publish = () => {
+    if (saving) return;
     const value = text.trim();
     if (!value) return;
 
-    const post = {
-      id: createId(),
-      text: value,
-      timestamp: new Date(),
-      likes: [] as string[],
-    };
+    setSaving(true);
+    try {
+      const post = {
+        id: createId(),
+        text: value,
+        timestamp: new Date(),
+        likes: [] as string[],
+      };
 
-    updateUser(
-      {
-        ...currentUser,
-        posts: [post, ...currentUser.posts],
-      },
-      t('create.contentPublished')
-    );
-    toast({
-      variant: 'success',
-      title: t('create.publishedTitle'),
-      description: t('create.publishedDesc'),
-    });
-    setText('');
-    router.back();
+      updateUser(
+        {
+          ...currentUser,
+          posts: [post, ...currentUser.posts],
+        },
+        t('create.contentPublished')
+      );
+      toast({
+        variant: 'success',
+        title: t('create.publishedTitle'),
+        description: t('create.publishedDesc'),
+      });
+      setText('');
+      router.back();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <Screen scroll contentStyle={styles.content}>
+    <Screen scroll keyboard contentStyle={styles.content}>
       <Title>{t('create.contentTitle')}</Title>
       <Muted>{t('create.contentSubtitle')}</Muted>
 
@@ -62,12 +69,14 @@ export default function CreateContentScreen() {
         <Button
           label={t('create.publish')}
           onPress={publish}
-          disabled={!text.trim()}
+          disabled={!text.trim() || saving}
+          loading={saving}
         />
         <Button
           label={t('common.cancel')}
           variant="ghost"
           onPress={() => router.back()}
+          disabled={saving}
         />
       </Card>
     </Screen>

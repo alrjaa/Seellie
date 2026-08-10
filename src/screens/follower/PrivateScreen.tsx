@@ -8,7 +8,6 @@ import React, {
   useState,
 } from 'react';
 import {
-  Alert,
   AppState,
   FlatList,
   Image,
@@ -34,6 +33,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { LoadingState } from '@/components/feedback/LoadingState';
+import { confirmDestructive } from '@/utils/confirm';
 import { InlineVideoPlayer } from '@/components/media/InlineVideoPlayer';
 import {
   Avatar,
@@ -147,6 +147,7 @@ const CHAT_VIDEO_H = 120;
 
 const ChatVideoBubble = memo(function ChatVideoBubble({ uri }: { uri: string }) {
   const focused = useIsFocused();
+  const { t } = useTranslation();
   const videoRef = useRef<VideoType | null>(null);
   const htmlRef = useRef<HTMLVideoElement | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -261,7 +262,7 @@ const ChatVideoBubble = memo(function ChatVideoBubble({ uri }: { uri: string }) 
             void videoRef.current?.playAsync().catch(() => setFailed(true));
           }}
           accessibilityRole="button"
-          accessibilityLabel="تشغيل"
+          accessibilityLabel={t('media.play')}
         >
           <View style={styles.videoPlayBtn}>
             <Ionicons name="play" size={28} color="#fff" />
@@ -271,32 +272,6 @@ const ChatVideoBubble = memo(function ChatVideoBubble({ uri }: { uri: string }) 
     </View>
   );
 });
-
-async function confirmAction(input: {
-  title: string;
-  message: string;
-  cancelLabel: string;
-  confirmLabel: string;
-}): Promise<boolean> {
-  if (Platform.OS === 'web') {
-    if (typeof window === 'undefined') return false;
-    return window.confirm(`${input.title}\n\n${input.message}`);
-  }
-  return await new Promise<boolean>((resolve) => {
-    Alert.alert(input.title, input.message, [
-      {
-        text: input.cancelLabel,
-        style: 'cancel',
-        onPress: () => resolve(false),
-      },
-      {
-        text: input.confirmLabel,
-        style: 'destructive',
-        onPress: () => resolve(true),
-      },
-    ]);
-  });
-}
 
 type Section = 'friends' | 'chat' | 'saved';
 
@@ -573,7 +548,7 @@ export default function PrivateScreen() {
 
   const onRemoveFriend = useCallback(
     async (friendId: string) => {
-      const ok = await confirmAction({
+      const ok = await confirmDestructive({
         title: t('privateSpace.removeFriendTitle'),
         message: t('privateSpace.removeFriendConfirm'),
         cancelLabel: t('common.cancel'),
@@ -600,7 +575,7 @@ export default function PrivateScreen() {
 
   const onClearChat = useCallback(async () => {
     if (!activeFriend) return;
-    const ok = await confirmAction({
+    const ok = await confirmDestructive({
       title: t('privateSpace.clearChatTitle'),
       message: t('privateSpace.clearChatConfirm'),
       cancelLabel: t('common.cancel'),

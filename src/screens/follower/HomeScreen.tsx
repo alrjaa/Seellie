@@ -46,7 +46,7 @@ function useHomeTitleDir() {
   const { isRTL } = useLanguage();
   return useMemo(
     () => ({
-      textAlign: (isRTL ? 'right' : 'left') as 'left' | 'right',
+      textAlign: 'left' as const,
       writingDirection: (isRTL ? 'rtl' : 'ltr') as 'rtl' | 'ltr',
       width: '100%' as const,
       alignSelf: 'stretch' as const,
@@ -785,7 +785,7 @@ export default function FollowerHomeScreen() {
               title={t('notifications.title')}
               subtitle={
                 unreadNotifs > 0
-                  ? `${unreadNotifs} إشعار غير مقروء`
+                  ? t('notifications.unreadCount', { count: unreadNotifs })
                   : t('notifications.emptyDesc')
               }
               icon="notifications-outline"
@@ -842,14 +842,24 @@ export default function FollowerHomeScreen() {
               onPress={() => router.push('/(follower)/settings' as any)}
             />
             {currentUser?.permissions.canCreateContent ? (
-              <ListRow
-                title={t('home.createAnalysis')}
-                subtitle={t('home.createAnalysisSub')}
-                icon="analytics-outline"
-                onPress={() =>
-                  router.push('/(follower)/analysis/create' as any)
-                }
-              />
+              <>
+                <ListRow
+                  title={t('home.createAnalysis')}
+                  subtitle={t('home.createAnalysisSub')}
+                  icon="analytics-outline"
+                  onPress={() =>
+                    router.push('/(follower)/analysis/create' as any)
+                  }
+                />
+                <ListRow
+                  title={t('create.contentTitle')}
+                  subtitle={t('create.contentSubtitle')}
+                  icon="create-outline"
+                  onPress={() =>
+                    router.push('/(follower)/content/create' as any)
+                  }
+                />
+              </>
             ) : null}
           </View>
 

@@ -1,7 +1,6 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
-  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -508,13 +507,7 @@ export default function GeneralFeedScreen() {
               ? () => openHandleProfile(item.authorId, item.authorHandle)
               : undefined
           }
-          onOpenMedia={
-            item.mediaUrl
-              ? () => {
-                  void Linking.openURL(item.mediaUrl!).catch(() => undefined);
-                }
-              : undefined
-          }
+          onOpenMedia={undefined}
         />
       );
     },

@@ -220,7 +220,7 @@ function Pledge({
           styles.pledgeLabel,
           {
             color: theme.colors.text,
-            textAlign: isRTL ? 'right' : 'left',
+            textAlign: 'left',
             writingDirection: isRTL ? 'rtl' : 'ltr',
           },
         ]}

@@ -36,8 +36,7 @@ export function ForgotPasswordForm({ initialEmail = '', onBack }: Props) {
       toast({
         variant: 'destructive',
         title: t('auth.resetFailed'),
-        description:
-          'Supabase غير مهيأ على هذا الموقع. تأكد من EXPO_PUBLIC_SUPABASE_URL و ANON_KEY في Vercel.',
+        description: t('auth.adminSupabaseMissingDesc'),
       });
       return;
     }
@@ -51,9 +50,8 @@ export function ForgotPasswordForm({ initialEmail = '', onBack }: Props) {
           title: t('auth.resetFailed'),
           description:
             result.error === 'not_configured'
-              ? 'Supabase غير مهيأ.'
-              : result.error ||
-                'تحقق أن Redirect URL مسموح: https://www.seellie.com/reset-password',
+              ? t('auth.resetNoSupabase')
+              : result.error || t('auth.resetOpenFromEmail'),
         });
         return;
       }
@@ -71,7 +69,8 @@ export function ForgotPasswordForm({ initialEmail = '', onBack }: Props) {
       toast({
         variant: 'destructive',
         title: t('auth.resetFailed'),
-        description: e instanceof Error ? e.message : 'network_error',
+        description:
+          e instanceof Error ? e.message : t('auth.adminNetworkHint'),
       });
     } finally {
       setBusy(false);

@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +20,7 @@ import { useToast } from '@/providers/ToastProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
+import { confirmDestructive } from '@/utils/confirm';
 import {
   ShareTargetModal,
   TinyShareButton,
@@ -182,44 +182,30 @@ export default function CompetitionManageScreen() {
     updateMatchResult(competition.id, matchId, next.t1, next.t2);
   };
 
-  const confirmDeleteCompetition = () => {
-    Alert.alert(
-      t('organizer.competitionManage.deleteCompetition'),
-      t('organizer.competitionManage.deleteCompetitionConfirm'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('organizer.competitionManage.deleteCompetition'),
-          style: 'destructive',
-          onPress: () => {
-            void (async () => {
-              if (await deleteCompetition(competition.id)) {
-                router.replace('/(organizer)/competitions');
-              }
-            })();
-          },
-        },
-      ]
-    );
+  const confirmDeleteCompetition = async () => {
+    const ok = await confirmDestructive({
+      title: t('organizer.competitionManage.deleteCompetition'),
+      message: t('organizer.competitionManage.deleteCompetitionConfirm'),
+      cancelLabel: t('common.cancel'),
+      confirmLabel: t('organizer.competitionManage.deleteCompetition'),
+    });
+    if (!ok) return;
+    if (await deleteCompetition(competition.id)) {
+      router.replace('/(organizer)/competitions');
+    }
   };
 
-  const confirmDeleteTeam = (team: Team) => {
-    Alert.alert(
-      t('organizer.competitionManage.deleteTeam'),
-      t('organizer.competitionManage.deleteTeamConfirm'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('organizer.competitionManage.deleteTeam'),
-          style: 'destructive',
-          onPress: () => {
-            if (deleteTeam(competition.id, team.id)) {
-              if (selectedTeamId === team.id) setSelectedTeamId(null);
-            }
-          },
-        },
-      ]
-    );
+  const confirmDeleteTeam = async (team: Team) => {
+    const ok = await confirmDestructive({
+      title: t('organizer.competitionManage.deleteTeam'),
+      message: t('organizer.competitionManage.deleteTeamConfirm'),
+      cancelLabel: t('common.cancel'),
+      confirmLabel: t('organizer.competitionManage.deleteTeam'),
+    });
+    if (!ok) return;
+    if (deleteTeam(competition.id, team.id)) {
+      if (selectedTeamId === team.id) setSelectedTeamId(null);
+    }
   };
 
   const openJoinShareForPlayer = (player: Player, team: Team) => {

@@ -1,8 +1,6 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
   FlatList,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -20,23 +18,7 @@ import { Avatar, Card, Chip, Muted, SearchBar, Subtitle } from '@/components/ui'
 import { statusToneColor } from '@/utils/status-tone';
 import { matchesSearchQuery } from '@/utils/search';
 import { isSupabaseConfigured } from '@/services/supabase';
-
-async function confirmAction(title: string, message: string): Promise<boolean> {
-  if (Platform.OS === 'web') {
-    if (typeof window === 'undefined') return false;
-    return window.confirm(`${title}\n\n${message}`);
-  }
-  return await new Promise<boolean>((resolve) => {
-    Alert.alert(title, message, [
-      { text: 'إلغاء', style: 'cancel', onPress: () => resolve(false) },
-      {
-        text: 'تأكيد',
-        style: 'destructive',
-        onPress: () => resolve(true),
-      },
-    ]);
-  });
-}
+import { confirmDestructive } from '@/utils/confirm';
 
 function matchesUserQuery(user: User, rawQuery: string): boolean {
   return matchesSearchQuery(
@@ -226,10 +208,12 @@ export default function UsersScreen() {
   const onAction = useCallback(
     async (user: User, action: 'active' | 'suspended' | 'warned' | 'delete') => {
       if (action === 'delete') {
-        const ok = await confirmAction(
-          'حذف نهائي',
-          `سيتم حذف ${user.name} (${user.email}) من Authentication بالكامل حتى يمكن التسجيل بنفس البريد لاحقاً.`
-        );
+        const ok = await confirmDestructive({
+          title: 'حذف نهائي',
+          message: `سيتم حذف ${user.name} (${user.email}) من Authentication بالكامل حتى يمكن التسجيل بنفس البريد لاحقاً.`,
+          cancelLabel: 'إلغاء',
+          confirmLabel: 'تأكيد',
+        });
         if (!ok) return;
         await deleteUser(user.id, `تم حذف ${user.name} نهائياً.`);
         return;
@@ -245,10 +229,13 @@ export default function UsersScreen() {
   );
 
   const onPurgeEmail = useCallback(async () => {
-    const ok = await confirmAction(
-      'تحرير بريد للتسجيل',
-      `حذف نهائي لكل حساب مرتبط بـ ${purgeEmail.trim()} من Authentication؟`
-    );
+    if (purging) return;
+    const ok = await confirmDestructive({
+      title: 'تحرير بريد للتسجيل',
+      message: `حذف نهائي لكل حساب مرتبط بـ ${purgeEmail.trim()} من Authentication؟`,
+      cancelLabel: 'إلغاء',
+      confirmLabel: 'تأكيد',
+    });
     if (!ok) return;
     setPurging(true);
     try {
@@ -257,7 +244,7 @@ export default function UsersScreen() {
     } finally {
       setPurging(false);
     }
-  }, [purgeEmail, purgeUserByEmail]);
+  }, [purgeEmail, purgeUserByEmail, purging]);
 
   const emptyTitle = query.trim()
     ? t('superadmin.users.noSearchResults')

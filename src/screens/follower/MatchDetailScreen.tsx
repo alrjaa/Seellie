@@ -18,6 +18,8 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { InlineVideoPlayer } from '@/components/media/InlineVideoPlayer';
+import { Image } from 'expo-image';
 import {
   Avatar,
   Button,
@@ -182,11 +184,22 @@ export default function MatchDetailScreen() {
                 <View style={{ gap: 8 }}>
                   <Subtitle>{t('match.media')}</Subtitle>
                   {(match.media?.photos || []).map((photo) => {
+                    const src = String(photo.url || '').trim();
                     const liked =
                       !!currentUser && photo.likes.includes(currentUser.id);
                     return (
                       <Card key={photo.id} style={{ gap: 8 }}>
-                        <Muted>{t('common.photo')}</Muted>
+                        {src ? (
+                          <Image
+                            source={{ uri: src }}
+                            style={styles.matchMedia}
+                            contentFit="cover"
+                            transition={200}
+                            accessibilityLabel={t('common.photo')}
+                          />
+                        ) : (
+                          <Muted>{t('match.mediaUnavailable')}</Muted>
+                        )}
                         <LikeButton
                           count={photo.likes.length}
                           liked={liked}
@@ -198,11 +211,16 @@ export default function MatchDetailScreen() {
                     );
                   })}
                   {(match.media?.videos || []).map((video) => {
+                    const src = String(video.url || '').trim();
                     const liked =
                       !!currentUser && video.likes.includes(currentUser.id);
                     return (
                       <Card key={video.id} style={{ gap: 8 }}>
-                        <Muted>{t('common.video')}</Muted>
+                        {src ? (
+                          <InlineVideoPlayer uri={src} height={220} />
+                        ) : (
+                          <Muted>{t('match.mediaUnavailable')}</Muted>
+                        )}
                         <LikeButton
                           count={video.likes.length}
                           liked={liked}
@@ -276,6 +294,12 @@ const styles = StyleSheet.create({
   teamCol: { alignItems: 'center', gap: 6, flex: 1 },
   teamName: { fontWeight: '700', fontSize: 13, textAlign: 'center' },
   score: { fontSize: 22, fontWeight: '800' },
+  matchMedia: {
+    width: '100%',
+    height: 220,
+    borderRadius: 12,
+    backgroundColor: '#0b1220',
+  },
   commentCard: { gap: 6 },
   commentRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   author: { fontWeight: '800', textAlign: 'left', fontSize: 13 },

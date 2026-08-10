@@ -1,7 +1,9 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -163,21 +165,28 @@ export default function FreelancersScreen() {
       />
 
       <Modal visible={modalOpen} transparent animationType="fade">
-        <Pressable
-          style={styles.overlay}
-          onPress={() => setModalOpen(false)}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <Pressable
-            style={[
-              styles.modal,
-              {
-                backgroundColor: theme.colors.surfaceElevated,
-                borderColor: theme.colors.border,
-              },
-            ]}
-            onPress={(e) => e.stopPropagation()}
+            style={styles.overlay}
+            onPress={() => setModalOpen(false)}
           >
-            <ScrollView contentContainerStyle={{ gap: 12 }}>
+            <Pressable
+              style={[
+                styles.modal,
+                {
+                  backgroundColor: theme.colors.surfaceElevated,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <ScrollView
+                contentContainerStyle={{ gap: 12 }}
+                keyboardShouldPersistTaps="handled"
+              >
               <Subtitle>
                 {t('organizer.freelancers.offerTo', {
                   name:
@@ -246,8 +255,9 @@ export default function FreelancersScreen() {
                 />
               </View>
             </ScrollView>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
       <ShareTargetModal
         visible={!!sharePayload}

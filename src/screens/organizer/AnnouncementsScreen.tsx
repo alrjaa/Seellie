@@ -107,7 +107,7 @@ export default function AnnouncementsScreen() {
   };
 
   return (
-    <Screen scroll contentStyle={styles.content}>
+    <Screen scroll keyboard contentStyle={styles.content}>
       <Title>{t('organizer.announcements.title')}</Title>
       <Muted>{t('organizer.announcements.subtitle')}</Muted>
 

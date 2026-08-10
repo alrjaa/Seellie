@@ -36,7 +36,7 @@ function HomeHeaderComponent({
   if (!currentUser) return null;
 
   const titleAlign = {
-    textAlign: (isRTL ? 'right' : 'left') as 'left' | 'right',
+    textAlign: 'left' as const,
     writingDirection: (isRTL ? 'rtl' : 'ltr') as 'rtl' | 'ltr',
   } as const;
 

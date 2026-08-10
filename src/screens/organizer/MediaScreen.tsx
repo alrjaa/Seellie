@@ -1,13 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import {
-  Alert,
-  Image,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTournament } from '@/providers/TournamentProvider';
@@ -17,12 +9,14 @@ import { useToast } from '@/providers/ToastProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
+import { InlineVideoPlayer } from '@/components/media/InlineVideoPlayer';
 import {
   ShareTargetModal,
   TinyShareButton,
   type ContentSharePayload,
 } from '@/components/share/ShareTargetModal';
 import { Button, Card, Chip, Input, Muted, Subtitle, Title } from '@/components/ui';
+import { confirmDestructive } from '@/utils/confirm';
 import {
   PROFILE_VIDEO_MAX_SEC,
   MEDIA_SPECS,
@@ -41,32 +35,6 @@ type MediaItem = {
   competitionName: string;
   label?: string;
 };
-
-async function confirmDeleteDialog(input: {
-  title: string;
-  message: string;
-  cancelLabel: string;
-  deleteLabel: string;
-}): Promise<boolean> {
-  if (Platform.OS === 'web') {
-    if (typeof window === 'undefined') return false;
-    return window.confirm(`${input.title}\n\n${input.message}`);
-  }
-  return await new Promise<boolean>((resolve) => {
-    Alert.alert(input.title, input.message, [
-      {
-        text: input.cancelLabel,
-        style: 'cancel',
-        onPress: () => resolve(false),
-      },
-      {
-        text: input.deleteLabel,
-        style: 'destructive',
-        onPress: () => resolve(true),
-      },
-    ]);
-  });
-}
 
 export default function MediaScreen() {
   const {
@@ -207,14 +175,15 @@ export default function MediaScreen() {
 
   const confirmDelete = useCallback(
     async (item: MediaItem) => {
-      const ok = await confirmDeleteDialog({
+      if (deletingId) return;
+      const ok = await confirmDestructive({
         title: t('organizer.media.deleteTitle'),
         message: t('organizer.media.deleteConfirm', {
           kind:
             item.kind === 'photo' ? t('common.photo') : t('common.video'),
         }),
         cancelLabel: t('common.cancel'),
-        deleteLabel: t('common.delete'),
+        confirmLabel: t('common.delete'),
       });
       if (!ok) return;
 
@@ -231,7 +200,7 @@ export default function MediaScreen() {
         setDeletingId(null);
       }
     },
-    [removeCompetitionMedia, t]
+    [removeCompetitionMedia, t, deletingId]
   );
 
   const pickFromLibrary = useCallback(
@@ -336,7 +305,7 @@ export default function MediaScreen() {
   );
 
   return (
-    <Screen scroll contentStyle={styles.content}>
+    <Screen scroll keyboard contentStyle={styles.content}>
       <Title>{t('organizer.media.title')}</Title>
       <Muted>{t('organizer.media.subtitle')}</Muted>
 
@@ -482,18 +451,7 @@ export default function MediaScreen() {
                 {item.kind === 'photo' ? (
                   <Image source={{ uri: item.url }} style={styles.image} />
                 ) : (
-                  <View
-                    style={[
-                      styles.videoPlaceholder,
-                      { backgroundColor: theme.colors.inputBg },
-                    ]}
-                  >
-                    <Text
-                      style={{ color: theme.colors.accent, fontWeight: '800' }}
-                    >
-                      {t('common.video')}
-                    </Text>
-                  </View>
+                  <InlineVideoPlayer uri={item.url} height={160} style={styles.image} />
                 )}
                 <View style={styles.mediaActions}>
                   <TinyShareButton

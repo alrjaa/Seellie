@@ -63,15 +63,29 @@ export const ar = {
     adminLogin: 'دخول المشرف',
     appLogin: 'دخول التطبيق',
     adminTagline: 'لوحة إدارة المنصة',
-    adminDemoHint:
-      'المشرف سحابي فقط: Sign up ثم promote-admin.sql، أو set-admin-password.sql',
+    adminDemoHint: 'المشرف سحابي فقط — استخدم حساباً مرقّى عبر /admin.',
     adminPortalOnlyTitle: 'دخول المشرف فقط',
     adminPortalOnlyDesc: 'هذه الشاشة مخصصة لحساب المشرف.',
+    adminNotPromotedDesc:
+      'هذا الحساب ليس مشرفاً. اطلب ترقية الحساب من إدارة المنصة ثم أعد المحاولة.',
+    adminCloudLoginFailedTitle: 'تعذّر الدخول السحابي',
+    adminCloudLoginHint:
+      'أنشئ حساباً عبر التسجيل ثم اطلب ترقية المشرف، أو أعد تعيين كلمة المرور من لوحة المصادقة.',
+    adminBadCredentialsHint:
+      'البريد أو كلمة المرور غير صحيحة. أعد التعيين من لوحة المصادقة ثم حاول مرة أخرى.',
+    adminEmailUnconfirmedHint:
+      'البريد غير مؤكد. أكّد الحساب من لوحة المصادقة ثم أعد المحاولة.',
+    adminNetworkHint: 'مشكلة شبكة أو اتصال. تأكد أن الجهاز على الإنترنت.',
+    adminSupabaseMissingTitle: 'الخدمة السحابية غير مهيأة',
+    adminSupabaseMissingDesc:
+      'دخول المشرف سحابي فقط. اضبط إعدادات الاتصال السحابي في بيئة التطبيق.',
+    emailUnconfirmedDesc:
+      'البريد غير مؤكد. أكّد الحساب أو عطّل تأكيد البريد أثناء الاختبار.',
     useAdminLoginTitle: 'استخدم بوابة المشرف',
     useAdminLoginDesc: 'حساب المشرف يدخل من رابط /admin وليس من دخول التطبيق.',
     logoA11y: 'شعار Seellie',
     invalidEmail: 'أدخل بريداً إلكترونياً صالحاً',
-    demoHint: 'تجريبي: follower@test.com / password123',
+    demoHint: '',
     forgotPassword: 'نسيت كلمة المرور؟',
     forgotPasswordTitle: 'استعادة كلمة المرور',
     forgotPasswordHint:
@@ -234,6 +248,34 @@ export const ar = {
     enterRole: 'الدخول ك%{role} الآن',
     enterAdmin: 'دخول المشرف',
   },
+  messages: {
+    support: {
+      defaultSubject: 'طلب دعم',
+      subjectPrefix: '[دعم]',
+      localAccountTitle: 'حساب محلي',
+      localAccountDesc: 'سجّل دخولاً بحساب Sign up لإرسال رسالة دعم.',
+      localAccountBanner:
+        'حساب محلي — اخرج وسجّل دخول Sign up لتظهر رسائل المشرف.',
+      cloudAccountOk: 'حساب سحابي ✓ %{email}',
+      adminUnavailableTitle: 'المشرف غير متاح',
+      adminUnavailableDesc:
+        'لا يوجد حساب مشرف سحابي. تأكد من ترقية الأدمن في profiles.',
+      incompleteTitle: 'أكمل الرسالة',
+      incompleteDesc: 'اكتب الموضوع ونص طلب الدعم.',
+      cardTitle: 'رسالة دعم للمشرف',
+      cardHint:
+        'أرسل طلباً أو مشكلة مباشرة إلى إدارة التطبيق. يرد المشرف من لوحة الرسائل.',
+      adminName: 'المشرف: %{name}',
+      adminSearching: 'جاري البحث عن حساب المشرف…',
+      writeButton: 'كتابة رسالة دعم',
+      subjectLabel: 'الموضوع',
+      bodyLabel: 'نص الرسالة',
+      bodyPlaceholder: 'اشرح المشكلة أو الطلب…',
+      sendButton: 'إرسال للمشرف',
+      refreshInbox: 'تحديث الوارد',
+      inboxTitle: 'الوارد',
+    },
+  },
   nav: {
     home: 'الرئيسية',
     settings: 'الإعدادات',
@@ -278,6 +320,12 @@ export const ar = {
   },
   cloud: {
     competitionSyncFailed: 'تعذّر مزامنة المسابقة مع السحابة',
+    messageSendFailed:
+      'تعذّر إرسال الرسالة عبر السحابة. تأكد من تهيئة الرسائل ثم أعد المحاولة.',
+    localAccountCannotMessage:
+      'حسابك محلي وليس سحابياً. اخرج وسجّل عبر التسجيل، وإن كنت مشرفاً اطلب الترقية ثم ادخل من /admin.',
+    bothNeedCloudAccounts:
+      'للإرسال بين جوالَين يجب أن يكون المرسل والمستلم حسابَي تسجيل سحابي، وليس حساباً تجريبياً.',
   },
   media: {
     permissionDenied: 'الإذن مرفوض',
@@ -408,7 +456,7 @@ export const ar = {
     positionHint: 'حارس / دفاع / وسط / هجوم',
     joinMessage: 'رسالة الطلب',
     send: 'إرسال البطاقة',
-    cloudSendFailed: 'تعذّر الإرسال عبر السحابة — تأكد من تشغيل جداول Supabase',
+    cloudSendFailed: 'تعذّر الإرسال عبر السحابة — تأكد من تهيئة المشاركة ثم أعد المحاولة',
     sent: 'تم إرسال بطاقة المشاركة',
     empty: 'لا توجد بطاقات',
     emptyDesc: 'أنشئ بطاقة جديدة لإرسال محتوى أو طلب انضمام.',
@@ -450,7 +498,7 @@ export const ar = {
   },
   notifications: {
     title: 'الإشعارات',
-    unreadCount: '%{count} غير مقروء',
+    unreadCount: '%{count} إشعار غير مقروء',
     allRead: 'لا توجد إشعارات جديدة',
     markAllRead: 'تعيين الكل مقروءاً',
     clear: 'مسح الكل',
@@ -1321,6 +1369,7 @@ export const ar = {
     played: 'مباراة منتهية',
     upcoming: 'مباراة قادمة',
     media: 'وسائط المباراة',
+    mediaUnavailable: 'تعذّر عرض هذه الوسائط',
     comments: 'التعليقات',
     noComments: 'لا توجد تعليقات',
     noCommentsDesc: 'كن أول من يعلق على هذه المباراة.',
@@ -1648,7 +1697,7 @@ export const ar = {
       topFollowed: 'الأكثر متابعة',
     },
     icons: {
-      subtitle: 'إدارة اختصارات FAB للمتابعين (حالة محلية)',
+      subtitle: 'إدارة اختصارات FAB — التغييرات تظهر في القائمة العائمة',
       addIcon: 'إضافة أيقونة',
       newIcon: 'أيقونة جديدة',
       labelField: 'التسمية',
@@ -1845,6 +1894,15 @@ export const ar = {
       emailTaken: 'هذا البريد مستخدم لحساب آخر.',
       newPassword: 'كلمة مرور جديدة (اختياري)',
       newPasswordHint: 'اتركها فارغة إن لم ترد التغيير',
+      localDemoTitle: 'حساب تجريبي محلي',
+      localDemoToastDesc:
+        'حسابك محلي. اخرج وادخل من /admin بحساب سحابي مرقّى.',
+      localDemoHint:
+        'حساب تجريبي محلي فقط (لا يعمل بين الأجهزة). لا تغيّر الإيميل هنا. للمشرف السحابي: اخرج ثم ادخل من /admin بحساب مرقّى.',
+      cloudAccountBadge: 'حساب سحابي ✓ %{email}',
+      passwordUpdateFailedTitle: 'تعذّر تحديث كلمة المرور',
+      passwordUpdateFailedDesc: 'أعد تسجيل الدخول ثم حاول مرة أخرى.',
+      reloginCloud: 'خروج ثم دخول سحابي',
     },
   },
 } as const;
