@@ -290,7 +290,7 @@ export async function updateProfileAdminCloud(input: {
 /** حذف نهائي من Auth + profiles (يتطلب ADMIN-PURGE-USER.sql) */
 export async function adminPurgeUserCloud(
   userId: string
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; email?: string }> {
   if (!isSupabaseConfigured() || !isUuid(userId)) {
     return { ok: false, error: 'not_cloud_user' };
   }
@@ -303,7 +303,60 @@ export async function adminPurgeUserCloud(
   const { data, error } = await sb.rpc('admin_purge_user', { p_id: userId });
   if (error) {
     console.warn('[supabase] admin_purge_user', error.message);
-    return { ok: false, error: error.message };
+    const missing =
+      /could not find|schema cache|function .* does not exist/i.test(
+        error.message
+      );
+    return {
+      ok: false,
+      error: missing
+        ? 'missing_rpc: نفّذ ADMIN-PURGE-USER.sql مرة واحدة في SQL Editor'
+        : error.message,
+    };
+  }
+  if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
+    return {
+      ok: false,
+      error: String((data as { error?: string }).error || 'purge_failed'),
+    };
+  }
+  return {
+    ok: true,
+    email:
+      data && typeof data === 'object'
+        ? String((data as { email?: string }).email || '')
+        : undefined,
+  };
+}
+
+/** حذف نهائي بالبريد — لتحرير إيميل عالق في Authentication */
+export async function adminPurgeUserByEmailCloud(
+  email: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: 'not_configured' };
+  }
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: 'no_client' };
+  const { data: sessionData } = await sb.auth.getSession();
+  if (!sessionData.session) {
+    return { ok: false, error: 'no_session' };
+  }
+  const { data, error } = await sb.rpc('admin_purge_user_by_email', {
+    p_email: email.trim().toLowerCase(),
+  });
+  if (error) {
+    console.warn('[supabase] admin_purge_user_by_email', error.message);
+    const missing =
+      /could not find|schema cache|function .* does not exist/i.test(
+        error.message
+      );
+    return {
+      ok: false,
+      error: missing
+        ? 'missing_rpc: نفّذ ADMIN-PURGE-USER.sql مرة واحدة في SQL Editor'
+        : error.message,
+    };
   }
   if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
     return {

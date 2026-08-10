@@ -49,6 +49,7 @@ import {
   updateProfileRolesCloud,
   updateProfileAdminCloud,
   adminPurgeUserCloud,
+  adminPurgeUserByEmailCloud,
 } from '@/services/supabase-auth';
 import {
   deleteCompetitionRequestCloud,
@@ -359,6 +360,8 @@ export interface TournamentContextType {
     userId: string,
     successMessage?: string
   ) => Promise<boolean>;
+  /** حذف نهائي بالبريد من Auth (يحرّر الإيميل للتسجيل) */
+  purgeUserByEmail: (email: string) => Promise<boolean>;
   addReferee: (
     data: Omit<Referee, 'id'>,
     successMessage?: string
@@ -1387,7 +1390,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           description: rateLimited
             ? 'تم تجاوز حد إيميلات Supabase. انتظر بضع دقائق ثم أنشئ حساباً جديداً.'
             : alreadyExists
-              ? 'البريد موجود في Authentication. احذفه من Users أو نفّذ FREE-EMAIL-FOR-SIGNUP.sql ثم سجّل مجدداً.'
+              ? 'البريد مسجّل مسبقاً. سجّل الدخول، أو اطلب من المشرف «تحرير بريد عالق» في إدارة المستخدمين.'
               : remote.error ||
                 'تعذّر إنشاء الحساب في السحابة. تأكد أن Confirm email معطّل ثم أعد المحاولة.',
         });
@@ -1687,8 +1690,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       if (currentUser?.id === userId) {
         toast({
           variant: 'destructive',
-          title: t('toasts.t009_eaec5e'),
-          description: 'لا يمكن حذف حساب المشرف الحالي أثناء تسجيل الدخول به.',
+          title: 'تعذّر الحذف',
+          description: 'لا يمكن حذف حسابك الحالي أثناء تسجيل الدخول به.',
         });
         return false;
       }
@@ -1697,54 +1700,81 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       if (target?.role === 'superadmin' || target?.activeRole === 'superadmin') {
         toast({
           variant: 'destructive',
-          title: t('toasts.t009_eaec5e'),
+          title: 'تعذّر الحذف',
           description: 'لا يمكن حذف حساب مشرف من هنا.',
         });
         return false;
       }
 
       if (isSupabaseConfigured() && isUuid(userId)) {
-        // حذف نهائي من Auth حتى يمكن إعادة التسجيل بنفس الإيميل
         const purged = await adminPurgeUserCloud(userId);
         if (!purged.ok) {
-          // احتياطي: حظر فقط إن لم تُنفَّذ ADMIN-PURGE-USER.sql بعد
-          const blocked = await updateProfileAdminCloud({
-            id: userId,
-            status: 'blocked',
-          });
-          if (!blocked.ok) {
-            toast({
-              variant: 'destructive',
-              title: 'تعذّر حذف الحساب سحابياً',
-              description:
-                purged.error ||
-                blocked.error ||
-                'نفّذ supabase/ADMIN-PURGE-USER.sql ثم أعد المحاولة.',
-            });
-            return false;
-          }
-          setUsers((prev) => prev.filter((u) => u.id !== userId));
           toast({
             variant: 'destructive',
-            title: 'الحساب حُظر فقط — لم يُحذف من Auth',
+            title: 'الحذف النهائي فشل',
             description:
-              'لذلك سيظهر «الحساب موجود» عند إعادة التسجيل. نفّذ ADMIN-PURGE-USER.sql في Supabase ثم احذف مرة أخرى، أو احذف من Authentication → Users.',
+              purged.error ||
+              'افتح Supabase → SQL Editor ونفّذ ملف ADMIN-PURGE-USER.sql مرة واحدة، ثم أعد الحذف من هنا.',
           });
           return false;
         }
       }
 
       setUsers((prev) => prev.filter((u) => u.id !== userId));
-      if (successMessage) {
-        toast({
-          variant: 'success',
-          title: t('toasts.t014_3569a8'),
-          description: successMessage,
-        });
-      }
+      toast({
+        variant: 'success',
+        title: 'تم الحذف نهائياً',
+        description:
+          successMessage ||
+          'أُزيل الحساب من Authentication ويمكن التسجيل بنفس البريد.',
+      });
       return true;
     },
-    [toast, t, currentUser?.id, users]
+    [toast, currentUser?.id, users]
+  );
+
+  const purgeUserByEmail = useCallback(
+    async (email: string) => {
+      const normalized = normalizeEmail(email);
+      if (!isValidEmail(normalized)) {
+        toast({
+          variant: 'destructive',
+          title: 'بريد غير صالح',
+          description: 'أدخل بريداً كاملاً مثل name@example.com',
+        });
+        return false;
+      }
+      if (!isSupabaseConfigured()) {
+        toast({
+          variant: 'destructive',
+          title: 'السحابة غير مهيأة',
+        });
+        return false;
+      }
+      const purged = await adminPurgeUserByEmailCloud(normalized);
+      if (!purged.ok) {
+        toast({
+          variant: 'destructive',
+          title: 'تعذّر تحرير البريد',
+          description:
+            purged.error === 'not_found'
+              ? 'لا يوجد مستخدم بهذا البريد في Auth أو profiles.'
+              : purged.error ||
+                'نفّذ ADMIN-PURGE-USER.sql مرة واحدة ثم أعد المحاولة.',
+        });
+        return false;
+      }
+      setUsers((prev) =>
+        prev.filter((u) => normalizeEmail(u.email) !== normalized)
+      );
+      toast({
+        variant: 'success',
+        title: 'تم تحرير البريد',
+        description: `${normalized} جاهز للتسجيل من جديد.`,
+      });
+      return true;
+    },
+    [toast]
   );
 
   const addReferee = useCallback(
@@ -5142,6 +5172,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       refreshCloudCompetitionRequests,
       togglePinnedCompetition,
       deleteUser,
+      purgeUserByEmail,
       addReferee,
       registerRefereeForCompetition,
       updateReferee,
@@ -5235,6 +5266,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       refreshCloudCompetitionRequests,
       togglePinnedCompetition,
       deleteUser,
+      purgeUserByEmail,
       addReferee,
       registerRefereeForCompetition,
       updateReferee,

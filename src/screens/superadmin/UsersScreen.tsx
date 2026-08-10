@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -20,7 +21,7 @@ import { statusToneColor } from '@/utils/status-tone';
 import { matchesSearchQuery } from '@/utils/search';
 import { isSupabaseConfigured } from '@/services/supabase';
 
-async function confirmDelete(title: string, message: string): Promise<boolean> {
+async function confirmAction(title: string, message: string): Promise<boolean> {
   if (Platform.OS === 'web') {
     if (typeof window === 'undefined') return false;
     return window.confirm(`${title}\n\n${message}`);
@@ -29,7 +30,7 @@ async function confirmDelete(title: string, message: string): Promise<boolean> {
     Alert.alert(title, message, [
       { text: 'إلغاء', style: 'cancel', onPress: () => resolve(false) },
       {
-        text: 'حذف',
+        text: 'تأكيد',
         style: 'destructive',
         onPress: () => resolve(true),
       },
@@ -55,19 +56,25 @@ const UserRow = memo(function UserRow({
   onEdit,
 }: {
   user: User;
-  onAction: (user: User, action: 'active' | 'suspended' | 'warned' | 'delete') => void;
+  onAction: (
+    user: User,
+    action: 'active' | 'suspended' | 'warned' | 'delete'
+  ) => void;
   onEdit?: (user: User) => void;
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
   const statusColor = statusToneColor(theme.colors, user.status);
+  const isBlocked = user.status === 'blocked';
 
   return (
     <Card style={styles.card}>
       <View style={styles.row}>
         <Avatar uri={user.avatar} name={user.name} size={44} />
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={[styles.name, { color: theme.colors.text }]}>{user.name}</Text>
+          <Text style={[styles.name, { color: theme.colors.text }]}>
+            {user.name}
+          </Text>
           <Muted>{user.handle}</Muted>
           <Muted>{t('superadmin.users.regIdLine', { id: user.visibleId })}</Muted>
           <Muted>{user.email}</Muted>
@@ -84,33 +91,79 @@ const UserRow = memo(function UserRow({
       </View>
       {user.role !== 'superadmin' ? (
         <View style={styles.actions}>
-          {user.role === 'organizer' && onEdit ? (
-            <Pressable onPress={() => onEdit(user)}>
-              <Text style={{ color: theme.colors.accent, fontWeight: '800', fontSize: 12 }}>
-                {t('superadmin.actions.edit')}
+          {isBlocked ? (
+            <Pressable onPress={() => onAction(user, 'delete')}>
+              <Text
+                style={{
+                  color: theme.colors.danger,
+                  fontWeight: '800',
+                  fontSize: 12,
+                }}
+              >
+                حذف نهائي من Auth
               </Text>
             </Pressable>
-          ) : null}
-          <Pressable onPress={() => onAction(user, 'active')}>
-            <Text style={{ color: theme.colors.accent, fontWeight: '700', fontSize: 12 }}>
-              {t('superadmin.actions.activate')}
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => onAction(user, 'warned')}>
-            <Text style={{ color: theme.colors.warning, fontWeight: '700', fontSize: 12 }}>
-              {t('superadmin.actions.warn')}
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => onAction(user, 'suspended')}>
-            <Text style={{ color: theme.colors.danger, fontWeight: '700', fontSize: 12 }}>
-              {t('superadmin.actions.suspend')}
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => onAction(user, 'delete')}>
-            <Text style={{ color: theme.colors.danger, fontWeight: '800', fontSize: 12 }}>
-              {t('superadmin.actions.delete')}
-            </Text>
-          </Pressable>
+          ) : (
+            <>
+              {user.role === 'organizer' && onEdit ? (
+                <Pressable onPress={() => onEdit(user)}>
+                  <Text
+                    style={{
+                      color: theme.colors.accent,
+                      fontWeight: '800',
+                      fontSize: 12,
+                    }}
+                  >
+                    {t('superadmin.actions.edit')}
+                  </Text>
+                </Pressable>
+              ) : null}
+              <Pressable onPress={() => onAction(user, 'active')}>
+                <Text
+                  style={{
+                    color: theme.colors.accent,
+                    fontWeight: '700',
+                    fontSize: 12,
+                  }}
+                >
+                  {t('superadmin.actions.activate')}
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => onAction(user, 'warned')}>
+                <Text
+                  style={{
+                    color: theme.colors.warning,
+                    fontWeight: '700',
+                    fontSize: 12,
+                  }}
+                >
+                  {t('superadmin.actions.warn')}
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => onAction(user, 'suspended')}>
+                <Text
+                  style={{
+                    color: theme.colors.danger,
+                    fontWeight: '700',
+                    fontSize: 12,
+                  }}
+                >
+                  {t('superadmin.actions.suspend')}
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => onAction(user, 'delete')}>
+                <Text
+                  style={{
+                    color: theme.colors.danger,
+                    fontWeight: '800',
+                    fontSize: 12,
+                  }}
+                >
+                  حذف نهائي
+                </Text>
+              </Pressable>
+            </>
+          )}
         </View>
       ) : null}
     </Card>
@@ -118,14 +171,17 @@ const UserRow = memo(function UserRow({
 });
 
 export default function UsersScreen() {
-  const { users, updateUser, deleteUser, syncCloudUsers } = useTournament();
+  const { users, updateUser, deleteUser, purgeUserByEmail, syncCloudUsers } =
+    useTournament();
   const router = useRouter();
   const { t } = useTranslation();
   const { toast } = useToast();
   const theme = useAppTheme();
-  const [filter, setFilter] = useState<'all' | User['role']>('all');
+  const [filter, setFilter] = useState<'all' | 'blocked' | User['role']>('all');
   const [query, setQuery] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [purgeEmail, setPurgeEmail] = useState('');
+  const [purging, setPurging] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -143,8 +199,8 @@ export default function UsersScreen() {
         title: 'تمت المزامنة',
         description:
           count > 0
-            ? `تم جلب ${count} حساباً من السحابة (بدون تكرار الإيميل).`
-            : 'لا توجد صفوف في profiles. نفّذ sync-profiles-from-auth.sql إن كان المستخدم في Auth فقط.',
+            ? `تم جلب ${count} حساباً من السحابة.`
+            : 'لا توجد صفوف جديدة في profiles.',
       });
     } finally {
       setSyncing(false);
@@ -154,7 +210,7 @@ export default function UsersScreen() {
   const data = useMemo(
     () =>
       users.filter((u) => {
-        // الحسابات المحذوفة = status blocked — تُخفى من القائمة
+        if (filter === 'blocked') return u.status === 'blocked';
         if (u.status === 'blocked') return false;
         if (filter !== 'all' && u.role !== filter) return false;
         return matchesUserQuery(u, query);
@@ -162,18 +218,20 @@ export default function UsersScreen() {
     [users, filter, query]
   );
 
+  const blockedCount = useMemo(
+    () => users.filter((u) => u.status === 'blocked').length,
+    [users]
+  );
+
   const onAction = useCallback(
     async (user: User, action: 'active' | 'suspended' | 'warned' | 'delete') => {
       if (action === 'delete') {
-        const ok = await confirmDelete(
-          t('superadmin.actions.confirmDelete'),
-          t('superadmin.users.deleteConfirm', { name: user.name })
+        const ok = await confirmAction(
+          'حذف نهائي',
+          `سيتم حذف ${user.name} (${user.email}) من Authentication بالكامل حتى يمكن التسجيل بنفس البريد لاحقاً.`
         );
         if (!ok) return;
-        await deleteUser(
-          user.id,
-          t('superadmin.users.deleted', { name: user.name })
-        );
+        await deleteUser(user.id, `تم حذف ${user.name} نهائياً.`);
         return;
       }
       const messages = {
@@ -185,6 +243,21 @@ export default function UsersScreen() {
     },
     [updateUser, deleteUser, t]
   );
+
+  const onPurgeEmail = useCallback(async () => {
+    const ok = await confirmAction(
+      'تحرير بريد للتسجيل',
+      `حذف نهائي لكل حساب مرتبط بـ ${purgeEmail.trim()} من Authentication؟`
+    );
+    if (!ok) return;
+    setPurging(true);
+    try {
+      await purgeUserByEmail(purgeEmail);
+      setPurgeEmail('');
+    } finally {
+      setPurging(false);
+    }
+  }, [purgeEmail, purgeUserByEmail]);
 
   const emptyTitle = query.trim()
     ? t('superadmin.users.noSearchResults')
@@ -200,7 +273,10 @@ export default function UsersScreen() {
         ListHeaderComponent={
           <View style={{ gap: 10, marginBottom: 8 }}>
             <Subtitle>{t('nav.users')}</Subtitle>
-            <Muted>{t('superadmin.users.subtitle')}</Muted>
+            <Muted>
+              حذف نهائي = إزالة من Authentication. بعد الحذف يمكن إنشاء حساب جديد
+              بنفس البريد.
+            </Muted>
             {isSupabaseConfigured() ? (
               <Pressable
                 onPress={() => void onSync()}
@@ -212,42 +288,90 @@ export default function UsersScreen() {
                 </Text>
               </Pressable>
             ) : null}
+
+            {isSupabaseConfigured() ? (
+              <Card style={{ gap: 8 }}>
+                <Text style={{ color: theme.colors.text, fontWeight: '800' }}>
+                  تحرير بريد عالق
+                </Text>
+                <Muted>
+                  إذا ظهر «البريد موجود» عند التسجيل: الصق الإيميل هنا واضغط تحرير.
+                </Muted>
+                <TextInput
+                  value={purgeEmail}
+                  onChangeText={setPurgeEmail}
+                  placeholder="email@example.com"
+                  placeholderTextColor={theme.colors.textMuted}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  style={[
+                    styles.emailInput,
+                    {
+                      color: theme.colors.text,
+                      borderColor: theme.colors.border,
+                      backgroundColor: theme.colors.surfaceElevated,
+                    },
+                  ]}
+                />
+                <Pressable
+                  onPress={() => void onPurgeEmail()}
+                  disabled={purging || !purgeEmail.trim()}
+                  style={[
+                    styles.purgeBtn,
+                    {
+                      backgroundColor: theme.colors.danger,
+                      opacity: purging || !purgeEmail.trim() ? 0.45 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '800' }}>
+                    {purging ? 'جاري التحرير…' : 'حذف نهائي وتحرير البريد'}
+                  </Text>
+                </Pressable>
+              </Card>
+            ) : null}
+
             <SearchBar
               value={query}
               onChangeText={setQuery}
-              placeholder={t('superadmin.users.searchPlaceholder')}
-              autoCapitalize="none"
-              autoCorrect={false}
-              clearButtonMode="never"
+              placeholder={t('superadmin.searchPlaceholder')}
             />
             <View style={styles.filters}>
               {(
                 [
-                  ['all', t('screens.all')],
-                  ['organizer', t('roles.organizer')],
-                  ['follower', t('roles.follower')],
-                  ['freelancer', t('roles.freelancer')],
+                  'all',
+                  'blocked',
+                  'follower',
+                  'organizer',
+                  'freelancer',
                 ] as const
-              ).map(([value, label]) => (
+              ).map((key) => (
                 <Chip
-                  key={value}
-                  label={label}
-                  active={filter === value}
-                  onPress={() => setFilter(value)}
+                  key={key}
+                  label={
+                    key === 'all'
+                      ? t('common.all')
+                      : key === 'blocked'
+                        ? `محظور/عالق${blockedCount ? ` (${blockedCount})` : ''}`
+                        : t(`roles.${key}`)
+                  }
+                  active={filter === key}
+                  onPress={() => setFilter(key)}
                 />
               ))}
             </View>
           </View>
         }
-        ListEmptyComponent={
-          <EmptyState title={emptyTitle} icon="people-outline" />
-        }
+        ListEmptyComponent={<EmptyState title={emptyTitle} icon="people-outline" />}
         renderItem={({ item }) => (
           <UserRow
             user={item}
-            onAction={onAction}
-            onEdit={(u) =>
-              router.push(`/(superadmin)/organizers/${u.id}` as any)
+            onAction={(u, a) => void onAction(u, a)}
+            onEdit={
+              item.role === 'organizer'
+                ? (u) =>
+                    router.push(`/(superadmin)/organizers/${u.id}` as any)
+                : undefined
             }
           />
         )}
@@ -257,18 +381,30 @@ export default function UsersScreen() {
 }
 
 const styles = StyleSheet.create({
-  list: { paddingTop: 8, gap: 10, paddingBottom: 40 },
+  list: { padding: 16, gap: 10, paddingBottom: 40 },
   card: { gap: 10 },
-  row: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  name: { fontWeight: '800', textAlign: 'left' },
-  badges: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
-  badge: { fontSize: 11, fontWeight: '700' },
+  row: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  name: { fontWeight: '800', fontSize: 16 },
+  badges: { flexDirection: 'row', gap: 8, marginTop: 4, flexWrap: 'wrap' },
+  badge: { fontSize: 12, fontWeight: '700' },
   actions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 14,
     flexWrap: 'wrap',
+    gap: 12,
+    paddingTop: 4,
   },
-  filters: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  syncBtn: { alignSelf: 'flex-start', paddingVertical: 4 },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  syncBtn: { alignSelf: 'flex-start', paddingVertical: 6 },
+  emailInput: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+  },
+  purgeBtn: {
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
 });
