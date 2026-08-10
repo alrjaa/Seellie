@@ -530,52 +530,31 @@ export default function PrivateScreen() {
     ? space.chats[activeFriend.id] || []
     : [];
 
-  // ارتفاع صندوق الرسائل فقط — شريط الكتابة داخل البطاقة (كمبيوتر) أو فوق التبويب (جوال)
+  // شريط الكتابة داخل بطاقة المحادثة (عرض البطاقة فقط — بدون fixed على الشاشة)
   const tabBarHeight = useMemo(
     () => (desktop ? 0 : tabBarTotalHeight(insets.bottom)),
     [desktop, insets.bottom]
   );
-  const composerBottomOffset = desktop
-    ? 0
-    : tabBarHeight + (Platform.OS === 'web' ? 8 : 4);
-  const composerReserve = 78;
+  const composerBlockHeight = pendingMedia ? 118 : 62;
+  const shellBottomPad = desktop ? 0 : tabBarHeight + 8;
 
   const chatShellHeight = useMemo(() => {
     const topChrome = desktop ? 72 : 52;
     return Math.max(
-      240,
-      windowHeight - topChrome - composerBottomOffset - composerReserve
+      280,
+      windowHeight - topChrome - shellBottomPad
     );
-  }, [windowHeight, composerBottomOffset, desktop]);
+  }, [windowHeight, shellBottomPad, desktop]);
 
   const chatMessagesHeight = useMemo(() => {
     const chips = 48;
     const head = 34;
-    const gaps = 16;
-    return Math.max(140, chatShellHeight - chips - head - gaps);
-  }, [chatShellHeight]);
-
-  const composerDockStyle = useMemo(() => {
-    if (desktop) {
-      // داخل عرض بطاقة المحادثة فقط — لا يمتد فوق القائمة الجانبية
-      return {
-        position: 'absolute' as const,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 5,
-        elevation: 4,
-      };
-    }
-    return {
-      ...styles.composerFixed,
-      bottom: composerBottomOffset,
-      position:
-        Platform.OS === 'web'
-          ? ('fixed' as 'absolute')
-          : ('absolute' as const),
-    };
-  }, [desktop, composerBottomOffset]);
+    const gaps = 20;
+    return Math.max(
+      120,
+      chatShellHeight - chips - head - gaps - composerBlockHeight
+    );
+  }, [chatShellHeight, composerBlockHeight]);
 
   const onAddFriend = useCallback(
     async (friendId: string) => {
@@ -1035,7 +1014,10 @@ export default function PrivateScreen() {
         <View
           style={[
             styles.chatShell,
-            { height: chatShellHeight, position: 'relative' },
+            {
+              height: chatShellHeight,
+              marginBottom: shellBottomPad,
+            },
           ]}
         >
           {friends.length === 0 ? (
@@ -1196,15 +1178,16 @@ export default function PrivateScreen() {
                     })
                   )}
                 </ScrollView>
-              </View>
 
                 <View
                   style={[
                     styles.composerDock,
-                    composerDockStyle,
                     {
                       borderColor: theme.colors.border,
-                      backgroundColor: theme.colors.card,
+                      backgroundColor: theme.colors.surfaceElevated,
+                      width: '100%',
+                      maxWidth: '100%',
+                      alignSelf: 'stretch',
                     },
                   ]}
                 >
@@ -1334,6 +1317,7 @@ export default function PrivateScreen() {
                     </Pressable>
                   </View>
                 </View>
+              </View>
             </>
           )}
         </View>
@@ -1630,20 +1614,17 @@ const styles = StyleSheet.create({
   composerDock: {
     gap: 8,
     flexShrink: 0,
+    width: '100%',
+    maxWidth: '100%',
+    alignSelf: 'stretch',
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 8,
+    marginTop: 4,
   },
   composerFixed: {
-    left: 12,
-    right: 12,
-    zIndex: 40,
-    elevation: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
+    // لم يعد يُستخدم — أُبقي للتوافق إن وُجدت مراجع قديمة
   },
   composerRow: {
     flexDirection: 'row',
