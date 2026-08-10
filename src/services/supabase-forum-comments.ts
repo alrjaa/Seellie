@@ -122,16 +122,22 @@ export async function updateForumCommentStatusRemote(
   if (!sb) return { ok: false, error: 'no_client' };
   const { data: sessionData } = await sb.auth.getSession();
   if (!sessionData.session) return { ok: false, error: 'no_session' };
-  const { error } = await sb
-    .from('forum_comments')
-    .update({
-      status: status || 'active',
-      status_reason: statusReason || null,
-    })
-    .eq('id', commentId);
+
+  // SECURITY-PHASE4: status عبر RPC للمشرف فقط
+  const { data, error } = await sb.rpc('set_forum_comment_status', {
+    p_comment_id: commentId,
+    p_status: status || 'active',
+    p_reason: statusReason || null,
+  });
   if (error) {
     console.warn('[forum] status', error.message);
     return { ok: false, error: error.message };
+  }
+  if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
+    return {
+      ok: false,
+      error: (data as { error?: string }).error || 'rpc_failed',
+    };
   }
   return { ok: true };
 }
@@ -146,27 +152,21 @@ export async function toggleForumCommentLikeRemote(
   const sb = getSupabase();
   if (!sb) return { likes: [], error: 'no_client' };
 
-  const { data, error } = await sb
-    .from('forum_comments')
-    .select('likes')
-    .eq('id', commentId)
-    .maybeSingle();
+  // SECURITY-PHASE4: تبديل إعجاب المستخدم الحالي فقط عبر RPC
+  const { data, error } = await sb.rpc('toggle_forum_comment_like', {
+    p_comment_id: commentId,
+  });
   if (error) return { likes: [], error: error.message };
-
-  const current = Array.isArray((data as { likes?: string[] } | null)?.likes)
-    ? ([...(data as { likes: string[] }).likes] as string[])
-    : [];
-  const liked = current.includes(userId);
-  const next = liked
-    ? current.filter((id) => id !== userId)
-    : [...current, userId];
-
-  const { error: upErr } = await sb
-    .from('forum_comments')
-    .update({ likes: next })
-    .eq('id', commentId);
-  if (upErr) return { likes: current, error: upErr.message };
-  return { likes: next };
+  if (data && typeof data === 'object') {
+    const payload = data as { ok?: boolean; likes?: string[]; error?: string };
+    if (payload.ok === false) {
+      return { likes: [], error: payload.error || 'rpc_failed' };
+    }
+    if (Array.isArray(payload.likes)) {
+      return { likes: payload.likes.map(String) };
+    }
+  }
+  return { likes: [] };
 }
 
 export function subscribeForumComments(

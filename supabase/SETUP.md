@@ -16,6 +16,9 @@
    - **`supabase/APP-BLOBS.sql`** ← referees, offers, gifts, branding, announcements, prizes
    - **`supabase/SECURITY-HARDENING.sql`** ← منع ترقية ذاتية لمشرف
    - **`supabase/SECURITY-PHASE1.sql`** ← تأمين RPC المحتوى + تقييد كتابة app_blobs
+   - **`supabase/SECURITY-PHASE2-BLOBS.sql`** ← هدايا append-only
+   - **`supabase/SECURITY-PHASE3-REFEREES.sql`** ← صور الحكام للمنظّم
+   - **`supabase/SECURITY-PHASE4-HARDENING.sql`** ← تحصين شامل (منتدى/عروض/حسابات موقوفة/حدود)
    - **`supabase/ADMIN-PURGE-USER.sql`** ← حذف نهائي من Auth (لإعادة التسجيل بنفس الإيميل)
 3. Confirm tables: `profiles` (with `content` jsonb), `share_cards`, `messages`, `app_competitions`, `forum_comments`, private_*, **`app_blobs`**
 4. Confirm storage bucket: `share-media` (public)

@@ -37,7 +37,9 @@ import { upsertUserContentCloud } from '@/services/supabase-user-content';
 import {
   appendGiftTransaction,
   fetchAppBlob,
+  setOfferStatusRemote,
   upsertAppBlob,
+  upsertOfferInBlob,
   upsertRefereeInBlob,
 } from '@/services/supabase-app-blobs';
 import {
@@ -239,20 +241,34 @@ async function saveReferees(items: Referee[]) {
   await setJson(REFEREES_STORAGE_KEY, items);
   if (!isSupabaseConfigured()) return;
 
-  // دمج فردي أولاً (يعمل للمنظّم بعد SECURITY-PHASE3-REFEREES.sql)
+  // دمج فردي عبر RPC فقط (PHASE3/4) — لا استبدال كامل من العميل
   let mergedOk = 0;
   for (const ref of items) {
     const result = await upsertRefereeInBlob(ref);
     if (result.ok) mergedOk += 1;
   }
-  if (mergedOk === items.length && items.length > 0) return;
-
-  // احتياطي: استبدال كامل للقائمة (مسموح للمنظّم بعد PHASE3)
-  const full = await upsertAppBlob('referees', items);
-  if (!full.ok) {
+  if (mergedOk < items.length) {
     console.warn(
-      '[referees] cloud save failed — run supabase/SECURITY-PHASE3-REFEREES.sql',
-      full.error
+      '[referees] cloud save incomplete — run SECURITY-PHASE3 + PHASE4 SQL',
+      { mergedOk, total: items.length }
+    );
+  }
+}
+
+async function saveOfferRemote(offer: Offer) {
+  if (!isSupabaseConfigured()) return;
+  const payload = {
+    ...offer,
+    timestamp:
+      offer.timestamp instanceof Date
+        ? offer.timestamp.toISOString()
+        : offer.timestamp,
+  };
+  const result = await upsertOfferInBlob(payload);
+  if (!result.ok) {
+    console.warn(
+      '[offers] upsert failed — run SECURITY-PHASE4-HARDENING.sql',
+      result.error
     );
   }
 }
@@ -280,12 +296,6 @@ async function saveSupportLevels(levels: SupportLevel[]) {
   await setJson(SUPPORT_LEVELS_KEY, levels);
   if (isSupabaseConfigured()) {
     void upsertAppBlob('support_levels', levels);
-  }
-}
-
-async function saveOffersCloud(items: Offer[]) {
-  if (isSupabaseConfigured()) {
-    void upsertAppBlob('offers', items);
   }
 }
 
@@ -1297,6 +1307,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           return true;
         }
         supabaseAuthError = remote.error;
+        if (remote.error === 'account_not_active') {
+          toast({
+            variant: 'destructive',
+            title: t('toasts.t001_1a486b'),
+            description: t('toasts.t074_7ca6a2'),
+          });
+          return false;
+        }
         if (/confirm|confirmation|verify/i.test(remote.error || '')) {
           toast({
             variant: 'destructive',
@@ -3007,8 +3025,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         const next = prev.map((o) =>
           o.id === offerId ? { ...o, status } : o
         );
-        void saveOffersCloud(next);
         return next;
+      });
+      void setOfferStatusRemote(offerId, status).then((res) => {
+        if (!res.ok) {
+          console.warn('[offers] status sync failed', res.error);
+        }
       });
       if (successMessage) {
         toast({
@@ -3049,11 +3071,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         status: 'pending',
         timestamp: new Date(),
       };
-      setOffers((prev) => {
-        const next = [offer, ...prev];
-        void saveOffersCloud(next);
-        return next;
-      });
+      setOffers((prev) => [offer, ...prev]);
+      void saveOfferRemote(offer);
       toast({ variant: 'success', title: t('toasts.t035_af963d') });
       return true;
     },

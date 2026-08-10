@@ -41,12 +41,24 @@ export async function upsertAppBlob(
   const sb = getSupabase();
   if (!sb) return { ok: false, error: 'no_client' };
 
-  // gift_transactions: use appendGiftTransaction after SECURITY-PHASE2-BLOBS.sql
+  // Shared mutable blobs: use scoped RPCs (PHASE2–4). Full replace = superadmin only.
   if (key === 'gift_transactions') {
     console.warn(
       '[app-blobs] refuse full upsert for gift_transactions — use appendGiftTransaction'
     );
     return { ok: false, error: 'use_append_gift_transaction' };
+  }
+  if (key === 'offers') {
+    console.warn(
+      '[app-blobs] refuse full upsert for offers — use upsertOfferInBlob / setOfferStatus'
+    );
+    return { ok: false, error: 'use_offer_rpcs' };
+  }
+  if (key === 'referees') {
+    console.warn(
+      '[app-blobs] refuse full upsert for referees — use upsertRefereeInBlob'
+    );
+    return { ok: false, error: 'use_upsert_referee_in_blob' };
   }
 
   const { error } = await sb.from('app_blobs').upsert(
@@ -84,6 +96,54 @@ export async function upsertRefereeInBlob(
     // الدالة غير موجودة بعد → لا نفشل بصمت؛ المستدعي يجرّب upsertAppBlob
     return { ok: false, error: error.message };
   }
+  if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
+    return {
+      ok: false,
+      error: (data as { error?: string }).error || 'rpc_failed',
+    };
+  }
+  return { ok: true };
+}
+
+/** Organizer creates/updates own offer (SECURITY-PHASE4). */
+export async function upsertOfferInBlob(
+  offer: unknown
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) return { ok: false, error: 'not_configured' };
+  const { session, error: sessionError } = await requireCloudSession();
+  if (!session) return { ok: false, error: sessionError || 'no_session' };
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: 'no_client' };
+
+  const { data, error } = await sb.rpc('upsert_offer_in_blob', {
+    p_offer: offer,
+  });
+  if (error) return { ok: false, error: error.message };
+  if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
+    return {
+      ok: false,
+      error: (data as { error?: string }).error || 'rpc_failed',
+    };
+  }
+  return { ok: true };
+}
+
+/** Freelancer/organizer updates offer status (SECURITY-PHASE4). */
+export async function setOfferStatusRemote(
+  offerId: string,
+  status: 'accepted' | 'declined' | 'pending'
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) return { ok: false, error: 'not_configured' };
+  const { session, error: sessionError } = await requireCloudSession();
+  if (!session) return { ok: false, error: sessionError || 'no_session' };
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: 'no_client' };
+
+  const { data, error } = await sb.rpc('set_offer_status', {
+    p_offer_id: offerId,
+    p_status: status,
+  });
+  if (error) return { ok: false, error: error.message };
   if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
     return {
       ok: false,

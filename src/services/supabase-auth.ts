@@ -392,6 +392,11 @@ export async function supabaseSignIn(
     password,
   });
   if (error || !data.user) {
+    void import('@/services/security-events').then(({ logSecurityEvent }) =>
+      logSecurityEvent('login_failed', {
+        reason: error?.message || 'auth_failed',
+      })
+    );
     return { user: null, error: error?.message || 'auth_failed' };
   }
   let profile = await fetchProfile(data.user.id);
@@ -405,6 +410,16 @@ export async function supabaseSignIn(
         'User',
       handle: data.user.user_metadata?.handle as string | undefined,
     });
+  }
+  if (
+    profile &&
+    (profile.status === 'blocked' || profile.status === 'suspended')
+  ) {
+    await sb.auth.signOut();
+    void import('@/services/security-events').then(({ logSecurityEvent }) =>
+      logSecurityEvent('login_blocked_account', { status: profile!.status })
+    );
+    return { user: null, error: 'account_not_active' };
   }
   return { user: profile };
 }
@@ -645,5 +660,13 @@ export async function restoreSupabaseSession(): Promise<User | null> {
   if (!sb) return null;
   const { data } = await sb.auth.getSession();
   if (!data.session?.user) return null;
-  return fetchProfile(data.session.user.id);
+  const profile = await fetchProfile(data.session.user.id);
+  if (
+    profile &&
+    (profile.status === 'blocked' || profile.status === 'suspended')
+  ) {
+    await sb.auth.signOut();
+    return null;
+  }
+  return profile;
 }
