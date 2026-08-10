@@ -44,6 +44,7 @@ import {
   Subtitle,
 } from '@/components/ui';
 import { useListChrome } from '@/hooks/useListChrome';
+import { useResponsive } from '@/hooks/useResponsive';
 import { usePrivateSpace } from '@/hooks/usePrivateSpace';
 import { ensureSocialLists } from '@/utils/social-stats';
 import { formatArabicDate } from '@/utils';
@@ -408,6 +409,7 @@ export default function PrivateScreen() {
   const listChrome = useListChrome();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
+  const { desktop } = useResponsive();
   const space = usePrivateSpace(currentUser?.id);
   const [section, setSection] = useState<Section>('friends');
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
@@ -528,21 +530,23 @@ export default function PrivateScreen() {
     ? space.chats[activeFriend.id] || []
     : [];
 
-  // ارتفاع صندوق الرسائل فقط — شريط الكتابة ثابت فوق التبويب
+  // ارتفاع صندوق الرسائل فقط — شريط الكتابة داخل البطاقة (كمبيوتر) أو فوق التبويب (جوال)
   const tabBarHeight = useMemo(
-    () => tabBarTotalHeight(insets.bottom),
-    [insets.bottom]
+    () => (desktop ? 0 : tabBarTotalHeight(insets.bottom)),
+    [desktop, insets.bottom]
   );
-  const composerBottomOffset = tabBarHeight + (Platform.OS === 'web' ? 8 : 4);
+  const composerBottomOffset = desktop
+    ? 0
+    : tabBarHeight + (Platform.OS === 'web' ? 8 : 4);
   const composerReserve = 78;
 
   const chatShellHeight = useMemo(() => {
-    const topChrome = 52;
+    const topChrome = desktop ? 72 : 52;
     return Math.max(
       240,
       windowHeight - topChrome - composerBottomOffset - composerReserve
     );
-  }, [windowHeight, composerBottomOffset]);
+  }, [windowHeight, composerBottomOffset, desktop]);
 
   const chatMessagesHeight = useMemo(() => {
     const chips = 48;
@@ -550,6 +554,28 @@ export default function PrivateScreen() {
     const gaps = 16;
     return Math.max(140, chatShellHeight - chips - head - gaps);
   }, [chatShellHeight]);
+
+  const composerDockStyle = useMemo(() => {
+    if (desktop) {
+      // داخل عرض بطاقة المحادثة فقط — لا يمتد فوق القائمة الجانبية
+      return {
+        position: 'absolute' as const,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 5,
+        elevation: 4,
+      };
+    }
+    return {
+      ...styles.composerFixed,
+      bottom: composerBottomOffset,
+      position:
+        Platform.OS === 'web'
+          ? ('fixed' as 'absolute')
+          : ('absolute' as const),
+    };
+  }, [desktop, composerBottomOffset]);
 
   const onAddFriend = useCallback(
     async (friendId: string) => {
@@ -1006,7 +1032,12 @@ export default function PrivateScreen() {
       ) : null}
 
       {section === 'chat' ? (
-        <View style={[styles.chatShell, { height: chatShellHeight }]}>
+        <View
+          style={[
+            styles.chatShell,
+            { height: chatShellHeight, position: 'relative' },
+          ]}
+        >
           {friends.length === 0 ? (
             <EmptyState
               title={t('privateSpace.noFriends')}
@@ -1170,15 +1201,10 @@ export default function PrivateScreen() {
                 <View
                   style={[
                     styles.composerDock,
-                    styles.composerFixed,
+                    composerDockStyle,
                     {
                       borderColor: theme.colors.border,
                       backgroundColor: theme.colors.card,
-                      bottom: composerBottomOffset,
-                      position:
-                        Platform.OS === 'web'
-                          ? ('fixed' as 'absolute')
-                          : 'absolute',
                     },
                   ]}
                 >
@@ -1546,8 +1572,11 @@ const styles = StyleSheet.create({
   block: { gap: 10 },
   chatShell: {
     width: '100%',
+    maxWidth: '100%',
+    alignSelf: 'stretch',
     gap: 8,
     overflow: 'hidden',
+    position: 'relative',
   },
   chatBlock: {
     flex: 1,
