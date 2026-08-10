@@ -186,11 +186,13 @@ export function validatePickerAsset(
 
   if (
     spec.kind === 'image' &&
+    kind !== 'avatar' &&
     asset.width &&
     asset.height &&
     (asset.width < spec.width * 0.4 || asset.height < spec.height * 0.4)
   ) {
     // تحذير خفيف: نسمح إن كانت أصغر بكثير فقط كرفض للصور الصغيرة جداً
+    // الأفاتار يُقصّ مربعاً عبر allowsEditing — لا نرفضه بالأبعاد
     return { ok: false, reason: 'dimensions', max: spec.width };
   }
 

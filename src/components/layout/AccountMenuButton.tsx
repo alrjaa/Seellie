@@ -21,6 +21,7 @@ import {
 } from '@/utils/roles';
 import type { UserRole } from '@/types';
 import { cairoText } from '@/theme/fonts';
+import { Avatar } from '@/components/ui/Avatar';
 
 type Props = {
   accountHref: string;
@@ -149,36 +150,36 @@ function AccountMenuButtonComponent({
         ]}
       >
         {variant === 'handle' ? (
-          <Text
-            style={[
-              styles.handleLabel,
-              compact && styles.handleLabelCompact,
-              cairoText('semiBold'),
-              { color: theme.colors.accent },
-              textStart,
-            ]}
-            numberOfLines={1}
-          >
-            {currentUser.handle}
-          </Text>
-        ) : (
           <View
             style={[
-              styles.avatarFallback,
-              {
-                width: size,
-                height: size,
-                borderRadius: size / 2,
-                backgroundColor: theme.colors.accentSoft,
-              },
+              styles.handleRow,
+              { flexDirection: rowDir },
             ]}
           >
-            <Ionicons
-              name="person"
-              size={Math.round(size * 0.5)}
-              color={theme.colors.accent}
+            <Avatar
+              uri={currentUser.avatar}
+              name={currentUser.name}
+              size={compact ? 26 : 30}
             />
+            <Text
+              style={[
+                styles.handleLabel,
+                compact && styles.handleLabelCompact,
+                cairoText('semiBold'),
+                { color: theme.colors.accent },
+                textStart,
+              ]}
+              numberOfLines={1}
+            >
+              {currentUser.handle}
+            </Text>
           </View>
+        ) : (
+          <Avatar
+            uri={currentUser.avatar}
+            name={currentUser.name}
+            size={size}
+          />
         )}
         {variant === 'avatar' ? (
           <View
@@ -232,26 +233,40 @@ function AccountMenuButtonComponent({
             <View
               style={[
                 styles.menuHeader,
-                { alignItems: isRTL ? 'flex-end' : 'flex-start' },
+                {
+                  alignItems: isRTL ? 'flex-end' : 'flex-start',
+                  flexDirection: rowDir,
+                },
               ]}
             >
-              <Text
-                style={[
-                  styles.menuHandle,
-                  cairoText('extraBold'),
-                  { color: theme.colors.accent },
-                  textStart,
-                ]}
-                numberOfLines={1}
-              >
-                {currentUser.handle}
-              </Text>
-              <Text
-                style={[styles.menuReg, { color: theme.colors.textMuted }, textStart]}
-                numberOfLines={1}
-              >
-                {currentUser.visibleId}
-              </Text>
+              <Avatar
+                uri={currentUser.avatar}
+                name={currentUser.name}
+                size={44}
+              />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text
+                  style={[
+                    styles.menuHandle,
+                    cairoText('extraBold'),
+                    { color: theme.colors.accent },
+                    textStart,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {currentUser.handle}
+                </Text>
+                <Text
+                  style={[
+                    styles.menuReg,
+                    { color: theme.colors.textMuted },
+                    textStart,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {currentUser.visibleId}
+                </Text>
+              </View>
             </View>
 
             <View
@@ -263,6 +278,39 @@ function AccountMenuButtonComponent({
               bounces={false}
               showsVerticalScrollIndicator={false}
             >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('media.changeHandleIcon')}
+                onPress={() => {
+                  close();
+                  router.push(pathsHref as any);
+                }}
+                style={({ pressed }) => [
+                  styles.item,
+                  {
+                    backgroundColor: pressed
+                      ? theme.colors.accentSoft
+                      : 'transparent',
+                    flexDirection: rowDir,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="camera-outline"
+                  size={20}
+                  color={theme.colors.accent}
+                />
+                <Text
+                  style={[
+                    styles.itemLabel,
+                    { color: theme.colors.text },
+                    textStart,
+                  ]}
+                >
+                  {t('media.changeHandleIcon')}
+                </Text>
+              </Pressable>
+
               {!isSuperAdmin ? (
                 <Pressable
                   accessibilityRole="button"
@@ -472,7 +520,7 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === 'android' ? 3 : 6,
     borderRadius: Platform.OS === 'android' ? 7 : 10,
     borderWidth: StyleSheet.hairlineWidth,
-    maxWidth: Platform.OS === 'android' ? 96 : 160,
+    maxWidth: Platform.OS === 'android' ? 140 : 200,
     alignSelf: 'flex-end',
   },
   handleWrapCompact: {
@@ -480,17 +528,19 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
     borderWidth: StyleSheet.hairlineWidth,
-    maxWidth: Platform.OS === 'android' ? 88 : 110,
+    maxWidth: Platform.OS === 'android' ? 140 : 180,
+  },
+  handleRow: {
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: '100%',
   },
   handleLabel: {
     fontSize: Platform.OS === 'android' ? 9 : 11,
+    flexShrink: 1,
   },
   handleLabelCompact: {
     fontSize: Platform.OS === 'android' ? 8 : 9,
-  },
-  avatarFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   badge: {
     position: 'absolute',
@@ -530,9 +580,10 @@ const styles = StyleSheet.create({
     maxHeight: 420,
   },
   menuHeader: {
-    gap: 4,
+    gap: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
+    alignItems: 'center',
   },
   menuHandle: {
     fontSize: 16,

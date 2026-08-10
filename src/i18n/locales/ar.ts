@@ -347,6 +347,12 @@ export const ar = {
     addPhotoHint: 'إضافة صورة من الجهاز أو عبر رابط',
     picking: 'جاري الاختيار...',
     pickPhotoFromDevice: 'اختيار صورة من الجهاز',
+    takePhoto: 'التقاط صورة بالكاميرا',
+    changeHandleIcon: 'تغيير صورة المعرّف',
+    handleIconHint:
+      'اختر أو أضف صورة تظهر بجانب معرّفك في الهيدر والقوائم والملف الشخصي.',
+    removeAvatar: 'إزالة الصورة',
+    avatarRemoved: 'تمت إزالة صورة المعرّف',
     photoUrlLabel: 'رابط صورة',
     addPhoto: 'إضافة الصورة',
     videosSection: 'الفيديوهات',

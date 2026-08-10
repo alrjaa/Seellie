@@ -5018,44 +5018,50 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     async (url: string, successMessage?: string) => {
       if (!currentUser) return false;
       const trimmed = url.trim();
-      if (!trimmed) return false;
+      const clearing = !trimmed;
 
-      const cloud = await requireCloudSession(currentUser.id);
-      let finalUrl = trimmed;
-      if (cloud.session) {
-        const resolved = await resolvePublicMediaUrl({
-          uri: trimmed,
-          kind: 'photo',
-          folder: 'avatars',
-          userId: cloud.session.userId,
-          requireCloud: true,
-        });
-        if (!resolved.url) {
+      let finalUrl = '';
+      if (!clearing) {
+        const cloud = await requireCloudSession(currentUser.id);
+        finalUrl = trimmed;
+        if (cloud.session) {
+          const resolved = await resolvePublicMediaUrl({
+            uri: trimmed,
+            kind: 'photo',
+            folder: 'avatars',
+            userId: cloud.session.userId,
+            requireCloud: true,
+          });
+          if (!resolved.url) {
+            toast({
+              variant: 'destructive',
+              title: t('toasts.t071_355b33'),
+              description: cloudWriteErrorMessage(resolved.error),
+            });
+            return false;
+          }
+          finalUrl = resolved.url;
+        } else if (!/^https?:\/\//i.test(trimmed)) {
           toast({
             variant: 'destructive',
             title: t('toasts.t071_355b33'),
-            description: cloudWriteErrorMessage(resolved.error),
+            description: cloudWriteErrorMessage(cloud.error),
           });
           return false;
         }
-        finalUrl = resolved.url;
-      } else if (!/^https?:\/\//i.test(trimmed)) {
-        toast({
-          variant: 'destructive',
-          title: t('toasts.t071_355b33'),
-          description: cloudWriteErrorMessage(cloud.error),
-        });
-        return false;
       }
 
-      const updated: User = { ...currentUser, avatar: finalUrl };
+      const updated: User = {
+        ...currentUser,
+        avatar: finalUrl || undefined,
+      };
       persistCurrentUser(updated);
-      if (cloud.session) {
+      if (isUuid(updated.id) && isSupabaseConfigured()) {
         await upsertUserContentCloud(updated);
       }
       toast({
         variant: 'success',
-        title: t('toasts.t072_2a81f2'),
+        title: clearing ? t('media.avatarRemoved') : t('toasts.t072_2a81f2'),
         description: successMessage,
       });
       return true;

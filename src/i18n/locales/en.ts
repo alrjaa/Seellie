@@ -346,6 +346,12 @@ export const en: TranslationTree = {
     addPhotoHint: 'Add a photo from device or via link',
     picking: 'Choosing...',
     pickPhotoFromDevice: 'Choose photo from device',
+    takePhoto: 'Take a photo',
+    changeHandleIcon: 'Change handle photo',
+    handleIconHint:
+      'Choose or add a photo shown next to your handle in the header, menus, and profile.',
+    removeAvatar: 'Remove photo',
+    avatarRemoved: 'Handle photo removed',
     photoUrlLabel: 'Photo URL',
     addPhoto: 'Add photo',
     videosSection: 'Videos',
