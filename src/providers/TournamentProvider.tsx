@@ -572,6 +572,11 @@ export interface TournamentContextType {
     name: string,
     successMessage?: string
   ) => boolean;
+  updateTeamLogo: (
+    competitionId: string,
+    teamId: string,
+    logo: string | undefined
+  ) => void;
   deleteTeam: (
     competitionId: string,
     teamId: string,
@@ -3401,6 +3406,25 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     [toast]
   );
 
+  const updateTeamLogo = useCallback(
+    (competitionId: string, teamId: string, logo: string | undefined) => {
+      setCompetitions((prev) => {
+        const next = prev.map((c) => {
+          if (c.id !== competitionId) return c;
+          return {
+            ...c,
+            teams: c.teams.map((team) =>
+              team.id === teamId ? { ...team, logo: logo || undefined } : team
+            ),
+          };
+        });
+        void syncCompetitions(next);
+        return next;
+      });
+    },
+    [syncCompetitions]
+  );
+
   const deleteTeam = useCallback(
     (
       competitionId: string,
@@ -5394,6 +5418,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       deleteCompetition,
       deleteCompetitionRequest,
       renameTeam,
+      updateTeamLogo,
       deleteTeam,
       addPlayerToTeam,
       updatePlayerAvatar,
@@ -5492,6 +5517,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       deleteCompetition,
       deleteCompetitionRequest,
       renameTeam,
+      updateTeamLogo,
       deleteTeam,
       addPlayerToTeam,
       updatePlayerAvatar,

@@ -97,6 +97,7 @@ export default function CompetitionManageScreen() {
     removeRefereeFromCompetition,
     updateReferee,
     updateCompetition,
+    updateTeamLogo,
   } = useTournament();
   const { toast } = useToast();
   const [pickingLogo, setPickingLogo] = useState(false);
@@ -106,6 +107,7 @@ export default function CompetitionManageScreen() {
 
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [teamName, setTeamName] = useState('');
+  const [teamLogo, setTeamLogo] = useState<string | undefined>();
   const [editCompetitionName, setEditCompetitionName] = useState('');
   const [editTeamName, setEditTeamName] = useState('');
   const [playerName, setPlayerName] = useState('');
@@ -600,6 +602,19 @@ export default function CompetitionManageScreen() {
                 )
               }
             />
+            <Subtitle>{t('organizer.competitionManage.teamLogoSection')}</Subtitle>
+            <EntityAvatarField
+              value={
+                competition.teams.find((item) => item.id === selectedTeamId)
+                  ?.logo
+              }
+              name={editTeamName || '?'}
+              folder="teams"
+              onChange={(url) =>
+                updateTeamLogo(competition.id, selectedTeamId, url)
+              }
+              compact
+            />
           </>
         ) : null}
 
@@ -610,16 +625,24 @@ export default function CompetitionManageScreen() {
           onChangeText={setTeamName}
           placeholder={t('organizer.competitionManage.teamNamePlaceholder')}
         />
+        <EntityAvatarField
+          value={teamLogo}
+          name={teamName || '?'}
+          folder="teams"
+          onChange={setTeamLogo}
+          compact
+        />
         <Button
           label={t('superadmin.actions.add')}
           onPress={() => {
             if (!teamName.trim()) return;
             addTeam(
               competition.id,
-              { name: teamName.trim() },
+              { name: teamName.trim(), logo: teamLogo },
               t('organizer.competitionManage.teamAdded')
             );
             setTeamName('');
+            setTeamLogo(undefined);
           }}
         />
       </Card>
