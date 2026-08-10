@@ -5,8 +5,8 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
-import { EntityAvatarField } from '@/components/account/EntityAvatarField';
-import { Avatar, Button, Card, Muted, SearchBar, Subtitle } from '@/components/ui';
+import { EntityAvatarEditModal } from '@/components/account/EntityAvatarField';
+import { Avatar, Card, Muted, SearchBar, Subtitle } from '@/components/ui';
 import { matchesSearchQuery } from '@/utils/search';
 import { confirmDestructive } from '@/utils/confirm';
 
@@ -85,14 +85,6 @@ export default function RefereesScreen() {
     [referees, query]
   );
 
-  const editingReferee = useMemo(
-    () =>
-      avatarEdit
-        ? referees.find((r) => r.id === avatarEdit.id) || null
-        : null,
-    [avatarEdit, referees]
-  );
-
   const renderItem = useCallback(
     ({ item }: { item: Referee }) => (
       <RefereeRow
@@ -153,32 +145,6 @@ export default function RefereesScreen() {
               autoCapitalize="none"
               autoCorrect={false}
             />
-            {avatarEdit && editingReferee ? (
-              <Card style={styles.card}>
-                <Subtitle>
-                  {t('media.changeHandleIcon')} — {avatarEdit.name}
-                </Subtitle>
-                <EntityAvatarField
-                  value={avatarEdit.value}
-                  name={avatarEdit.name}
-                  folder="referees"
-                  onChange={(url) => {
-                    updateReferee(
-                      { ...editingReferee, avatar: url },
-                      t('media.entityPhotoUpdated')
-                    );
-                    setAvatarEdit((prev) =>
-                      prev ? { ...prev, value: url } : prev
-                    );
-                  }}
-                />
-                <Button
-                  label={t('common.done')}
-                  variant="outline"
-                  onPress={() => setAvatarEdit(null)}
-                />
-              </Card>
-            ) : null}
           </View>
         }
         ListEmptyComponent={
@@ -193,6 +159,28 @@ export default function RefereesScreen() {
         }
         renderItem={renderItem}
       />
+      {avatarEdit ? (
+        <EntityAvatarEditModal
+          visible
+          title={`${t('media.changeHandleIcon')} — ${avatarEdit.name}`}
+          value={avatarEdit.value}
+          name={avatarEdit.name}
+          folder="referees"
+          onChange={(url) => {
+            const current = referees.find((r) => r.id === avatarEdit.id);
+            if (current) {
+              updateReferee(
+                { ...current, avatar: url },
+                t('media.entityPhotoUpdated')
+              );
+            }
+            setAvatarEdit((prev) =>
+              prev ? { ...prev, value: url } : prev
+            );
+          }}
+          onClose={() => setAvatarEdit(null)}
+        />
+      ) : null}
     </Screen>
   );
 }

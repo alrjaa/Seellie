@@ -8,7 +8,10 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
-import { EntityAvatarField } from '@/components/account/EntityAvatarField';
+import {
+  EntityAvatarField,
+  EntityAvatarEditModal,
+} from '@/components/account/EntityAvatarField';
 import {
   Avatar,
   Button,
@@ -243,33 +246,26 @@ export default function OrganizerRefereesScreen() {
       </Card>
 
       {avatarEdit ? (
-        <Card style={styles.card}>
-          <Subtitle>
-            {t('media.changeHandleIcon')} — {avatarEdit.name}
-          </Subtitle>
-          <EntityAvatarField
-            value={avatarEdit.value}
-            name={avatarEdit.name}
-            folder="referees"
-            onChange={(url) => {
-              const current = referees.find((r) => r.id === avatarEdit.id);
-              if (current) {
-                updateReferee(
-                  { ...current, avatar: url },
-                  t('media.entityPhotoUpdated')
-                );
-              }
-              setAvatarEdit((prev) =>
-                prev ? { ...prev, value: url } : prev
+        <EntityAvatarEditModal
+          visible
+          title={`${t('media.changeHandleIcon')} — ${avatarEdit.name}`}
+          value={avatarEdit.value}
+          name={avatarEdit.name}
+          folder="referees"
+          onChange={(url) => {
+            const current = referees.find((r) => r.id === avatarEdit.id);
+            if (current) {
+              updateReferee(
+                { ...current, avatar: url },
+                t('media.entityPhotoUpdated')
               );
-            }}
-          />
-          <Button
-            label={t('common.done')}
-            variant="outline"
-            onPress={() => setAvatarEdit(null)}
-          />
-        </Card>
+            }
+            setAvatarEdit((prev) =>
+              prev ? { ...prev, value: url } : prev
+            );
+          }}
+          onClose={() => setAvatarEdit(null)}
+        />
       ) : null}
     </Screen>
   );

@@ -38,7 +38,10 @@ import {
 } from '@/components/ui';
 import { formatVenueAddress } from '@/utils/competition';
 import { MIN_COMPETITION_TEAMS } from '@/utils/competition-request';
-import { EntityAvatarField } from '@/components/account/EntityAvatarField';
+import {
+  EntityAvatarEditModal,
+  EntityAvatarField,
+} from '@/components/account/EntityAvatarField';
 import { formatArabicDate, formatArabicTime } from '@/utils';
 import { MEDIA_SPECS, validatePickerAsset } from '@/utils/media-limits';
 
@@ -1193,56 +1196,49 @@ export default function CompetitionManageScreen() {
       />
 
       {avatarEdit ? (
-        <Card style={styles.card}>
-          <Subtitle>
-            {t('media.changeHandleIcon')} — {avatarEdit.name}
-          </Subtitle>
-          <EntityAvatarField
-            value={avatarEdit.value}
-            name={avatarEdit.name}
-            folder={
-              avatarEdit.kind === 'player'
-                ? 'players'
-                : avatarEdit.kind === 'staff'
-                  ? 'staff'
-                  : 'referees'
-            }
-            onChange={(url) => {
-              if (avatarEdit.kind === 'player' && avatarEdit.teamId) {
-                updatePlayerAvatar(
-                  competition.id,
-                  avatarEdit.teamId,
-                  avatarEdit.id,
-                  url,
-                  t('media.entityPhotoUpdated')
-                );
-              } else if (avatarEdit.kind === 'staff') {
-                updateStaffAvatar(
-                  competition.id,
-                  avatarEdit.id,
-                  url,
-                  t('media.entityPhotoUpdated')
-                );
-              } else if (avatarEdit.kind === 'referee') {
-                const current = referees.find((r) => r.id === avatarEdit.id);
-                if (current) {
-                  updateReferee(
-                    { ...current, avatar: url },
-                    t('media.entityPhotoUpdated')
-                  );
-                }
-              }
-              setAvatarEdit((prev) =>
-                prev ? { ...prev, value: url } : prev
+        <EntityAvatarEditModal
+          visible
+          title={`${t('media.changeHandleIcon')} — ${avatarEdit.name}`}
+          value={avatarEdit.value}
+          name={avatarEdit.name}
+          folder={
+            avatarEdit.kind === 'player'
+              ? 'players'
+              : avatarEdit.kind === 'staff'
+                ? 'staff'
+                : 'referees'
+          }
+          onChange={(url) => {
+            if (avatarEdit.kind === 'player' && avatarEdit.teamId) {
+              updatePlayerAvatar(
+                competition.id,
+                avatarEdit.teamId,
+                avatarEdit.id,
+                url,
+                t('media.entityPhotoUpdated')
               );
-            }}
-          />
-          <Button
-            label={t('common.done')}
-            variant="outline"
-            onPress={() => setAvatarEdit(null)}
-          />
-        </Card>
+            } else if (avatarEdit.kind === 'staff') {
+              updateStaffAvatar(
+                competition.id,
+                avatarEdit.id,
+                url,
+                t('media.entityPhotoUpdated')
+              );
+            } else if (avatarEdit.kind === 'referee') {
+              const current = referees.find((r) => r.id === avatarEdit.id);
+              if (current) {
+                updateReferee(
+                  { ...current, avatar: url },
+                  t('media.entityPhotoUpdated')
+                );
+              }
+            }
+            setAvatarEdit((prev) =>
+              prev ? { ...prev, value: url } : prev
+            );
+          }}
+          onClose={() => setAvatarEdit(null)}
+        />
       ) : null}
     </Screen>
   );

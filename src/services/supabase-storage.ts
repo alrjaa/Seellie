@@ -23,9 +23,16 @@ export async function uploadAppMedia(
     // على الويب/أندرويد .mov غالباً لا يُشغَّل — نُبقي الامتداد الحقيقي مع نوع محتوى أوضح
     const ext = kind === 'video' && rawExt === 'qt' ? 'mov' : rawExt;
     const safeFolder = folder.replace(/[^a-z0-9/_-]/gi, '') || 'uploads';
-    const path = `${userId}/${safeFolder}/${Date.now()}.${ext}`;
     const response = await fetch(localUri);
+    if (!response.ok) {
+      console.warn('[supabase] upload fetch', response.status);
+      return null;
+    }
     const blob = await response.blob();
+    if (!blob || blob.size <= 0) {
+      console.warn('[supabase] upload empty blob');
+      return null;
+    }
     const contentType =
       blob.type && blob.type !== 'application/octet-stream'
         ? blob.type
@@ -41,7 +48,18 @@ export async function uploadAppMedia(
               ? 'image/webp'
               : 'image/jpeg';
 
-    const { error } = await sb.storage.from(BUCKET).upload(path, blob, {
+    // على الويب blob بدون امتداد واضح → فرض jpeg/png من نوع المحتوى
+    const uploadExt =
+      kind === 'photo' && (ext === 'jpg' || ext.length > 4)
+        ? contentType.includes('png')
+          ? 'png'
+          : contentType.includes('webp')
+            ? 'webp'
+            : 'jpg'
+        : ext;
+    const uploadPath = `${userId}/${safeFolder}/${Date.now()}.${uploadExt}`;
+
+    const { error } = await sb.storage.from(BUCKET).upload(uploadPath, blob, {
       contentType,
       upsert: false,
       cacheControl: '3600',
@@ -50,7 +68,7 @@ export async function uploadAppMedia(
       console.warn('[supabase] upload', error.message);
       return null;
     }
-    const { data } = sb.storage.from(BUCKET).getPublicUrl(path);
+    const { data } = sb.storage.from(BUCKET).getPublicUrl(uploadPath);
     return data.publicUrl || null;
   } catch (e) {
     console.warn('[supabase] upload failed', e);
