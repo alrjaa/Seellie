@@ -109,11 +109,6 @@ function AccountMenuButtonComponent({
     logout();
   }, [logout]);
 
-  const onEnterAdmin = useCallback(() => {
-    setOpen(false);
-    logout({ to: 'admin' });
-  }, [logout]);
-
   const onSwitchRole = useCallback(
     (role: UserRole) => {
       setOpen(false);
@@ -310,39 +305,6 @@ function AccountMenuButtonComponent({
                   {t('media.changeHandleIcon')}
                 </Text>
               </Pressable>
-
-              {!isSuperAdmin ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('menu.enterAdmin')}
-                  onPress={onEnterAdmin}
-                  style={({ pressed }) => [
-                    styles.item,
-                    styles.itemHighlight,
-                    {
-                      backgroundColor: theme.colors.accentSoft,
-                      borderColor: theme.colors.accent,
-                      opacity: pressed ? 0.85 : 1,
-                      flexDirection: rowDir,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="shield-checkmark-outline"
-                    size={20}
-                    color={theme.colors.accent}
-                  />
-                  <Text
-                    style={[
-                      styles.itemLabel,
-                      { color: theme.colors.accent },
-                      textStart,
-                    ]}
-                  >
-                    {t('menu.enterAdmin')}
-                  </Text>
-                </Pressable>
-              ) : null}
 
               {!isSuperAdmin ? (
                 <Pressable
