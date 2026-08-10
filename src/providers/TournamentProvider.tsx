@@ -48,6 +48,7 @@ import {
   supabaseUpdatePassword,
   updateProfileRolesCloud,
   updateProfileAdminCloud,
+  adminPurgeUserCloud,
 } from '@/services/supabase-auth';
 import {
   deleteCompetitionRequestCloud,
@@ -1386,7 +1387,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           description: rateLimited
             ? 'تم تجاوز حد إيميلات Supabase. انتظر بضع دقائق ثم أنشئ حساباً جديداً.'
             : alreadyExists
-              ? 'هذا البريد مسجّل مسبقاً في السحابة. استخدم تسجيل الدخول.'
+              ? 'هذا البريد ما زال في Auth (حذف المشرف السابق كان حظراً فقط). احذفه من Authentication → Users أو نفّذ ADMIN-PURGE-USER.sql ثم سجّل من جديد.'
               : remote.error ||
                 'تعذّر إنشاء الحساب في السحابة. تأكد أن Confirm email معطّل ثم أعد المحاولة.',
         });
@@ -1702,31 +1703,32 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      // محلياً: علّم كمحظور ثم أخفه من القائمة
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === userId ? { ...u, status: 'blocked' as const } : u
-        )
-      );
-
       if (isSupabaseConfigured() && isUuid(userId)) {
-        const cloud = await updateProfileAdminCloud({
-          id: userId,
-          status: 'blocked',
-        });
-        if (!cloud.ok) {
-          // أعد الحالة السابقة إن فشلت السحابة
-          if (target) {
-            setUsers((prev) =>
-              prev.map((u) => (u.id === userId ? target : u))
-            );
+        // حذف نهائي من Auth حتى يمكن إعادة التسجيل بنفس الإيميل
+        const purged = await adminPurgeUserCloud(userId);
+        if (!purged.ok) {
+          // احتياطي: حظر فقط إن لم تُنفَّذ ADMIN-PURGE-USER.sql بعد
+          const blocked = await updateProfileAdminCloud({
+            id: userId,
+            status: 'blocked',
+          });
+          if (!blocked.ok) {
+            toast({
+              variant: 'destructive',
+              title: 'تعذّر حذف الحساب سحابياً',
+              description:
+                purged.error ||
+                blocked.error ||
+                'نفّذ supabase/ADMIN-PURGE-USER.sql ثم أعد المحاولة.',
+            });
+            return false;
           }
+          setUsers((prev) => prev.filter((u) => u.id !== userId));
           toast({
             variant: 'destructive',
-            title: 'تعذّر حذف الحساب سحابياً',
+            title: 'الحساب حُظر فقط — لم يُحذف من Auth',
             description:
-              cloud.error ||
-              'تحقق من سياسة profiles_update_admin و SECURITY-HARDENING.sql',
+              'لذلك سيظهر «الحساب موجود» عند إعادة التسجيل. نفّذ ADMIN-PURGE-USER.sql في Supabase ثم احذف مرة أخرى، أو احذف من Authentication → Users.',
           });
           return false;
         }

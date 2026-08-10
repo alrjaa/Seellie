@@ -16,9 +16,10 @@
    - **`supabase/APP-BLOBS.sql`** ← referees, offers, gifts, branding, announcements, prizes
    - **`supabase/SECURITY-HARDENING.sql`** ← منع ترقية ذاتية لمشرف
    - **`supabase/SECURITY-PHASE1.sql`** ← تأمين RPC المحتوى + تقييد كتابة app_blobs
+   - **`supabase/ADMIN-PURGE-USER.sql`** ← حذف نهائي من Auth (لإعادة التسجيل بنفس الإيميل)
 3. Confirm tables: `profiles` (with `content` jsonb), `share_cards`, `messages`, `app_competitions`, `forum_comments`, private_*, **`app_blobs`**
 4. Confirm storage bucket: `share-media` (public)
-5. Confirm RPC: `replace_profile_content` (hardened)
+5. Confirm RPC: `replace_profile_content` (hardened), `admin_purge_user`
 
 ## Content sync rule
 Any **add content** action with a cloud Sign-up session must:

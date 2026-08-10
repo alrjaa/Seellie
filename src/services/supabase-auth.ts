@@ -3,6 +3,7 @@ import type { UserRole } from '@/types';
 import { ensureSocialLists } from '@/utils/social-stats';
 import { normalizeUserRoles } from '@/utils/roles';
 import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
+import { isUuid } from '@/services/supabase-messages';
 import {
   applyContentPayload,
   type UserContentPayload,
@@ -282,6 +283,33 @@ export async function updateProfileAdminCloud(input: {
   if (error) {
     console.warn('[supabase] updateProfileAdminCloud', error.message);
     return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+/** حذف نهائي من Auth + profiles (يتطلب ADMIN-PURGE-USER.sql) */
+export async function adminPurgeUserCloud(
+  userId: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || !isUuid(userId)) {
+    return { ok: false, error: 'not_cloud_user' };
+  }
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: 'no_client' };
+  const { data: sessionData } = await sb.auth.getSession();
+  if (!sessionData.session) {
+    return { ok: false, error: 'no_session' };
+  }
+  const { data, error } = await sb.rpc('admin_purge_user', { p_id: userId });
+  if (error) {
+    console.warn('[supabase] admin_purge_user', error.message);
+    return { ok: false, error: error.message };
+  }
+  if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
+    return {
+      ok: false,
+      error: String((data as { error?: string }).error || 'purge_failed'),
+    };
   }
   return { ok: true };
 }
