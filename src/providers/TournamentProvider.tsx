@@ -1387,7 +1387,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           description: rateLimited
             ? 'تم تجاوز حد إيميلات Supabase. انتظر بضع دقائق ثم أنشئ حساباً جديداً.'
             : alreadyExists
-              ? 'هذا البريد ما زال في Auth (حذف المشرف السابق كان حظراً فقط). احذفه من Authentication → Users أو نفّذ ADMIN-PURGE-USER.sql ثم سجّل من جديد.'
+              ? 'البريد موجود في Authentication. احذفه من Users أو نفّذ FREE-EMAIL-FOR-SIGNUP.sql ثم سجّل مجدداً.'
               : remote.error ||
                 'تعذّر إنشاء الحساب في السحابة. تأكد أن Confirm email معطّل ثم أعد المحاولة.',
         });
