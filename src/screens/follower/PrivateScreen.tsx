@@ -1,5 +1,4 @@
 import React, {
-  createElement,
   memo,
   useCallback,
   useEffect,
@@ -9,6 +8,7 @@ import React, {
 } from 'react';
 import {
   Alert,
+  AppState,
   FlatList,
   Image,
   Modal,
@@ -24,6 +24,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { ResizeMode, Video } from 'expo-av';
 import type { AVPlaybackStatus, Video as VideoType } from 'expo-av';
+import { useIsFocused } from '@react-navigation/native';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
@@ -32,6 +33,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { LoadingState } from '@/components/feedback/LoadingState';
+import { InlineVideoPlayer } from '@/components/media/InlineVideoPlayer';
 import {
   Avatar,
   Button,
@@ -59,7 +61,13 @@ function isHttpUrl(url?: string) {
 
 /** رسائل وصلت كنص رابط قبل أعمدة الوسائط */
 function isVideoUrl(url: string) {
-  return /\.(?:mp4|mov|webm|m4v)(?:\?\S*)?$/i.test(url.trim());
+  const u = url.trim();
+  if (/\.(?:mp4|mov|webm|m4v|mkv)(?:\?\S*)?$/i.test(u)) return true;
+  // مسارات تخزين بدون امتداد واضح غالباً فيديو عند وجود /video أو content-type في المسار
+  if (/\/(?:video|videos|highlights|private-dm)[/_-]/i.test(u) && !/\.(?:png|jpe?g|gif|webp|svg)(?:\?\S*)?$/i.test(u)) {
+    return /video|mp4|mov|webm/i.test(u);
+  }
+  return false;
 }
 
 function resolveChatMedia(message: {
@@ -115,56 +123,57 @@ type AttachableItem = {
 };
 
 const ChatVideoBubble = memo(function ChatVideoBubble({ uri }: { uri: string }) {
+  const focused = useIsFocused();
   const videoRef = useRef<VideoType | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [failed, setFailed] = useState(false);
 
-  // على الويب: عنصر video أصلي يعرض أول إطار + أزرار التشغيل بوضوح
-  if (Platform.OS === 'web') {
-    return (
-      <View style={styles.bubbleMediaWrap}>
-        {createElement('video', {
-          src: uri,
-          controls: true,
-          playsInline: true,
-          preload: 'metadata',
-          style: {
-            width: 200,
-            height: 120,
-            objectFit: 'cover',
-            borderRadius: 10,
-            backgroundColor: '#0b1220',
-            display: 'block',
-          },
-        })}
-      </View>
-    );
-  }
-
-  const onStatus = useCallback((status: AVPlaybackStatus) => {
-    if (!status.isLoaded) return;
-    setPlaying(status.isPlaying);
+  const stop = useCallback(() => {
+    void videoRef.current?.pauseAsync().catch(() => undefined);
+    if (Platform.OS === 'web') {
+      void videoRef.current?.unloadAsync().catch(() => undefined);
+    }
+    setPlaying(false);
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    const warm = async () => {
-      try {
-        const player = videoRef.current;
-        if (!player) return;
-        // تحميل أول إطار ثم إيقاف — حتى لا يبقى صندوق فارغ
-        await player.setPositionAsync(0);
-        await player.playAsync();
-        await new Promise((r) => setTimeout(r, 120));
-        if (!cancelled) await player.pauseAsync();
-      } catch {
-        // تجاهل فشل التحميل الأولي
-      }
-    };
-    void warm();
-    return () => {
-      cancelled = true;
-    };
-  }, [uri]);
+    if (!focused) stop();
+    return () => stop();
+  }, [focused, uri, stop]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') stop();
+    });
+    return () => sub.remove();
+  }, [stop]);
+
+  const onStatus = useCallback((status: AVPlaybackStatus) => {
+    if (!status.isLoaded) {
+      if (status.error) setFailed(true);
+      return;
+    }
+    setPlaying(status.isPlaying);
+  }, []);
+
+  if (!focused) {
+    return <View style={[styles.bubbleMediaWrap, styles.bubbleMedia, { backgroundColor: '#0b1220' }]} />;
+  }
+
+  if (failed) {
+    return (
+      <View
+        style={[
+          styles.bubbleMediaWrap,
+          styles.bubbleMedia,
+          styles.pendingVideo,
+          { backgroundColor: '#0b1220' },
+        ]}
+      >
+        <Ionicons name="alert-circle-outline" size={28} color="#fff" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.bubbleMediaWrap}>
@@ -178,12 +187,14 @@ const ChatVideoBubble = memo(function ChatVideoBubble({ uri }: { uri: string }) 
         isLooping={false}
         isMuted={false}
         onPlaybackStatusUpdate={onStatus}
+        onError={() => setFailed(true)}
+        {...(Platform.OS === 'web' ? ({ playsInline: true } as object) : null)}
       />
       {!playing ? (
         <Pressable
           style={styles.videoPlayOverlay}
           onPress={() => {
-            void videoRef.current?.playAsync();
+            void videoRef.current?.playAsync().catch(() => setFailed(true));
           }}
           accessibilityRole="button"
           accessibilityLabel="تشغيل"
@@ -283,16 +294,7 @@ const SavedCard = memo(function SavedCard({
         <Image source={{ uri: item.mediaUrl }} style={styles.savedMedia} />
       ) : null}
       {item.kind === 'video' && item.mediaUrl ? (
-        <View
-          style={[
-            styles.savedMedia,
-            styles.videoPlaceholder,
-            { backgroundColor: theme.colors.surfaceElevated },
-          ]}
-        >
-          <Ionicons name="videocam" size={28} color={theme.colors.accent} />
-          <Muted>{t('common.video')}</Muted>
-        </View>
+        <InlineVideoPlayer uri={item.mediaUrl} height={180} style={styles.savedMedia} />
       ) : null}
       {item.title ? (
         <Text style={[styles.savedTitle, { color: theme.colors.text }]}>
@@ -1114,18 +1116,21 @@ export default function PrivateScreen() {
                           resizeMode="cover"
                         />
                       ) : (
-                        <View
-                          style={[
-                            styles.pendingThumb,
-                            styles.pendingVideo,
-                            { backgroundColor: theme.colors.surfaceElevated },
-                          ]}
-                        >
-                          <Ionicons
-                            name="videocam"
-                            size={22}
-                            color={theme.colors.accent}
+                        <View style={styles.pendingThumb}>
+                          <Video
+                            source={{ uri: pendingMedia.uri }}
+                            style={StyleSheet.absoluteFillObject}
+                            resizeMode={ResizeMode.COVER}
+                            shouldPlay={false}
+                            isMuted
+                            useNativeControls={false}
+                            {...(Platform.OS === 'web'
+                              ? ({ playsInline: true } as object)
+                              : null)}
                           />
+                          <View style={styles.pendingVideoBadge}>
+                            <Ionicons name="play" size={14} color="#fff" />
+                          </View>
                         </View>
                       )}
                       <Muted style={{ flex: 1 }} numberOfLines={1}>
@@ -1395,18 +1400,21 @@ export default function PrivateScreen() {
                           resizeMode="cover"
                         />
                       ) : (
-                        <View
-                          style={[
-                            styles.attachThumb,
-                            styles.pendingVideo,
-                            { backgroundColor: theme.colors.border },
-                          ]}
-                        >
-                          <Ionicons
-                            name="play-circle"
-                            size={28}
-                            color={theme.colors.accent}
+                        <View style={styles.attachThumb}>
+                          <Video
+                            source={{ uri: item.uri }}
+                            style={StyleSheet.absoluteFillObject}
+                            resizeMode={ResizeMode.COVER}
+                            shouldPlay={false}
+                            isMuted
+                            useNativeControls={false}
+                            {...(Platform.OS === 'web'
+                              ? ({ playsInline: true } as object)
+                              : null)}
                           />
+                          <View style={styles.attachPlayBadge}>
+                            <Ionicons name="play-circle" size={28} color="#fff" />
+                          </View>
                         </View>
                       )}
                       <Text
@@ -1631,10 +1639,24 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#0b1220',
   },
   pendingVideo: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  pendingVideoBadge: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  attachPlayBadge: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.28)',
   },
   attachBackdrop: {
     flex: 1,
@@ -1696,6 +1718,8 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
     borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#0b1220',
   },
   savedCard: { gap: 8, marginBottom: 10 },
   savedList: { flex: 1, minHeight: 280 },

@@ -1,5 +1,6 @@
-import React, { memo, useMemo, useState } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
   Modal,
   Platform,
   Pressable,
@@ -8,6 +9,8 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { ResizeMode, Video } from 'expo-av';
+import type { Video as VideoType } from 'expo-av';
+import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useResponsive } from '@/hooks/useResponsive';
@@ -24,7 +27,7 @@ type Props = {
 
 /**
  * لقطة فيديو قابلة للتشغيل داخل البطاقة (ويب + جوال)
- * على الكمبيوتر: ارتفاع أوسع للمشاهدة + زر تكبير لملء الشاشة.
+ * يتوقف تلقائياً عند مغادرة الشاشة أو خلفية التطبيق.
  */
 function InlineVideoPlayerComponent({
   uri,
@@ -33,8 +36,11 @@ function InlineVideoPlayerComponent({
   autoPlayMuted = false,
 }: Props) {
   const theme = useAppTheme();
+  const focused = useIsFocused();
   const { width, height: winH, tablet } = useResponsive();
   const [fullscreen, setFullscreen] = useState(false);
+  const videoRef = useRef<VideoType | null>(null);
+  const fullRef = useRef<VideoType | null>(null);
 
   const playerHeight = useMemo(() => {
     if (typeof heightProp === 'number') return heightProp;
@@ -46,7 +52,6 @@ function InlineVideoPlayerComponent({
     );
     const byRatio = Math.round(cardW * (9 / 16));
 
-    // كمبيوتر / تابلت: لقطة أوضح للمشاهدة (~نصف الشاشة تقريباً)
     if (Platform.OS === 'web' || tablet) {
       return clamp(
         Math.max(byRatio, Math.round(winH * 0.48)),
@@ -58,14 +63,40 @@ function InlineVideoPlayerComponent({
     return clamp(byRatio, 200, 320);
   }, [heightProp, width, winH, tablet]);
 
+  const stopAll = () => {
+    void videoRef.current?.pauseAsync().catch(() => undefined);
+    void fullRef.current?.pauseAsync().catch(() => undefined);
+    if (Platform.OS === 'web') {
+      void videoRef.current?.unloadAsync().catch(() => undefined);
+      void fullRef.current?.unloadAsync().catch(() => undefined);
+    }
+    setFullscreen(false);
+  };
+
+  useEffect(() => {
+    if (!focused) stopAll();
+    return () => stopAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focused, uri]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') stopAll();
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (!uri) return null;
+
+  const canAutoPlay = autoPlayMuted && focused;
 
   const videoProps = {
     source: { uri },
     useNativeControls: true,
     resizeMode: ResizeMode.CONTAIN,
     isLooping: false,
-    shouldPlay: autoPlayMuted,
+    shouldPlay: canAutoPlay,
     isMuted: autoPlayMuted,
     ...(Platform.OS === 'web' ? ({ playsInline: true } as object) : null),
   };
@@ -83,9 +114,13 @@ function InlineVideoPlayerComponent({
           style,
         ]}
       >
-        <Video {...videoProps} style={styles.video} />
+        {focused ? (
+          <Video ref={videoRef} {...videoProps} style={styles.video} />
+        ) : (
+          <View style={[styles.video, { backgroundColor: '#000' }]} />
+        )}
 
-        {(Platform.OS === 'web' || tablet) && (
+        {(Platform.OS === 'web' || tablet) && focused ? (
           <Pressable
             onPress={() => setFullscreen(true)}
             accessibilityRole="button"
@@ -97,17 +132,18 @@ function InlineVideoPlayerComponent({
           >
             <Ionicons name="expand-outline" size={18} color="#fff" />
           </Pressable>
-        )}
+        ) : null}
       </View>
 
       <Modal
-        visible={fullscreen}
+        visible={fullscreen && focused}
         animationType="fade"
         supportedOrientations={['portrait', 'landscape']}
         onRequestClose={() => setFullscreen(false)}
       >
         <View style={styles.fullRoot}>
           <Video
+            ref={fullRef}
             {...videoProps}
             style={styles.fullVideo}
             shouldPlay

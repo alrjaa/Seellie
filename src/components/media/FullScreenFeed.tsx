@@ -125,6 +125,10 @@ const Slide = memo(function Slide({
     if (!active) {
       setPaused(true);
       void videoRef.current?.pauseAsync().catch(() => undefined);
+      // على الويب: تفريغ المصدر يوقف الصوت عند مغادرة التبويب
+      if (Platform.OS === 'web') {
+        void videoRef.current?.unloadAsync().catch(() => undefined);
+      }
     }
   }, [active]);
 
@@ -179,13 +183,13 @@ const Slide = memo(function Slide({
           onPress={handleContentPress}
           style={styles.videoFill}
         >
-          {playableUri && !loadError ? (
+          {playableUri && !loadError && active ? (
             <Video
               ref={videoRef}
               source={{ uri: item.mediaUrl! }}
               style={StyleSheet.absoluteFill}
               resizeMode={ResizeMode.CONTAIN}
-              shouldPlay={active && !paused}
+              shouldPlay={!paused}
               isLooping
               isMuted={false}
               useNativeControls={false}
@@ -200,7 +204,7 @@ const Slide = memo(function Slide({
             />
           ) : null}
 
-          {item.posterUrl && (paused || loadError || !playableUri) ? (
+          {item.posterUrl && (paused || loadError || !playableUri || !active) ? (
             <Image
               source={{ uri: item.posterUrl }}
               style={StyleSheet.absoluteFill}
@@ -330,11 +334,19 @@ function FullScreenFeedComponent({
   const sourceId = `feed:${reactId}`;
   const [height, setHeight] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(data[0]?.id ?? null);
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   const overlayOpacity = useRef(new Animated.Value(1)).current;
   const overlayTranslate = useRef(new Animated.Value(0)).current;
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 70,
   }).current;
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      setAppActive(state === 'active');
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (!focused) {
@@ -414,7 +426,7 @@ function FullScreenFeedComponent({
       <Slide
         item={item}
         height={height}
-        active={item.id === activeId}
+        active={focused && appActive && item.id === activeId}
         onLike={() => onLike(item)}
         onPressAuthor={
           onPressAuthor ? () => onPressAuthor(item) : undefined
@@ -422,7 +434,7 @@ function FullScreenFeedComponent({
         onDoubleTap={onDoubleTap ? () => onDoubleTap(item) : undefined}
       />
     ),
-    [activeId, height, onLike, onPressAuthor, onDoubleTap]
+    [activeId, appActive, focused, height, onLike, onPressAuthor, onDoubleTap]
   );
 
   const getItemLayout = useCallback(
