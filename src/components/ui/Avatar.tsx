@@ -13,13 +13,15 @@ type Props = {
 
 function AvatarComponent({ uri, name, size = 48 }: Props) {
   const theme = useAppTheme();
-  const [failed, setFailed] = useState(false);
-  const showImage = !!uri && !failed;
+  const [failedUri, setFailedUri] = useState<string | null>(null);
+  const trimmed = uri?.trim() || '';
+  const showImage = !!trimmed && failedUri !== trimmed;
 
   if (showImage) {
     return (
       <Image
-        source={{ uri }}
+        key={trimmed}
+        source={{ uri: trimmed }}
         style={{
           width: size,
           height: size,
@@ -32,7 +34,7 @@ function AvatarComponent({ uri, name, size = 48 }: Props) {
         transition={200}
         cachePolicy="memory-disk"
         accessibilityLabel={name}
-        onError={() => setFailed(true)}
+        onError={() => setFailedUri(trimmed)}
       />
     );
   }

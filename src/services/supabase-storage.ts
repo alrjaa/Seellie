@@ -15,6 +15,25 @@ function normalizeExt(ext: string, kind: 'photo' | 'video'): string {
   return ext;
 }
 
+function extFromUriOrMime(
+  localUri: string,
+  kind: 'photo' | 'video',
+  mime?: string
+): string {
+  // blob:/data: على الويب غالباً بلا امتداد
+  if (/^(blob:|data:)/i.test(localUri)) {
+    if (mime?.includes('png')) return 'png';
+    if (mime?.includes('webp')) return 'webp';
+    if (mime?.includes('webm')) return 'webm';
+    if (mime?.includes('quicktime') || mime?.includes('mov')) return 'mov';
+    return kind === 'video' ? 'mp4' : 'jpg';
+  }
+  const raw =
+    localUri.match(/\.([a-z0-9]+)(?:\?|#|$)/i)?.[1]?.toLowerCase() ||
+    (kind === 'video' ? 'mp4' : 'jpg');
+  return normalizeExt(raw, kind);
+}
+
 /**
  * يرفع ملفاً محلياً إلى Supabase Storage ويعيد رابطاً عاماً HTTPS.
  * folder مثل: shares | competitions | matches | users | forums | avatars
@@ -34,18 +53,10 @@ export async function uploadAppMedia(
   }
 
   try {
-    const rawExt =
-      localUri.match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1]?.toLowerCase() ||
-      (kind === 'video' ? 'mp4' : 'jpg');
-    const ext = normalizeExt(rawExt, kind);
-    const allowExt = kind === 'video' ? ALLOWED_VIDEO_EXT : ALLOWED_IMAGE_EXT;
-    if (!allowExt.has(ext)) {
-      console.warn('[supabase] upload refused: extension', ext);
-      return null;
-    }
     const safeFolder = folder.replace(/[^a-z0-9/_-]/gi, '') || 'uploads';
     const response = await fetch(localUri);
-    if (!response.ok) {
+    // بعض متصفحات الويب لا تضع status صحيحاً لـ blob:
+    if (!response.ok && !/^(blob:|data:)/i.test(localUri)) {
       console.warn('[supabase] upload fetch', response.status);
       return null;
     }
@@ -59,26 +70,28 @@ export async function uploadAppMedia(
       console.warn('[supabase] upload refused: size', blob.size);
       return null;
     }
+
     const contentType =
       blob.type && blob.type !== 'application/octet-stream'
         ? blob.type
         : kind === 'video'
-          ? ext === 'mov'
-            ? 'video/quicktime'
-            : ext === 'webm'
-              ? 'video/webm'
-              : 'video/mp4'
-          : ext === 'png'
-            ? 'image/png'
-            : ext === 'webp'
-              ? 'image/webp'
-              : 'image/jpeg';
+          ? 'video/mp4'
+          : 'image/jpeg';
 
     const mimeOk =
-      (kind === 'photo' && contentType.startsWith('image/')) ||
-      (kind === 'video' && contentType.startsWith('video/'));
+      (kind === 'photo' &&
+        (contentType.startsWith('image/') || !blob.type)) ||
+      (kind === 'video' &&
+        (contentType.startsWith('video/') || !blob.type));
     if (!mimeOk) {
       console.warn('[supabase] upload refused: mime', contentType);
+      return null;
+    }
+
+    const ext = extFromUriOrMime(localUri, kind, contentType);
+    const allowExt = kind === 'video' ? ALLOWED_VIDEO_EXT : ALLOWED_IMAGE_EXT;
+    if (!allowExt.has(ext)) {
+      console.warn('[supabase] upload refused: extension', ext);
       return null;
     }
 
@@ -93,7 +106,14 @@ export async function uploadAppMedia(
     const uploadPath = `${userId}/${safeFolder}/${Date.now()}.${uploadExt}`;
 
     const { error } = await sb.storage.from(BUCKET).upload(uploadPath, blob, {
-      contentType,
+      contentType:
+        kind === 'photo'
+          ? uploadExt === 'png'
+            ? 'image/png'
+            : uploadExt === 'webp'
+              ? 'image/webp'
+              : 'image/jpeg'
+          : contentType,
       upsert: false,
       cacheControl: '3600',
     });

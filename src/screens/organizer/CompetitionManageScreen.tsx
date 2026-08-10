@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -394,7 +395,8 @@ export default function CompetitionManageScreen() {
               setPickingLogo(true);
               const perm =
                 await ImagePicker.requestMediaLibraryPermissionsAsync();
-              if (!perm.granted) {
+              // على الويب الصلاحية غالباً غير مطلوبة / غير دقيقة
+              if (!perm.granted && Platform.OS !== 'web') {
                 toast({
                   variant: 'destructive',
                   title: t('media.permissionDenied'),
@@ -403,10 +405,12 @@ export default function CompetitionManageScreen() {
                 return;
               }
               const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                mediaTypes: ['images'],
                 quality: 0.85,
-                allowsEditing: true,
+                // allowsEditing يكسر الالتقاط على متصفح الكمبيوتر
+                allowsEditing: Platform.OS !== 'web',
                 aspect: [1, 1],
+                exif: false,
               });
               if (result.canceled || !result.assets?.[0]?.uri) return;
               const asset = result.assets[0];
@@ -416,7 +420,7 @@ export default function CompetitionManageScreen() {
                 height: asset.height,
                 fileSize: asset.fileSize,
               });
-              // لا نرفض بالأبعاد بعد القصّ (مثل الأفاتار) — الحجم فقط
+              // لا نرفض بالأبعاد بعد القصّ/الويب — الحجم فقط
               if (!check.ok && check.reason === 'size') {
                 toast({
                   variant: 'destructive',
@@ -428,7 +432,6 @@ export default function CompetitionManageScreen() {
                 return;
               }
 
-              // لا نحفظ file:// في السحابة — نرفع أولاً ثم نحدّث مرة واحدة
               const cloud = await requireCloudSession(currentUser?.id);
               if (!cloud.session) {
                 toast({
@@ -459,10 +462,12 @@ export default function CompetitionManageScreen() {
                 { ...competition, logo: resolved.url },
                 t('organizer.competitionManage.logoUpdated')
               );
-            } catch {
+            } catch (e) {
+              console.warn('[competition logo]', e);
               toast({
                 variant: 'destructive',
                 title: t('media.pickFailed'),
+                description: t('media.pickFailedHint'),
               });
             } finally {
               setPickingLogo(false);
