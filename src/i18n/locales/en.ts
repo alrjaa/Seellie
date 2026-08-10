@@ -350,10 +350,12 @@ export const en: TranslationTree = {
     changeHandleIcon: 'Change handle photo',
     handleIconHint:
       'Choose or add a photo shown next to your handle in the header, menus, and profile.',
+    entityPhotoLabel: 'Photo / icon',
     removeAvatar: 'Remove photo',
     avatarRemoved: 'Handle photo removed',
     photoUrlLabel: 'Photo URL',
     addPhoto: 'Add photo',
+    entityPhotoUpdated: 'Photo updated',
     videosSection: 'Videos',
     noVideos: 'No videos',
     addVideosHint: 'Add skill videos from account management.',

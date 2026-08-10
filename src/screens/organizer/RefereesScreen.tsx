@@ -8,6 +8,7 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { EntityAvatarField } from '@/components/account/EntityAvatarField';
 import {
   Avatar,
   Button,
@@ -40,6 +41,7 @@ export default function OrganizerRefereesScreen() {
     referees,
     registerRefereeForCompetition,
     removeRefereeFromCompetition,
+    updateReferee,
   } = useTournament();
 
   const myCompetitions = useMemo(() => {
@@ -53,6 +55,12 @@ export default function OrganizerRefereesScreen() {
     useState<Referee['role']>('حكم ساحة');
   const [refereeMobile, setRefereeMobile] = useState('');
   const [refereeCity, setRefereeCity] = useState('');
+  const [refereeAvatar, setRefereeAvatar] = useState<string | undefined>();
+  const [avatarEdit, setAvatarEdit] = useState<{
+    id: string;
+    name: string;
+    value?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!competitionId && myCompetitions[0]) {
@@ -109,6 +117,13 @@ export default function OrganizerRefereesScreen() {
           onChangeText={setRefereeName}
           placeholder={t('organizer.referees.namePlaceholder')}
         />
+        <EntityAvatarField
+          value={refereeAvatar}
+          name={refereeName || '?'}
+          folder="referees"
+          onChange={setRefereeAvatar}
+          compact
+        />
         <Muted>{t('organizer.competitionManage.refereeRole')}</Muted>
         <View style={styles.chips}>
           {REFEREE_ROLE_OPTIONS.map((option) => (
@@ -143,11 +158,13 @@ export default function OrganizerRefereesScreen() {
                 role: refereeRole,
                 mobile: refereeMobile,
                 city: refereeCity,
+                avatar: refereeAvatar,
               })
             ) {
               setRefereeName('');
               setRefereeMobile('');
               setRefereeCity('');
+              setRefereeAvatar(undefined);
               setRefereeRole('حكم ساحة');
             }
           }}
@@ -175,6 +192,27 @@ export default function OrganizerRefereesScreen() {
                 </Text>
                 <Muted>{ref.role}</Muted>
                 {ref.mobile ? <Muted>{ref.mobile}</Muted> : null}
+                <Pressable
+                  onPress={() =>
+                    setAvatarEdit({
+                      id: ref.id,
+                      name: ref.name,
+                      value: ref.avatar,
+                    })
+                  }
+                  hitSlop={6}
+                >
+                  <Text
+                    style={{
+                      color: theme.colors.accent,
+                      fontWeight: '700',
+                      fontSize: 11,
+                      marginTop: 4,
+                    }}
+                  >
+                    {t('media.changeHandleIcon')}
+                  </Text>
+                </Pressable>
               </View>
               {selected ? (
                 <Pressable
@@ -203,6 +241,36 @@ export default function OrganizerRefereesScreen() {
           ))
         )}
       </Card>
+
+      {avatarEdit ? (
+        <Card style={styles.card}>
+          <Subtitle>
+            {t('media.changeHandleIcon')} — {avatarEdit.name}
+          </Subtitle>
+          <EntityAvatarField
+            value={avatarEdit.value}
+            name={avatarEdit.name}
+            folder="referees"
+            onChange={(url) => {
+              const current = referees.find((r) => r.id === avatarEdit.id);
+              if (current) {
+                updateReferee(
+                  { ...current, avatar: url },
+                  t('media.entityPhotoUpdated')
+                );
+              }
+              setAvatarEdit((prev) =>
+                prev ? { ...prev, value: url } : prev
+              );
+            }}
+          />
+          <Button
+            label={t('common.done')}
+            variant="outline"
+            onPress={() => setAvatarEdit(null)}
+          />
+        </Card>
+      ) : null}
     </Screen>
   );
 }

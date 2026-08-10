@@ -20,6 +20,7 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { ReasonModal } from '@/components/feedback/ReasonModal';
+import { EntityAvatarField } from '@/components/account/EntityAvatarField';
 import { Avatar, Button, Card, Input, Muted, Subtitle, Title } from '@/components/ui';
 import { confirmDestructive } from '@/utils/confirm';
 import {
@@ -70,6 +71,8 @@ export default function CompetitionDetailScreen() {
     removeRefereeFromCompetition,
     addStaffToCompetition,
     removeStaffFromCompetition,
+    updateStaffAvatar,
+    updatePlayerAvatar,
     deleteCompetition,
   } = useTournament();
 
@@ -84,6 +87,17 @@ export default function CompetitionDetailScreen() {
   const [staffName, setStaffName] = useState('');
   const [staffRole, setStaffRole] = useState('');
   const [staffMobile, setStaffMobile] = useState('');
+  const [staffAvatar, setStaffAvatar] = useState<string | undefined>();
+  const [avatarEdit, setAvatarEdit] = useState<
+    | {
+        kind: 'player' | 'staff' | 'referee';
+        id: string;
+        teamId?: string;
+        name: string;
+        value?: string;
+      }
+    | null
+  >(null);
 
   const competition = useMemo(
     () => competitions.find((c) => c.id === id),
@@ -407,6 +421,21 @@ export default function CompetitionDetailScreen() {
                   <View style={styles.inlineActions}>
                     <Pressable
                       onPress={() =>
+                        setAvatarEdit({
+                          kind: 'player',
+                          id: player.id,
+                          teamId: team.id,
+                          name: player.name,
+                          value: player.avatar,
+                        })
+                      }
+                    >
+                      <Text style={{ color: theme.colors.accent, fontWeight: '800', fontSize: 11 }}>
+                        {t('media.changeHandleIcon')}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() =>
                         setPending({
                           kind: 'player',
                           teamId: team.id,
@@ -633,34 +662,59 @@ export default function CompetitionDetailScreen() {
                   key={member.id}
                   style={[styles.staffRow, { borderTopColor: theme.colors.border }]}
                 >
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={[styles.value, { color: theme.colors.text }]}>
-                      {member.name}
-                    </Text>
-                    <Muted>{member.role}</Muted>
-                    <Muted>{member.mobile || '—'}</Muted>
-                  </View>
-                  <Pressable
-                    onPress={() =>
-                      removeStaffFromCompetition(
-                        competition.id,
-                        member.id,
-                        t('organizer.competitionManage.staffRemoved', {
-                          name: member.name,
-                        })
-                      )
-                    }
-                  >
-                    <Text
-                      style={{
-                        color: theme.colors.danger,
-                        fontWeight: '800',
-                        fontSize: 12,
-                      }}
+                  <View style={styles.personRow}>
+                    <Avatar uri={member.avatar} name={member.name} size={36} />
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={[styles.value, { color: theme.colors.text }]}>
+                        {member.name}
+                      </Text>
+                      <Muted>{member.role}</Muted>
+                      <Muted>{member.mobile || '—'}</Muted>
+                      <Pressable
+                        onPress={() =>
+                          setAvatarEdit({
+                            kind: 'staff',
+                            id: member.id,
+                            name: member.name,
+                            value: member.avatar,
+                          })
+                        }
+                        hitSlop={6}
+                      >
+                        <Text
+                          style={{
+                            color: theme.colors.accent,
+                            fontWeight: '700',
+                            fontSize: 11,
+                            marginTop: 2,
+                          }}
+                        >
+                          {t('media.changeHandleIcon')}
+                        </Text>
+                      </Pressable>
+                    </View>
+                    <Pressable
+                      onPress={() =>
+                        removeStaffFromCompetition(
+                          competition.id,
+                          member.id,
+                          t('organizer.competitionManage.staffRemoved', {
+                            name: member.name,
+                          })
+                        )
+                      }
                     >
-                      {t('organizer.competitionManage.remove')}
-                    </Text>
-                  </Pressable>
+                      <Text
+                        style={{
+                          color: theme.colors.danger,
+                          fontWeight: '800',
+                          fontSize: 12,
+                        }}
+                      >
+                        {t('organizer.competitionManage.remove')}
+                      </Text>
+                    </Pressable>
+                  </View>
                 </View>
               ))
             )}
@@ -670,6 +724,13 @@ export default function CompetitionDetailScreen() {
               label={t('organizer.competitionManage.staffName')}
               value={staffName}
               onChangeText={setStaffName}
+            />
+            <EntityAvatarField
+              value={staffAvatar}
+              name={staffName || '?'}
+              folder="staff"
+              onChange={setStaffAvatar}
+              compact
             />
             <Input
               label={t('organizer.competitionManage.staffRole')}
@@ -691,11 +752,13 @@ export default function CompetitionDetailScreen() {
                     name: staffName,
                     role: staffRole,
                     mobile: staffMobile,
+                    avatar: staffAvatar,
                   })
                 ) {
                   setStaffName('');
                   setStaffRole('');
                   setStaffMobile('');
+                  setStaffAvatar(undefined);
                 }
               }}
             />
@@ -1153,6 +1216,20 @@ export default function CompetitionDetailScreen() {
                     <View style={styles.inlineActions}>
                       <Pressable
                         onPress={() =>
+                          setAvatarEdit({
+                            kind: 'referee',
+                            id: ref.id,
+                            name: ref.name,
+                            value: ref.avatar,
+                          })
+                        }
+                      >
+                        <Text style={{ color: theme.colors.accent, fontWeight: '800', fontSize: 11 }}>
+                          {t('media.changeHandleIcon')}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() =>
                           setPending({
                             kind: 'referee',
                             referee: ref,
@@ -1273,6 +1350,59 @@ export default function CompetitionDetailScreen() {
           onCancel={() => setPending(null)}
           onConfirm={confirmPending}
         />
+      ) : null}
+
+      {avatarEdit ? (
+        <Card style={styles.card}>
+          <Subtitle>
+            {t('media.changeHandleIcon')} — {avatarEdit.name}
+          </Subtitle>
+          <EntityAvatarField
+            value={avatarEdit.value}
+            name={avatarEdit.name}
+            folder={
+              avatarEdit.kind === 'player'
+                ? 'players'
+                : avatarEdit.kind === 'staff'
+                  ? 'staff'
+                  : 'referees'
+            }
+            onChange={(url) => {
+              if (avatarEdit.kind === 'player' && avatarEdit.teamId) {
+                updatePlayerAvatar(
+                  competition.id,
+                  avatarEdit.teamId,
+                  avatarEdit.id,
+                  url,
+                  t('media.entityPhotoUpdated')
+                );
+              } else if (avatarEdit.kind === 'staff') {
+                updateStaffAvatar(
+                  competition.id,
+                  avatarEdit.id,
+                  url,
+                  t('media.entityPhotoUpdated')
+                );
+              } else if (avatarEdit.kind === 'referee') {
+                const current = referees.find((r) => r.id === avatarEdit.id);
+                if (current) {
+                  updateReferee(
+                    { ...current, avatar: url },
+                    t('media.entityPhotoUpdated')
+                  );
+                }
+              }
+              setAvatarEdit((prev) =>
+                prev ? { ...prev, value: url } : prev
+              );
+            }}
+          />
+          <Button
+            label={t('common.done')}
+            variant="outline"
+            onPress={() => setAvatarEdit(null)}
+          />
+        </Card>
       ) : null}
     </Screen>
   );

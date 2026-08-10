@@ -138,6 +138,7 @@ export interface TeamOfficial {
   address?: string;
   mobile?: string;
   email?: string;
+  avatar?: string;
   status: 'active' | 'suspended' | 'warned';
 }
 
@@ -228,6 +229,7 @@ export interface CompetitionStaff {
   name: string;
   role: string;
   mobile?: string;
+  avatar?: string;
 }
 
 export interface Competition {

@@ -38,6 +38,7 @@ import {
 } from '@/components/ui';
 import { formatVenueAddress } from '@/utils/competition';
 import { MIN_COMPETITION_TEAMS } from '@/utils/competition-request';
+import { EntityAvatarField } from '@/components/account/EntityAvatarField';
 import { formatArabicDate, formatArabicTime } from '@/utils';
 import { MEDIA_SPECS, validatePickerAsset } from '@/utils/media-limits';
 
@@ -76,13 +77,16 @@ export default function CompetitionManageScreen() {
     renameTeam,
     deleteTeam,
     addPlayerToTeam,
+    updatePlayerAvatar,
     addStaffToCompetition,
+    updateStaffAvatar,
     removeStaffFromCompetition,
     generateFixturesForCompetition,
     updateMatchResult,
     registerRefereeForCompetition,
     assignRefereeToCompetition,
     removeRefereeFromCompetition,
+    updateReferee,
     updateCompetition,
   } = useTournament();
   const { toast } = useToast();
@@ -98,14 +102,27 @@ export default function CompetitionManageScreen() {
   const [playerName, setPlayerName] = useState('');
   const [jersey, setJersey] = useState('');
   const [position, setPosition] = useState<Player['position']>('وسط');
+  const [playerAvatar, setPlayerAvatar] = useState<string | undefined>();
   const [staffName, setStaffName] = useState('');
   const [staffRole, setStaffRole] = useState('');
   const [staffMobile, setStaffMobile] = useState('');
+  const [staffAvatar, setStaffAvatar] = useState<string | undefined>();
   const [refereeName, setRefereeName] = useState('');
   const [refereeRole, setRefereeRole] =
     useState<Referee['role']>('حكم ساحة');
   const [refereeMobile, setRefereeMobile] = useState('');
   const [refereeCity, setRefereeCity] = useState('');
+  const [refereeAvatar, setRefereeAvatar] = useState<string | undefined>();
+  const [avatarEdit, setAvatarEdit] = useState<
+    | {
+        kind: 'player' | 'staff' | 'referee';
+        id: string;
+        teamId?: string;
+        name: string;
+        value?: string;
+      }
+    | null
+  >(null);
   const [scores, setScores] = useState<
     Record<string, { t1: number; t2: number }>
   >({});
@@ -308,6 +325,30 @@ export default function CompetitionManageScreen() {
                 <Muted>
                   #{player.jerseyNumber} · {player.position}
                 </Muted>
+                <Pressable
+                  onPress={() =>
+                    setAvatarEdit({
+                      kind: 'player',
+                      id: player.id,
+                      teamId: team.id,
+                      name: player.name,
+                      value: player.avatar,
+                    })
+                  }
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('media.entityPhotoLabel')}
+                >
+                  <Text
+                    style={{
+                      color: theme.colors.accent,
+                      fontWeight: '700',
+                      fontSize: 11,
+                    }}
+                  >
+                    {t('media.changeHandleIcon')}
+                  </Text>
+                </Pressable>
               </View>
             ))
           : null}
@@ -414,6 +455,13 @@ export default function CompetitionManageScreen() {
           value={refereeName}
           onChangeText={setRefereeName}
         />
+        <EntityAvatarField
+          value={refereeAvatar}
+          name={refereeName || '?'}
+          folder="referees"
+          onChange={setRefereeAvatar}
+          compact
+        />
         <Muted>{t('organizer.competitionManage.refereeRole')}</Muted>
         <View style={styles.chips}>
           {REFEREE_ROLE_OPTIONS.map((option) => (
@@ -447,11 +495,13 @@ export default function CompetitionManageScreen() {
                 role: refereeRole,
                 mobile: refereeMobile,
                 city: refereeCity,
+                avatar: refereeAvatar,
               })
             ) {
               setRefereeName('');
               setRefereeMobile('');
               setRefereeCity('');
+              setRefereeAvatar(undefined);
               setRefereeRole('حكم ساحة');
             }
           }}
@@ -579,6 +629,13 @@ export default function CompetitionManageScreen() {
                 />
               ))}
             </View>
+            <EntityAvatarField
+              value={playerAvatar}
+              name={playerName || '?'}
+              folder="players"
+              onChange={setPlayerAvatar}
+              compact
+            />
             <Button
               label={t('organizer.competitionManage.addPlayer')}
               onPress={() => {
@@ -590,11 +647,13 @@ export default function CompetitionManageScreen() {
                     name: playerName.trim(),
                     jerseyNumber: Number(jersey),
                     position,
+                    avatar: playerAvatar,
                   },
                   t('organizer.competitionManage.playerAdded')
                 );
                 setPlayerName('');
                 setJersey('');
+                setPlayerAvatar(undefined);
               }}
             />
           </>
@@ -934,12 +993,35 @@ export default function CompetitionManageScreen() {
               key={member.id}
               style={[styles.refRow, { borderTopColor: theme.colors.border }]}
             >
+              <Avatar uri={member.avatar} name={member.name} size={36} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.value, { color: theme.colors.text }]}>
                   {member.name}
                 </Text>
                 <Muted>{member.role}</Muted>
                 <Muted>{member.mobile || '—'}</Muted>
+                <Pressable
+                  onPress={() =>
+                    setAvatarEdit({
+                      kind: 'staff',
+                      id: member.id,
+                      name: member.name,
+                      value: member.avatar,
+                    })
+                  }
+                  hitSlop={6}
+                >
+                  <Text
+                    style={{
+                      color: theme.colors.accent,
+                      fontWeight: '700',
+                      fontSize: 11,
+                      marginTop: 4,
+                    }}
+                  >
+                    {t('media.changeHandleIcon')}
+                  </Text>
+                </Pressable>
               </View>
               <Pressable
                 onPress={() =>
@@ -972,6 +1054,13 @@ export default function CompetitionManageScreen() {
           value={staffName}
           onChangeText={setStaffName}
         />
+        <EntityAvatarField
+          value={staffAvatar}
+          name={staffName || '?'}
+          folder="staff"
+          onChange={setStaffAvatar}
+          compact
+        />
         <Input
           label={t('organizer.competitionManage.staffRole')}
           value={staffRole}
@@ -992,11 +1081,13 @@ export default function CompetitionManageScreen() {
                 name: staffName,
                 role: staffRole,
                 mobile: staffMobile,
+                avatar: staffAvatar,
               })
             ) {
               setStaffName('');
               setStaffRole('');
               setStaffMobile('');
+              setStaffAvatar(undefined);
             }
           }}
         />
@@ -1018,6 +1109,28 @@ export default function CompetitionManageScreen() {
                   {ref.name}
                 </Text>
                 <Muted>{ref.role}</Muted>
+                <Pressable
+                  onPress={() =>
+                    setAvatarEdit({
+                      kind: 'referee',
+                      id: ref.id,
+                      name: ref.name,
+                      value: ref.avatar,
+                    })
+                  }
+                  hitSlop={6}
+                >
+                  <Text
+                    style={{
+                      color: theme.colors.accent,
+                      fontWeight: '700',
+                      fontSize: 11,
+                      marginTop: 4,
+                    }}
+                  >
+                    {t('media.changeHandleIcon')}
+                  </Text>
+                </Pressable>
               </View>
               <Pressable
                 onPress={() =>
@@ -1078,6 +1191,59 @@ export default function CompetitionManageScreen() {
         payload={sharePayload}
         onClose={() => setSharePayload(null)}
       />
+
+      {avatarEdit ? (
+        <Card style={styles.card}>
+          <Subtitle>
+            {t('media.changeHandleIcon')} — {avatarEdit.name}
+          </Subtitle>
+          <EntityAvatarField
+            value={avatarEdit.value}
+            name={avatarEdit.name}
+            folder={
+              avatarEdit.kind === 'player'
+                ? 'players'
+                : avatarEdit.kind === 'staff'
+                  ? 'staff'
+                  : 'referees'
+            }
+            onChange={(url) => {
+              if (avatarEdit.kind === 'player' && avatarEdit.teamId) {
+                updatePlayerAvatar(
+                  competition.id,
+                  avatarEdit.teamId,
+                  avatarEdit.id,
+                  url,
+                  t('media.entityPhotoUpdated')
+                );
+              } else if (avatarEdit.kind === 'staff') {
+                updateStaffAvatar(
+                  competition.id,
+                  avatarEdit.id,
+                  url,
+                  t('media.entityPhotoUpdated')
+                );
+              } else if (avatarEdit.kind === 'referee') {
+                const current = referees.find((r) => r.id === avatarEdit.id);
+                if (current) {
+                  updateReferee(
+                    { ...current, avatar: url },
+                    t('media.entityPhotoUpdated')
+                  );
+                }
+              }
+              setAvatarEdit((prev) =>
+                prev ? { ...prev, value: url } : prev
+              );
+            }}
+          />
+          <Button
+            label={t('common.done')}
+            variant="outline"
+            onPress={() => setAvatarEdit(null)}
+          />
+        </Card>
+      ) : null}
     </Screen>
   );
 }

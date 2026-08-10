@@ -5,7 +5,8 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
-import { Avatar, Card, Muted, SearchBar, Subtitle } from '@/components/ui';
+import { EntityAvatarField } from '@/components/account/EntityAvatarField';
+import { Avatar, Button, Card, Muted, SearchBar, Subtitle } from '@/components/ui';
 import { matchesSearchQuery } from '@/utils/search';
 import { confirmDestructive } from '@/utils/confirm';
 
@@ -13,10 +14,12 @@ const RefereeRow = memo(function RefereeRow({
   item,
   onToggle,
   onDelete,
+  onChangePhoto,
 }: {
   item: Referee;
   onToggle: () => void;
   onDelete: () => void;
+  onChangePhoto: () => void;
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
@@ -42,6 +45,11 @@ const RefereeRow = memo(function RefereeRow({
         </View>
       </View>
       <View style={styles.actions}>
+        <Pressable onPress={onChangePhoto} hitSlop={8}>
+          <Text style={{ color: theme.colors.accent, fontWeight: '700', fontSize: 12 }}>
+            {t('media.changeHandleIcon')}
+          </Text>
+        </Pressable>
         <Pressable onPress={onToggle} hitSlop={8}>
           <Text style={{ color: theme.colors.accent, fontWeight: '700', fontSize: 12 }}>
             {item.status === 'active'
@@ -63,6 +71,11 @@ export default function RefereesScreen() {
   const { referees, updateReferee, deleteReferee } = useTournament();
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
+  const [avatarEdit, setAvatarEdit] = useState<{
+    id: string;
+    name: string;
+    value?: string;
+  } | null>(null);
 
   const data = useMemo(
     () =>
@@ -72,10 +85,25 @@ export default function RefereesScreen() {
     [referees, query]
   );
 
+  const editingReferee = useMemo(
+    () =>
+      avatarEdit
+        ? referees.find((r) => r.id === avatarEdit.id) || null
+        : null,
+    [avatarEdit, referees]
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: Referee }) => (
       <RefereeRow
         item={item}
+        onChangePhoto={() =>
+          setAvatarEdit({
+            id: item.id,
+            name: item.name,
+            value: item.avatar,
+          })
+        }
         onToggle={() =>
           updateReferee(
             {
@@ -125,6 +153,32 @@ export default function RefereesScreen() {
               autoCapitalize="none"
               autoCorrect={false}
             />
+            {avatarEdit && editingReferee ? (
+              <Card style={styles.card}>
+                <Subtitle>
+                  {t('media.changeHandleIcon')} — {avatarEdit.name}
+                </Subtitle>
+                <EntityAvatarField
+                  value={avatarEdit.value}
+                  name={avatarEdit.name}
+                  folder="referees"
+                  onChange={(url) => {
+                    updateReferee(
+                      { ...editingReferee, avatar: url },
+                      t('media.entityPhotoUpdated')
+                    );
+                    setAvatarEdit((prev) =>
+                      prev ? { ...prev, value: url } : prev
+                    );
+                  }}
+                />
+                <Button
+                  label={t('common.done')}
+                  variant="outline"
+                  onPress={() => setAvatarEdit(null)}
+                />
+              </Card>
+            ) : null}
           </View>
         }
         ListEmptyComponent={

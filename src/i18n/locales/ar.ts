@@ -351,10 +351,12 @@ export const ar = {
     changeHandleIcon: 'تغيير صورة المعرّف',
     handleIconHint:
       'اختر أو أضف صورة تظهر بجانب معرّفك في الهيدر والقوائم والملف الشخصي.',
+    entityPhotoLabel: 'صورة / أيقونة',
     removeAvatar: 'إزالة الصورة',
     avatarRemoved: 'تمت إزالة صورة المعرّف',
     photoUrlLabel: 'رابط صورة',
     addPhoto: 'إضافة الصورة',
+    entityPhotoUpdated: 'تم تحديث الصورة',
     videosSection: 'الفيديوهات',
     noVideos: 'لا توجد فيديوهات',
     addVideosHint: 'أضف فيديوهات مهاراتك من إدارة حسابك.',

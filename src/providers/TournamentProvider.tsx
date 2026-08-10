@@ -388,6 +388,7 @@ export interface TournamentContextType {
       role: Referee['role'];
       mobile?: string;
       city?: string;
+      avatar?: string;
     },
     successMessage?: string
   ) => boolean;
@@ -549,12 +550,31 @@ export interface TournamentContextType {
       name: string;
       jerseyNumber: number;
       position: Player['position'];
+      avatar?: string;
     },
     successMessage?: string
   ) => void;
+  updatePlayerAvatar: (
+    competitionId: string,
+    teamId: string,
+    playerId: string,
+    avatar: string | undefined,
+    successMessage?: string
+  ) => boolean;
   addStaffToCompetition: (
     competitionId: string,
-    staffData: { name: string; role: string; mobile?: string },
+    staffData: {
+      name: string;
+      role: string;
+      mobile?: string;
+      avatar?: string;
+    },
+    successMessage?: string
+  ) => boolean;
+  updateStaffAvatar: (
+    competitionId: string,
+    staffId: string,
+    avatar: string | undefined,
     successMessage?: string
   ) => boolean;
   removeStaffFromCompetition: (
@@ -1835,6 +1855,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         role: Referee['role'];
         mobile?: string;
         city?: string;
+        avatar?: string;
       },
       successMessage?: string
     ) => {
@@ -1854,6 +1875,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         role: data.role,
         mobile: data.mobile?.trim() || undefined,
         city: data.city?.trim() || undefined,
+        avatar: data.avatar?.trim() || undefined,
         rating: 5,
         status: 'active',
       };
@@ -3379,6 +3401,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         name: string;
         jerseyNumber: number;
         position: Player['position'];
+        avatar?: string;
       },
       successMessage?: string
     ) => {
@@ -3412,6 +3435,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
                     position: playerData.position,
                     teamId,
                     status: 'active' as const,
+                    avatar: playerData.avatar?.trim() || undefined,
                     media: { photos: [], videos: [] },
                     comments: [],
                   },
@@ -3443,7 +3467,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const addStaffToCompetition = useCallback(
     (
       competitionId: string,
-      staffData: { name: string; role: string; mobile?: string },
+      staffData: {
+        name: string;
+        role: string;
+        mobile?: string;
+        avatar?: string;
+      },
       successMessage?: string
     ) => {
       const name = staffData.name.trim();
@@ -3470,6 +3499,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
                 name,
                 role,
                 mobile: staffData.mobile?.trim() || undefined,
+                avatar: staffData.avatar?.trim() || undefined,
               },
             ],
           };
@@ -3486,6 +3516,83 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       return true;
     },
     [toast]
+  );
+
+  const updatePlayerAvatar = useCallback(
+    (
+      competitionId: string,
+      teamId: string,
+      playerId: string,
+      avatar: string | undefined,
+      successMessage?: string
+    ) => {
+      let found = false;
+      setCompetitions((prev) => {
+        const next = prev.map((c) => {
+          if (c.id !== competitionId) return c;
+          return {
+            ...c,
+            teams: c.teams.map((team) => {
+              if (team.id !== teamId) return team;
+              return {
+                ...team,
+                players: team.players.map((p) => {
+                  if (p.id !== playerId) return p;
+                  found = true;
+                  return { ...p, avatar: avatar?.trim() || undefined };
+                }),
+              };
+            }),
+          };
+        });
+        if (found) void syncCompetitions(next);
+        return next;
+      });
+      if (!found) return false;
+      if (successMessage) {
+        toast({
+          variant: 'success',
+          title: t('toasts.t072_2a81f2'),
+          description: successMessage,
+        });
+      }
+      return true;
+    },
+    [toast, t]
+  );
+
+  const updateStaffAvatar = useCallback(
+    (
+      competitionId: string,
+      staffId: string,
+      avatar: string | undefined,
+      successMessage?: string
+    ) => {
+      let found = false;
+      setCompetitions((prev) => {
+        const next = prev.map((c) => {
+          if (c.id !== competitionId) return c;
+          const staff = (c.staff || []).map((s) => {
+            if (s.id !== staffId) return s;
+            found = true;
+            return { ...s, avatar: avatar?.trim() || undefined };
+          });
+          return { ...c, staff };
+        });
+        if (found) void syncCompetitions(next);
+        return next;
+      });
+      if (!found) return false;
+      if (successMessage) {
+        toast({
+          variant: 'success',
+          title: t('toasts.t072_2a81f2'),
+          description: successMessage,
+        });
+      }
+      return true;
+    },
+    [toast, t]
   );
 
   const removeStaffFromCompetition = useCallback(
@@ -5246,7 +5353,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       renameTeam,
       deleteTeam,
       addPlayerToTeam,
+      updatePlayerAvatar,
       addStaffToCompetition,
+      updateStaffAvatar,
       removeStaffFromCompetition,
       addAnalysis,
       applyAsAnalyst,
@@ -5342,7 +5451,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       renameTeam,
       deleteTeam,
       addPlayerToTeam,
+      updatePlayerAvatar,
       addStaffToCompetition,
+      updateStaffAvatar,
       removeStaffFromCompetition,
       addAnalysis,
       applyAsAnalyst,
