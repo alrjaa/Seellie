@@ -185,6 +185,8 @@ grant execute on function public.replace_profile_content(uuid, jsonb) to authent
 -- overwrite the shared blob. Mitigate gifts with SECURITY-PHASE2-BLOBS.sql
 -- (append_gift_transaction RPC). Offers stay open so organizers can send and
 -- freelancers can accept/decline without breaking the purchase flow.
+-- Referees: after SECURITY-PHASE3-REFEREES.sql, authenticated users may write
+-- the `referees` key so organizers can persist referee photos.
 drop policy if exists "app_blobs_upsert_auth" on public.app_blobs;
 drop policy if exists "app_blobs_update_auth" on public.app_blobs;
 drop policy if exists "app_blobs_delete_auth" on public.app_blobs;

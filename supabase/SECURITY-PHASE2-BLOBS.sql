@@ -11,8 +11,9 @@
 --     would be per-organizer keys or an RPC that validates organizerId.
 --   • `announcements:{uid}` / `prizes:{uid}` — already scoped to owner or
 --     superadmin in PHASE1 (do not tighten further).
---   • `referees` / `support_levels` / `app_branding` — superadmin-only writes
---     via PHASE1 (is_app_superadmin).
+--   • `referees` — opened to authenticated writers in SECURITY-PHASE3-REFEREES.sql
+--     (organizers must save referee avatars). `support_levels` / `app_branding`
+--     remain superadmin-only via PHASE1.
 
 -- 1) Append-only gift purchase (caller must be the gifter)
 create or replace function public.append_gift_transaction(p_gift jsonb)

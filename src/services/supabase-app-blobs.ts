@@ -64,6 +64,35 @@ export async function upsertAppBlob(
   return { ok: true };
 }
 
+/**
+ * دمج حكم واحد في blob الحكام (SECURITY-PHASE3-REFEREES.sql).
+ * يعمل للمنظّم حتى لو فشل الاستبدال الكامل سابقاً.
+ */
+export async function upsertRefereeInBlob(
+  referee: unknown
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) return { ok: false, error: 'not_configured' };
+  const { session, error: sessionError } = await requireCloudSession();
+  if (!session) return { ok: false, error: sessionError || 'no_session' };
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: 'no_client' };
+
+  const { data, error } = await sb.rpc('upsert_referee_in_blob', {
+    p_referee: referee,
+  });
+  if (error) {
+    // الدالة غير موجودة بعد → لا نفشل بصمت؛ المستدعي يجرّب upsertAppBlob
+    return { ok: false, error: error.message };
+  }
+  if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
+    return {
+      ok: false,
+      error: (data as { error?: string }).error || 'rpc_failed',
+    };
+  }
+  return { ok: true };
+}
+
 /** Append one gift (SECURITY-PHASE2). Caller must be gifterId. */
 export async function appendGiftTransaction(
   gift: unknown

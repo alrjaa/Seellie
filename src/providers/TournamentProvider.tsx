@@ -38,6 +38,7 @@ import {
   appendGiftTransaction,
   fetchAppBlob,
   upsertAppBlob,
+  upsertRefereeInBlob,
 } from '@/services/supabase-app-blobs';
 import {
   DEFAULT_FAB_ICONS,
@@ -222,14 +223,37 @@ function applyCredentialOverrides(
 function mergeRefereesById(base: Referee[], stored: Referee[]): Referee[] {
   const map = new Map<string, Referee>();
   for (const ref of base) map.set(ref.id, ref);
-  for (const ref of stored) map.set(ref.id, { ...map.get(ref.id), ...ref });
+  for (const ref of stored) {
+    const prev = map.get(ref.id);
+    const merged: Referee = { ...prev, ...ref };
+    // لا تمسح صورة موجودة عند دمج سجل سحابي قديم بلا avatar
+    const avatar = (ref.avatar && String(ref.avatar).trim()) || prev?.avatar;
+    if (avatar) merged.avatar = avatar;
+    else delete merged.avatar;
+    map.set(ref.id, merged);
+  }
   return Array.from(map.values());
 }
 
 async function saveReferees(items: Referee[]) {
   await setJson(REFEREES_STORAGE_KEY, items);
-  if (isSupabaseConfigured()) {
-    void upsertAppBlob('referees', items);
+  if (!isSupabaseConfigured()) return;
+
+  // دمج فردي أولاً (يعمل للمنظّم بعد SECURITY-PHASE3-REFEREES.sql)
+  let mergedOk = 0;
+  for (const ref of items) {
+    const result = await upsertRefereeInBlob(ref);
+    if (result.ok) mergedOk += 1;
+  }
+  if (mergedOk === items.length && items.length > 0) return;
+
+  // احتياطي: استبدال كامل للقائمة (مسموح للمنظّم بعد PHASE3)
+  const full = await upsertAppBlob('referees', items);
+  if (!full.ok) {
+    console.warn(
+      '[referees] cloud save failed — run supabase/SECURITY-PHASE3-REFEREES.sql',
+      full.error
+    );
   }
 }
 
