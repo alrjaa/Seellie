@@ -1,5 +1,13 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  FlatList,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTournament, type User } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
@@ -11,6 +19,23 @@ import { Avatar, Card, Chip, Muted, SearchBar, Subtitle } from '@/components/ui'
 import { statusToneColor } from '@/utils/status-tone';
 import { matchesSearchQuery } from '@/utils/search';
 import { isSupabaseConfigured } from '@/services/supabase';
+
+async function confirmDelete(title: string, message: string): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    if (typeof window === 'undefined') return false;
+    return window.confirm(`${title}\n\n${message}`);
+  }
+  return await new Promise<boolean>((resolve) => {
+    Alert.alert(title, message, [
+      { text: 'إلغاء', style: 'cancel', onPress: () => resolve(false) },
+      {
+        text: 'حذف',
+        style: 'destructive',
+        onPress: () => resolve(true),
+      },
+    ]);
+  });
+}
 
 function matchesUserQuery(user: User, rawQuery: string): boolean {
   return matchesSearchQuery(
@@ -129,6 +154,8 @@ export default function UsersScreen() {
   const data = useMemo(
     () =>
       users.filter((u) => {
+        // الحسابات المحذوفة = status blocked — تُخفى من القائمة
+        if (u.status === 'blocked') return false;
         if (filter !== 'all' && u.role !== filter) return false;
         return matchesUserQuery(u, query);
       }),
@@ -136,23 +163,16 @@ export default function UsersScreen() {
   );
 
   const onAction = useCallback(
-    (user: User, action: 'active' | 'suspended' | 'warned' | 'delete') => {
+    async (user: User, action: 'active' | 'suspended' | 'warned' | 'delete') => {
       if (action === 'delete') {
-        Alert.alert(
+        const ok = await confirmDelete(
           t('superadmin.actions.confirmDelete'),
-          t('superadmin.users.deleteConfirm', { name: user.name }),
-          [
-            { text: t('common.cancel'), style: 'cancel' },
-            {
-              text: t('superadmin.actions.delete'),
-              style: 'destructive',
-              onPress: () =>
-                deleteUser(
-                  user.id,
-                  t('superadmin.users.deleted', { name: user.name })
-                ),
-            },
-          ]
+          t('superadmin.users.deleteConfirm', { name: user.name })
+        );
+        if (!ok) return;
+        await deleteUser(
+          user.id,
+          t('superadmin.users.deleted', { name: user.name })
         );
         return;
       }

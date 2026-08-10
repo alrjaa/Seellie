@@ -354,7 +354,10 @@ export interface TournamentContextType {
   refreshCloudCompetitionRequests: () => Promise<number>;
   /** تثبيت/إلغاء تثبيت بطولة في الرئيسية الشخصية */
   togglePinnedCompetition: (competitionId: string) => void;
-  deleteUser: (userId: string, successMessage?: string) => void;
+  deleteUser: (
+    userId: string,
+    successMessage?: string
+  ) => Promise<boolean>;
   addReferee: (
     data: Omit<Referee, 'id'>,
     successMessage?: string
@@ -1678,20 +1681,68 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const deleteUser = useCallback(
-    (userId: string, successMessage?: string) => {
-      setUsers((prev) => prev.filter((u) => u.id !== userId));
+    async (userId: string, successMessage?: string) => {
+      if (!userId) return false;
+      if (currentUser?.id === userId) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t009_eaec5e'),
+          description: 'لا يمكن حذف حساب المشرف الحالي أثناء تسجيل الدخول به.',
+        });
+        return false;
+      }
+
+      const target = users.find((u) => u.id === userId);
+      if (target?.role === 'superadmin' || target?.activeRole === 'superadmin') {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t009_eaec5e'),
+          description: 'لا يمكن حذف حساب مشرف من هنا.',
+        });
+        return false;
+      }
+
+      // محلياً: علّم كمحظور ثم أخفه من القائمة
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId ? { ...u, status: 'blocked' as const } : u
+        )
+      );
+
       if (isSupabaseConfigured() && isUuid(userId)) {
-        // حظر سحابي بدل حذف Auth (يتطلب service role) — يمنع الدخول عبر فحص status
-        void updateProfileAdminCloud({
+        const cloud = await updateProfileAdminCloud({
           id: userId,
           status: 'blocked',
         });
+        if (!cloud.ok) {
+          // أعد الحالة السابقة إن فشلت السحابة
+          if (target) {
+            setUsers((prev) =>
+              prev.map((u) => (u.id === userId ? target : u))
+            );
+          }
+          toast({
+            variant: 'destructive',
+            title: 'تعذّر حذف الحساب سحابياً',
+            description:
+              cloud.error ||
+              'تحقق من سياسة profiles_update_admin و SECURITY-HARDENING.sql',
+          });
+          return false;
+        }
       }
+
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
       if (successMessage) {
-        toast({ title: t('toasts.t014_3569a8'), description: successMessage });
+        toast({
+          variant: 'success',
+          title: t('toasts.t014_3569a8'),
+          description: successMessage,
+        });
       }
+      return true;
     },
-    [toast, t]
+    [toast, t, currentUser?.id, users]
   );
 
   const addReferee = useCallback(
