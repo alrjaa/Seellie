@@ -1,13 +1,14 @@
 /* Admin password reset — run in Supabase SQL Editor
-   email: alrjaa.ns@gmail.com
-   password: SeellieAdmin2026!
+   1) Replace YOUR_STRONG_ADMIN_PASSWORD with a new secret before running
+   2) Adjust the email if needed
+   Never put the live admin password in client toasts or UI placeholders.
 */
 
 create extension if not exists pgcrypto;
 
 update auth.users
 set
-  encrypted_password = crypt('SeellieAdmin2026!', gen_salt('bf')),
+  encrypted_password = crypt('YOUR_STRONG_ADMIN_PASSWORD', gen_salt('bf')),
   email_confirmed_at = coalesce(email_confirmed_at, now()),
   updated_at = now()
 where lower(email) = lower('alrjaa.ns@gmail.com');

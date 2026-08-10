@@ -104,7 +104,7 @@ export default function SettingsScreen() {
         {!isUuid(currentUser?.id) ? (
           <Muted>
             حساب تجريبي محلي فقط (لا يعمل بين الأجهزة). لا تغيّر الإيميل هنا.
-            للمشرف الحقيقي: اخرج → /admin → alrjaa.ns@gmail.com بعد SQL.
+            للمشرف السحابي: اخرج → /admin بحساب مرقّى عبر promote-admin.sql.
           </Muted>
         ) : (
           <Muted>حساب سحابي ✓ {currentUser?.email}</Muted>

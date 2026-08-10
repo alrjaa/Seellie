@@ -12,11 +12,13 @@
    - `supabase/private-space-friends-fix.sql`
    - **`supabase/PRIVATE-DM-FIX.sql`** ← رسائل الخاصة تصل للطرفين (مهم)
    - **`supabase/CONTENT-CLOUD.sql`** ← user posts/media/analysis + storage
-   - **`supabase/CONTENT-CLOUD-RPC.sql`** ← likes/follows/analyst admin writes across users
+   - **`supabase/CONTENT-CLOUD-RPC.sql`** ← likes/follows (owner/admin full; others social-merge)
    - **`supabase/APP-BLOBS.sql`** ← referees, offers, gifts, branding, announcements, prizes
+   - **`supabase/SECURITY-HARDENING.sql`** ← منع ترقية ذاتية لمشرف
+   - **`supabase/SECURITY-PHASE1.sql`** ← تأمين RPC المحتوى + تقييد كتابة app_blobs
 3. Confirm tables: `profiles` (with `content` jsonb), `share_cards`, `messages`, `app_competitions`, `forum_comments`, private_*, **`app_blobs`**
 4. Confirm storage bucket: `share-media` (public)
-5. Confirm RPC: `replace_profile_content`
+5. Confirm RPC: `replace_profile_content` (hardened)
 
 ## Content sync rule
 Any **add content** action with a cloud Sign-up session must:

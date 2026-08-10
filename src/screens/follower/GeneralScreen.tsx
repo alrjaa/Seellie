@@ -316,8 +316,8 @@ export default function GeneralFeedScreen() {
             items.push({
               id: `photo-player-${player.id}-${photo.id}`,
               type: 'photo',
-              authorId: uploaderId,
-              authorName: uploaderName,
+              authorId: player.id,
+              authorName: player.name || uploaderName,
               authorHandle: uploaderHandle,
               authorAvatar: player.avatar || uploaderAvatar,
               mediaUrl: photo.url,
@@ -332,8 +332,8 @@ export default function GeneralFeedScreen() {
             items.push({
               id: `video-player-${player.id}-${video.id}`,
               type: 'video',
-              authorId: uploaderId,
-              authorName: uploaderName,
+              authorId: player.id,
+              authorName: player.name || uploaderName,
               authorHandle: uploaderHandle,
               authorAvatar: player.avatar || uploaderAvatar,
               mediaUrl: video.url,

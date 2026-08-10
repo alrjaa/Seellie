@@ -1,7 +1,9 @@
--- Social content write for any authenticated user (likes/follows mirrored on profiles.content).
--- Paste in SQL Editor after CONTENT-CLOUD.sql.
--- HARDENED: owner/superadmin full replace; others social-merge only.
--- Prefer also running SECURITY-PHASE1.sql which includes the same function + app_blobs lockdown.
+-- Seellie · SECURITY-PHASE1
+-- Paste in SQL Editor AFTER FIX-CLOUD-SYNC.sql, CONTENT-CLOUD-RPC.sql, APP-BLOBS.sql, SECURITY-HARDENING.sql
+-- 1) Harden replace_profile_content
+-- 2) Restrict app_blobs writes
+
+-- Requires public.is_app_superadmin() from FIX-CLOUD-SYNC.sql
 
 create or replace function public.merge_profile_social_json(
   old_content jsonb,
@@ -35,6 +37,7 @@ begin
   result := coalesce(old_content, '{}'::jsonb);
   incoming := coalesce(incoming, '{}'::jsonb);
 
+  -- following / followers: allow mirror updates from social actions
   if incoming ? 'following' then
     result := jsonb_set(result, '{following}', coalesce(incoming->'following', '[]'::jsonb), true);
   end if;
@@ -42,6 +45,7 @@ begin
     result := jsonb_set(result, '{followers}', coalesce(incoming->'followers', '[]'::jsonb), true);
   end if;
 
+  -- posts: merge likes by id only
   old_posts := coalesce(result->'posts', '[]'::jsonb);
   new_posts := coalesce(incoming->'posts', '[]'::jsonb);
   for post in select * from jsonb_array_elements(old_posts)
@@ -58,6 +62,7 @@ begin
   end loop;
   result := jsonb_set(result, '{posts}', merged_posts, true);
 
+  -- media photos/videos: merge likes by id
   old_media := coalesce(result->'media', '{}'::jsonb);
   new_media := coalesce(incoming->'media', '{}'::jsonb);
   photos := coalesce(old_media->'photos', '[]'::jsonb);
@@ -96,6 +101,7 @@ begin
     true
   );
 
+  -- analysisContent: merge likes (+ status only for admin path uses full replace)
   old_analysis := coalesce(result->'analysisContent', '[]'::jsonb);
   new_analysis := coalesce(incoming->'analysisContent', '[]'::jsonb);
   for analysis in select * from jsonb_array_elements(old_analysis)
@@ -116,6 +122,9 @@ begin
     merged_analysis := merged_analysis || jsonb_build_array(analysis);
   end loop;
   result := jsonb_set(result, '{analysisContent}', merged_analysis, true);
+
+  -- analyst object: allow status updates mirrored from admin via full replace only;
+  -- non-admin social path leaves analyst untouched
 
   return result;
 end;
@@ -142,6 +151,7 @@ begin
     raise exception 'profile not found';
   end if;
 
+  -- Owner or superadmin: full replace
   if auth.uid() = p_id or public.is_app_superadmin() then
     update public.profiles
     set
@@ -151,6 +161,7 @@ begin
     return;
   end if;
 
+  -- Other authenticated users: social merge only (likes / follow mirrors)
   select content into old_content
   from public.profiles
   where id = p_id
@@ -168,3 +179,46 @@ $$;
 
 grant execute on function public.merge_profile_social_json(jsonb, jsonb) to authenticated;
 grant execute on function public.replace_profile_content(uuid, jsonb) to authenticated;
+
+-- Restrict app_blobs writes
+drop policy if exists "app_blobs_upsert_auth" on public.app_blobs;
+drop policy if exists "app_blobs_update_auth" on public.app_blobs;
+drop policy if exists "app_blobs_delete_auth" on public.app_blobs;
+drop policy if exists "app_blobs_insert_scoped" on public.app_blobs;
+drop policy if exists "app_blobs_update_scoped" on public.app_blobs;
+drop policy if exists "app_blobs_delete_scoped" on public.app_blobs;
+
+create policy "app_blobs_insert_scoped"
+  on public.app_blobs for insert
+  to authenticated
+  with check (
+    public.is_app_superadmin()
+    or key = 'announcements:' || auth.uid()::text
+    or key = 'prizes:' || auth.uid()::text
+    or key in ('offers', 'gift_transactions')
+  );
+
+create policy "app_blobs_update_scoped"
+  on public.app_blobs for update
+  to authenticated
+  using (
+    public.is_app_superadmin()
+    or key = 'announcements:' || auth.uid()::text
+    or key = 'prizes:' || auth.uid()::text
+    or key in ('offers', 'gift_transactions')
+  )
+  with check (
+    public.is_app_superadmin()
+    or key = 'announcements:' || auth.uid()::text
+    or key = 'prizes:' || auth.uid()::text
+    or key in ('offers', 'gift_transactions')
+  );
+
+create policy "app_blobs_delete_scoped"
+  on public.app_blobs for delete
+  to authenticated
+  using (
+    public.is_app_superadmin()
+    or key = 'announcements:' || auth.uid()::text
+    or key = 'prizes:' || auth.uid()::text
+  );

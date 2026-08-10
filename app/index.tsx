@@ -33,7 +33,15 @@ export default function Index() {
   }
 
   if (currentUser) {
-    return <Redirect href={routeForRole(currentUser.role) as any} />;
+    return (
+      <Redirect
+        href={
+          routeForRole(
+            currentUser.activeRole || currentUser.role
+          ) as any
+        }
+      />
+    );
   }
   return <Redirect href="/(auth)/login" />;
 }

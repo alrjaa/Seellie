@@ -49,8 +49,9 @@ export default function FreelancerHomeScreen() {
 
   if (loading) return <LoadingState />;
   if (!currentUser) return <Redirect href="/(auth)/login" />;
-  if (currentUser.role !== 'freelancer') {
-    return <Redirect href={routeForRole(currentUser.role) as any} />;
+  const active = currentUser.activeRole || currentUser.role;
+  if (active !== 'freelancer') {
+    return <Redirect href={routeForRole(active) as any} />;
   }
 
   return (

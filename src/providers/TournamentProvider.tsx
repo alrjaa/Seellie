@@ -1103,7 +1103,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             toast({
               variant: 'destructive',
               title: t('auth.adminPortalOnlyTitle'),
-              description: `الحساب سحابي لكن دوره «${normalizedUser.role}» وليس مشرفاً. في SQL Editor نفّذ:\nupdate public.profiles set role='superadmin', roles=array['superadmin']::text[], active_role='superadmin' where lower(email)=lower('${normalized}');`,
+              description:
+                'هذا الحساب ليس مشرفاً. رقِّه من SQL Editor عبر promote-admin.sql ثم أعد المحاولة.',
             });
             return false;
           }
@@ -1222,22 +1223,34 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         if (portal === 'admin') {
           const err = (supabaseAuthError || '').toLowerCase();
           let hint =
-            'أنشئ حساباً عبر Sign up ثم رقِّه بملف promote-admin.sql، أو استخدم set-admin-password.sql.';
+            'أنشئ حساباً عبر Sign up ثم رقِّه بملف promote-admin.sql، أو أعد تعيين كلمة المرور من Authentication.';
           if (/invalid login|invalid credentials|wrong/i.test(err)) {
             hint =
-              'كلمة المرور غير صحيحة. نفّذ set-admin-password.sql ثم ادخل بنفس الإيميل وكلمة SeellieAdmin2026!';
+              'البريد أو كلمة المرور غير صحيحة. أعد التعيين من Supabase Authentication أو set-admin-password.sql.';
           } else if (/confirm|confirmation|verify/i.test(err)) {
             hint =
-              'البريد غير مؤكد. عطّل Confirm email أو أكّد المستخدم من Authentication → Users.';
+              'البريد غير مؤكد. أكّد المستخدم من Authentication → Users.';
           } else if (/network|fetch|failed to fetch/i.test(err)) {
             hint = 'مشكلة شبكة/اتصال بـ Supabase. تأكد أن الجهاز على الإنترنت.';
           }
           toast({
             variant: 'destructive',
             title: 'تعذّر الدخول السحابي',
-            description: `${hint}${
-              supabaseAuthError ? `\n(${supabaseAuthError})` : ''
-            }`,
+            description: hint,
+          });
+          return false;
+        }
+
+        // إنتاج: لا تسمح بالحسابات التجريبية المحلية عندما السحابة مهيأة
+        const allowLocalDemo =
+          typeof __DEV__ !== 'undefined' && __DEV__ === true;
+        if (!allowLocalDemo) {
+          toast({
+            variant: 'destructive',
+            title: t('toasts.t003_7a384c'),
+            description:
+              supabaseAuthError ||
+              'تعذّر الدخول السحابي. تحقق من البريد وكلمة المرور.',
           });
           return false;
         }
@@ -1449,6 +1462,18 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
       setCurrentUser(updated);
       void setJson(USER_STORAGE_KEY, updated);
+      if (isSupabaseConfigured() && isUuid(updated.id)) {
+        void updateProfileRolesCloud({
+          id: updated.id,
+          email: updated.email,
+          name: updated.name,
+          handle: updated.handle,
+          visibleId: updated.visibleId,
+          role: updated.role,
+          roles: updated.roles || [updated.role],
+          activeRole: updated.activeRole || updated.role,
+        });
+      }
       toast({
         variant: 'success',
         title: t('toasts.t008_9e9cc6'),
@@ -1466,7 +1491,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }, 0);
       return true;
     },
-    [currentUser, toast, router, routeForRole]
+    [currentUser, toast, router, routeForRole, t]
   );
 
   const enableSecondaryRole = useCallback(
@@ -4424,13 +4449,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const changePassword = useCallback(
     async (currentPassword: string, nextPassword: string) => {
       if (!currentUser) return false;
-      if (!verifyPassword(currentPassword, currentUser.passwordHash)) {
-        toast({
-          variant: 'destructive',
-          title: t('toasts.t068_1ed93e'),
-        });
-        return false;
-      }
       if (nextPassword.length < 6) {
         toast({
           variant: 'destructive',
@@ -4440,7 +4458,22 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      if (isUuid(currentUser.id) && isSupabaseConfigured()) {
+      const isCloudAccount =
+        isUuid(currentUser.id) && isSupabaseConfigured();
+
+      if (isCloudAccount) {
+        // تحقق من كلمة المرور الحالية عبر تسجيل الدخول السحابي
+        const reauth = await supabaseSignIn(
+          normalizeEmail(currentUser.email),
+          currentPassword
+        );
+        if (!reauth.user) {
+          toast({
+            variant: 'destructive',
+            title: t('toasts.t068_1ed93e'),
+          });
+          return false;
+        }
         const cloud = await supabaseUpdatePassword(nextPassword);
         if (!cloud.ok) {
           toast({
@@ -4450,6 +4483,25 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           });
           return false;
         }
+        const updated = {
+          ...currentUser,
+          passwordHash: 'supabase' as const,
+        };
+        setUsers((prev) =>
+          prev.map((u) => (u.id === updated.id ? updated : u))
+        );
+        setCurrentUser(updated);
+        void setJson(USER_STORAGE_KEY, updated);
+        toast({ variant: 'success', title: t('toasts.t070_104895') });
+        return true;
+      }
+
+      if (!verifyPassword(currentPassword, currentUser.passwordHash)) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t068_1ed93e'),
+        });
+        return false;
       }
 
       const updated = {

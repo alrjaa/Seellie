@@ -178,7 +178,7 @@ export default function AdminLoginScreen() {
                     setLoginEmail(v);
                     setEmailError('');
                   }}
-                  placeholder="alrjaa.ns@gmail.com"
+                  placeholder="email@example.com"
                   autoCapitalize="none"
                   keyboardType="email-address"
                   ltr
