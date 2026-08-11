@@ -88,7 +88,7 @@ export default function HighlightsScreen() {
               organizerId: comp.organizerId,
               organizerName,
               organizerHandle,
-              organizerAvatar,
+              organizerAvatar: player.avatar || organizerAvatar,
             });
           });
           (player.media?.videos || []).forEach((v) => {
@@ -104,7 +104,7 @@ export default function HighlightsScreen() {
               organizerId: comp.organizerId,
               organizerName,
               organizerHandle,
-              organizerAvatar,
+              organizerAvatar: player.avatar || organizerAvatar,
             });
           });
         });

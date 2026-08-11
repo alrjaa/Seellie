@@ -31,8 +31,9 @@ function AvatarComponent({ uri, name, size = 48 }: Props) {
           borderColor: theme.colors.border,
         }}
         contentFit="cover"
-        transition={200}
+        transition={150}
         cachePolicy="memory-disk"
+        recyclingKey={trimmed}
         accessibilityLabel={name}
         onError={() => setFailedUri(trimmed)}
       />

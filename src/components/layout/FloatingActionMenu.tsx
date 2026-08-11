@@ -37,6 +37,28 @@ function isHttpMedia(url?: string) {
   return !!url && /^https?:\/\//i.test(url.trim());
 }
 
+function normalizeHandle(handle?: string) {
+  return (handle || '').replace(/^@/, '').trim().toLowerCase();
+}
+
+function pickAvatarUrl(
+  ...candidates: Array<string | undefined | null>
+): string | undefined {
+  for (const raw of candidates) {
+    const value = (raw || '').trim();
+    if (!value) continue;
+    if (
+      /^https?:\/\//i.test(value) ||
+      value.startsWith('data:') ||
+      value.startsWith('blob:') ||
+      value.startsWith('/')
+    ) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 function isIoniconName(
   name: string
 ): name is keyof typeof Ionicons.glyphMap {
@@ -64,9 +86,9 @@ function FloatingActionMenuComponent() {
 
   useEffect(() => subscribeContentAuthorFocus(setAuthor), []);
 
-  // إن لم يُفتح تبويب اللقطات بعد: عيّن أول منظّم لديه وسائط كصاحب محتوى افتراضي
+  // إن لم يصل أفاتار بعد: عيّن منظّماً لديه وسائط، أو حدّث الصورة إن نقصت
   useEffect(() => {
-    if (author?.id) return;
+    if (author?.id && pickAvatarUrl(author.avatar)) return;
     if (!competitions?.length) return;
     for (const comp of competitions) {
       const hasMedia =
@@ -85,16 +107,22 @@ function FloatingActionMenuComponent() {
             (m.media?.videos || []).some((x) => isHttpMedia(x.url))
         );
       if (!hasMedia || !comp.organizerId) continue;
+      if (author?.id && author.id !== comp.organizerId) continue;
       const organizer = users.find((u) => u.id === comp.organizerId);
+      const avatar = pickAvatarUrl(
+        organizer?.avatar,
+        author?.avatar,
+        comp.logo
+      );
       setContentAuthorFocus({
-        id: comp.organizerId,
-        name: organizer?.name || comp.name,
-        handle: organizer?.handle,
-        avatar: organizer?.avatar || comp.logo,
+        id: author?.id || comp.organizerId,
+        name: author?.name || organizer?.name || comp.name,
+        handle: author?.handle || organizer?.handle,
+        avatar,
       });
       break;
     }
-  }, [author?.id, competitions, users]);
+  }, [author?.id, author?.avatar, author?.name, author?.handle, competitions, users]);
 
   useEffect(() => {
     if (isFloatingSuppressed()) {
@@ -206,18 +234,30 @@ function FloatingActionMenuComponent() {
 
   const authorProfile = useMemo(() => {
     if (!author?.id) return null;
-    if (currentUser && author.id === currentUser.id) return null;
-    const known = users.find((u) => u.id === author.id);
+    const handleKey = normalizeHandle(author.handle);
+    const known =
+      users.find((u) => u.id === author.id) ||
+      (handleKey
+        ? users.find((u) => normalizeHandle(u.handle) === handleKey)
+        : undefined);
+    const fromCompetition = competitions?.find(
+      (c) => c.organizerId === author.id || c.organizerId === known?.id
+    );
     return {
-      id: author.id,
+      id: known?.id || author.id,
       name: known?.name || author.name,
       handle: known?.handle || author.handle,
-      avatar: known?.avatar || author.avatar,
+      avatar: pickAvatarUrl(
+        known?.avatar,
+        author.avatar,
+        fromCompetition?.logo
+      ),
+      isSelf: !!(currentUser && (known?.id || author.id) === currentUser.id),
     };
-  }, [author, users, currentUser]);
+  }, [author, users, currentUser, competitions]);
 
   const isFollowingAuthor = useMemo(() => {
-    if (!currentUser || !authorProfile) return false;
+    if (!currentUser || !authorProfile || authorProfile.isSelf) return false;
     const me = ensureSocialLists(currentUser);
     return (me.following || []).includes(authorProfile.id);
   }, [currentUser, authorProfile]);
@@ -287,7 +327,7 @@ function FloatingActionMenuComponent() {
           },
         ]}
       >
-        {/* أعلى العمود: أفاتار صاحب المحتوى (دائماً للمتابع) */}
+        {/* أسفل العمود (عمود معكوس): أفاتار صاحب المحتوى */}
         {isFollowerLike ? (
           <View style={[styles.authorItem, styles.itemRaised]}>
             <Pressable
@@ -309,8 +349,8 @@ function FloatingActionMenuComponent() {
               {authorProfile ? (
                 <Avatar
                   uri={authorProfile.avatar}
-                  name={authorProfile.name}
-                  size={52}
+                  name={authorProfile.name || authorProfile.handle || 'user'}
+                  size={54}
                 />
               ) : (
                 <Ionicons
@@ -320,7 +360,7 @@ function FloatingActionMenuComponent() {
                 />
               )}
             </Pressable>
-            {authorProfile ? (
+            {authorProfile && !authorProfile.isSelf ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={

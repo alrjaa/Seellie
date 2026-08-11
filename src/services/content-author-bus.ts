@@ -26,22 +26,35 @@ function emit() {
   });
 }
 
+function normalizeAvatar(value?: string) {
+  const v = (value || '').trim();
+  return v || undefined;
+}
+
 export function setContentAuthorFocus(author: ContentAuthorFocus | null) {
   if (!author?.id) return;
+
+  const incomingAvatar = normalizeAvatar(author.avatar);
+  const next = {
+    id: author.id,
+    name: author.name || author.handle || author.id,
+    handle: author.handle || (current?.id === author.id ? current?.handle : undefined),
+    // لا تفقد الأفاتار عند تحديث لاحق بلا صورة
+    avatar:
+      incomingAvatar ||
+      (current?.id === author.id ? normalizeAvatar(current?.avatar) : undefined),
+  };
+
   if (
-    author.id === current?.id &&
-    (author.avatar || '') === (current?.avatar || '') &&
-    (author.handle || '') === (current?.handle || '') &&
-    (author.name || '') === (current?.name || '')
+    next.id === current?.id &&
+    (next.avatar || '') === (current?.avatar || '') &&
+    (next.handle || '') === (current?.handle || '') &&
+    (next.name || '') === (current?.name || '')
   ) {
     return;
   }
-  current = {
-    id: author.id,
-    name: author.name || author.handle || author.id,
-    handle: author.handle,
-    avatar: author.avatar,
-  };
+
+  current = next;
   emit();
 }
 
