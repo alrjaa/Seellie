@@ -490,6 +490,7 @@ function FullScreenFeedComponent({
     : 8;
 
   useEffect(() => {
+    const useNative = Platform.OS !== 'web';
     if (visible) {
       overlayOpacity.setValue(1);
       overlayTranslate.setValue(0);
@@ -498,12 +499,12 @@ function FullScreenFeedComponent({
       Animated.timing(overlayOpacity, {
         toValue: visible ? 1 : 0,
         duration: visible ? 180 : 120,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
       }),
       Animated.timing(overlayTranslate, {
         toValue: visible ? 0 : -12,
         duration: visible ? 180 : 120,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
       }),
     ]).start();
   }, [overlayOpacity, overlayTranslate, visible]);

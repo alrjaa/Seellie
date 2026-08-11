@@ -1,13 +1,15 @@
 /**
- * ظهور/اختفاء الواجهة العائمة — آلة حالات بسيطة ومستقرة.
+ * ظهور/إخفاء الواجهة العائمة — عقد ثابت وموثوق.
  *
- * المبدأ (مثل شريط كروم التطبيقات):
- * - أثناء التمرير النشط → إخفاء
- * - عند توقف التمرير (لا أحداث لمدة QUIET_MS، أو settle صريح) → إظهار
- * - المصدر المركّز فقط يتحكّم (لا سرقة من مصادر أخرى)
- * - suppress يفرض الإخفاء (المساحة الخاصة) حتى يُلغى
+ * السلوك:
+ * 1) الافتراضي: ظاهرة
+ * 2) بداية تمرير / حركة معتبرة → إخفاء
+ * 3) نهاية التمرير (settle) → إظهار بعد تأخير قصير
+ * 4) ضمان أقصى: لن تبقى مخفية أكثر من MAX_HIDDEN_MS (ما لم تكن suppressed)
  *
- * لا نعتمد على عتبات dy معقّدة ولا على forceShow من كل مكان.
+ * الخلل السابق: كل حدث onScroll كان يعيد جدولة مؤقّت الإظهار،
+ * فأحداث الاهتزاز/الصفحات تمنع الظهور إلى الأبد. هنا أثناء الإخفاء
+ * نتجاهل إزاحات التمرير ولا نؤجّل الظهور.
  */
 
 type VisibilityListener = (visible: boolean) => void;
@@ -16,16 +18,17 @@ const listeners = new Set<VisibilityListener>();
 
 let visible = true;
 let suppressFloating = false;
-/** الشاشة/القائمة المركّزة فقط */
 let ownerId: string | null = null;
-let showTimer: ReturnType<typeof setTimeout> | null = null;
-/** آخر إزاحة للمصدر — لمعرفة أن هناك حركة حقيقية */
+/** المستخدم في تفاعل تمرير حالياً */
+let scrolling = false;
 let lastY: number | null = null;
+let settleTimer: ReturnType<typeof setTimeout> | null = null;
+let failsafeTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** بعد آخر حدث تمرير — أظهر */
-const QUIET_MS = 420;
-/** بعد settle صريح — أظهر أسرع */
-const SETTLE_MS = 160;
+const MOVE_EPS = 8;
+const SETTLE_SHOW_MS = 200;
+/** ضمان قوي: إظهار حتى لو لم يصل settle من النظام */
+const MAX_HIDDEN_MS = 850;
 
 function emit(next: boolean) {
   const effective = suppressFloating ? false : next;
@@ -40,43 +43,69 @@ function emit(next: boolean) {
   });
 }
 
-function clearShowTimer() {
-  if (showTimer) {
-    clearTimeout(showTimer);
-    showTimer = null;
+function clearSettleTimer() {
+  if (settleTimer) {
+    clearTimeout(settleTimer);
+    settleTimer = null;
   }
 }
 
-function scheduleShow(delay: number) {
-  clearShowTimer();
+function clearFailsafeTimer() {
+  if (failsafeTimer) {
+    clearTimeout(failsafeTimer);
+    failsafeTimer = null;
+  }
+}
+
+function showNow() {
+  scrolling = false;
+  lastY = null;
+  clearSettleTimer();
+  clearFailsafeTimer();
   if (suppressFloating) {
     emit(false);
     return;
   }
-  showTimer = setTimeout(() => {
-    showTimer = null;
-    lastY = null;
-    emit(true);
-  }, delay);
+  emit(true);
 }
 
-function hideForActivity() {
+function hideForScroll() {
   if (suppressFloating) {
     emit(false);
     return;
   }
   emit(false);
-  scheduleShow(QUIET_MS);
+  // يُفعَّل مرة واحدة لكل فترة إخفاء — لا يُعاد ضبطه بأحداث التمرير
+  if (!failsafeTimer) {
+    failsafeTimer = setTimeout(() => {
+      failsafeTimer = null;
+      showNow();
+    }, MAX_HIDDEN_MS);
+  }
 }
 
-function isOwner(sourceId: string) {
+function scheduleSettleShow() {
+  clearSettleTimer();
+  if (suppressFloating) {
+    emit(false);
+    return;
+  }
+  settleTimer = setTimeout(() => {
+    settleTimer = null;
+    showNow();
+  }, SETTLE_SHOW_MS);
+}
+
+function acceptsSource(sourceId: string) {
   return ownerId == null || ownerId === sourceId;
 }
 
 export function setFloatingSuppressed(suppressed: boolean) {
   suppressFloating = suppressed;
-  clearShowTimer();
+  scrolling = false;
   lastY = null;
+  clearSettleTimer();
+  clearFailsafeTimer();
   emit(!suppressed);
 }
 
@@ -96,79 +125,85 @@ export function isFloatingVisible() {
   return visible;
 }
 
-/** الشاشة المركّزة تملك التحكم وتُظهر فوراً */
 export function claimFloatingScrollSource(sourceId: string) {
   ownerId = sourceId;
+  scrolling = false;
   lastY = null;
-  clearShowTimer();
+  clearSettleTimer();
+  clearFailsafeTimer();
   emit(true);
 }
 
 export function releaseFloatingScrollSource(sourceId: string) {
   if (ownerId !== sourceId) return;
   ownerId = null;
+  scrolling = false;
   lastY = null;
-  clearShowTimer();
+  clearSettleTimer();
+  clearFailsafeTimer();
   emit(true);
 }
 
-/**
- * بداية سحب/تمرير — إخفاء فوري.
- * يُستدعى من onScrollBeginDrag / onMomentumScrollBegin.
- */
 export function noteFloatingScrollBegin(sourceId: string) {
   if (suppressFloating) return;
-  if (!isOwner(sourceId)) return;
+  if (!acceptsSource(sourceId)) return;
   if (ownerId == null) ownerId = sourceId;
+  scrolling = true;
   lastY = null;
-  hideForActivity();
+  clearSettleTimer();
+  hideForScroll();
 }
 
 /**
- * إزاحة التمرير — أي حركة حقيقية = نشاط → إخفاء + إعادة جدولة الإظهار.
- * يتجاهل المصادر غير المالكة بالكامل.
+ * أثناء الإخفاء/التمرير: نحدّث lastY فقط — بدون تأجيل الظهور.
+ * إن كنا ظاهرين وحصلت حركة معتبرة: نبدأ الإخفاء مرة واحدة.
  */
 export function noteFloatingScrollOffset(sourceId: string, y: number) {
   if (suppressFloating) return;
-  if (!isOwner(sourceId)) return;
+  if (!acceptsSource(sourceId)) return;
   if (ownerId == null) ownerId = sourceId;
 
   const offset = Math.max(0, y);
+
+  if (scrolling || !visible) {
+    lastY = offset;
+    return;
+  }
+
   if (lastY == null) {
     lastY = offset;
-    // أول إزاحة بعد claim لا تخفي — ننتظر حركة
     return;
   }
 
-  const dy = offset - lastY;
-  if (Math.abs(dy) < 2) return;
+  const dy = Math.abs(offset - lastY);
   lastY = offset;
-  hideForActivity();
+  if (dy < MOVE_EPS) return;
+
+  scrolling = true;
+  clearSettleTimer();
+  hideForScroll();
 }
 
-/**
- * نهاية السحب/الزخم — أظهر بعد تأخير قصير.
- */
 export function noteFloatingScrollSettle(sourceId: string) {
   if (suppressFloating) return;
-  if (!isOwner(sourceId)) return;
+  if (!acceptsSource(sourceId)) return;
+  scrolling = false;
   lastY = null;
-  scheduleShow(SETTLE_MS);
+  scheduleSettleShow();
 }
 
-/** إظهار فوري (تغيير مسار / عودة للتطبيق) — ليس أثناء التمرير */
 export function forceFloatingVisible() {
-  lastY = null;
-  clearShowTimer();
-  if (suppressFloating) {
-    emit(false);
-    return;
-  }
-  emit(true);
+  showNow();
 }
 
 export function forceFloatingHidden() {
-  clearShowTimer();
+  clearSettleTimer();
+  scrolling = false;
   emit(false);
-  if (!suppressFloating) scheduleShow(QUIET_MS);
+  if (!suppressFloating && !failsafeTimer) {
+    failsafeTimer = setTimeout(() => {
+      failsafeTimer = null;
+      showNow();
+    }, MAX_HIDDEN_MS);
+  }
 }

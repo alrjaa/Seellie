@@ -77,13 +77,21 @@ function FloatingActionMenuComponent() {
   const insets = useSafeAreaInsets();
   const { desktop } = useResponsive();
   const [chromeVisible, setChromeVisible] = useState(true);
+  const [suppressed, setSuppressed] = useState(() => isFloatingSuppressed());
   const opacity = useRef(new Animated.Value(1)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const [pressedKey, setPressedKey] = useState<string | null>(null);
   const [author, setAuthor] = useState<ContentAuthorFocus | null>(null);
 
   useEffect(() => subscribeContentAuthorFocus(setAuthor), []);
-  useEffect(() => subscribeFloatingVisibility(setChromeVisible), []);
+  useEffect(
+    () =>
+      subscribeFloatingVisibility((next) => {
+        setChromeVisible(next);
+        setSuppressed(isFloatingSuppressed());
+      }),
+    []
+  );
 
   // بذرة فقط إن لم يُحدَّد صاحب محتوى بعد — لا تستبدل صاحب المحتوى الظاهر
   useEffect(() => {
@@ -120,31 +128,33 @@ function FloatingActionMenuComponent() {
 
   // عند تغيير المسار: أظهر فوراً (ما لم تكن الخاصة)
   useEffect(() => {
+    setSuppressed(isFloatingSuppressed());
     if (isFloatingSuppressed()) return;
     forceFloatingVisible();
   }, [pathname]);
 
-  // الحركة: ويب = CSS transition (موثوق)، أصلي = Animated
+  const fabShown = chromeVisible && !suppressed;
+
+  // أصلي فقط: Animated — الويب يعتمد CSS عبر View عادي
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    const show = chromeVisible && !isFloatingSuppressed();
     opacity.stopAnimation();
     translateY.stopAnimation();
     Animated.parallel([
       Animated.timing(opacity, {
-        toValue: show ? 1 : 0,
-        duration: show ? 220 : 160,
-        easing: show ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+        toValue: fabShown ? 1 : 0,
+        duration: fabShown ? 220 : 160,
+        easing: fabShown ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(translateY, {
-        toValue: show ? 0 : 28,
-        duration: show ? 220 : 160,
-        easing: show ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+        toValue: fabShown ? 0 : 28,
+        duration: fabShown ? 220 : 160,
+        easing: fabShown ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start();
-  }, [chromeVisible, opacity, translateY]);
+  }, [fabShown, opacity, translateY]);
 
   const role = currentUser?.activeRole || currentUser?.role;
   const isFollowerLike =
@@ -234,7 +244,7 @@ function FloatingActionMenuComponent() {
   if (!isFollowerLike && actions.length === 0) return null;
   if (desktop) return null;
   // عند الإخفاء القسري فقط (محادثة الخاصة…) — لا تُلغَ الواجهة عند التمرير
-  if (isFloatingSuppressed()) return null;
+  if (suppressed) return null;
   if (onPrivateSpace) return null;
   if (
     pathname?.includes('(auth)') ||
@@ -271,24 +281,22 @@ function FloatingActionMenuComponent() {
     ? authorProfile.handle || authorProfile.name
     : t('menu.contentAuthor');
 
-  const fabShown = chromeVisible && !isFloatingSuppressed();
-
   const motionStyle =
     Platform.OS === 'web'
       ? ({
           opacity: fabShown ? 1 : 0,
-          transform: [{ translateY: fabShown ? 0 : 28 }],
-          // CSS على الويب أكثر ثباتاً من Animated عند التمرير السريع
+          transform: [{ translateY: fabShown ? 0 : 24 }],
           transitionProperty: 'opacity, transform',
-          transitionDuration: fabShown ? '220ms' : '160ms',
-          transitionTimingFunction: fabShown
-            ? 'cubic-bezier(0.0, 0.0, 0.2, 1)'
-            : 'cubic-bezier(0.4, 0.0, 1, 1)',
+          transitionDuration: fabShown ? '200ms' : '140ms',
+          transitionTimingFunction: 'ease-out',
+          willChange: 'opacity, transform',
         } as const)
       : {
           opacity,
           transform: [{ translateY }],
         };
+
+  const Wrap = Platform.OS === 'web' ? View : Animated.View;
 
   return (
     <View
@@ -297,7 +305,7 @@ function FloatingActionMenuComponent() {
       dataSet={{ seellieFab: '1' }}
       style={[styles.layer, Platform.OS === 'web' && styles.layerWeb]}
     >
-      <Animated.View
+      <Wrap
         pointerEvents={fabShown ? 'box-none' : 'none'}
         style={[
           styles.wrap,
@@ -443,7 +451,7 @@ function FloatingActionMenuComponent() {
             </View>
           );
         })}
-      </Animated.View>
+      </Wrap>
     </View>
   );
 }
