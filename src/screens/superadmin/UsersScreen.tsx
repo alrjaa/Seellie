@@ -357,7 +357,7 @@ export default function UsersScreen() {
             onEdit={
               item.role === 'organizer'
                 ? (u) =>
-                    router.push(`/(superadmin)/organizers/${u.id}` as any)
+                    router.push(`/admin/organizers/${u.id}` as any)
                 : undefined
             }
           />

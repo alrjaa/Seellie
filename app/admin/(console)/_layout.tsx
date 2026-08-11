@@ -13,8 +13,9 @@ import {
 import { ADMIN_MODULES } from '@/screens/superadmin/modules';
 import { transparentHeaderOptions } from '@/theme/navigation';
 import { useResponsive } from '@/hooks/useResponsive';
+import { ADMIN_HOME, adminPath } from '@/utils/admin-portal';
 
-export default function SuperAdminLayout() {
+export default function AdminConsoleLayout() {
   const theme = useAppTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -34,7 +35,7 @@ export default function SuperAdminLayout() {
     const home: DesktopNavItem = {
       key: 'dashboard',
       label: t('superadmin.dashboard.title'),
-      href: '/(superadmin)',
+      href: ADMIN_HOME,
       icon: 'grid-outline',
       section: t('superadmin.dashboard.title'),
     };
@@ -52,8 +53,8 @@ export default function SuperAdminLayout() {
     <SuperAdminGuard>
       <DesktopShell
         items={desktopItems}
-        accountHref="/(superadmin)/settings"
-        settingsHref="/(superadmin)/settings"
+        accountHref={adminPath('settings')}
+        settingsHref={adminPath('settings')}
         brandLabel="Seellie Admin"
       >
         <Stack
@@ -66,7 +67,7 @@ export default function SuperAdminLayout() {
           }}
         >
           <Stack.Screen
-            name="index"
+            name="home"
             options={{
               headerShown: false,
               title: t('superadmin.dashboard.title'),
@@ -111,8 +112,8 @@ export default function SuperAdminLayout() {
                       ? t('home.messagesSubUnread', { count: unreadMessages })
                       : undefined
                   }
-                  accountHref="/(superadmin)/settings"
-                  settingsHref="/(superadmin)/settings"
+                  accountHref={adminPath('settings')}
+                  settingsHref={adminPath('settings')}
                   hideAccount={desktop}
                   showBack
                 />
@@ -129,8 +130,8 @@ export default function SuperAdminLayout() {
               header: () => (
                 <SettingsHeader
                   title={t('nav.emails')}
-                  accountHref="/(superadmin)/settings"
-                  settingsHref="/(superadmin)/settings"
+                  accountHref={adminPath('settings')}
+                  settingsHref={adminPath('settings')}
                   hideAccount={desktop}
                   showBack
                 />

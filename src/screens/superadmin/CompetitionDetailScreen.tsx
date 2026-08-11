@@ -550,7 +550,7 @@ export default function CompetitionDetailScreen() {
               });
               if (!ok) return;
               if (await deleteCompetition(competition.id)) {
-                router.replace('/(superadmin)/competitions' as any);
+                router.replace('/admin/competitions' as any);
               }
             })();
           }}

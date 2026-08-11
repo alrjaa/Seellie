@@ -147,7 +147,7 @@ export default function SuperAdminDashboardScreen() {
   return (
     <Screen scroll contentStyle={styles.content} edges={['top', 'left', 'right']} density="dashboard">
       <HomeHeader
-        accountHref="/(superadmin)/settings"
+        accountHref="/admin/settings"
         pageTitle={t('superadmin.dashboard.title')}
         pageSubtitle={t('superadmin.dashboard.subtitle')}
       />

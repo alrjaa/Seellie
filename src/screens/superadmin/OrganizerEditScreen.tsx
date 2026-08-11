@@ -40,7 +40,7 @@ export default function OrganizerEditScreen() {
   }
 
   if (user.role !== 'organizer') {
-    return <Redirect href="/(superadmin)/users" />;
+    return <Redirect href={'/admin/users' as any} />;
   }
 
   return (

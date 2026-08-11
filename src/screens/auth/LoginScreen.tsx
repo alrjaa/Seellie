@@ -25,6 +25,7 @@ import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
 import { DEFAULT_LOGO, DEFAULT_LOGO_MODULE } from '@/theme/brand';
 import { cairoText } from '@/theme/fonts';
 import Constants from 'expo-constants';
+import { ADMIN_LOGIN, isAdminHostname } from '@/utils/admin-portal';
 
 function webBuildLabel(): string {
   const extra = Constants.expoConfig?.extra as { buildId?: string } | undefined;
@@ -97,6 +98,12 @@ export default function LoginScreen() {
   );
 
   if (loading) return <LoadingState />;
+
+  // على مضيف المشرف لا تُعرض شاشة دخول التطبيق
+  if (Platform.OS === 'web' && isAdminHostname()) {
+    return <Redirect href={ADMIN_LOGIN as any} />;
+  }
+
   if (currentUser) {
     return (
       <Redirect

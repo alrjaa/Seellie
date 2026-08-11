@@ -152,10 +152,9 @@ function FloatingActionMenuComponent() {
   if (onPrivateSpace) return null;
   if (
     pathname?.includes('(auth)') ||
-    pathname?.includes('(superadmin)') ||
-    pathname?.includes('/superadmin') ||
-    pathname === '/login' ||
-    pathname === '/admin'
+    pathname?.includes('(console)') ||
+    pathname?.includes('/admin') ||
+    pathname === '/login'
   ) {
     return null;
   }

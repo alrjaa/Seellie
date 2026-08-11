@@ -63,7 +63,7 @@ export const ar = {
     admin: 'مشرف',
     adminLogin: 'دخول المشرف',
     appLogin: 'دخول التطبيق',
-    adminTagline: 'لوحة إدارة المنصة',
+    adminTagline: 'بوابة إدارة مستقلة عن التطبيق',
     adminDemoHint: 'المشرف سحابي فقط — استخدم حساباً مرقّى عبر /admin.',
     adminPortalOnlyTitle: 'دخول المشرف فقط',
     adminPortalOnlyDesc: 'هذه الشاشة مخصصة لحساب المشرف.',
@@ -83,7 +83,8 @@ export const ar = {
     emailUnconfirmedDesc:
       'البريد غير مؤكد. أكّد الحساب أو عطّل تأكيد البريد أثناء الاختبار.',
     useAdminLoginTitle: 'استخدم بوابة المشرف',
-    useAdminLoginDesc: 'حساب المشرف يدخل من رابط /admin وليس من دخول التطبيق.',
+    useAdminLoginDesc:
+      'حساب المشرف يدخل من /admin ثم /admin/home وليس من دخول التطبيق.',
     logoA11y: 'شعار Seellie',
     invalidEmail: 'أدخل بريداً إلكترونياً صالحاً',
     demoHint: '',

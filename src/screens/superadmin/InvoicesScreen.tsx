@@ -68,7 +68,7 @@ export default function InvoicesScreen() {
             accessibilityRole="button"
             hitSlop={4}
             onPress={() =>
-              router.push(`/(superadmin)/invoices/${inv.id}` as any)
+              router.push(`/admin/invoices/${inv.id}` as any)
             }
           >
             <Card style={styles.card}>

@@ -8,11 +8,13 @@ import {
   isAuthCallbackUrl,
   peekPendingAuthUrl,
 } from '@/services/pending-auth-url';
+import { ADMIN_HOME, ADMIN_LOGIN, isAdminHostname } from '@/utils/admin-portal';
 
 export default function Index() {
   const { currentUser, loading, routeForRole } = useTournament();
   const [webChecked, setWebChecked] = useState(Platform.OS !== 'web');
   const [recovery, setRecovery] = useState(false);
+  const [adminHost, setAdminHost] = useState(false);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') {
@@ -23,6 +25,7 @@ export default function Index() {
     captureWebAuthUrlEarly();
     const href = window.location.href;
     setRecovery(!!isAuthCallbackUrl(href) || !!peekPendingAuthUrl());
+    setAdminHost(isAdminHostname(window.location.hostname));
     setWebChecked(true);
   }, []);
 
@@ -30,6 +33,18 @@ export default function Index() {
 
   if (recovery) {
     return <Redirect href="/(auth)/reset-password" />;
+  }
+
+  // مضيف المشرف المستقل (admin.seellie.com) — لا يدخل بوابة التطبيق العامة
+  if (adminHost) {
+    if (
+      currentUser &&
+      (currentUser.role === 'superadmin' ||
+        currentUser.activeRole === 'superadmin')
+    ) {
+      return <Redirect href={ADMIN_HOME as any} />;
+    }
+    return <Redirect href={ADMIN_LOGIN as any} />;
   }
 
   if (currentUser) {

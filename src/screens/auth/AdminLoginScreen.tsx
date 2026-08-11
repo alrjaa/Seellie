@@ -156,6 +156,11 @@ export default function AdminLoginScreen() {
               <Text style={[styles.tagline, { color: theme.colors.textMuted }]}>
                 {t('auth.adminTagline')}
               </Text>
+              <Muted style={styles.portalUrl}>
+                {Platform.OS === 'web' && typeof window !== 'undefined'
+                  ? `${window.location.host}/admin`
+                  : 'seellie.com/admin'}
+              </Muted>
             </View>
 
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
@@ -275,6 +280,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     marginTop: 4,
+  },
+  portalUrl: {
+    ...cairoText('semiBold'),
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 6,
+    letterSpacing: 0.3,
   },
   sectionTitle: {
     ...cairoText('bold'),

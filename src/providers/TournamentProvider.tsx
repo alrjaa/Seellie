@@ -1216,7 +1216,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const routeForRole = useCallback((role: UserRole) => {
     switch (role) {
       case 'superadmin':
-        return '/(superadmin)';
+        return '/admin/home';
       case 'organizer':
         return '/(organizer)';
       case 'freelancer':

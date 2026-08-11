@@ -54,7 +54,11 @@ cp .env.example .env
 
 > المشرف سحابي فقط (لا حساب تجريبي محلي). رقِّ الحساب بـ `supabase/promote-admin.sql` أو عيّن كلمة المرور بـ `set-admin-password.sql`.
 
-> دخول المشرف منفصل: افتح المسار `/admin` (لا يعمل من شاشة دخول التطبيق).
+> **بوابة المشرف مستقلة عن التطبيق:**
+> - دخول التطبيق: `https://www.seellie.com/login`
+> - دخول المشرف: `https://www.seellie.com/admin`
+> - لوحة المشرف: `https://www.seellie.com/admin/home` ، `/admin/users` ، …
+> - اختياري لاحقاً: اربط النطاق `admin.seellie.com` على نفس مشروع Vercel ليصبح المضيف كله لبوابة المشرف.
 
 ## الميزات المعمارية
 

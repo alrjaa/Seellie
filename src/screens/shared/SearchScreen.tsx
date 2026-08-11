@@ -77,7 +77,7 @@ export default function SearchScreen() {
 
     const competitionHref = (id: string) => {
       if (role === 'organizer') return `/(organizer)/competitions/${id}`;
-      if (role === 'superadmin') return `/(superadmin)/competitions/${id}`;
+      if (role === 'superadmin') return `/admin/competitions/${id}`;
       if (role === 'follower') return `/(follower)/competitions/${id}`;
       return '/forums';
     };
@@ -248,7 +248,7 @@ export default function SearchScreen() {
           id: `ref-${r.id}`,
           title: r.name,
           subtitle: t('searchUi.refereeRole', { role: r.role }),
-          href: role === 'superadmin' ? '/(superadmin)/referees' : homeHref,
+          href: role === 'superadmin' ? '/admin/referees' : homeHref,
           kind: t('searchUi.kindReferee'),
         });
       }

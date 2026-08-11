@@ -70,7 +70,6 @@ function RootNavigator() {
           <Stack.Screen name="(follower)" />
           <Stack.Screen name="(organizer)" />
           <Stack.Screen name="(freelancer)" />
-          <Stack.Screen name="(superadmin)" />
           <Stack.Screen
             name="forums"
             options={{

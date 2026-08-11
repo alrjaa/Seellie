@@ -61,7 +61,7 @@ export const en: TranslationTree = {
     admin: 'Admin',
     adminLogin: 'Admin sign in',
     appLogin: 'App sign in',
-    adminTagline: 'Platform admin console',
+    adminTagline: 'Separate admin portal — not the app login',
     adminDemoHint:
       'Cloud admin only — use a promoted admin account at /admin.',
     adminPortalOnlyTitle: 'Admin only',
@@ -82,7 +82,8 @@ export const en: TranslationTree = {
     emailUnconfirmedDesc:
       'Email is not confirmed. Confirm the account or disable email confirmation while testing.',
     useAdminLoginTitle: 'Use the admin portal',
-    useAdminLoginDesc: 'Admin accounts sign in at /admin, not the app login.',
+    useAdminLoginDesc:
+      'Admin accounts sign in at /admin then /admin/home, not the app login.',
     logoA11y: 'Seellie logo',
     invalidEmail: 'Enter a valid email address',
     demoHint: '',

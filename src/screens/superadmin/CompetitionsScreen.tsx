@@ -134,7 +134,7 @@ export default function CompetitionsScreen() {
         organizerName={
           organizerMap.get(item.organizerId) || t('superadmin.labels.unknown')
         }
-        onPress={() => router.push(`/(superadmin)/competitions/${item.id}`)}
+        onPress={() => router.push(`/admin/competitions/${item.id}` as any)}
         onDelete={() => confirmDelete(item)}
       />
     ),

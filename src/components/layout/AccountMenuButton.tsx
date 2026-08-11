@@ -47,7 +47,7 @@ function defaultSettingsHref(
     case 'follower':
       return '/(follower)/settings';
     case 'superadmin':
-      return '/(superadmin)/settings';
+      return '/admin/settings';
     default:
       return accountHref;
   }
