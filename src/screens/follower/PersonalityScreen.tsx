@@ -66,6 +66,14 @@ type PersonalityItem = {
   handle?: string;
   timestamp: Date;
   likes: string[];
+  comments: {
+    id: string;
+    text: string;
+    authorId: string;
+    authorName: string;
+    authorAvatar?: string;
+    timestamp: Date | string | number;
+  }[];
 };
 
 const MediaCard = memo(function MediaCard({
@@ -116,7 +124,7 @@ const MediaCard = memo(function MediaCard({
 
 /** شخصية — مخصص لمحتوى اللاعب الحر (صور وفيديوهات) مع إعجاب فعّال. */
 export default function PersonalityScreen() {
-  const { users, currentUser, toggleMediaLike } = useTournament();
+  const { users, currentUser, toggleMediaLike, addMediaComment } = useTournament();
   const theme = useAppTheme();
   const router = useRouter();
   const { t } = useTranslation();
@@ -143,6 +151,7 @@ export default function PersonalityScreen() {
             handle: u.handle,
             timestamp: new Date(photo.timestamp || Date.now()),
             likes: photo.likes,
+            comments: photo.comments || [],
           });
         });
         (u.media?.videos || []).forEach((video) => {
@@ -157,6 +166,7 @@ export default function PersonalityScreen() {
             handle: u.handle,
             timestamp: new Date(video.timestamp || Date.now()),
             likes: video.likes,
+            comments: video.comments || [],
           });
         });
       });
@@ -202,6 +212,14 @@ export default function PersonalityScreen() {
         }`,
         likes: item.likes,
         liked: !!currentUser && item.likes.includes(currentUser.id),
+        comments: (item.comments || []).map((c) => ({
+          id: c.id,
+          text: c.text,
+          authorId: c.authorId,
+          authorName: c.authorName,
+          authorAvatar: c.authorAvatar,
+          timestamp: c.timestamp,
+        })),
       })),
     [filtered, currentUser, t]
   );
@@ -213,6 +231,30 @@ export default function PersonalityScreen() {
       toggleMediaLike(source.authorId, source.mediaId, source.kind, 'user');
     },
     [filtered, toggleMediaLike]
+  );
+
+  const onFullComment = useCallback(
+    (item: FullScreenContent, text: string) => {
+      const source = filtered.find((f) => f.id === item.id);
+      if (!source) return null;
+      const created = addMediaComment(
+        source.authorId,
+        source.mediaId,
+        source.kind,
+        text,
+        'user'
+      );
+      if (!created) return null;
+      return {
+        id: created.id,
+        text: created.text,
+        authorId: created.authorId,
+        authorName: created.authorName,
+        authorAvatar: created.authorAvatar,
+        timestamp: created.timestamp,
+      };
+    },
+    [filtered, addMediaComment]
   );
 
   const onPressAuthor = useCallback(
@@ -307,6 +349,7 @@ export default function PersonalityScreen() {
         <FullScreenFeed
           data={fullScreenData}
           onLike={onFullLike}
+          onComment={onFullComment}
           onPressAuthor={onPressAuthor}
           onDoubleTap={(item) => void saveToPrivate(item)}
           emptyTitle={t('screens.personalityEmpty')}

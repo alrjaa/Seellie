@@ -17,6 +17,7 @@ type MediaItem = {
   type: 'photo' | 'video';
   matchLabel: string;
   likes: string[];
+  comments: { id: string; text: string; authorId: string; authorName: string; authorAvatar?: string; timestamp: Date | string | number }[];
   /** صاحب المحتوى (حساب النشر) — يتغيّر الأفاتار/الاسم مع العنصر */
   organizerId?: string;
   organizerName?: string;
@@ -29,7 +30,8 @@ function isHttpUrl(url?: string) {
 }
 
 export default function HighlightsScreen() {
-  const { competitions, currentUser, toggleMediaLike, users } = useTournament();
+  const { competitions, currentUser, toggleMediaLike, addMediaComment, users } =
+    useTournament();
   const { t } = useTranslation();
   const saveToPrivate = useSaveToPrivateSpace();
 
@@ -51,6 +53,7 @@ export default function HighlightsScreen() {
           type: 'photo',
           matchLabel: comp.name,
           likes: p.likes,
+          comments: p.comments || [],
           organizerId: comp.organizerId,
           organizerName,
           organizerHandle,
@@ -67,6 +70,7 @@ export default function HighlightsScreen() {
           type: 'video',
           matchLabel: comp.name,
           likes: v.likes,
+          comments: v.comments || [],
           organizerId: comp.organizerId,
           organizerName,
           organizerHandle,
@@ -86,6 +90,7 @@ export default function HighlightsScreen() {
               type: 'photo',
               matchLabel: `${player.name} · ${team.name}`,
               likes: p.likes,
+          comments: p.comments || [],
               // صاحب المحتوى = حساب المنظّم، والصورة/الاسم من اللاعب ليتغيّر مع اللقطة
               organizerId: comp.organizerId,
               organizerName: player.name || organizerName,
@@ -103,6 +108,7 @@ export default function HighlightsScreen() {
               type: 'video',
               matchLabel: `${player.name} · ${team.name}`,
               likes: v.likes,
+          comments: v.comments || [],
               organizerId: comp.organizerId,
               organizerName: player.name || organizerName,
               organizerHandle,
@@ -126,6 +132,7 @@ export default function HighlightsScreen() {
             type: 'photo',
             matchLabel: label,
             likes: p.likes,
+          comments: p.comments || [],
             organizerId: comp.organizerId,
             organizerName,
             organizerHandle,
@@ -142,6 +149,7 @@ export default function HighlightsScreen() {
             type: 'video',
             matchLabel: label,
             likes: v.likes,
+          comments: v.comments || [],
             organizerId: comp.organizerId,
             organizerName,
             organizerHandle,
@@ -178,6 +186,14 @@ export default function HighlightsScreen() {
                 : t('screens.matchClipVideo'),
         likes: item.likes,
         liked: !!currentUser && item.likes.includes(currentUser.id),
+        comments: (item.comments || []).map((c) => ({
+          id: c.id,
+          text: c.text,
+          authorId: c.authorId,
+          authorName: c.authorName,
+          authorAvatar: c.authorAvatar,
+          timestamp: c.timestamp,
+        })),
       })),
     [media, currentUser, t]
   );
@@ -193,11 +209,38 @@ export default function HighlightsScreen() {
     [media, toggleMediaLike]
   );
 
+  const onFullComment = useCallback(
+    (item: FullScreenContent, text: string) => {
+      const source = media.find(
+        (m) => `${m.source}-${m.type}-${m.id}` === item.id
+      );
+      if (!source) return null;
+      const created = addMediaComment(
+        source.ownerId,
+        source.id,
+        source.type,
+        text,
+        source.source
+      );
+      if (!created) return null;
+      return {
+        id: created.id,
+        text: created.text,
+        authorId: created.authorId,
+        authorName: created.authorName,
+        authorAvatar: created.authorAvatar,
+        timestamp: created.timestamp,
+      };
+    },
+    [media, addMediaComment]
+  );
+
   return (
     <Screen bleed edges={['left', 'right']}>
       <FullScreenFeed
         data={fullScreenData}
         onLike={onFullLike}
+        onComment={onFullComment}
         onDoubleTap={(item) => void saveToPrivate(item)}
         emptyTitle={t('screens.noHighlights')}
         emptyDescription={t('screens.noHighlightsDesc')}

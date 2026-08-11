@@ -47,7 +47,17 @@ type FeedItem = {
   text?: string;
   mediaUrl?: string;
   mediaId?: string;
+  /** معرف المالك لـ toggleMediaLike / addMediaComment (مسابقة/مباراة/لاعب/مستخدم) */
+  mediaOwnerId?: string;
   likes: string[];
+  comments?: {
+    id: string;
+    text: string;
+    authorId: string;
+    authorName: string;
+    authorAvatar?: string;
+    timestamp: Date | string | number;
+  }[];
   timestamp: Date;
   mediaSource?: 'user' | 'player' | 'match' | 'competition';
   subtitle?: string;
@@ -191,6 +201,7 @@ export default function GeneralFeedScreen() {
     togglePostLike,
     toggleAnalysisLike,
     toggleMediaLike,
+    addMediaComment,
     addComment,
   } = useTournament();
 
@@ -247,7 +258,9 @@ export default function GeneralFeedScreen() {
             authorAvatar: user.avatar,
             mediaUrl: photo.url,
             mediaId: photo.id,
+            mediaOwnerId: user.id,
             likes: photo.likes,
+            comments: photo.comments || [],
             timestamp: new Date(photo.timestamp || Date.now()),
             mediaSource: 'user',
             subtitle: t('home.freelancerPlayer'),
@@ -265,7 +278,9 @@ export default function GeneralFeedScreen() {
             authorAvatar: user.avatar,
             mediaUrl: video.url,
             mediaId: video.id,
+            mediaOwnerId: user.id,
             likes: video.likes,
+            comments: video.comments || [],
             timestamp: new Date(video.timestamp || Date.now()),
             mediaSource: 'user',
             subtitle: t('home.freelancerPlayer'),
@@ -285,6 +300,7 @@ export default function GeneralFeedScreen() {
           title: a.title,
           text: a.content,
           likes: a.likes,
+          comments: a.comments || [],
           timestamp: new Date(a.timestamp),
         });
       });
@@ -308,7 +324,9 @@ export default function GeneralFeedScreen() {
           authorAvatar: uploaderAvatar,
           mediaUrl: photo.url,
           mediaId: photo.id,
+          mediaOwnerId: comp.id,
           likes: photo.likes,
+          comments: photo.comments || [],
           timestamp: new Date(photo.timestamp || Date.now()),
           mediaSource: 'competition',
           subtitle: t('screens.competitionMedia'),
@@ -325,7 +343,9 @@ export default function GeneralFeedScreen() {
           authorAvatar: uploaderAvatar,
           mediaUrl: video.url,
           mediaId: video.id,
+          mediaOwnerId: comp.id,
           likes: video.likes,
+          comments: video.comments || [],
           timestamp: new Date(video.timestamp || Date.now()),
           mediaSource: 'competition',
           subtitle: t('screens.competitionMedia'),
@@ -345,7 +365,9 @@ export default function GeneralFeedScreen() {
               authorAvatar: player.avatar || uploaderAvatar,
               mediaUrl: photo.url,
               mediaId: photo.id,
+              mediaOwnerId: player.id,
               likes: photo.likes,
+              comments: photo.comments || [],
               timestamp: new Date(photo.timestamp || Date.now()),
               mediaSource: 'player',
               subtitle: `${team.name} · ${player.name}`,
@@ -362,7 +384,9 @@ export default function GeneralFeedScreen() {
               authorAvatar: player.avatar || uploaderAvatar,
               mediaUrl: video.url,
               mediaId: video.id,
+              mediaOwnerId: player.id,
               likes: video.likes,
+              comments: video.comments || [],
               timestamp: new Date(video.timestamp || Date.now()),
               mediaSource: 'player',
               subtitle: `${team.name} · ${player.name}`,
@@ -386,7 +410,9 @@ export default function GeneralFeedScreen() {
             authorAvatar: uploaderAvatar,
             mediaUrl: photo.url,
             mediaId: photo.id,
+            mediaOwnerId: match.id,
             likes: photo.likes,
+            comments: photo.comments || [],
             timestamp: new Date(photo.timestamp || match.date),
             mediaSource: 'match',
             subtitle: `${comp.name} · ${label}`,
@@ -403,7 +429,9 @@ export default function GeneralFeedScreen() {
             authorAvatar: uploaderAvatar,
             mediaUrl: video.url,
             mediaId: video.id,
+            mediaOwnerId: match.id,
             likes: video.likes,
+            comments: video.comments || [],
             timestamp: new Date(video.timestamp || match.date),
             mediaSource: 'match',
             subtitle: `${comp.name} · ${label}`,
@@ -495,7 +523,7 @@ export default function GeneralFeedScreen() {
       if (item.type === 'photo' || item.type === 'video') {
         if (!item.mediaId) return;
         toggleMediaLike(
-          item.authorId,
+          item.mediaOwnerId || item.authorId,
           item.mediaId,
           item.type,
           item.mediaSource || 'user'
@@ -559,6 +587,14 @@ export default function GeneralFeedScreen() {
         subtitle: undefined,
         likes: item.likes,
         liked: !!currentUser && item.likes.includes(currentUser.id),
+        comments: (item.comments || []).map((c) => ({
+          id: c.id,
+          text: c.text,
+          authorId: c.authorId,
+          authorName: c.authorName,
+          authorAvatar: c.authorAvatar,
+          timestamp: c.timestamp,
+        })),
       })),
     [filtered, currentUser]
   );
@@ -569,6 +605,35 @@ export default function GeneralFeedScreen() {
       if (source) onLike(source);
     },
     [filtered, onLike]
+  );
+
+  const onFullComment = useCallback(
+    (item: FullScreenContent, text: string) => {
+      const source = filtered.find((f) => f.id === item.id);
+      if (!source) return null;
+      if (source.type === 'photo' || source.type === 'video') {
+        if (!source.mediaId) return null;
+        const created = addMediaComment(
+          source.mediaOwnerId || source.authorId,
+          source.mediaId,
+          source.type,
+          text,
+          source.mediaSource || 'user'
+        );
+        if (!created) return null;
+        return {
+          id: created.id,
+          text: created.text,
+          authorId: created.authorId,
+          authorName: created.authorName,
+          authorAvatar: created.authorAvatar,
+          timestamp: created.timestamp,
+        };
+      }
+      // منشورات/تحليلات/نقاشات: التخزين المحلي عبر FullScreenFeed يكفي للعرض
+      return null;
+    },
+    [filtered, addMediaComment]
   );
 
   const onPressAuthor = useCallback(
@@ -789,6 +854,7 @@ export default function GeneralFeedScreen() {
         <FullScreenFeed
           data={fullScreenData}
           onLike={onFullLike}
+          onComment={onFullComment}
           onPressAuthor={onPressAuthor}
           onDoubleTap={(item) => void saveToPrivate(item)}
           authorPresentation="handleOnly"

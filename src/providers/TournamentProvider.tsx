@@ -742,6 +742,14 @@ export interface TournamentContextType {
     mediaType: 'photo' | 'video',
     source?: 'user' | 'player' | 'match' | 'competition'
   ) => void;
+  /** تعليق على صورة/فيديو — يُحفظ مع الوسائط ويُزامن للسحابة عند الإمكان */
+  addMediaComment: (
+    authorId: string,
+    mediaId: string,
+    mediaType: 'photo' | 'video',
+    text: string,
+    source?: 'user' | 'player' | 'match' | 'competition'
+  ) => Comment | null;
   changePassword: (
     currentPassword: string,
     nextPassword: string
@@ -5066,6 +5074,136 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     [currentUser, syncCompetitions]
   );
 
+  const addMediaComment = useCallback(
+    (
+      authorId: string,
+      mediaId: string,
+      mediaType: 'photo' | 'video',
+      text: string,
+      source: 'user' | 'player' | 'match' | 'competition' = 'user'
+    ): Comment | null => {
+      if (!currentUser) return null;
+      if (currentUser.permissions?.canComment === false) {
+        toast({
+          variant: 'destructive',
+          title: t('match.commentsDisabled'),
+        });
+        return null;
+      }
+      const trimmed = text.trim();
+      if (!trimmed) return null;
+
+      const comment: Comment = {
+        id: createId(),
+        text: trimmed,
+        authorId: currentUser.id,
+        authorName: currentUser.name,
+        authorAvatar: currentUser.avatar || '',
+        timestamp: new Date(),
+        likes: [],
+        replies: [],
+        status: 'active',
+      };
+      const key = mediaType === 'photo' ? 'photos' : 'videos';
+
+      const appendList = <
+        T extends { id: string; comments: Comment[] },
+      >(
+        list: T[]
+      ): T[] =>
+        list.map((item) =>
+          item.id === mediaId
+            ? { ...item, comments: [comment, ...(item.comments || [])] }
+            : item
+        );
+
+      if (source === 'user') {
+        setUsers((prev) =>
+          prev.map((u) => {
+            if (u.id !== authorId) return u;
+            const media = u.media || { photos: [], videos: [] };
+            return {
+              ...u,
+              media: { ...media, [key]: appendList(media[key] || []) },
+            };
+          })
+        );
+        setCurrentUser((prev) => {
+          if (!prev || prev.id !== authorId) return prev;
+          const media = prev.media || { photos: [], videos: [] };
+          const updated = {
+            ...prev,
+            media: { ...media, [key]: appendList(media[key] || []) },
+          };
+          void setJson(USER_STORAGE_KEY, updated);
+          if (isUuid(updated.id)) void upsertUserContentCloud(updated);
+          return updated;
+        });
+        setUsers((prev) => {
+          const author = prev.find((u) => u.id === authorId);
+          if (author && isUuid(author.id)) {
+            const media = author.media || { photos: [], videos: [] };
+            void upsertUserContentCloud(
+              {
+                ...author,
+                media: { ...media, [key]: appendList(media[key] || []) },
+              },
+              { allowCrossUser: true }
+            );
+          }
+          return prev;
+        });
+        return comment;
+      }
+
+      setCompetitions((prev) => {
+        const next = prev.map((comp) => {
+          if (source === 'competition') {
+            if (comp.id !== authorId) return comp;
+            const media = comp.media || { photos: [], videos: [] };
+            return {
+              ...comp,
+              media: { ...media, [key]: appendList(media[key] || []) },
+            };
+          }
+          if (source === 'match') {
+            return {
+              ...comp,
+              matches: comp.matches.map((m) => {
+                if (m.id !== authorId) return m;
+                return {
+                  ...m,
+                  media: {
+                    ...m.media,
+                    [key]: appendList(m.media[key] || []),
+                  },
+                };
+              }),
+            };
+          }
+          return {
+            ...comp,
+            teams: comp.teams.map((team) => ({
+              ...team,
+              players: team.players.map((player) => {
+                if (player.id !== authorId) return player;
+                const media = player.media || { photos: [], videos: [] };
+                return {
+                  ...player,
+                  media: { ...media, [key]: appendList(media[key] || []) },
+                };
+              }),
+            })),
+          };
+        });
+        void syncCompetitions(next);
+        return next;
+      });
+      return comment;
+    },
+    [currentUser, syncCompetitions, toast, t]
+  );
+
   const changePassword = useCallback(
     async (currentPassword: string, nextPassword: string) => {
       if (!currentUser) return false;
@@ -5775,6 +5913,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       togglePostLike,
       toggleAnalysisLike,
       toggleMediaLike,
+      addMediaComment,
       changePassword,
       addUserMedia,
       removeUserMedia,
@@ -5875,6 +6014,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       togglePostLike,
       toggleAnalysisLike,
       toggleMediaLike,
+      addMediaComment,
       changePassword,
       addUserMedia,
       removeUserMedia,
