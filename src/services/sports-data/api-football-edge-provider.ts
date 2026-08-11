@@ -7,7 +7,7 @@ import {
   type SportsLeagueBundle,
 } from './types';
 
-const BUNDLE_CACHE_KEY = 'sports_national_league_bundle_v1';
+const BUNDLE_CACHE_KEY = 'sports_national_league_bundle_v2';
 const BUNDLE_TTL_MS = 2 * 60 * 1000;
 
 type InvokeOk<T> = { ok: true; cached?: boolean; data: T };

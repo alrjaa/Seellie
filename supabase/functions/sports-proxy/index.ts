@@ -80,7 +80,10 @@ function cacheSet(key: string, body: unknown, ttl: number) {
 async function apiFootball(
   path: string,
   apiKey: string
-): Promise<{ ok: true; data: unknown } | { ok: false }> {
+): Promise<
+  | { ok: true; data: any; results: number; errorKeys: string[] }
+  | { ok: false; errorKeys: string[] }
+> {
   try {
     const res = await fetch(`${UPSTREAM}${path}`, {
       method: 'GET',
@@ -90,14 +93,115 @@ async function apiFootball(
       },
     });
     if (!res.ok) {
-      // لا نسجّل الهيدر ولا المفتاح ولا جسم الخطأ الخام
-      return { ok: false };
+      return { ok: false, errorKeys: [`http_${res.status}`] };
     }
     const data = await res.json();
-    return { ok: true, data };
+    const errors = data?.errors;
+    const errorKeys =
+      errors && typeof errors === 'object' && !Array.isArray(errors)
+        ? Object.keys(errors)
+        : Array.isArray(errors) && errors.length
+          ? ['list']
+          : [];
+    const results = Number(data?.results) || 0;
+    return { ok: true, data, results, errorKeys };
   } catch {
-    return { ok: false };
+    return { ok: false, errorKeys: ['network'] };
   }
+}
+
+function seasonCandidates(preferred?: number): number[] {
+  const base = preferred && preferred > 2000 ? preferred : currentSeason();
+  // جرّب الموسم الحالي ثم السابقين — كثير من الدوريات تُرمَّز بسنة البداية
+  const list = [base, base - 1, base - 2, base + 1];
+  return [...new Set(list.filter((y) => y >= 2018 && y <= 2100))];
+}
+
+async function fetchStandingsForSeasons(
+  leagueId: number,
+  apiKey: string,
+  preferred?: number
+) {
+  for (const season of seasonCandidates(preferred)) {
+    const up = await apiFootball(
+      `/standings?league=${leagueId}&season=${season}`,
+      apiKey
+    );
+    if (!up.ok) continue;
+    const standings = mapStandings(up.data);
+    if (standings.length > 0) {
+      return {
+        season,
+        standings,
+        meta: leagueMeta(up.data),
+        errorKeys: up.errorKeys,
+      };
+    }
+  }
+  return null;
+}
+
+async function fetchFixturesFlexible(
+  leagueId: number,
+  season: number,
+  apiKey: string
+) {
+  const queries = [
+    `/fixtures?league=${leagueId}&season=${season}&next=15`,
+    `/fixtures?league=${leagueId}&season=${season}&last=15`,
+    `/fixtures?league=${leagueId}&season=${season}`,
+  ];
+  let nextFixtures: ReturnType<typeof mapFixtures> = [];
+  let lastFixtures: ReturnType<typeof mapFixtures> = [];
+  const errorKeys: string[] = [];
+
+  // next
+  const nx = await apiFootball(queries[0], apiKey);
+  if (nx.ok) {
+    nextFixtures = mapFixtures(nx.data);
+    errorKeys.push(...nx.errorKeys.map((k) => `next:${k}`));
+  }
+
+  // last
+  const ls = await apiFootball(queries[1], apiKey);
+  if (ls.ok) {
+    lastFixtures = mapFixtures(ls.data);
+    errorKeys.push(...ls.errorKeys.map((k) => `last:${k}`));
+  }
+
+  // إن بقيت فارغة: كل مباريات الموسم ثم تقسيم قادم/منتهية
+  if (!nextFixtures.length && !lastFixtures.length) {
+    const all = await apiFootball(queries[2], apiKey);
+    if (all.ok) {
+      errorKeys.push(...all.errorKeys.map((k) => `all:${k}`));
+      const list = mapFixtures(all.data);
+      const now = Date.now();
+      const upcoming = list
+        .filter((f) => {
+          const t = Date.parse(f.date);
+          return Number.isFinite(t) && t >= now;
+        })
+        .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+      const finished = list
+        .filter((f) => {
+          const played =
+            f.homeScore != null &&
+            f.awayScore != null &&
+            String(f.status).toUpperCase() === 'FT';
+          const t = Date.parse(f.date);
+          return played || (Number.isFinite(t) && t < now);
+        })
+        .sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
+      nextFixtures = upcoming.slice(0, 10);
+      lastFixtures = finished.slice(0, 10);
+    }
+  }
+
+  const live = await apiFootball(`/fixtures?live=${leagueId}`, apiKey);
+  const liveFixtures = live.ok ? mapFixtures(live.data) : [];
+  if (live.ok) errorKeys.push(...live.errorKeys.map((k) => `live:${k}`));
+
+  return { nextFixtures, lastFixtures, liveFixtures, errorKeys };
 }
 
 function mapStandings(raw: any) {
@@ -270,42 +374,54 @@ serve(async (req) => {
   }
 
   if (resource === 'bundle') {
-    const [st, nx, ls, lv] = await Promise.all([
-      apiFootball(`/standings?league=${leagueId}&season=${season}`, apiKey),
-      apiFootball(
-        `/fixtures?league=${leagueId}&season=${season}&next=8`,
-        apiKey
-      ),
-      apiFootball(
-        `/fixtures?league=${leagueId}&season=${season}&last=8`,
-        apiKey
-      ),
-      apiFootball(`/fixtures?live=${leagueId}`, apiKey),
-    ]);
-
-    // يكفي نجاح جزئي — لا نكسر الاستجابة بالكامل
-    const standings = st.ok ? mapStandings(st.data) : [];
-    const meta = st.ok
-      ? leagueMeta(st.data)
-      : { leagueId, leagueName: undefined, season, country: undefined };
-    const data = {
-      ...meta,
+    // اختيار موسم فيه ترتيب فعلي (لا نعرض موسماً فارغاً مثل 2026 قبل توفره)
+    const resolved = await fetchStandingsForSeasons(
       leagueId,
-      season,
-      standings,
-      nextFixtures: nx.ok ? mapFixtures(nx.data) : [],
-      lastFixtures: ls.ok ? mapFixtures(ls.data) : [],
-      liveFixtures: lv.ok ? mapFixtures(lv.data) : [],
-      partial: !(st.ok && nx.ok && ls.ok),
+      apiKey,
+      typeof body.season === 'number' ? body.season : undefined
+    );
+
+    if (!resolved) {
+      // لا بيانات لهذا الدوري ضمن المواسم المجربة
+      const data = {
+        leagueId,
+        season,
+        standings: [],
+        nextFixtures: [],
+        lastFixtures: [],
+        liveFixtures: [],
+        partial: true,
+        fetchedAt: new Date().toISOString(),
+        source: 'api-football' as const,
+      };
+      return json({ ok: true, cached: false, data });
+    }
+
+    const fx = await fetchFixturesFlexible(
+      leagueId,
+      resolved.season,
+      apiKey
+    );
+
+    const data = {
+      ...resolved.meta,
+      leagueId,
+      season: resolved.season,
+      standings: resolved.standings,
+      nextFixtures: fx.nextFixtures,
+      lastFixtures: fx.lastFixtures,
+      liveFixtures: fx.liveFixtures,
+      partial:
+        fx.nextFixtures.length === 0 &&
+        fx.lastFixtures.length === 0 &&
+        fx.liveFixtures.length === 0,
+      // مفاتيح أخطاء المزود فقط (مثل plan) — بلا تفاصيل حساسة
+      providerHints: [...new Set(fx.errorKeys)].slice(0, 8),
       fetchedAt: new Date().toISOString(),
       source: 'api-football' as const,
     };
 
-    if (!st.ok && !nx.ok && !ls.ok && !lv.ok) {
-      return safeError('upstream_unavailable');
-    }
-
-    cacheSet(cacheKey, data, ttl);
+    cacheSet(`bundle:${leagueId}:${resolved.season}`, data, ttl);
     return json({ ok: true, cached: false, data });
   }
 
