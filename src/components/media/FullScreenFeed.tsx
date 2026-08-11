@@ -564,7 +564,6 @@ const Slide = memo(function Slide({
         ]}
         pointerEvents={commentsExpanded ? 'auto' : 'none'}
       >
-        <View style={styles.commentsDivider} />
         <View
           style={[
             styles.addCommentRow,
@@ -973,12 +972,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#000',
     paddingHorizontal: 14,
-  },
-  commentsDivider: {
-    height: 2,
-    width: '100%',
-    backgroundColor: '#2563eb',
-    marginBottom: 10,
+    paddingTop: 10,
   },
   addCommentRow: {
     alignItems: 'center',
