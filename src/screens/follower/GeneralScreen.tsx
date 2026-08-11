@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -196,7 +197,22 @@ export default function GeneralFeedScreen() {
 
   const [filter, setFilter] = useState<FeedFilter>('all');
   const [discussionText, setDiscussionText] = useState('');
-  const [discussionOpen, setDiscussionOpen] = useState(false);
+  /** حقل «شارك رأيك» لا يُركَّب في الشاشة إلا داخل النافذة بعد زر نقاشات سريعة */
+  const [discussionModalOpen, setDiscussionModalOpen] = useState(false);
+
+  const closeDiscussionModal = useCallback(() => {
+    setDiscussionModalOpen(false);
+    setDiscussionText('');
+  }, []);
+
+  const publishDiscussion = useCallback(() => {
+    const value = discussionText.trim();
+    if (!value) return;
+    addComment(value, undefined, { type: 'general' });
+    setDiscussionText('');
+    setFilter('discussions');
+    setDiscussionModalOpen(false);
+  }, [addComment, discussionText]);
 
   const isHttpUrl = useCallback((url?: string) => {
     return !!url && /^https?:\/\//i.test(url.trim());
@@ -672,7 +688,7 @@ export default function GeneralFeedScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('screens.quickDiscuss')}
-            onPress={() => setDiscussionOpen((v) => !v)}
+            onPress={() => setDiscussionModalOpen(true)}
             style={[
               styles.quickToggle,
               {
@@ -692,41 +708,68 @@ export default function GeneralFeedScreen() {
               {t('screens.quickDiscuss')}
             </Text>
           </Pressable>
-          {discussionOpen ? (
-            <Card style={styles.composerBody}>
-              <Muted>{t('screens.discussHint')}</Muted>
-              <Input
-                label={t('screens.discussLabel')}
-                value={discussionText}
-                onChangeText={setDiscussionText}
-                placeholder={t('screens.discussPlaceholder')}
-                multiline
-              />
-              <View style={styles.composerActions}>
-                <Button
-                  label={t('screens.publishForum')}
-                  onPress={() => {
-                    const value = discussionText.trim();
-                    if (!value) return;
-                    addComment(value, undefined, { type: 'general' });
-                    setDiscussionText('');
-                    setFilter('discussions');
-                    setDiscussionOpen(false);
-                  }}
-                  style={{ flex: 1 }}
-                />
-                <Button
-                  label={t('screens.openForums')}
-                  variant="outline"
-                  onPress={() => router.push('/forums')}
-                  style={{ flex: 1 }}
-                />
-              </View>
-            </Card>
-          ) : null}
         </View>
       ) : null}
     </View>
+  );
+
+  const discussionModal = (
+    <Modal
+      visible={discussionModalOpen}
+      transparent
+      animationType="fade"
+      onRequestClose={closeDiscussionModal}
+    >
+      <Pressable style={styles.modalBackdrop} onPress={closeDiscussionModal}>
+        <View
+          style={[
+            styles.modalCard,
+            {
+              backgroundColor: theme.colors.card,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+              {t('screens.quickDiscuss')}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('common.close')}
+              onPress={closeDiscussionModal}
+              hitSlop={12}
+            >
+              <Ionicons name="close" size={22} color={theme.colors.textMuted} />
+            </Pressable>
+          </View>
+          <Muted>{t('screens.discussHint')}</Muted>
+          <Input
+            label={t('screens.discussLabel')}
+            value={discussionText}
+            onChangeText={setDiscussionText}
+            placeholder={t('screens.shareOpinion')}
+            multiline
+          />
+          <View style={styles.composerActions}>
+            <Button
+              label={t('screens.publishForum')}
+              onPress={publishDiscussion}
+              style={{ flex: 1 }}
+            />
+            <Button
+              label={t('screens.openForums')}
+              variant="outline"
+              onPress={() => {
+                closeDiscussionModal();
+                router.push('/forums');
+              }}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </View>
+      </Pressable>
+    </Modal>
   );
 
   const emptyTitle = t('screens.generalEmpty');
@@ -762,7 +805,7 @@ export default function GeneralFeedScreen() {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={t('screens.quickDiscuss')}
-                    onPress={() => setDiscussionOpen((v) => !v)}
+                    onPress={() => setDiscussionModalOpen(true)}
                     style={[
                       styles.quickToggle,
                       {
@@ -785,46 +828,19 @@ export default function GeneralFeedScreen() {
                       {t('screens.quickDiscuss')}
                     </Text>
                   </Pressable>
-                  {discussionOpen ? (
-                    <View
-                      style={[
-                        styles.mobileComposerBody,
-                        {
-                          backgroundColor: theme.colors.card,
-                          borderColor: theme.colors.border,
-                        },
-                      ]}
-                    >
-                      <Input
-                        value={discussionText}
-                        onChangeText={setDiscussionText}
-                        placeholder={t('screens.shareOpinion')}
-                        multiline
-                      />
-                      <Button
-                        label={t('screens.publish')}
-                        onPress={() => {
-                          const value = discussionText.trim();
-                          if (!value) return;
-                          addComment(value, undefined, { type: 'general' });
-                          setDiscussionText('');
-                          setFilter('discussions');
-                          setDiscussionOpen(false);
-                        }}
-                      />
-                    </View>
-                  ) : null}
                 </View>
               ) : null}
             </View>
           }
         />
+        {discussionModal}
       </Screen>
     );
   }
 
   return (
     <Screen>
+      {discussionModal}
       <FlatList
         style={styles.listFlex}
         data={filtered}
@@ -886,13 +902,6 @@ const styles = StyleSheet.create({
     gap: 6,
     alignItems: 'flex-end',
   },
-  mobileComposerBody: {
-    gap: 8,
-    width: '100%',
-    padding: 10,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
   quickToggle: {
     alignSelf: 'flex-end',
     flexDirection: 'row',
@@ -908,8 +917,30 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   composer: { gap: 8 },
-  composerBody: { gap: 10 },
   composerActions: { flexDirection: 'row', gap: 8 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 16,
+    gap: 12,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalTitle: {
+    fontWeight: '800',
+    fontSize: 16,
+    flex: 1,
+  },
   card: { gap: 10 },
   handleRow: {
     width: '100%',
