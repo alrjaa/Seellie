@@ -1,4 +1,8 @@
-import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
+import {
+  getSupabase,
+  getSupabasePublicConfig,
+  isSupabaseConfigured,
+} from '@/services/supabase';
 import {
   purgeSportsCacheOutsideWindow,
   readSportsCache,
@@ -11,12 +15,50 @@ import {
   type SportsLeagueBundle,
 } from './types';
 
-const BUNDLE_TTL_MS = 2 * 60 * 1000;
+const BUNDLE_TTL_MS = 90 * 1000;
 
 type InvokeOk<T> = { ok: true; cached?: boolean; stale?: boolean; data: T };
 type InvokeErr = { ok: false; error?: string };
 
-async function invokeSports<T>(
+function parsePayload<T>(
+  payload: unknown
+): { data: T | null; stale?: boolean } {
+  if (!payload || typeof payload !== 'object') return { data: null };
+  const p = payload as InvokeOk<T> | InvokeErr;
+  if (!('ok' in p) || !p.ok) return { data: null };
+  const ok = p as InvokeOk<T>;
+  return { data: (ok.data as T) ?? null, stale: !!ok.stale };
+}
+
+/**
+ * استدعاء Edge Function مباشرة بـ anon key.
+ * أكثر ثباتاً على الويب من functions.invoke عند اختلاف جلسة المستخدم.
+ */
+async function invokeSportsFetch<T>(
+  resource: string,
+  extra?: Record<string, unknown>
+): Promise<{ data: T | null; stale?: boolean }> {
+  const config = getSupabasePublicConfig();
+  if (!config) return { data: null };
+  try {
+    const res = await fetch(`${config.url}/functions/v1/sports-proxy`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.anonKey}`,
+        apikey: config.anonKey,
+      },
+      body: JSON.stringify({ resource, ...extra }),
+    });
+    if (!res.ok) return { data: null };
+    const json = await res.json();
+    return parsePayload<T>(json);
+  } catch {
+    return { data: null };
+  }
+}
+
+async function invokeSportsSdk<T>(
   resource: string,
   extra?: Record<string, unknown>
 ): Promise<{ data: T | null; stale?: boolean }> {
@@ -28,14 +70,20 @@ async function invokeSports<T>(
       body: { resource, ...extra },
     });
     if (error) return { data: null };
-    const payload = data as InvokeOk<T> | InvokeErr | null;
-    if (!payload || typeof payload !== 'object') return { data: null };
-    if (!('ok' in payload) || !payload.ok) return { data: null };
-    const ok = payload as InvokeOk<T>;
-    return { data: ok.data ?? null, stale: !!ok.stale };
+    return parsePayload<T>(data);
   } catch {
     return { data: null };
   }
+}
+
+async function invokeSports<T>(
+  resource: string,
+  extra?: Record<string, unknown>
+): Promise<{ data: T | null; stale?: boolean }> {
+  // الويب: fetch مباشر أولاً (أكثر موثوقية)
+  const viaFetch = await invokeSportsFetch<T>(resource, extra);
+  if (viaFetch.data) return viaFetch;
+  return invokeSportsSdk<T>(resource, extra);
 }
 
 function normalizeBundle(
@@ -93,9 +141,27 @@ export const apiFootballViaEdgeProvider: SportsDataProvider = {
       leagueId,
       forceSync: !!opts?.forceSync,
     });
+    if (!data?.standings?.length && !data?.lastFixtures?.length) {
+      // محاولة مزامنة صريحة مرة واحدة
+      const synced = await invokeSports<SportsLeagueBundle>('sync_league', {
+        leagueId,
+      });
+      if (!synced.data?.standings?.length) return data ? normalizeBundle(data, stale) : null;
+      const bundle = normalizeBundle(synced.data);
+      if (bundle.window) {
+        await purgeSportsCacheOutsideWindow(leagueId, bundle.window);
+      }
+      await writeSportsCache(cacheKey, bundle, BUNDLE_TTL_MS, {
+        leagueId,
+        season: bundle.season,
+      });
+      return bundle;
+    }
     if (!data) return null;
 
     const bundle = normalizeBundle(data, stale);
+    if (!bundle.standings.length && !bundle.lastFixtures.length) return null;
+
     if (bundle.window) {
       await purgeSportsCacheOutsideWindow(leagueId, bundle.window);
     }

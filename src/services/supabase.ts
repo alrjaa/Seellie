@@ -27,6 +27,11 @@ export function isSupabaseConfigured(): boolean {
   return !!readConfig();
 }
 
+/** إعدادات عامة للعميل (URL + anon) — ليست أسرار خادم */
+export function getSupabasePublicConfig(): { url: string; anonKey: string } | null {
+  return readConfig();
+}
+
 export function getSupabase(): SupabaseClient | null {
   const config = readConfig();
   if (!config) return null;
