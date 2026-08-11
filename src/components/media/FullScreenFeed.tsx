@@ -178,7 +178,6 @@ const Slide = memo(function Slide({
   const [commentsExpanded, setCommentsExpanded] = useState(false);
   const [draft, setDraft] = useState('');
   const lastTapRef = useRef(0);
-  const panelAnim = useRef(new Animated.Value(0)).current;
   const comments = useContentComments(item.id, item.comments);
   const bottomPad = Math.max(insets.bottom, 6) + 4;
   const commentsPanelHeight = 210 + Math.max(insets.bottom, 8);
@@ -197,16 +196,10 @@ const Slide = memo(function Slide({
   }, [active, item.id]);
 
   useEffect(() => {
-    Animated.timing(panelAnim, {
-      toValue: commentsExpanded ? 1 : 0,
-      duration: 220,
-      useNativeDriver: false,
-    }).start();
-    if (commentsExpanded) {
-      const tmr = setTimeout(() => inputRef.current?.focus(), 240);
-      return () => clearTimeout(tmr);
-    }
-  }, [commentsExpanded, panelAnim]);
+    if (!commentsExpanded) return;
+    const tmr = setTimeout(() => inputRef.current?.focus(), 80);
+    return () => clearTimeout(tmr);
+  }, [commentsExpanded]);
 
   const openCommentsPanel = useCallback(() => {
     setCommentsExpanded(true);
@@ -372,11 +365,6 @@ const Slide = memo(function Slide({
     onDoubleTap,
     toggleVideoPlayback,
   ]);
-
-  const panelHeight = panelAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, commentsPanelHeight],
-  });
 
   return (
     <View style={[styles.slide, { height, backgroundColor: '#000' }]}>
@@ -552,90 +540,93 @@ const Slide = memo(function Slide({
         </View>
       </View>
 
-      {/* امتداد أسفل المحتوى: حقل كتابة + التعليقات المحفوظة على نفس العنصر */}
-      <Animated.View
-        style={[
-          styles.commentsExpandPanel,
-          {
-            height: panelHeight,
-            paddingBottom: Math.max(insets.bottom, 10),
-          },
-        ]}
-        pointerEvents={commentsExpanded ? 'auto' : 'none'}
-      >
+      {/* تظهر فقط بعد النقر على «تعليقات»: حقل كتابة + قائمة تعليقات هذا المحتوى */}
+      {commentsExpanded ? (
         <View
           style={[
-            styles.addCommentRow,
-            { flexDirection: isRTL ? 'row-reverse' : 'row' },
+            styles.commentsExpandPanel,
+            {
+              height: commentsPanelHeight,
+              paddingBottom: Math.max(insets.bottom, 10),
+            },
           ]}
         >
-          <TextInput
-            ref={inputRef}
-            value={draft}
-            onChangeText={(v) => setDraft(v.replace(/\n+/g, ' ').slice(0, 120))}
-            placeholder={t('ui.addCommentPlaceholder')}
-            placeholderTextColor="#666"
+          <View
             style={[
-              styles.addCommentInput,
-              cairoText('regular'),
-              { textAlign: isRTL ? 'right' : 'left' },
-            ]}
-            multiline
-            numberOfLines={2}
-            maxLength={120}
-            returnKeyType="send"
-            blurOnSubmit
-            onSubmitEditing={submitComment}
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('common.send')}
-            onPress={submitComment}
-            style={({ pressed }) => [
-              styles.addCommentSend,
-              { opacity: pressed ? 0.65 : draft.trim() ? 1 : 0.4 },
+              styles.addCommentRow,
+              { flexDirection: isRTL ? 'row-reverse' : 'row' },
             ]}
           >
-            <Ionicons
-              name="send"
-              size={18}
-              color={theme.colors.accent || '#2563eb'}
-            />
-          </Pressable>
-        </View>
-        <ScrollView
-          style={styles.commentsList}
-          contentContainerStyle={styles.commentsListContent}
-          keyboardShouldPersistTaps="handled"
-          nestedScrollEnabled
-        >
-          {comments.length === 0 ? (
-            <Text
+            <TextInput
+              ref={inputRef}
+              value={draft}
+              onChangeText={(v) =>
+                setDraft(v.replace(/\n+/g, ' ').slice(0, 120))
+              }
+              placeholder={t('ui.addCommentPlaceholder')}
+              placeholderTextColor="#666"
               style={[
-                styles.commentEmpty,
-                cairoText('medium'),
+                styles.addCommentInput,
+                cairoText('regular'),
                 { textAlign: isRTL ? 'right' : 'left' },
               ]}
+              multiline
+              numberOfLines={2}
+              maxLength={120}
+              returnKeyType="send"
+              blurOnSubmit
+              onSubmitEditing={submitComment}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('common.send')}
+              onPress={submitComment}
+              style={({ pressed }) => [
+                styles.addCommentSend,
+                { opacity: pressed ? 0.65 : draft.trim() ? 1 : 0.4 },
+              ]}
             >
-              {t('ui.noItemComments')}
-            </Text>
-          ) : (
-            comments.map((c) => (
+              <Ionicons
+                name="send"
+                size={18}
+                color={theme.colors.accent || '#2563eb'}
+              />
+            </Pressable>
+          </View>
+          <ScrollView
+            style={styles.commentsList}
+            contentContainerStyle={styles.commentsListContent}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+          >
+            {comments.length === 0 ? (
               <Text
-                key={c.id}
                 style={[
-                  styles.commentLine,
-                  cairoText('regular'),
+                  styles.commentEmpty,
+                  cairoText('medium'),
                   { textAlign: isRTL ? 'right' : 'left' },
                 ]}
-                numberOfLines={2}
               >
-                {c.text}
+                {t('ui.noItemComments')}
               </Text>
-            ))
-          )}
-        </ScrollView>
-      </Animated.View>
+            ) : (
+              comments.map((c) => (
+                <Text
+                  key={c.id}
+                  style={[
+                    styles.commentLine,
+                    cairoText('regular'),
+                    { textAlign: isRTL ? 'right' : 'left' },
+                  ]}
+                  numberOfLines={2}
+                >
+                  {c.text}
+                </Text>
+              ))
+            )}
+          </ScrollView>
+        </View>
+      ) : null}
     </View>
   );
 });
