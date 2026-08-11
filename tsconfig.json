@@ -16,5 +16,11 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
     "app.config.ts"
+  ],
+  "exclude": [
+    "supabase/functions/**",
+    "node_modules",
+    "dist",
+    "web-build"
   ]
 }

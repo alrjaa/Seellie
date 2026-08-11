@@ -1,0 +1,3 @@
+# إعدادات الدالة — JWT مشروع Supabase مطلوب من العميل (anon/authenticated)
+# السر API_FOOTBALL_KEY يُضبط عبر: supabase secrets set API_FOOTBALL_KEY=...
+verify_jwt = true

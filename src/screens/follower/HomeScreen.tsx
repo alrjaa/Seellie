@@ -41,6 +41,7 @@ import {
 } from '@/utils/competition';
 import { userHasRole } from '@/utils/roles';
 import { cairoText } from '@/theme/fonts';
+import { NationalLeagueHomeSection } from '@/components/home/NationalLeagueHomeSection';
 
 function useHomeTitleDir() {
   const { isRTL } = useLanguage();
@@ -631,6 +632,8 @@ export default function FollowerHomeScreen() {
         </View>
       ) : (
         <>
+          <NationalLeagueHomeSection />
+
           <View style={styles.section}>
             <Subtitle style={[styles.sectionTitle, titleDir]}>{t('home.upcoming')}</Subtitle>
             <Muted style={[styles.sectionTitle, titleDir]}>
