@@ -187,16 +187,7 @@ export default function FollowerLayout() {
             name="highlights"
             options={{
               title: t('tabs.highlights'),
-              headerTitle: () => null,
-              headerLeft: () => null,
-              headerRight: () => null,
-              header: () => (
-                <SettingsHeader
-                  title={t('screens.highlights')}
-                  titleSize={12}
-                  hideAccount
-                />
-              ),
+              headerShown: false,
               tabBarIcon: ({ color, size }) => (
                 <Ionicons name="trophy" color={color} size={size} />
               ),

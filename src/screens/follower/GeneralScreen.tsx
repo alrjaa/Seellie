@@ -580,12 +580,8 @@ export default function GeneralFeedScreen() {
     [filtered, openHandleProfile]
   );
 
-  const filterBar = (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.filters}
-    >
+  const mobileTopBar = (
+    <View style={styles.topBar}>
       {FILTERS.map((f) => {
         const active = filter === f.key;
         return (
@@ -596,7 +592,7 @@ export default function GeneralFeedScreen() {
             accessibilityLabel={`${t(f.labelKey)} (${counts[f.key]})`}
             accessibilityState={{ selected: active }}
             style={[
-              styles.filterChip,
+              styles.mobileFilterBtn,
               {
                 backgroundColor: active
                   ? theme.colors.accent
@@ -609,23 +605,33 @@ export default function GeneralFeedScreen() {
           >
             <Ionicons
               name={active ? f.iconActive : f.icon}
-              size={14}
+              size={16}
               color={active ? theme.colors.textInverse : '#fff'}
             />
-            <Text
-              style={{
-                color: active ? theme.colors.textInverse : '#fff',
-                fontSize: 10,
-                fontWeight: '700',
-              }}
-              numberOfLines={1}
-            >
-              {t(f.labelKey)}
-            </Text>
           </Pressable>
         );
       })}
-    </ScrollView>
+      {currentUser ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('screens.quickDiscuss')}
+          onPress={() => setDiscussionModalOpen(true)}
+          style={[
+            styles.mobileFilterBtn,
+            {
+              backgroundColor: 'rgba(37, 244, 238, 0.22)',
+              borderColor: theme.colors.accent,
+            },
+          ]}
+        >
+          <Ionicons
+            name="add-circle-outline"
+            size={16}
+            color={theme.colors.accent}
+          />
+        </Pressable>
+      ) : null}
+    </View>
   );
 
   const header = (
@@ -791,39 +797,7 @@ export default function GeneralFeedScreen() {
           emptyIcon="newspaper-outline"
           topOverlay={
             <View style={styles.mobileOverlay} pointerEvents="box-none">
-              <View style={styles.topBar}>
-                <View style={styles.filtersWrap}>{filterBar}</View>
-              </View>
-              {(filter === 'all' || filter === 'discussions') && currentUser ? (
-                <View style={styles.mobileComposer}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('screens.quickDiscuss')}
-                    onPress={() => setDiscussionModalOpen(true)}
-                    style={[
-                      styles.quickToggle,
-                      {
-                        backgroundColor: 'rgba(37, 244, 238, 0.22)',
-                        borderColor: theme.colors.accent,
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name="chatbubbles-outline"
-                      size={14}
-                      color={theme.colors.accent}
-                    />
-                    <Text
-                      style={[
-                        styles.quickToggleLabel,
-                        { color: theme.colors.accent },
-                      ]}
-                    >
-                      {t('screens.quickDiscuss')}
-                    </Text>
-                  </Pressable>
-                </View>
-              ) : null}
+              {mobileTopBar}
             </View>
           }
         />
@@ -877,16 +851,24 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   mobileOverlay: {
-    paddingHorizontal: 8,
-    gap: 6,
+    paddingHorizontal: 10,
   },
   topBar: {
-    minHeight: 32,
-    // LTR ثابت: الفلاتر يسار · المعرّف يمين
+    minHeight: 36,
     direction: 'ltr',
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 6,
+  },
+  mobileFilterBtn: {
+    flexGrow: 1,
+    flexBasis: 0,
+    minHeight: 36,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filtersWrap: {
     flex: 1,
