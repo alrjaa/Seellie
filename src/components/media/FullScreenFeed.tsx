@@ -41,7 +41,6 @@ import {
   releaseFloatingScrollSource,
 } from '@/services/floating-scroll-bus';
 import {
-  clearContentAuthorFocus,
   setContentAuthorFocus,
 } from '@/services/content-author-bus';
 import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
@@ -447,13 +446,11 @@ function FullScreenFeedComponent({
   useEffect(() => {
     if (!focused) {
       releaseFloatingScrollSource(sourceId);
-      clearContentAuthorFocus();
       return;
     }
     claimFloatingScrollSource(sourceId);
     return () => {
       releaseFloatingScrollSource(sourceId);
-      clearContentAuthorFocus();
     };
   }, [focused, sourceId]);
 
@@ -461,13 +458,10 @@ function FullScreenFeedComponent({
     if (!focused) return;
     const active =
       data.find((item) => item.id === activeId) || data[0] || null;
-    if (!active?.authorId) {
-      clearContentAuthorFocus();
-      return;
-    }
+    if (!active?.authorId) return;
     setContentAuthorFocus({
-      id: active.authorId,
-      name: active.authorName || active.authorHandle || active.authorId,
+      id: String(active.authorId),
+      name: active.authorName || active.authorHandle || String(active.authorId),
       handle: active.authorHandle,
       avatar: active.authorAvatar,
     });

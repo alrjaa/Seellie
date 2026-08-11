@@ -21,6 +21,7 @@ import {
   isFloatingSuppressed,
 } from '@/services/floating-scroll-bus';
 import {
+  setContentAuthorFocus,
   subscribeContentAuthorFocus,
   type ContentAuthorFocus,
 } from '@/services/content-author-bus';
@@ -32,6 +33,10 @@ import type { FabIconConfig } from '@/types/fab-icons';
 
 const useNativeDriver = Platform.OS !== 'web';
 
+function isHttpMedia(url?: string) {
+  return !!url && /^https?:\/\//i.test(url.trim());
+}
+
 function isIoniconName(
   name: string
 ): name is keyof typeof Ionicons.glyphMap {
@@ -39,12 +44,12 @@ function isIoniconName(
 }
 
 /**
- * أزرار تنقل عائمة — على الجوال ومتصفح الجوال.
- * تُخفى فقط في تخطيط سطح المكتب الواسع (شريط جانبي).
- * أعلى العمود: أفاتار صاحب المحتوى (+ متابعة) أكبر من بقية الأزرار.
+ * أزرار تنقل عائمة — الجوال / متصفح الجوال.
+ * أعلى العمود دائماً: أفاتار صاحب المحتوى (+ متابعة) — أكبر من بقية الأزرار.
  */
 function FloatingActionMenuComponent() {
-  const { currentUser, fabIcons, users, toggleFollowUser } = useTournament();
+  const { currentUser, fabIcons, users, toggleFollowUser, competitions } =
+    useTournament();
   const theme = useAppTheme();
   const { t } = useTranslation();
   const router = useRouter();
@@ -58,6 +63,38 @@ function FloatingActionMenuComponent() {
   const [author, setAuthor] = useState<ContentAuthorFocus | null>(null);
 
   useEffect(() => subscribeContentAuthorFocus(setAuthor), []);
+
+  // إن لم يُفتح تبويب اللقطات بعد: عيّن أول منظّم لديه وسائط كصاحب محتوى افتراضي
+  useEffect(() => {
+    if (author?.id) return;
+    if (!competitions?.length) return;
+    for (const comp of competitions) {
+      const hasMedia =
+        (comp.media?.photos || []).some((p) => isHttpMedia(p.url)) ||
+        (comp.media?.videos || []).some((v) => isHttpMedia(v.url)) ||
+        comp.teams.some((team) =>
+          team.players.some(
+            (p) =>
+              (p.media?.photos || []).some((x) => isHttpMedia(x.url)) ||
+              (p.media?.videos || []).some((x) => isHttpMedia(x.url))
+          )
+        ) ||
+        (comp.matches || []).some(
+          (m) =>
+            (m.media?.photos || []).some((x) => isHttpMedia(x.url)) ||
+            (m.media?.videos || []).some((x) => isHttpMedia(x.url))
+        );
+      if (!hasMedia || !comp.organizerId) continue;
+      const organizer = users.find((u) => u.id === comp.organizerId);
+      setContentAuthorFocus({
+        id: comp.organizerId,
+        name: organizer?.name || comp.name,
+        handle: organizer?.handle,
+        avatar: organizer?.avatar || comp.logo,
+      });
+      break;
+    }
+  }, [author?.id, competitions, users]);
 
   useEffect(() => {
     if (isFloatingSuppressed()) {
@@ -113,10 +150,17 @@ function FloatingActionMenuComponent() {
     ]).start();
   }, [opacity, translateY, visible]);
 
+  const role = currentUser?.activeRole || currentUser?.role;
+  const isFollowerLike =
+    !!currentUser &&
+    role !== 'superadmin' &&
+    currentUser.role !== 'superadmin' &&
+    role !== 'organizer' &&
+    currentUser.role !== 'organizer';
+
   const actions = useMemo(() => {
     if (!currentUser) return [];
-    const active = currentUser.activeRole || currentUser.role;
-    if (active === 'superadmin' || currentUser.role === 'superadmin') {
+    if (role === 'superadmin' || currentUser.role === 'superadmin') {
       return [];
     }
 
@@ -145,7 +189,7 @@ function FloatingActionMenuComponent() {
         href: a.href,
       }));
 
-    if (active === 'organizer' || currentUser.role === 'organizer') {
+    if (role === 'organizer' || currentUser.role === 'organizer') {
       return mapped.filter((a) =>
         ['search', '/search'].some(
           (k) => a.key.includes(k) || a.href.includes(k)
@@ -153,10 +197,11 @@ function FloatingActionMenuComponent() {
       );
     }
     return mapped;
-  }, [currentUser, fabIcons, t]);
+  }, [currentUser, fabIcons, role, t]);
 
   const authorProfile = useMemo(() => {
     if (!author?.id) return null;
+    if (currentUser && author.id === currentUser.id) return null;
     const known = users.find((u) => u.id === author.id);
     return {
       id: author.id,
@@ -164,7 +209,7 @@ function FloatingActionMenuComponent() {
       handle: known?.handle || author.handle,
       avatar: known?.avatar || author.avatar,
     };
-  }, [author, users]);
+  }, [author, users, currentUser]);
 
   const isFollowingAuthor = useMemo(() => {
     if (!currentUser || !authorProfile) return false;
@@ -176,8 +221,8 @@ function FloatingActionMenuComponent() {
     !!pathname &&
     (pathname.includes('/private') || pathname.includes('(follower)/private'));
 
-  const showAuthor = !!authorProfile && authorProfile.id !== currentUser?.id;
-  if (!currentUser || (actions.length === 0 && !showAuthor)) return null;
+  if (!currentUser) return null;
+  if (!isFollowerLike && actions.length === 0) return null;
   if (desktop) return null;
   if (!visible || isFloatingSuppressed()) return null;
   if (onPrivateSpace) return null;
@@ -198,7 +243,10 @@ function FloatingActionMenuComponent() {
   );
 
   const openAuthorProfile = () => {
-    if (!authorProfile) return;
+    if (!authorProfile) {
+      router.push('/(follower)/highlights' as any);
+      return;
+    }
     router.push(
       `/(follower)/profile/${authorProfile.id || authorProfile.handle}` as any
     );
@@ -208,6 +256,10 @@ function FloatingActionMenuComponent() {
     if (!authorProfile) return;
     toggleFollowUser(authorProfile.id);
   };
+
+  const authorLabel = authorProfile
+    ? authorProfile.handle || authorProfile.name
+    : t('menu.contentAuthor');
 
   return (
     <View
@@ -229,6 +281,73 @@ function FloatingActionMenuComponent() {
           },
         ]}
       >
+        {/* أعلى العمود: أفاتار صاحب المحتوى (دائماً للمتابع) */}
+        {isFollowerLike ? (
+          <View style={[styles.authorItem, styles.itemRaised]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={authorLabel}
+              onPress={openAuthorProfile}
+              hitSlop={6}
+              style={({ pressed }) => [
+                styles.authorBtn,
+                {
+                  borderColor: authorProfile
+                    ? theme.colors.accent
+                    : theme.colors.border,
+                  backgroundColor: theme.colors.surfaceElevated,
+                  opacity: pressed ? 0.92 : 1,
+                },
+              ]}
+            >
+              {authorProfile ? (
+                <Avatar
+                  uri={authorProfile.avatar}
+                  name={authorProfile.name}
+                  size={52}
+                />
+              ) : (
+                <Ionicons
+                  name="person-circle-outline"
+                  size={40}
+                  color={theme.colors.textMuted}
+                />
+              )}
+            </Pressable>
+            {authorProfile ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  isFollowingAuthor
+                    ? t('account.stats.unfollow')
+                    : t('account.stats.follow')
+                }
+                onPress={onToggleFollow}
+                hitSlop={10}
+                style={[
+                  styles.followBadge,
+                  {
+                    backgroundColor: isFollowingAuthor
+                      ? theme.colors.surfaceElevated
+                      : theme.colors.accent,
+                    borderColor: theme.colors.accent,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={isFollowingAuthor ? 'checkmark' : 'add'}
+                  size={16}
+                  color={
+                    isFollowingAuthor
+                      ? theme.colors.accent
+                      : theme.colors.textInverse
+                  }
+                />
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
         {actions.map((action) => {
           const active = isActive(action.href);
           const showLabel = pressedKey === action.key;
@@ -295,62 +414,6 @@ function FloatingActionMenuComponent() {
             </View>
           );
         })}
-
-        {showAuthor && authorProfile ? (
-          <View style={[styles.item, styles.authorItem, styles.itemRaised]}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={
-                authorProfile.handle || authorProfile.name
-              }
-              onPress={openAuthorProfile}
-              hitSlop={6}
-              style={({ pressed }) => [
-                styles.authorBtn,
-                {
-                  borderColor: theme.colors.accent,
-                  backgroundColor: theme.colors.surfaceElevated,
-                  opacity: pressed ? 0.92 : 1,
-                },
-              ]}
-            >
-              <Avatar
-                uri={authorProfile.avatar}
-                name={authorProfile.name}
-                size={52}
-              />
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={
-                isFollowingAuthor
-                  ? t('account.stats.unfollow')
-                  : t('account.stats.follow')
-              }
-              onPress={onToggleFollow}
-              hitSlop={8}
-              style={[
-                styles.followBadge,
-                {
-                  backgroundColor: isFollowingAuthor
-                    ? theme.colors.surfaceElevated
-                    : theme.colors.accent,
-                  borderColor: theme.colors.accent,
-                },
-              ]}
-            >
-              <Ionicons
-                name={isFollowingAuthor ? 'checkmark' : 'add'}
-                size={14}
-                color={
-                  isFollowingAuthor
-                    ? theme.colors.accent
-                    : theme.colors.textInverse
-                }
-              />
-            </Pressable>
-          </View>
-        ) : null}
       </Animated.View>
     </View>
   );
@@ -376,6 +439,8 @@ const styles = StyleSheet.create({
   },
   wrap: {
     position: 'absolute',
+    // العمود من الأسفل للأعلى: العنصر الأول يظهر في القمة
+    flexDirection: 'column-reverse',
     gap: 12,
     alignItems: 'flex-start',
     direction: 'ltr',
@@ -393,8 +458,11 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   authorItem: {
-    width: 56,
-    height: 56,
+    position: 'relative',
+    width: 58,
+    height: 58,
+    justifyContent: 'center',
+    overflow: 'visible',
   },
   itemRaised: {
     zIndex: 8,
@@ -409,9 +477,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   authorBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
@@ -419,18 +487,20 @@ const styles = StyleSheet.create({
   },
   followBadge: {
     position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: StyleSheet.hairlineWidth,
+    right: -4,
+    bottom: -4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 12,
+    elevation: 12,
   },
   tooltip: {
     position: 'absolute',
-    left: 50,
+    left: 54,
     top: 6,
     zIndex: 10,
     elevation: 10,

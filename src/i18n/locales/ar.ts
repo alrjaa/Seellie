@@ -237,6 +237,7 @@ export const ar = {
   menu: {
     unique: 'الفريد',
     forums: 'الساحات',
+    contentAuthor: 'صاحب المحتوى',
     forumsTitle: 'الساحات والتعليقات',
     shares: 'المشاركات',
     search: 'بحث',

@@ -236,6 +236,7 @@ export const en: TranslationTree = {
   menu: {
     unique: 'Unique',
     forums: 'Forums',
+    contentAuthor: 'Content author',
     forumsTitle: 'Forums & comments',
     shares: 'Shares',
     search: 'Search',
