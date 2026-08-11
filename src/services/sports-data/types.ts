@@ -1,5 +1,9 @@
 /** أنواع موحّدة لطبقة البيانات الرياضية — مستقلة عن مزوّد API-Football */
 
+import type { SeasonWindow } from './season-window';
+
+export type { SeasonWindow };
+
 export type SportsStandingRow = {
   rank: number;
   teamId: string;
@@ -35,30 +39,46 @@ export type SportsLeagueBundle = {
   leagueName?: string;
   season: number;
   country?: string;
+  window?: SeasonWindow;
   standings: SportsStandingRow[];
   nextFixtures: SportsFixture[];
   lastFixtures: SportsFixture[];
   liveFixtures: SportsFixture[];
+  previousSeason?: number | null;
+  previousStandings?: SportsStandingRow[];
+  previousLastFixtures?: SportsFixture[];
   partial?: boolean;
   fetchedAt: string;
   source: string;
+  stale?: boolean;
 };
 
 export type SportsHealth = {
   ok: boolean;
   configured: boolean;
   provider?: string;
+  store?: string;
   defaultLeagueId?: number;
-  season?: number;
+  trackedLeagueIds?: number[];
 };
 
 export type SportsDataProvider = {
   getHealth(): Promise<SportsHealth>;
   getNationalLeagueBundle(opts?: {
     leagueId?: number;
-    season?: number;
+    forceSync?: boolean;
   }): Promise<SportsLeagueBundle | null>;
+  syncLeague?(leagueId: number): Promise<SportsLeagueBundle | null>;
 };
 
 /** الدوري السعودي للمحترفين في API-Football */
 export const SAUDI_PRO_LEAGUE_ID = 307;
+
+export const TRACKED_LEAGUE_IDS = [
+  307, // Saudi Pro League
+  39, // Premier League
+  140, // La Liga
+  135, // Serie A
+  78, // Bundesliga
+  61, // Ligue 1
+] as const;

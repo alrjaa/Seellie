@@ -226,7 +226,10 @@ export const NationalLeagueHomeSection = memo(
         </Subtitle>
         <Muted style={[styles.sectionTitle, titleDir]}>
           {t('home.nationalLeagueSub')}
-          {bundle.season ? ` · ${bundle.season}` : ''}
+          {bundle.season ? ` · ${t('home.nationalSeasonLabel', { season: bundle.season })}` : ''}
+          {bundle.window?.previous
+            ? ` · ${t('home.nationalPreviousSeason', { season: bundle.window.previous })}`
+            : ''}
         </Muted>
 
         {nextMatch ? (

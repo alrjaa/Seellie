@@ -7,20 +7,22 @@ export type {
   SportsHealth,
   SportsLeagueBundle,
   SportsStandingRow,
+  SeasonWindow,
 } from './types';
-export { SAUDI_PRO_LEAGUE_ID } from './types';
+export { SAUDI_PRO_LEAGUE_ID, TRACKED_LEAGUE_IDS } from './types';
+export {
+  isSeasonInWindow,
+  pickLatestAvailableSeason,
+  rotateToNewSeason,
+  seasonProbeList,
+} from './season-window';
 
-/**
- * نقطة الدخول الوحيدة للتطبيق.
- * لتبديل المزوّد لاحقاً: غيّر التعيين هنا فقط.
- */
 let activeProvider: SportsDataProvider = apiFootballViaEdgeProvider;
 
 export function getSportsDataProvider(): SportsDataProvider {
   return activeProvider;
 }
 
-/** للاختبارات أو تبديل المزوّد دون إعادة بناء الشاشات */
 export function setSportsDataProvider(provider: SportsDataProvider): void {
   activeProvider = provider;
 }

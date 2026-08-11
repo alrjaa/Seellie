@@ -1,49 +1,55 @@
-# Sports API (API-Football) — إعداد آمن
+# Sports API — مخزن تشغيلي لآخر موسمين فقط
 
 ## أين تضع API Key؟
 
-**لا تضعه في تطبيق Expo / أي ملف Frontend / `.env` العام للعميل.**
-
-ضعه كـ Secret في مشروع Supabase:
-
-```bash
-# من جهازك بعد تثبيت Supabase CLI وربطه بالمشروع
-cd native   # أو مجلد Seellie
-supabase login
-supabase link --project-ref YOUR_PROJECT_REF
-
-supabase secrets set API_FOOTBALL_KEY=YOUR_KEY_HERE
-
-supabase functions deploy sports-proxy
-```
-
-أو من لوحة Supabase:
-**Project Settings → Edge Functions → Secrets →** أضف:
+Supabase → Edge Functions → Secrets:
 
 | Name | Value |
 |------|--------|
-| `API_FOOTBALL_KEY` | مفتاح حسابك من API-Football |
+| `API_FOOTBALL_KEY` | مفتاح API-Football |
 
-## ماذا يفعل التطبيق؟
-
-- يستدعي الدالة `sports-proxy` عبر `supabase.functions.invoke`
-- الدالة فقط تتصل بـ `v3.football.api-sports.io` بالمفتاح
-- العميل يستلم بيانات مختصرة (ترتيب / مباريات) بلا مفتاح
-
-## التحقق
+أو:
 
 ```bash
-# صحة الإعداد (configured: true إن وُجد السر)
-curl -X POST "$SUPABASE_URL/functions/v1/sports-proxy" \
-  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"resource":"health"}'
-
-# حزمة الدوري السعودي (307)
-curl -X POST "$SUPABASE_URL/functions/v1/sports-proxy" \
-  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"resource":"bundle","leagueId":307}'
+supabase secrets set API_FOOTBALL_KEY=YOUR_KEY_HERE
+supabase functions deploy sports-proxy
 ```
 
-إن فشل الـ API، الرئيسية تبقى تعمل وجداول المنصة كما هي.
+**ممنوع** وضع المفتاح في Expo / Frontend / Git.
+
+## جداول Supabase التشغيلية
+
+نفّذ مرة واحدة في SQL Editor:
+
+`supabase/sports-data.sql`
+
+الجداول:
+
+- `sports_leagues`
+- `sports_season_windows` — `current_season` + `previous_season` فقط
+- `sports_season_payloads` — ترتيب/مباريات لكل موسم مسموح
+
+عند ظهور موسم جديد متاح فعلياً:
+
+1. يُدخل الموسم الجديد كـ current
+2. يصبح current السابق = previous
+3. يُحذف الموسم الأقدم عبر `sports_purge_season` فقط
+4. فشل API المؤقت **لا يحذف** شيئاً
+
+## الدوريات المدعومة
+
+307 Saudi · 39 EPL · 140 La Liga · 135 Serie A · 78 Bundesliga · 61 Ligue 1
+
+```bash
+# مزامنة دوري
+curl -X POST "$SUPABASE_URL/functions/v1/sports-proxy" \
+  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"resource":"sync_league","leagueId":307}'
+
+# مزامنة الكل
+curl -X POST "$SUPABASE_URL/functions/v1/sports-proxy" \
+  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"resource":"sync_all"}'
+```

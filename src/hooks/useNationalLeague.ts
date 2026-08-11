@@ -12,17 +12,17 @@ type State = {
 };
 
 /**
- * جلب حزمة الدوري العام (سعودي افتراضياً) بأمان.
- * عند الفشل: unavailable=true و bundle=null — لا يرمي ولا يوقف الشاشة.
+ * جلب حزمة الدوري (سعودي افتراضياً) من المخزن التشغيلي لآخر موسمين.
+ * عند الفشل: unavailable=true — لا يرمي ولا يوقف الشاشة.
  */
 export function useNationalLeague(opts?: {
   leagueId?: number;
-  season?: number;
   enabled?: boolean;
+  forceSync?: boolean;
 }) {
   const enabled = opts?.enabled !== false;
   const leagueId = opts?.leagueId ?? SAUDI_PRO_LEAGUE_ID;
-  const season = opts?.season;
+  const forceSync = !!opts?.forceSync;
   const [state, setState] = useState<State>({
     loading: enabled,
     bundle: null,
@@ -38,7 +38,7 @@ export function useNationalLeague(opts?: {
     try {
       const bundle = await getSportsDataProvider().getNationalLeagueBundle({
         leagueId,
-        season,
+        forceSync,
       });
       setState({
         loading: false,
@@ -48,7 +48,7 @@ export function useNationalLeague(opts?: {
     } catch {
       setState({ loading: false, bundle: null, unavailable: true });
     }
-  }, [enabled, leagueId, season]);
+  }, [enabled, leagueId, forceSync]);
 
   useEffect(() => {
     void refresh();
