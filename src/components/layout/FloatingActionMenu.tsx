@@ -63,6 +63,19 @@ function isIoniconName(
   return name in Ionicons.glyphMap;
 }
 
+/** تبويب الرئيسية للمتابع — الأفاتار هنا لصاحب الحساب لا لصاحب المحتوى */
+function isFollowerHomePath(pathname?: string | null) {
+  if (!pathname) return false;
+  const p = pathname.replace(/\/+$/, '') || '/';
+  return (
+    p === '/' ||
+    p === '/(follower)' ||
+    p === '/(follower)/index' ||
+    p.endsWith('/(follower)') ||
+    p.endsWith('/(follower)/index')
+  );
+}
+
 /**
  * أزرار تنقل عائمة — الجوال / متصفح الجوال.
  * أسفل العمود: أفاتار صاحب المحتوى الظاهر (يتغيّر مع التمرير) + متابعة.
@@ -216,7 +229,6 @@ function FloatingActionMenuComponent() {
     const fromCompetition = competitions?.find(
       (c) => c.organizerId === author.id || c.organizerId === known?.id
     );
-    // أولوية لصورة/بيانات المحتوى الظاهر، ثم الملف، ثم شعار البطولة
     return {
       id: author.id,
       name: author.name || known?.name || author.handle || author.id,
@@ -230,11 +242,30 @@ function FloatingActionMenuComponent() {
     };
   }, [author, users, currentUser, competitions]);
 
+  const onHome = isFollowerHomePath(pathname);
+
+  /** الرئيسية → حسابي | اللقطات/عام/… → صاحب المحتوى الظاهر */
+  const identityProfile = useMemo(() => {
+    if (onHome && currentUser) {
+      return {
+        id: currentUser.id,
+        name: currentUser.name,
+        handle: currentUser.handle,
+        avatar: pickAvatarUrl(currentUser.avatar),
+        isSelf: true,
+        mode: 'account' as const,
+      };
+    }
+    if (!authorProfile) return null;
+    return { ...authorProfile, mode: 'content' as const };
+  }, [onHome, currentUser, authorProfile]);
+
   const isFollowingAuthor = useMemo(() => {
-    if (!currentUser || !authorProfile || authorProfile.isSelf) return false;
+    if (!currentUser || !identityProfile || identityProfile.isSelf) return false;
+    if (identityProfile.mode !== 'content') return false;
     const me = ensureSocialLists(currentUser);
-    return (me.following || []).includes(authorProfile.id);
-  }, [currentUser, authorProfile]);
+    return (me.following || []).includes(identityProfile.id);
+  }, [currentUser, identityProfile]);
 
   const onPrivateSpace =
     !!pathname &&
@@ -262,23 +293,27 @@ function FloatingActionMenuComponent() {
     Math.max(insets.bottom, Platform.OS === 'web' ? 8 : 0)
   );
 
-  const openAuthorProfile = () => {
-    if (!authorProfile) {
+  const openIdentityProfile = () => {
+    if (!identityProfile) {
       router.push('/(follower)/highlights' as any);
       return;
     }
+    if (identityProfile.mode === 'account') {
+      router.push('/(follower)/settings/account' as any);
+      return;
+    }
     router.push(
-      `/(follower)/profile/${authorProfile.id || authorProfile.handle}` as any
+      `/(follower)/profile/${identityProfile.id || identityProfile.handle}` as any
     );
   };
 
   const onToggleFollow = () => {
-    if (!authorProfile) return;
-    toggleFollowUser(authorProfile.id);
+    if (!identityProfile || identityProfile.mode !== 'content') return;
+    toggleFollowUser(identityProfile.id);
   };
 
-  const authorLabel = authorProfile
-    ? authorProfile.handle || authorProfile.name
+  const identityLabel = identityProfile
+    ? identityProfile.handle || identityProfile.name
     : t('menu.contentAuthor');
 
   const motionStyle =
@@ -317,18 +352,18 @@ function FloatingActionMenuComponent() {
           },
         ]}
       >
-        {/* أسفل العمود (عمود معكوس): أفاتار صاحب المحتوى */}
+        {/* أسفل العمود: حسابي في الرئيسية · صاحب المحتوى في اللقطات/عام/… */}
         {isFollowerLike ? (
           <View style={[styles.authorItem, styles.itemRaised]}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={authorLabel}
-              onPress={openAuthorProfile}
+              accessibilityLabel={identityLabel}
+              onPress={openIdentityProfile}
               hitSlop={6}
               style={({ pressed }) => [
                 styles.authorBtn,
                 {
-                  borderColor: authorProfile
+                  borderColor: identityProfile
                     ? theme.colors.accent
                     : theme.colors.border,
                   backgroundColor: theme.colors.surfaceElevated,
@@ -336,11 +371,13 @@ function FloatingActionMenuComponent() {
                 },
               ]}
             >
-              {authorProfile ? (
+              {identityProfile ? (
                 <Avatar
-                  key={`fab-author-${authorProfile.id}-${authorProfile.avatar || 'x'}`}
-                  uri={authorProfile.avatar}
-                  name={authorProfile.name || authorProfile.handle || 'user'}
+                  key={`fab-id-${identityProfile.mode}-${identityProfile.id}-${identityProfile.avatar || 'x'}`}
+                  uri={identityProfile.avatar}
+                  name={
+                    identityProfile.name || identityProfile.handle || 'user'
+                  }
                   size={54}
                 />
               ) : (
@@ -351,7 +388,9 @@ function FloatingActionMenuComponent() {
                 />
               )}
             </Pressable>
-            {authorProfile && !authorProfile.isSelf ? (
+            {identityProfile &&
+            identityProfile.mode === 'content' &&
+            !identityProfile.isSelf ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={
