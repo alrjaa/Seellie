@@ -127,6 +127,7 @@ export default function HighlightsScreen() {
             organizerId: comp.organizerId,
             organizerName,
             organizerHandle,
+            organizerAvatar,
           });
         });
         match.media?.videos?.forEach((v) => {
@@ -142,6 +143,7 @@ export default function HighlightsScreen() {
             organizerId: comp.organizerId,
             organizerName,
             organizerHandle,
+            organizerAvatar,
           });
         });
       });
