@@ -961,34 +961,47 @@ const styles = StyleSheet.create({
     width: '100%',
     overflow: 'hidden',
     backgroundColor: '#000',
-    paddingHorizontal: 14,
-    paddingTop: 10,
+    /** يترك مساحة لعمود الأزرار العائمة يساراً (~10 + 52 + فراغ) */
+    paddingLeft: 78,
+    paddingRight: 16,
+    paddingTop: 8,
+    zIndex: 8,
   },
   addCommentRow: {
     alignItems: 'center',
     gap: 8,
     marginBottom: 10,
+    maxWidth: 420,
+    alignSelf: 'stretch',
   },
   addCommentInput: {
     flex: 1,
     minHeight: 40,
     maxHeight: 44,
     backgroundColor: '#fff',
-    borderRadius: 8,
+    borderRadius: 10,
+    borderWidth: 0,
     paddingHorizontal: 12,
     paddingVertical: 8,
     color: '#111',
     fontSize: 14,
     lineHeight: 18,
+    // ويب: منع إطار التركيز الأزرق الافتراضي
+    ...(Platform.OS === 'web'
+      ? ({ outlineStyle: 'none', outlineWidth: 0 } as object)
+      : null),
   },
   addCommentSend: {
     width: 36,
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   commentsList: {
     flex: 1,
+    maxWidth: 420,
+    alignSelf: 'stretch',
   },
   commentsListContent: {
     gap: 8,
