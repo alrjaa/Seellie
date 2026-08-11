@@ -337,7 +337,7 @@ const ChatMediaLightbox = memo(function ChatMediaLightbox({
   );
 });
 
-type Section = 'friends' | 'following' | 'chat' | 'saved';
+type Section = 'friends' | 'following' | 'followers' | 'chat' | 'saved';
 
 function resolveAuthorId(
   item: PrivateContentItem,
@@ -400,6 +400,11 @@ const SECTIONS: { key: Section; labelKey: string; icon: keyof typeof Ionicons.gl
     key: 'following',
     labelKey: 'privateSpace.followingTab',
     icon: 'person-add-outline',
+  },
+  {
+    key: 'followers',
+    labelKey: 'privateSpace.followersTab',
+    icon: 'people-circle-outline',
   },
   { key: 'chat', labelKey: 'privateSpace.chat', icon: 'chatbubbles-outline' },
   { key: 'saved', labelKey: 'privateSpace.saved', icon: 'bookmark-outline' },
@@ -556,6 +561,23 @@ export default function PrivateScreen() {
       })
       .filter((u) => u.id !== me.id) as User[];
   }, [me, users]);
+
+  const followersList = useMemo(() => {
+    if (!me) return [] as User[];
+    const ids = ensureSocialLists(me).followers || [];
+    return ids
+      .map((id) => {
+        const known = users.find((u) => u.id === id);
+        if (known) return known;
+        return friendStub({ id, name: id.slice(0, 8) });
+      })
+      .filter((u) => u.id !== me.id) as User[];
+  }, [me, users]);
+
+  const followingIds = useMemo(
+    () => new Set(me ? ensureSocialLists(me).following || [] : []),
+    [me]
+  );
 
   const candidates = useMemo(() => {
     if (!me) return [];
@@ -993,13 +1015,13 @@ export default function PrivateScreen() {
           >
             <Ionicons
               name={s.icon}
-              size={12}
+              size={11}
               color={active ? theme.colors.textInverse : theme.colors.text}
             />
             <Text
               style={{
                 color: active ? theme.colors.textInverse : theme.colors.text,
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: '700',
               }}
               numberOfLines={1}
@@ -1020,7 +1042,11 @@ export default function PrivateScreen() {
         ...(section === 'chat' ? styles.contentChat : null),
       }}
       hasTabBar
-      scroll={section === 'friends' || section === 'following'}
+      scroll={
+        section === 'friends' ||
+        section === 'following' ||
+        section === 'followers'
+      }
       keyboard={section === 'chat'}
       fabClearance={section !== 'chat'}
     >
@@ -1171,6 +1197,78 @@ export default function PrivateScreen() {
                 </View>
               </Card>
             ))
+          )}
+        </View>
+      ) : null}
+
+      {section === 'followers' ? (
+        <View style={styles.block}>
+          <Muted>{t('privateSpace.followersHint')}</Muted>
+          {followersList.length === 0 ? (
+            <EmptyState
+              title={t('privateSpace.noFollowers')}
+              description={t('privateSpace.noFollowersDesc')}
+              icon="people-circle-outline"
+            />
+          ) : (
+            followersList.map((u) => {
+              const isFollowingBack = followingIds.has(u.id);
+              return (
+                <Card key={u.id} style={styles.friendCard}>
+                  <View style={styles.friendRow}>
+                    <Avatar uri={u.avatar} name={u.name} size={40} />
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{ color: theme.colors.text, fontWeight: '800' }}
+                      >
+                        {u.handle || u.name}
+                      </Text>
+                      <Muted>{u.name}</Muted>
+                    </View>
+                    {!space.friendIds.includes(u.id) ? (
+                      <Pressable
+                        onPress={() => void onAddFriend(u.id)}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('privateSpace.addFriend')}
+                      >
+                        <Ionicons
+                          name="person-add-outline"
+                          size={22}
+                          color={theme.colors.accent}
+                        />
+                      </Pressable>
+                    ) : (
+                      <Muted>{t('privateSpace.alreadyFriend')}</Muted>
+                    )}
+                    <Pressable
+                      onPress={() => toggleFollowUser(u.id)}
+                      hitSlop={6}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        isFollowingBack
+                          ? t('account.stats.unfollow')
+                          : t('account.stats.follow')
+                      }
+                    >
+                      <Ionicons
+                        name={
+                          isFollowingBack
+                            ? 'checkmark-circle'
+                            : 'person-add-outline'
+                        }
+                        size={22}
+                        color={
+                          isFollowingBack
+                            ? theme.colors.success || theme.colors.accent
+                            : theme.colors.accent
+                        }
+                      />
+                    </Pressable>
+                  </View>
+                </Card>
+              );
+            })
           )}
         </View>
       ) : null}
@@ -1719,14 +1817,14 @@ const styles = StyleSheet.create({
   sections: {
     flexDirection: 'row',
     flexWrap: 'nowrap',
-    gap: 6,
+    gap: 4,
     flexShrink: 0,
   },
   sectionChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
+    gap: 3,
+    paddingHorizontal: 6,
     paddingVertical: 5,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,

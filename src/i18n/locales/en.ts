@@ -560,6 +560,10 @@ export const en: TranslationTree = {
     noFollowing: 'Not following anyone yet',
     noFollowingDesc:
       'Tap + on a content author avatar in the floating buttons to add them here.',
+    followersTab: 'Followers',
+    followersHint: 'Accounts that follow you — follow back or add as friends.',
+    noFollowers: 'No followers yet',
+    noFollowersDesc: 'When someone follows you, they will appear here.',
     chat: 'Chat',
     saved: 'Saved',
     addFriend: 'Add friend',
