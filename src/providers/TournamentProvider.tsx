@@ -881,10 +881,78 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     setCompetitionRequests((prev) => filterSeedCompetitionRequests(prev));
   }, []);
 
+  /** تحميل الكتالوج العام من السحابة (مسابقات، ملفات، منتدى، blobs) */
+  const hydrateCloudPublicCatalog = useCallback(async () => {
+    if (!isSupabaseConfigured()) return;
+    const [
+      cloudProfiles,
+      cloudRequests,
+      cloudCompetitions,
+      forum,
+      blobs,
+    ] = await Promise.all([
+      fetchAllProfiles(),
+      fetchCompetitionRequestsCloud(),
+      fetchCompetitionsCloud(),
+      fetchForumComments(),
+      fetchGlobalAppBlobs(),
+    ]);
+    if (cloudProfiles.length) {
+      setUsers((prev) => mergeUsersPreferCloud(prev, cloudProfiles));
+    }
+    if (cloudRequests.error !== 'no_session') {
+      setCompetitionRequests((prev) => {
+        const merged = reconcileCompetitionRequestsWithCloud(
+          prev,
+          cloudRequests.items
+        );
+        void saveCompetitionRequests(merged);
+        return merged;
+      });
+    }
+    if (cloudCompetitions.error !== 'no_session') {
+      setCompetitions((prev) => {
+        const merged = reconcileCompetitionsWithCloud(
+          prev,
+          cloudCompetitions.items
+        );
+        void saveCompetitions(merged, { fromCloud: true });
+        return merged;
+      });
+    }
+    if (forum.comments?.length) {
+      setComments((prev) => mergeCommentsById(forum.comments, prev));
+    }
+    if (blobs.referees?.length) {
+      setReferees((prev) => {
+        const next = applyRefereesFromCloud(prev, blobs.referees!);
+        setCompetitions((cprev) =>
+          sanitizeCompetitionsRefereeIds(cprev, next)
+        );
+        return next;
+      });
+    }
+    if (blobs.offers) setOffers(blobs.offers);
+    if (blobs.levels?.length) {
+      setSupportLevels(normalizeSupportLevels(blobs.levels));
+    }
+    if (blobs.gifts) {
+      setGiftTransactions(
+        blobs.gifts.map((g) => ({
+          ...g,
+          timestamp: new Date(g.timestamp as Date | string),
+        }))
+      );
+    }
+    if (blobs.branding?.appName) setAppNameState(blobs.branding.appName);
+    if (blobs.branding?.appLogo) setAppLogoState(blobs.branding.appLogo);
+  }, []);
+
   useEffect(() => {
     if (!currentUser || !isUuid(currentUser.id)) return;
     purgeDemoSeedForCloudUser();
-  }, [currentUser?.id, purgeDemoSeedForCloudUser]);
+    void hydrateCloudPublicCatalog();
+  }, [currentUser?.id, purgeDemoSeedForCloudUser, hydrateCloudPublicCatalog]);
 
   useEffect(() => {
     let active = true;
@@ -1570,6 +1638,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           );
           setCurrentUser(newUser);
           void setJson(USER_STORAGE_KEY, newUser);
+          // لا تعتمد على البذرة التجريبية — حمّل الكتالوج العام فوراً بعد التسجيل
+          await hydrateCloudPublicCatalog();
           toast({
             variant: 'success',
             title: t('toasts.t006_e4142f'),
@@ -1644,7 +1714,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       router.replace(routeForRole('follower') as any);
       return true;
     },
-    [users, toast, router, routeForRole, t]
+    [users, toast, router, routeForRole, t, hydrateCloudPublicCatalog]
   );
 
   const switchActiveRole = useCallback(

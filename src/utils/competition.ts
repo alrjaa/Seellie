@@ -171,17 +171,21 @@ export function competitionMatchesUserLocation(
   return false;
 }
 
-/** بطولات الرئيسية: مدينة/منطقة المتابع + المثبتة (للتخصيص) */
+/** بطولات الرئيسية: مدينة/منطقة المتابع + المثبتة (للتخصيص).
+ * إن لم تُحدَّد مدينة/منطقة بعد (حساب جديد) نعرض كل المسابقات النشطة. */
 export function selectHomeCompetitions(
   competitions: Competition[],
   user: { city?: string; region?: string; pinnedCompetitionIds?: string[] } | null | undefined
 ): Competition[] {
   const pinned = new Set(user?.pinnedCompetitionIds || []);
+  const hasLocation = !!(user?.city?.trim() || user?.region?.trim());
   return competitions
     .filter(
       (c) =>
         c.status === 'active' &&
-        (pinned.has(c.id) || competitionMatchesUserLocation(c, user))
+        (pinned.has(c.id) ||
+          !hasLocation ||
+          competitionMatchesUserLocation(c, user))
     )
     .sort((a, b) => {
       const aPinned = pinned.has(a.id) ? 0 : 1;

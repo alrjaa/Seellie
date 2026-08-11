@@ -169,6 +169,16 @@ export function subscribeCompetitionsCloud(
 
   pull();
 
+  const { data: authSub } = sb.auth.onAuthStateChange((event) => {
+    if (
+      event === 'SIGNED_IN' ||
+      event === 'TOKEN_REFRESHED' ||
+      event === 'INITIAL_SESSION'
+    ) {
+      pull();
+    }
+  });
+
   const channel = sb
     .channel('app-competitions-all')
     .on(
@@ -179,6 +189,7 @@ export function subscribeCompetitionsCloud(
     .subscribe();
 
   return () => {
+    authSub.subscription.unsubscribe();
     void sb.removeChannel(channel);
   };
 }
