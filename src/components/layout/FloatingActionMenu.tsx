@@ -98,11 +98,15 @@ function FloatingActionMenuComponent() {
 
   useEffect(() => {
     if (isFloatingSuppressed()) {
+      opacity.stopAnimation();
+      translateY.stopAnimation();
       opacity.setValue(0);
-      translateY.setValue(18);
+      translateY.setValue(22);
       return;
     }
     forceFloatingVisible();
+    opacity.stopAnimation();
+    translateY.stopAnimation();
     opacity.setValue(1);
     translateY.setValue(0);
   }, [pathname, opacity, translateY]);
@@ -114,36 +118,37 @@ function FloatingActionMenuComponent() {
   }, []);
 
   useEffect(() => {
+    opacity.stopAnimation();
+    translateY.stopAnimation();
+
     if (!visible || isFloatingSuppressed()) {
-      opacity.setValue(0);
       Animated.parallel([
         Animated.timing(opacity, {
           toValue: 0,
-          duration: 120,
+          duration: 160,
           easing: Easing.in(Easing.cubic),
           useNativeDriver,
         }),
         Animated.timing(translateY, {
-          toValue: 18,
-          duration: 120,
+          toValue: 28,
+          duration: 160,
           easing: Easing.in(Easing.cubic),
           useNativeDriver,
         }),
       ]).start();
       return;
     }
-    opacity.setValue(1);
-    translateY.setValue(0);
+
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
-        duration: 180,
+        duration: 220,
         easing: Easing.out(Easing.cubic),
         useNativeDriver,
       }),
       Animated.timing(translateY, {
         toValue: 0,
-        duration: 180,
+        duration: 220,
         easing: Easing.out(Easing.cubic),
         useNativeDriver,
       }),

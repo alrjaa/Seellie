@@ -14,6 +14,8 @@ import { screenContentBottomPadding } from '@/theme/navigation';
 type Options = {
   hasTabBar?: boolean;
   fabClearance?: boolean;
+  /** false = لا تدّعِ مصدر التمرير (مثلاً جوال يستخدم FullScreenFeed) */
+  enabled?: boolean;
   contentContainerStyle?: StyleProp<ViewStyle>;
 };
 
@@ -25,29 +27,35 @@ export function useListChrome(options: Options = {}) {
   const focused = useIsFocused();
   const reactId = useId();
   const sourceId = `list:${reactId}`;
+  const enabled = options.enabled !== false;
 
   useEffect(() => {
+    if (!enabled) {
+      releaseFloatingScrollSource(sourceId);
+      return;
+    }
     if (!focused) {
       releaseFloatingScrollSource(sourceId);
       return;
     }
     claimFloatingScrollSource(sourceId);
     return () => releaseFloatingScrollSource(sourceId);
-  }, [focused, sourceId]);
+  }, [enabled, focused, sourceId]);
 
   useEffect(() => {
+    if (!enabled) return;
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active' && focused) forceFloatingVisible();
     });
     return () => sub.remove();
-  }, [focused]);
+  }, [enabled, focused]);
 
   const onScroll = useCallback(
     (e: { nativeEvent: { contentOffset: { y: number } } }) => {
-      if (!focused) return;
+      if (!enabled || !focused) return;
       noteFloatingScrollOffset(sourceId, e.nativeEvent.contentOffset.y);
     },
-    [focused, sourceId]
+    [enabled, focused, sourceId]
   );
 
   const onScrollBeginDrag = useCallback(() => {
@@ -55,18 +63,18 @@ export function useListChrome(options: Options = {}) {
   }, []);
 
   const onScrollEndDrag = useCallback(() => {
-    if (!focused) return;
+    if (!enabled || !focused) return;
     noteFloatingScrollSettle(sourceId);
-  }, [focused, sourceId]);
+  }, [enabled, focused, sourceId]);
 
   const onMomentumScrollBegin = useCallback(() => {
     // لا إخفاء عند بداية الزخم
   }, []);
 
   const onMomentumScrollEnd = useCallback(() => {
-    if (!focused) return;
+    if (!enabled || !focused) return;
     noteFloatingScrollSettle(sourceId);
-  }, [focused, sourceId]);
+  }, [enabled, focused, sourceId]);
 
   const paddingBottom = screenContentBottomPadding({
     bottomInset: insets.bottom,

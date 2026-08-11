@@ -180,7 +180,7 @@ export default function GeneralFeedScreen() {
   const theme = useAppTheme();
   const { t } = useTranslation();
   const { tablet } = useResponsive();
-  const listChrome = useListChrome();
+  const listChrome = useListChrome({ enabled: tablet });
   const saveToPrivate = useSaveToPrivateSpace();
   const {
     users,

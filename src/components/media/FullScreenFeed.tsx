@@ -459,10 +459,12 @@ function FullScreenFeedComponent({
   const onScrollEndDrag = useCallback(() => {
     if (!focused) return;
     noteFloatingScrollSettle(sourceId);
+    forceFloatingVisible();
   }, [focused, sourceId]);
   const onMomentumScrollEnd = useCallback(() => {
     if (!focused) return;
     noteFloatingScrollSettle(sourceId);
+    forceFloatingVisible();
   }, [focused, sourceId]);
 
   const overlayPadTop = topOverlaySafeArea
@@ -502,6 +504,8 @@ function FullScreenFeedComponent({
       const first = viewableItems.find((v) => v.isViewable && v.item);
       if (first?.item && typeof first.item === 'object' && 'id' in first.item) {
         setActiveId((first.item as FullScreenContent).id);
+        // بعد ثبات الصفحة أعد إظهار الأزرار العائمة
+        forceFloatingVisible();
       }
     }
   ).current;
