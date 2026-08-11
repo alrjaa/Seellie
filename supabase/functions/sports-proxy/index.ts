@@ -8,8 +8,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import {
-  pickLatestAvailableSeason,
-  rotateToNewSeason,
+  mergeWindowWithDiscovery,
   seasonProbeList,
   type SeasonWindow,
 } from './season-window.ts';
@@ -388,10 +387,8 @@ async function syncLeague(
     }
   }
 
-  const latest = pickLatestAvailableSeason(withData);
-
   // فشل المزود / لا مواسم: أعد المخزن التشغيلي دون حذف
-  if (latest == null) {
+  if (!withData.length) {
     if (existingWindow && sb) {
       const bundle = await buildBundleFromStore(sb, leagueId, existingWindow);
       return { ok: !!bundle, bundle };
@@ -399,12 +396,10 @@ async function syncLeague(
     return { ok: false, bundle: null };
   }
 
-  const rotation = rotateToNewSeason(existingWindow, latest);
+  const rotation = mergeWindowWithDiscovery(existingWindow, withData);
   const window = rotation.window;
-
-  // لا تدّور ولا تحذف إن لم يتوفر موسم أحدث فعلياً من المخزن
-  if (rotation.rotated && rotation.purgeSeason != null && sb) {
-    // إدخال الموسم الجديد أولاً ثم الحذف
+  if (!window.current) {
+    return { ok: false, bundle: null };
   }
 
   if (!sb) {

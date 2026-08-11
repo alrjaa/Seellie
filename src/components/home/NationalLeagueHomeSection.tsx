@@ -1,11 +1,23 @@
-import React, { memo, useMemo } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import React, { memo, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation, useLanguage } from '@/providers/LanguageProvider';
 import { Avatar, Card, Muted, Subtitle } from '@/components/ui';
 import { useNationalLeague } from '@/hooks/useNationalLeague';
 import { formatArabicDate, formatArabicTime } from '@/utils';
-import type { SportsFixture, SportsStandingRow } from '@/services/sports-data';
+import {
+  SAUDI_PRO_LEAGUE_ID,
+  TRACKED_LEAGUES,
+  type SportsFixture,
+  type SportsStandingRow,
+} from '@/services/sports-data';
 import { cairoText } from '@/theme/fonts';
 
 function useTitleDir() {
@@ -28,7 +40,15 @@ function scoreLabel(f: SportsFixture): string {
 
 function isLiveStatus(status: string) {
   const s = status.toUpperCase();
-  return s === '1H' || s === '2H' || s === 'HT' || s === 'ET' || s === 'BT' || s === 'P' || s === 'LIVE';
+  return (
+    s === '1H' ||
+    s === '2H' ||
+    s === 'HT' ||
+    s === 'ET' ||
+    s === 'BT' ||
+    s === 'P' ||
+    s === 'LIVE'
+  );
 }
 
 const NationalStandings = memo(function NationalStandings({
@@ -115,7 +135,10 @@ const NationalFixtures = memo(function NationalFixtures({
           style={[styles.fxRow, { borderBottomColor: theme.colors.border }]}
         >
           <View style={styles.fxDateCol}>
-            <Text style={[styles.fxDate, { color: theme.colors.text }]} numberOfLines={1}>
+            <Text
+              style={[styles.fxDate, { color: theme.colors.text }]}
+              numberOfLines={1}
+            >
               {f.date ? formatArabicDate(f.date) : '—'}
             </Text>
             <Muted>
@@ -156,138 +179,234 @@ const NationalFixtures = memo(function NationalFixtures({
   );
 });
 
+type SeasonTab = 'current' | 'previous';
+
 /**
- * قسم الدوري العام (حي عبر Edge Function) — لا يستبدل جداول المنصة.
- * عند فشل المزود: رسالة خفيفة أو إخفاء صامت إن لم يُضبط السر بعد.
+ * قسم الدوريات العالمية — اختيار دوري + موسم حالي/سابق داخل نافذة الموسمين.
  */
 export const NationalLeagueHomeSection = memo(
   function NationalLeagueHomeSection() {
     const theme = useAppTheme();
-    const { t } = useTranslation();
+    const { t, language } = useTranslation();
     const titleDir = useTitleDir();
-    const { loading, bundle, unavailable } = useNationalLeague();
+    const [leagueId, setLeagueId] = useState(SAUDI_PRO_LEAGUE_ID);
+    const [seasonTab, setSeasonTab] = useState<SeasonTab>('current');
+    const { loading, bundle, unavailable } = useNationalLeague({ leagueId });
 
-    const nextMatch = bundle?.nextFixtures?.[0] || bundle?.liveFixtures?.[0];
+    const selectedMeta = TRACKED_LEAGUES.find((l) => l.leagueId === leagueId);
+    const leagueTitle =
+      language === 'en'
+        ? selectedMeta?.nameEn || bundle?.leagueName
+        : selectedMeta?.nameAr || bundle?.leagueName;
 
-    if (loading && !bundle) {
-      return (
-        <View style={styles.section}>
-          <Subtitle style={[styles.sectionTitle, titleDir]}>
-            {t('home.nationalLeague')}
-          </Subtitle>
-          <Muted style={[styles.sectionTitle, titleDir]}>
-            {t('home.nationalLeagueSub')}
-          </Muted>
-          <View style={styles.loadingBox}>
-            <ActivityIndicator color={theme.colors.accent} />
-          </View>
-        </View>
-      );
-    }
+    const hasPrevious =
+      !!bundle?.window?.previous &&
+      ((bundle.previousStandings?.length ?? 0) > 0 ||
+        (bundle.previousLastFixtures?.length ?? 0) > 0);
 
-    // غير مضبوط / فشل: لا نكسر الرئيسية — نعرض تلميحاً خفيفاً فقط
-    if (unavailable || !bundle) {
-      return (
-        <View style={styles.section}>
-          <Subtitle style={[styles.sectionTitle, titleDir]}>
-            {t('home.nationalLeague')}
-          </Subtitle>
-          <Muted style={[styles.sectionTitle, titleDir]}>
-            {t('home.nationalLeagueUnavailable')}
-          </Muted>
-        </View>
-      );
-    }
+    const viewingPrevious = seasonTab === 'previous' && hasPrevious;
 
-    const hasAny =
-      !!nextMatch ||
-      bundle.liveFixtures.length > 0 ||
-      bundle.nextFixtures.length > 0 ||
-      bundle.lastFixtures.length > 0 ||
-      bundle.standings.length > 0;
-
-    if (!hasAny) {
-      return (
-        <View style={styles.section}>
-          <Subtitle style={[styles.sectionTitle, titleDir]}>
-            {t('home.nationalLeague')}
-          </Subtitle>
-          <Muted style={[styles.sectionTitle, titleDir]}>
-            {t('home.nationalLeagueEmpty')}
-          </Muted>
-        </View>
-      );
-    }
+    const standings = viewingPrevious
+      ? bundle?.previousStandings || []
+      : bundle?.standings || [];
+    const lastFixtures = viewingPrevious
+      ? bundle?.previousLastFixtures || []
+      : bundle?.lastFixtures || [];
+    const nextFixtures = viewingPrevious ? [] : bundle?.nextFixtures || [];
+    const liveFixtures = viewingPrevious ? [] : bundle?.liveFixtures || [];
+    const nextMatch = liveFixtures[0] || nextFixtures[0];
+    const displaySeason = viewingPrevious
+      ? bundle?.window?.previous
+      : bundle?.window?.current || bundle?.season;
 
     return (
       <View style={styles.section}>
         <Subtitle style={[styles.sectionTitle, titleDir]}>
-          {bundle.leagueName || t('home.nationalLeague')}
+          {t('home.nationalLeague')}
         </Subtitle>
         <Muted style={[styles.sectionTitle, titleDir]}>
-          {t('home.nationalLeagueSub')}
-          {bundle.season ? ` · ${t('home.nationalSeasonLabel', { season: bundle.season })}` : ''}
-          {bundle.window?.previous
-            ? ` · ${t('home.nationalPreviousSeason', { season: bundle.window.previous })}`
-            : ''}
+          {t('home.nationalLeaguePickHint')}
         </Muted>
 
-        {nextMatch ? (
-          <Card style={styles.nextCard}>
-            <Muted style={titleDir}>{t('home.nationalNextMatch')}</Muted>
-            <View style={styles.nextRow}>
-              <View style={styles.nextTeam}>
-                <Avatar
-                  uri={nextMatch.homeLogo}
-                  name={nextMatch.homeName}
-                  size={44}
-                />
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.leagueRow}
+        >
+          {TRACKED_LEAGUES.map((league) => {
+            const active = league.leagueId === leagueId;
+            const label = language === 'en' ? league.nameEn : league.nameAr;
+            return (
+              <Pressable
+                key={league.leagueId}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                onPress={() => {
+                  setLeagueId(league.leagueId);
+                  setSeasonTab('current');
+                }}
+                style={[
+                  styles.leagueChip,
+                  {
+                    backgroundColor: active
+                      ? theme.colors.accent
+                      : theme.colors.inputBg,
+                    borderColor: active
+                      ? theme.colors.accent
+                      : theme.colors.border,
+                  },
+                ]}
+              >
                 <Text
-                  style={[styles.nextName, { color: theme.colors.text }]}
-                  numberOfLines={2}
+                  style={[
+                    styles.leagueChipText,
+                    cairoText('semiBold'),
+                    {
+                      color: active
+                        ? theme.colors.textInverse
+                        : theme.colors.text,
+                    },
+                  ]}
+                  numberOfLines={1}
                 >
-                  {nextMatch.homeName}
+                  {label}
                 </Text>
-              </View>
-              <Text style={[styles.vs, { color: theme.colors.textMuted }]}>
-                {scoreLabel(nextMatch)}
-              </Text>
-              <View style={styles.nextTeam}>
-                <Avatar
-                  uri={nextMatch.awayLogo}
-                  name={nextMatch.awayName}
-                  size={44}
-                />
-                <Text
-                  style={[styles.nextName, { color: theme.colors.text }]}
-                  numberOfLines={2}
-                >
-                  {nextMatch.awayName}
-                </Text>
-              </View>
-            </View>
-            {nextMatch.date ? (
-              <Muted style={titleDir}>
-                {formatArabicDate(nextMatch.date)} ·{' '}
-                {formatArabicTime(nextMatch.date)}
-              </Muted>
-            ) : null}
-          </Card>
-        ) : null}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
-        <NationalFixtures
-          title={t('home.nationalLive')}
-          fixtures={bundle.liveFixtures}
-        />
-        <NationalFixtures
-          title={t('home.nationalUpcoming')}
-          fixtures={bundle.nextFixtures}
-        />
-        <NationalFixtures
-          title={t('home.nationalResults')}
-          fixtures={bundle.lastFixtures}
-        />
-        <NationalStandings rows={bundle.standings} />
+        {loading && !bundle ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator color={theme.colors.accent} />
+          </View>
+        ) : unavailable || !bundle ? (
+          <Muted style={titleDir}>{t('home.nationalLeagueUnavailable')}</Muted>
+        ) : (
+          <>
+            <Subtitle style={[styles.sectionTitle, titleDir]}>
+              {leagueTitle || t('home.nationalLeague')}
+            </Subtitle>
+
+            <View style={styles.seasonRow}>
+              <Pressable
+                onPress={() => setSeasonTab('current')}
+                style={[
+                  styles.seasonChip,
+                  {
+                    borderColor:
+                      seasonTab === 'current'
+                        ? theme.colors.accent
+                        : theme.colors.border,
+                    backgroundColor:
+                      seasonTab === 'current'
+                        ? theme.colors.inputBg
+                        : 'transparent',
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.seasonChipText,
+                    { color: theme.colors.text },
+                    cairoText('medium'),
+                  ]}
+                >
+                  {t('home.nationalSeasonCurrent', {
+                    season: bundle.window?.current || bundle.season,
+                  })}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => hasPrevious && setSeasonTab('previous')}
+                disabled={!hasPrevious}
+                style={[
+                  styles.seasonChip,
+                  {
+                    opacity: hasPrevious ? 1 : 0.45,
+                    borderColor:
+                      seasonTab === 'previous'
+                        ? theme.colors.accent
+                        : theme.colors.border,
+                    backgroundColor:
+                      seasonTab === 'previous'
+                        ? theme.colors.inputBg
+                        : 'transparent',
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.seasonChipText,
+                    { color: theme.colors.text },
+                    cairoText('medium'),
+                  ]}
+                >
+                  {hasPrevious
+                    ? t('home.nationalSeasonPrevious', {
+                        season: bundle.window?.previous,
+                      })
+                    : t('home.nationalSeasonPreviousUnavailable')}
+                </Text>
+              </Pressable>
+            </View>
+
+            <Muted style={titleDir}>
+              {t('home.nationalSeasonLabel', { season: displaySeason })}
+            </Muted>
+
+            {nextMatch ? (
+              <Card style={styles.nextCard}>
+                <Muted style={titleDir}>{t('home.nationalNextMatch')}</Muted>
+                <View style={styles.nextRow}>
+                  <View style={styles.nextTeam}>
+                    <Avatar
+                      uri={nextMatch.homeLogo}
+                      name={nextMatch.homeName}
+                      size={44}
+                    />
+                    <Text
+                      style={[styles.nextName, { color: theme.colors.text }]}
+                      numberOfLines={2}
+                    >
+                      {nextMatch.homeName}
+                    </Text>
+                  </View>
+                  <Text style={[styles.vs, { color: theme.colors.textMuted }]}>
+                    {scoreLabel(nextMatch)}
+                  </Text>
+                  <View style={styles.nextTeam}>
+                    <Avatar
+                      uri={nextMatch.awayLogo}
+                      name={nextMatch.awayName}
+                      size={44}
+                    />
+                    <Text
+                      style={[styles.nextName, { color: theme.colors.text }]}
+                      numberOfLines={2}
+                    >
+                      {nextMatch.awayName}
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+            ) : null}
+
+            <NationalFixtures
+              title={t('home.nationalLive')}
+              fixtures={liveFixtures}
+            />
+            <NationalFixtures
+              title={t('home.nationalUpcoming')}
+              fixtures={nextFixtures}
+            />
+            <NationalFixtures
+              title={t('home.nationalResults')}
+              fixtures={lastFixtures}
+            />
+            <NationalStandings rows={standings} />
+          </>
+        )}
       </View>
     );
   }
@@ -297,6 +416,22 @@ const styles = StyleSheet.create({
   section: { gap: 10, marginBottom: 8 },
   sectionTitle: { marginBottom: 0 },
   loadingBox: { paddingVertical: 18, alignItems: 'center' },
+  leagueRow: { gap: 8, paddingVertical: 2 },
+  leagueChip: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  leagueChipText: { fontSize: 12 },
+  seasonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  seasonChip: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  seasonChipText: { fontSize: 12 },
   card: { gap: 0, paddingVertical: 10 },
   cardTitle: { marginBottom: 8, fontSize: 14 },
   nextCard: { gap: 10 },
