@@ -10,7 +10,6 @@ import {
   type PrivateChatMessage,
   type PrivateSpaceState,
 } from '@/services/private-space';
-import { playPrivateMessageTone } from '@/services/message-tone';
 
 function collectInboundIds(state: PrivateSpaceState): Set<string> {
   const ids = new Set<string>();
@@ -99,7 +98,9 @@ export function PrivateIncomingAlerts() {
         });
 
         if (AppState.currentState === 'active') {
-          void playPrivateMessageTone();
+          void import('@/services/message-tone')
+            .then((m) => m.playPrivateMessageTone())
+            .catch(() => undefined);
           toast({
             variant: 'success',
             title: t('privateSpace.privateMessageTitle'),

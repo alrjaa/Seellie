@@ -18,7 +18,7 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { OfflineBanner } from '@/components/feedback/OfflineBanner';
 import { FloatingActionMenu } from '@/components/layout/FloatingActionMenu';
 import { AuthDeepLinkHandler } from '@/components/auth/AuthDeepLinkHandler';
-import { PrivateIncomingAlerts } from '@/components/private/PrivateIncomingAlerts';
+import { SafePrivateIncomingAlerts } from '@/components/private/SafePrivateIncomingAlerts';
 import {
   applyGlobalCairoFonts,
   cairoFontMap,
@@ -145,7 +145,7 @@ function RootNavigator() {
           />
         </Stack>
       </View>
-      <PrivateIncomingAlerts />
+      <SafePrivateIncomingAlerts />
       <FloatingActionMenu />
     </View>
   );
