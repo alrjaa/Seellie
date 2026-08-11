@@ -26,8 +26,8 @@ function LikeButtonComponent({
   const theme = useAppTheme();
   const { t, isRTL } = useTranslation();
   const androidSm = Platform.OS === 'android' && size === 'sm';
-  const iconSize = androidSm ? 14 : size === 'sm' ? 16 : 18;
-  const fontSize = androidSm ? 11 : size === 'sm' ? 12 : 13;
+  const iconSize = androidSm ? 18 : size === 'sm' ? 22 : 26;
+  const fontSize = androidSm ? 13 : size === 'sm' ? 14 : 15;
   const color = liked
     ? theme.colors.accent
     : tone === 'light'
@@ -61,7 +61,7 @@ function LikeButtonComponent({
         color={color}
       />
       <Text style={[styles.count, cairoText('bold'), { color, fontSize }]}>
-        {t('ui.likesCount', { count })}
+        {String(count)}
       </Text>
     </Pressable>
   );
@@ -73,7 +73,9 @@ const styles = StyleSheet.create({
   row: {
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    minHeight: 36,
   },
   count: {},
 });
