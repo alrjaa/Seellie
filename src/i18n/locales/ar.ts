@@ -1441,6 +1441,7 @@ export const ar = {
     comment: 'تعليق',
     commentA11y: 'تعليق',
     comments: 'تعليقات',
+    addCommentPlaceholder: 'اضافة تعليق',
     optionalCommentPlaceholder: 'تعليق قصير على هذا المحتوى...',
     noItemComments: 'لا توجد تعليقات بعد',
     profileA11y: 'الملف الشخصي',

@@ -16,6 +16,7 @@ import {
   Keyboard,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -173,12 +174,14 @@ const Slide = memo(function Slide({
   const [paused, setPaused] = useState(!active);
   const [loadError, setLoadError] = useState(false);
   const [frameReady, setFrameReady] = useState(false);
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [listOpen, setListOpen] = useState(false);
+  /** لوحة تعليقات هذا المحتوى — تمتد أسفل شاشة المحتوى */
+  const [commentsExpanded, setCommentsExpanded] = useState(false);
   const [draft, setDraft] = useState('');
   const lastTapRef = useRef(0);
+  const panelAnim = useRef(new Animated.Value(0)).current;
   const comments = useContentComments(item.id, item.comments);
   const bottomPad = Math.max(insets.bottom, 6) + 4;
+  const commentsPanelHeight = 210 + Math.max(insets.bottom, 8);
   // زر الإعجاب على اليمين فيزيائياً — المعرّف انتقل للأزرار العائمة
   const dockSide =
     I18nManager.isRTL && I18nManager.doLeftAndRightSwapInRTL
@@ -187,19 +190,32 @@ const Slide = memo(function Slide({
 
   useEffect(() => {
     if (!active) {
-      setComposerOpen(false);
-      setListOpen(false);
+      setCommentsExpanded(false);
       setDraft('');
       Keyboard.dismiss();
     }
   }, [active, item.id]);
 
   useEffect(() => {
-    if (composerOpen) {
-      const tmr = setTimeout(() => inputRef.current?.focus(), 80);
+    Animated.timing(panelAnim, {
+      toValue: commentsExpanded ? 1 : 0,
+      duration: 220,
+      useNativeDriver: false,
+    }).start();
+    if (commentsExpanded) {
+      const tmr = setTimeout(() => inputRef.current?.focus(), 240);
       return () => clearTimeout(tmr);
     }
-  }, [composerOpen]);
+  }, [commentsExpanded, panelAnim]);
+
+  const openCommentsPanel = useCallback(() => {
+    setCommentsExpanded(true);
+  }, []);
+
+  const dismissCommentsPanel = useCallback(() => {
+    setCommentsExpanded(false);
+    Keyboard.dismiss();
+  }, []);
 
   const playableUri =
     !!item.mediaUrl && /^https?:\/\//i.test(item.mediaUrl.trim());
@@ -309,29 +325,16 @@ const Slide = memo(function Slide({
     }
   }, [paused, playableUri, loadError]);
 
-  const dismissOverlays = useCallback(() => {
-    setComposerOpen(false);
-    setListOpen(false);
-    Keyboard.dismiss();
-  }, []);
-
   const handleLikePress = useCallback(() => {
     onLike();
-    setListOpen(false);
-    setComposerOpen(true);
-  }, [onLike]);
+    openCommentsPanel();
+  }, [onLike, openCommentsPanel]);
 
   const submitComment = useCallback(() => {
     const trimmed = draft.trim().slice(0, 120);
-    if (!trimmed) {
-      dismissOverlays();
-      return;
-    }
+    if (!trimmed) return;
     if (!currentUser) return;
-    if (currentUser.permissions?.canComment === false) {
-      dismissOverlays();
-      return;
-    }
+    if (currentUser.permissions?.canComment === false) return;
     const fromParent = onComment?.(item, trimmed);
     const stored = fromParent
       ? toStoreComment(fromParent)
@@ -345,13 +348,12 @@ const Slide = memo(function Slide({
         };
     addContentItemComment(item.id, stored);
     setDraft('');
-    setComposerOpen(false);
-    Keyboard.dismiss();
-  }, [draft, currentUser, onComment, item, dismissOverlays]);
+    // تبقى اللوحة مفتوحة لرؤية التعليق ضمن نفس المحتوى
+  }, [draft, currentUser, onComment, item]);
 
   const handleContentPress = useCallback(() => {
-    if (composerOpen || listOpen) {
-      dismissOverlays();
+    if (commentsExpanded) {
+      dismissCommentsPanel();
       return;
     }
     const now = Date.now();
@@ -365,248 +367,218 @@ const Slide = memo(function Slide({
       void toggleVideoPlayback();
     }
   }, [
-    composerOpen,
-    listOpen,
-    dismissOverlays,
+    commentsExpanded,
+    dismissCommentsPanel,
     item.kind,
     onDoubleTap,
     toggleVideoPlayback,
   ]);
 
+  const panelHeight = panelAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, commentsPanelHeight],
+  });
+
   return (
     <View style={[styles.slide, { height, backgroundColor: '#000' }]}>
-      {item.kind === 'photo' && item.mediaUrl ? (
-        <Pressable style={StyleSheet.absoluteFill} onPress={handleContentPress}>
-          <Image
-            source={{ uri: item.mediaUrl }}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            transition={180}
-          />
-        </Pressable>
-      ) : null}
-
-      {item.kind === 'video' ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={
-            paused ? t('media.playVideo') : t('media.pauseVideo')
-          }
-          onPress={handleContentPress}
-          style={styles.videoFill}
-        >
-          {playableUri && !loadError && active && Platform.OS === 'web'
-            ? createElement('video', {
-                ref: (node: HTMLVideoElement | null) => {
-                  htmlVideoRef.current = node;
-                },
-                src: item.mediaUrl,
-                muted: true,
-                defaultMuted: true,
-                autoPlay: true,
-                playsInline: true,
-                preload: 'auto',
-                loop: true,
-                controls: false,
-                poster: item.posterUrl || undefined,
-                style: {
-                  position: 'absolute',
-                  inset: 0,
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  backgroundColor: '#000',
-                },
-                onError: () => {
-                  setLoadError(true);
-                  setPaused(true);
-                },
-                onLoadedData: () => setFrameReady(true),
-                onPlaying: () => {
-                  setFrameReady(true);
-                  setPaused(false);
-                },
-              })
-            : null}
-
-          {playableUri && !loadError && active && Platform.OS !== 'web' ? (
-            <Video
-              ref={videoRef}
-              source={{ uri: item.mediaUrl! }}
-              style={StyleSheet.absoluteFill}
-              resizeMode={ResizeMode.COVER}
-              shouldPlay={!paused}
-              isLooping
-              isMuted={false}
-              useNativeControls={false}
-              pointerEvents="none"
-              onReadyForDisplay={() => setFrameReady(true)}
-              onError={() => {
-                setLoadError(true);
-                setPaused(true);
-              }}
-            />
-          ) : null}
-
-          {item.posterUrl &&
-          (loadError || !playableUri || !active || (!frameReady && paused)) ? (
+      {/* شاشة المحتوى — تنكمش للأعلى عند امتداد لوحة التعليقات */}
+      <View style={styles.contentPane}>
+        {item.kind === 'photo' && item.mediaUrl ? (
+          <Pressable style={StyleSheet.absoluteFill} onPress={handleContentPress}>
             <Image
-              source={{ uri: item.posterUrl }}
+              source={{ uri: item.mediaUrl }}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
+              transition={180}
             />
-          ) : null}
+          </Pressable>
+        ) : null}
 
-          {loadError || !playableUri ? (
-            <View style={styles.playWrap}>
-              <Ionicons name="alert-circle-outline" size={56} color="#fff" />
-              <Text style={styles.playLabel}>{t('media.videoPlayFailed')}</Text>
-            </View>
-          ) : null}
-        </Pressable>
-      ) : null}
+        {item.kind === 'video' ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              paused ? t('media.playVideo') : t('media.pauseVideo')
+            }
+            onPress={handleContentPress}
+            style={styles.videoFill}
+          >
+            {playableUri && !loadError && active && Platform.OS === 'web'
+              ? createElement('video', {
+                  ref: (node: HTMLVideoElement | null) => {
+                    htmlVideoRef.current = node;
+                  },
+                  src: item.mediaUrl,
+                  muted: true,
+                  defaultMuted: true,
+                  autoPlay: true,
+                  playsInline: true,
+                  preload: 'auto',
+                  loop: true,
+                  controls: false,
+                  poster: item.posterUrl || undefined,
+                  style: {
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    backgroundColor: '#000',
+                  },
+                  onError: () => {
+                    setLoadError(true);
+                    setPaused(true);
+                  },
+                  onLoadedData: () => setFrameReady(true),
+                  onPlaying: () => {
+                    setFrameReady(true);
+                    setPaused(false);
+                  },
+                })
+              : null}
 
-      {item.kind === 'text' ? (
-        <Pressable
-          onPress={handleContentPress}
-          style={[
-            styles.textSlide,
-            { backgroundColor: theme.colors.surfaceElevated },
-          ]}
-        >
-          {item.title ? (
-            <Text style={[styles.textTitle, { color: theme.colors.text }]}>
-              {item.title}
+            {playableUri && !loadError && active && Platform.OS !== 'web' ? (
+              <Video
+                ref={videoRef}
+                source={{ uri: item.mediaUrl! }}
+                style={StyleSheet.absoluteFill}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay={!paused}
+                isLooping
+                isMuted={false}
+                useNativeControls={false}
+                pointerEvents="none"
+                onReadyForDisplay={() => setFrameReady(true)}
+                onError={() => {
+                  setLoadError(true);
+                  setPaused(true);
+                }}
+              />
+            ) : null}
+
+            {item.posterUrl &&
+            (loadError || !playableUri || !active || (!frameReady && paused)) ? (
+              <Image
+                source={{ uri: item.posterUrl }}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+              />
+            ) : null}
+
+            {loadError || !playableUri ? (
+              <View style={styles.playWrap}>
+                <Ionicons name="alert-circle-outline" size={56} color="#fff" />
+                <Text style={styles.playLabel}>{t('media.videoPlayFailed')}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        ) : null}
+
+        {item.kind === 'text' ? (
+          <Pressable
+            onPress={handleContentPress}
+            style={[
+              styles.textSlide,
+              { backgroundColor: theme.colors.surfaceElevated },
+            ]}
+          >
+            {item.title ? (
+              <Text style={[styles.textTitle, { color: theme.colors.text }]}>
+                {item.title}
+              </Text>
+            ) : null}
+            <Text style={[styles.textBody, { color: theme.colors.text }]}>
+              {item.text || ''}
             </Text>
-          ) : null}
-          <Text style={[styles.textBody, { color: theme.colors.text }]}>
-            {item.text || ''}
-          </Text>
-        </Pressable>
-      ) : null}
+          </Pressable>
+        ) : null}
 
-      <LinearGradient
-        colors={[
-          'rgba(0,0,0,0.55)',
-          'transparent',
-          'transparent',
-          'rgba(0,0,0,0.75)',
-        ]}
-        locations={[0, 0.18, 0.55, 1]}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-
-      {item.kind !== 'text' && item.text ? (
-        <Text
-          style={[
-            styles.caption,
-            { bottom: bottomPad + (composerOpen ? 100 : listOpen ? 120 : 24) },
+        <LinearGradient
+          colors={[
+            'rgba(0,0,0,0.55)',
+            'transparent',
+            'transparent',
+            'rgba(0,0,0,0.75)',
           ]}
-          numberOfLines={3}
-        >
-          {item.text}
-        </Text>
-      ) : null}
-
-      {/*
-        رصيف عمودي على يمين الشاشة: إعجاب ثم «تعليقات» تحته.
-        direction:'ltr' حتى لا يعكس I18nManager موضع الحافة.
-      */}
-      <View
-        pointerEvents="box-none"
-        style={[
-          styles.actionsDock,
-          dockSide,
-          {
-            bottom: bottomPad + (composerOpen ? 72 : 12),
-            direction: 'ltr',
-          },
-        ]}
-      >
-        <LikeButton
-          count={item.likes.length}
-          liked={item.liked}
-          onPress={handleLikePress}
-          tone="light"
-          size="md"
+          locations={[0, 0.18, 0.55, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
         />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('ui.comments')}
-          onPress={() => {
-            setComposerOpen(false);
-            Keyboard.dismiss();
-            setListOpen((v) => !v);
-          }}
-          hitSlop={8}
-          style={({ pressed }) => [
-            styles.commentsLink,
-            { opacity: pressed ? 0.65 : 1 },
-          ]}
-        >
-          <Text style={[styles.commentsLinkText, cairoText('medium')]}>
-            {t('ui.comments')}
-            {comments.length > 0 ? ` ${comments.length}` : ''}
-          </Text>
-        </Pressable>
-      </View>
 
-      {listOpen ? (
+        {item.kind !== 'text' && item.text ? (
+          <Text
+            style={[styles.caption, { bottom: bottomPad + 24 }]}
+            numberOfLines={3}
+          >
+            {item.text}
+          </Text>
+        ) : null}
+
         <View
           pointerEvents="box-none"
           style={[
-            styles.commentsPanel,
+            styles.actionsDock,
+            dockSide,
             {
-              bottom: bottomPad + (composerOpen ? 72 : 12) + 78,
-              ...(dockSide.right != null
-                ? { right: 72, left: 16 }
-                : { left: 72, right: 16 }),
+              bottom: bottomPad + 8,
+              direction: 'ltr',
             },
           ]}
         >
-          {comments.length === 0 ? (
-            <Text style={[styles.commentEmpty, cairoText('medium')]}>
-              {t('ui.noItemComments')}
+          <LikeButton
+            count={item.likes.length}
+            liked={item.liked}
+            onPress={handleLikePress}
+            tone="light"
+            size="md"
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('ui.comments')}
+            onPress={() => {
+              if (commentsExpanded) dismissCommentsPanel();
+              else openCommentsPanel();
+            }}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.commentsLink,
+              { opacity: pressed ? 0.65 : 1 },
+            ]}
+          >
+            <Text style={[styles.commentsLinkText, cairoText('medium')]}>
+              {t('ui.comments')}
+              {comments.length > 0 ? ` ${comments.length}` : ''}
             </Text>
-          ) : (
-            comments.slice(0, 8).map((c) => (
-              <Text
-                key={c.id}
-                style={[styles.commentLine, cairoText('regular')]}
-                numberOfLines={2}
-              >
-                <Text style={[styles.commentAuthor, cairoText('semiBold')]}>
-                  {c.authorName}{' '}
-                </Text>
-                {c.text}
-              </Text>
-            ))
-          )}
+          </Pressable>
         </View>
-      ) : null}
+      </View>
 
-      {composerOpen ? (
+      {/* امتداد أسفل المحتوى: حقل كتابة + التعليقات المحفوظة على نفس العنصر */}
+      <Animated.View
+        style={[
+          styles.commentsExpandPanel,
+          {
+            height: panelHeight,
+            paddingBottom: Math.max(insets.bottom, 10),
+          },
+        ]}
+        pointerEvents={commentsExpanded ? 'auto' : 'none'}
+      >
+        <View style={styles.commentsDivider} />
         <View
           style={[
-            styles.composerBar,
-            {
-              bottom: bottomPad + 8,
-              flexDirection: isRTL ? 'row-reverse' : 'row',
-              ...(dockSide.right != null
-                ? { right: 72, left: 14 }
-                : { left: 72, right: 14 }),
-            },
+            styles.addCommentRow,
+            { flexDirection: isRTL ? 'row-reverse' : 'row' },
           ]}
         >
           <TextInput
             ref={inputRef}
             value={draft}
             onChangeText={(v) => setDraft(v.replace(/\n+/g, ' ').slice(0, 120))}
-            placeholder={t('ui.optionalCommentPlaceholder')}
-            placeholderTextColor="rgba(255,255,255,0.45)"
+            placeholder={t('ui.addCommentPlaceholder')}
+            placeholderTextColor="#666"
             style={[
-              styles.composerInput,
+              styles.addCommentInput,
               cairoText('regular'),
               { textAlign: isRTL ? 'right' : 'left' },
             ]}
@@ -622,14 +594,50 @@ const Slide = memo(function Slide({
             accessibilityLabel={t('common.send')}
             onPress={submitComment}
             style={({ pressed }) => [
-              styles.composerSend,
-              { opacity: pressed ? 0.65 : 1 },
+              styles.addCommentSend,
+              { opacity: pressed ? 0.65 : draft.trim() ? 1 : 0.4 },
             ]}
           >
-            <Ionicons name="send" size={18} color="#fff" />
+            <Ionicons
+              name="send"
+              size={18}
+              color={theme.colors.accent || '#2563eb'}
+            />
           </Pressable>
         </View>
-      ) : null}
+        <ScrollView
+          style={styles.commentsList}
+          contentContainerStyle={styles.commentsListContent}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+        >
+          {comments.length === 0 ? (
+            <Text
+              style={[
+                styles.commentEmpty,
+                cairoText('medium'),
+                { textAlign: isRTL ? 'right' : 'left' },
+              ]}
+            >
+              {t('ui.noItemComments')}
+            </Text>
+          ) : (
+            comments.map((c) => (
+              <Text
+                key={c.id}
+                style={[
+                  styles.commentLine,
+                  cairoText('regular'),
+                  { textAlign: isRTL ? 'right' : 'left' },
+                ]}
+                numberOfLines={2}
+              >
+                {c.text}
+              </Text>
+            ))
+          )}
+        </ScrollView>
+      </Animated.View>
     </View>
   );
 });
@@ -872,6 +880,12 @@ const styles = StyleSheet.create({
   slide: {
     width: '100%',
     overflow: 'hidden',
+    flexDirection: 'column',
+  },
+  contentPane: {
+    flex: 1,
+    overflow: 'hidden',
+    backgroundColor: '#000',
   },
   videoFill: {
     ...StyleSheet.absoluteFillObject,
@@ -954,52 +968,57 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
     textAlign: 'center',
   },
-  commentsPanel: {
-    position: 'absolute',
-    zIndex: 7,
-    gap: 6,
-    maxHeight: 112,
+  commentsExpandPanel: {
+    width: '100%',
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    paddingHorizontal: 14,
+  },
+  commentsDivider: {
+    height: 2,
+    width: '100%',
+    backgroundColor: '#2563eb',
+    marginBottom: 10,
+  },
+  addCommentRow: {
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  addCommentInput: {
+    flex: 1,
+    minHeight: 40,
+    maxHeight: 44,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    color: '#111',
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  addCommentSend: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commentsList: {
+    flex: 1,
+  },
+  commentsListContent: {
+    gap: 8,
+    paddingBottom: 4,
   },
   commentLine: {
-    color: 'rgba(255,255,255,0.92)',
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  commentAuthor: {
     color: '#fff',
     fontSize: 12,
+    lineHeight: 16,
+    backgroundColor: 'transparent',
   },
   commentEmpty: {
     color: 'rgba(255,255,255,0.55)',
     fontSize: 12,
-  },
-  composerBar: {
-    position: 'absolute',
-    zIndex: 8,
-    alignItems: 'flex-end',
-    gap: 8,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  composerInput: {
-    flex: 1,
-    minHeight: 34,
-    maxHeight: 40,
-    color: '#fff',
-    fontSize: 13,
-    lineHeight: 17,
-    paddingVertical: 2,
-    paddingHorizontal: 2,
-  },
-  composerSend: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   overlay: {
     position: 'absolute',
