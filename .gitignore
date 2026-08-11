@@ -42,3 +42,6 @@ yarn-error.*
 
 .env
 .env.local
+
+# Supabase CLI local link temp
+supabase/.temp/
