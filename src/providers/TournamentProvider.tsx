@@ -5090,7 +5090,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
         return null;
       }
-      const trimmed = text.trim();
+      const trimmed = text.trim().replace(/\s+/g, ' ').slice(0, 120);
       if (!trimmed) return null;
 
       const comment: Comment = {

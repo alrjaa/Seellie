@@ -1951,7 +1951,7 @@ export const en: TranslationTree = {
     comment: 'Comment',
     commentA11y: 'Comment',
     comments: 'Comments',
-    optionalCommentPlaceholder: 'Write a comment (optional)...',
+    optionalCommentPlaceholder: 'Short comment on this content...',
     noItemComments: 'No comments yet',
     profileA11y: 'Profile',
     likesCount: '%{count}',

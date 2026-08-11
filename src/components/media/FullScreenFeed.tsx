@@ -16,7 +16,6 @@ import {
   Keyboard,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -323,7 +322,7 @@ const Slide = memo(function Slide({
   }, [onLike]);
 
   const submitComment = useCallback(() => {
-    const trimmed = draft.trim();
+    const trimmed = draft.trim().slice(0, 120);
     if (!trimmed) {
       dismissOverlays();
       return;
@@ -502,7 +501,7 @@ const Slide = memo(function Slide({
         <Text
           style={[
             styles.caption,
-            { bottom: bottomPad + (composerOpen ? 108 : listOpen ? 160 : 52) },
+            { bottom: bottomPad + (composerOpen ? 100 : listOpen ? 120 : 24) },
           ]}
           numberOfLines={3}
         >
@@ -511,8 +510,8 @@ const Slide = memo(function Slide({
       ) : null}
 
       {/*
-        رصيف ثابت على الحافة اليمنى فيزيائياً.
-        حاوية direction:'ltr' حتى لا يعكس I18nManager/RTL موضع flex-end.
+        رصيف عمودي على يمين الشاشة: إعجاب ثم «تعليقات» تحته.
+        direction:'ltr' حتى لا يعكس I18nManager موضع الحافة.
       */}
       <View
         pointerEvents="box-none"
@@ -520,7 +519,7 @@ const Slide = memo(function Slide({
           styles.actionsDock,
           dockSide,
           {
-            bottom: bottomPad + (composerOpen ? 64 : 36),
+            bottom: bottomPad + (composerOpen ? 72 : 12),
             direction: 'ltr',
           },
         ]}
@@ -532,38 +531,58 @@ const Slide = memo(function Slide({
           tone="light"
           size="md"
         />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('ui.comments')}
+          onPress={() => {
+            setComposerOpen(false);
+            Keyboard.dismiss();
+            setListOpen((v) => !v);
+          }}
+          hitSlop={8}
+          style={({ pressed }) => [
+            styles.commentsLink,
+            { opacity: pressed ? 0.65 : 1 },
+          ]}
+        >
+          <Text style={[styles.commentsLinkText, cairoText('medium')]}>
+            {t('ui.comments')}
+            {comments.length > 0 ? ` ${comments.length}` : ''}
+          </Text>
+        </Pressable>
       </View>
 
       {listOpen ? (
         <View
           pointerEvents="box-none"
-          style={[styles.commentsPanel, { bottom: bottomPad + 36 }]}
+          style={[
+            styles.commentsPanel,
+            {
+              bottom: bottomPad + (composerOpen ? 72 : 12) + 78,
+              ...(dockSide.right != null
+                ? { right: 72, left: 16 }
+                : { left: 72, right: 16 }),
+            },
+          ]}
         >
-          <ScrollView
-            style={styles.commentsScroll}
-            contentContainerStyle={styles.commentsScrollContent}
-            keyboardShouldPersistTaps="handled"
-            nestedScrollEnabled
-          >
-            {comments.length === 0 ? (
-              <Text style={[styles.commentEmpty, cairoText('medium')]}>
-                {t('ui.noItemComments')}
-              </Text>
-            ) : (
-              comments.map((c) => (
-                <Text
-                  key={c.id}
-                  style={[styles.commentLine, cairoText('regular')]}
-                  numberOfLines={4}
-                >
-                  <Text style={[styles.commentAuthor, cairoText('semiBold')]}>
-                    {c.authorName}{' '}
-                  </Text>
-                  {c.text}
+          {comments.length === 0 ? (
+            <Text style={[styles.commentEmpty, cairoText('medium')]}>
+              {t('ui.noItemComments')}
+            </Text>
+          ) : (
+            comments.slice(0, 8).map((c) => (
+              <Text
+                key={c.id}
+                style={[styles.commentLine, cairoText('regular')]}
+                numberOfLines={2}
+              >
+                <Text style={[styles.commentAuthor, cairoText('semiBold')]}>
+                  {c.authorName}{' '}
                 </Text>
-              ))
-            )}
-          </ScrollView>
+                {c.text}
+              </Text>
+            ))
+          )}
         </View>
       ) : null}
 
@@ -572,15 +591,18 @@ const Slide = memo(function Slide({
           style={[
             styles.composerBar,
             {
-              bottom: bottomPad + 28,
+              bottom: bottomPad + 8,
               flexDirection: isRTL ? 'row-reverse' : 'row',
+              ...(dockSide.right != null
+                ? { right: 72, left: 14 }
+                : { left: 72, right: 14 }),
             },
           ]}
         >
           <TextInput
             ref={inputRef}
             value={draft}
-            onChangeText={setDraft}
+            onChangeText={(v) => setDraft(v.replace(/\n+/g, ' ').slice(0, 120))}
             placeholder={t('ui.optionalCommentPlaceholder')}
             placeholderTextColor="rgba(255,255,255,0.45)"
             style={[
@@ -589,7 +611,8 @@ const Slide = memo(function Slide({
               { textAlign: isRTL ? 'right' : 'left' },
             ]}
             multiline
-            maxLength={400}
+            numberOfLines={2}
+            maxLength={120}
             returnKeyType="send"
             blurOnSubmit
             onSubmitEditing={submitComment}
@@ -607,23 +630,6 @@ const Slide = memo(function Slide({
           </Pressable>
         </View>
       ) : null}
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('ui.comments')}
-        onPress={() => {
-          setComposerOpen(false);
-          Keyboard.dismiss();
-          setListOpen((v) => !v);
-        }}
-        style={[styles.commentsLink, { bottom: bottomPad }]}
-        hitSlop={8}
-      >
-        <Text style={[styles.commentsLinkText, cairoText('medium')]}>
-          {t('ui.comments')}
-          {comments.length > 0 ? ` · ${comments.length}` : ''}
-        </Text>
-      </Pressable>
     </View>
   );
 });
@@ -901,18 +907,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   /**
-   * رصيف الإجراءات على يمين الشاشة فيزيائياً.
+   * رصيف الإجراءات على يمين الشاشة فيزيائياً (عمود: إعجاب ثم تعليقات).
    * direction:'ltr' + right يمنع انعكاس RTL لـ flex/I18nManager.
    */
   actionsDock: {
     position: 'absolute',
     zIndex: 6,
     elevation: 6,
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: Platform.OS === 'android' ? 10 : 12,
-    maxWidth: '78%',
+    gap: 4,
+    maxWidth: 88,
   },
   handlePress: {
     maxWidth: 160,
@@ -937,36 +943,27 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   commentsLink: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    zIndex: 7,
+    paddingVertical: 2,
+    paddingHorizontal: 2,
+    backgroundColor: 'transparent',
     alignItems: 'center',
-    paddingVertical: 4,
   },
   commentsLinkText: {
-    color: 'rgba(255,255,255,0.88)',
-    fontSize: 12,
-    letterSpacing: 0.2,
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 11,
+    letterSpacing: 0.1,
+    textAlign: 'center',
   },
   commentsPanel: {
     position: 'absolute',
-    left: 16,
-    right: 72,
     zIndex: 7,
-    maxHeight: 140,
-  },
-  commentsScroll: {
-    maxHeight: 140,
-  },
-  commentsScrollContent: {
-    gap: 8,
-    paddingBottom: 4,
+    gap: 6,
+    maxHeight: 112,
   },
   commentLine: {
-    color: 'rgba(255,255,255,0.9)',
+    color: 'rgba(255,255,255,0.92)',
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 16,
   },
   commentAuthor: {
     color: '#fff',
@@ -978,30 +975,29 @@ const styles = StyleSheet.create({
   },
   composerBar: {
     position: 'absolute',
-    left: 14,
-    right: 14,
     zIndex: 8,
     alignItems: 'flex-end',
     gap: 8,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   composerInput: {
     flex: 1,
-    minHeight: 36,
-    maxHeight: 72,
+    minHeight: 34,
+    maxHeight: 40,
     color: '#fff',
-    fontSize: 14,
-    paddingVertical: 4,
+    fontSize: 13,
+    lineHeight: 17,
+    paddingVertical: 2,
     paddingHorizontal: 2,
   },
   composerSend: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     alignItems: 'center',
     justifyContent: 'center',
   },
