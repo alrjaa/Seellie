@@ -184,6 +184,7 @@ export const en: TranslationTree = {
     nationalSeasonPrevious: 'Previous %{season}',
     nationalSeasonPreviousUnavailable: 'Previous not available yet',
     nationalTopScorers: 'Top scorers',
+    nationalTopScorersUnavailable: 'Top scorers are unavailable right now',
     player: 'Player',
     goalsAbbr: 'G',
     assistsAbbr: 'A',

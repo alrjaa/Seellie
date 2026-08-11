@@ -36,7 +36,7 @@ export function useNationalLeague(opts?: {
     try {
       const bundle = await getSportsDataProvider().getNationalLeagueBundle({
         leagueId,
-        forceSync: true,
+        forceSync: false,
       });
       const empty =
         !bundle ||

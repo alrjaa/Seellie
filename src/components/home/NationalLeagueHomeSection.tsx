@@ -125,63 +125,73 @@ const NationalTopScorers = memo(function NationalTopScorers({
   const theme = useAppTheme();
   const { t } = useTranslation();
   const titleDir = useTitleDir();
-  if (!rows.length) return null;
   return (
     <Card style={styles.card}>
       <Subtitle style={[styles.cardTitle, titleDir]}>
         {t('home.nationalTopScorers')}
       </Subtitle>
-      <View style={[styles.head, { borderBottomColor: theme.colors.border }]}>
-        <Text style={[styles.thRank, { color: theme.colors.textMuted }]}>#</Text>
-        <Text style={[styles.thTeam, { color: theme.colors.textMuted }]}>
-          {t('home.player')}
-        </Text>
-        <Text style={[styles.thGoals, { color: theme.colors.textMuted }]}>
-          {t('home.goalsAbbr')}
-        </Text>
-        <Text style={[styles.thGoals, { color: theme.colors.textMuted }]}>
-          {t('home.assistsAbbr')}
-        </Text>
-      </View>
-      {rows.slice(0, 10).map((row) => (
-        <View
-          key={`${row.playerId}-${row.rank}`}
-          style={[styles.row, { borderBottomColor: theme.colors.border }]}
-        >
-          <Text style={[styles.tdRank, { color: theme.colors.textMuted }]}>
-            {row.rank}
-          </Text>
-          <View style={styles.teamCell}>
-            <Avatar
-              uri={row.playerPhoto || row.teamLogo}
-              name={row.playerName}
-              size={24}
-            />
-            <View style={styles.scorerTextCol}>
-              <Text
-                style={[styles.tdTeam, { color: theme.colors.text }]}
-                numberOfLines={1}
-              >
-                {row.playerName}
-              </Text>
-              {row.teamName ? (
-                <Text
-                  style={[styles.scorerTeam, { color: theme.colors.textMuted }]}
-                  numberOfLines={1}
-                >
-                  {row.teamName}
-                </Text>
-              ) : null}
-            </View>
+      {!rows.length ? (
+        <Muted style={titleDir}>{t('home.nationalTopScorersUnavailable')}</Muted>
+      ) : (
+        <>
+          <View style={[styles.head, { borderBottomColor: theme.colors.border }]}>
+            <Text style={[styles.thRank, { color: theme.colors.textMuted }]}>
+              #
+            </Text>
+            <Text style={[styles.thTeam, { color: theme.colors.textMuted }]}>
+              {t('home.player')}
+            </Text>
+            <Text style={[styles.thGoals, { color: theme.colors.textMuted }]}>
+              {t('home.goalsAbbr')}
+            </Text>
+            <Text style={[styles.thGoals, { color: theme.colors.textMuted }]}>
+              {t('home.assistsAbbr')}
+            </Text>
           </View>
-          <Text style={[styles.tdGoals, { color: theme.colors.accent }]}>
-            {row.goals}
-          </Text>
-          <Text style={[styles.tdGoals, { color: theme.colors.text }]}>
-            {row.assists == null ? '—' : row.assists}
-          </Text>
-        </View>
-      ))}
+          {rows.slice(0, 10).map((row) => (
+            <View
+              key={`${row.playerId}-${row.rank}`}
+              style={[styles.row, { borderBottomColor: theme.colors.border }]}
+            >
+              <Text style={[styles.tdRank, { color: theme.colors.textMuted }]}>
+                {row.rank}
+              </Text>
+              <View style={styles.teamCell}>
+                <Avatar
+                  uri={row.playerPhoto || row.teamLogo}
+                  name={row.playerName}
+                  size={24}
+                />
+                <View style={styles.scorerTextCol}>
+                  <Text
+                    style={[styles.tdTeam, { color: theme.colors.text }]}
+                    numberOfLines={1}
+                  >
+                    {row.playerName}
+                  </Text>
+                  {row.teamName ? (
+                    <Text
+                      style={[
+                        styles.scorerTeam,
+                        { color: theme.colors.textMuted },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {row.teamName}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+              <Text style={[styles.tdGoals, { color: theme.colors.accent }]}>
+                {row.goals}
+              </Text>
+              <Text style={[styles.tdGoals, { color: theme.colors.text }]}>
+                {row.assists == null ? '—' : row.assists}
+              </Text>
+            </View>
+          ))}
+        </>
+      )}
     </Card>
   );
 });

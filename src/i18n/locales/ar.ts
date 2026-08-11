@@ -185,6 +185,7 @@ export const ar = {
     nationalSeasonPrevious: 'السابق %{season}',
     nationalSeasonPreviousUnavailable: 'السابق غير متاح بعد',
     nationalTopScorers: 'الهدافون',
+    nationalTopScorersUnavailable: 'بيانات الهدافين غير متاحة حالياً',
     player: 'اللاعب',
     goalsAbbr: 'أ',
     assistsAbbr: 'ص',
