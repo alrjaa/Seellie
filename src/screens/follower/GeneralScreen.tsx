@@ -556,7 +556,7 @@ export default function GeneralFeedScreen() {
         authorId: item.authorId,
         authorName: item.authorHandle || item.authorName || '',
         authorHandle: item.authorHandle,
-        authorAvatar: undefined,
+        authorAvatar: item.authorAvatar,
         subtitle: undefined,
         likes: item.likes,
         liked: !!currentUser && item.likes.includes(currentUser.id),

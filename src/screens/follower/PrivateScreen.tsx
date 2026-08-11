@@ -337,7 +337,7 @@ const ChatMediaLightbox = memo(function ChatMediaLightbox({
   );
 });
 
-type Section = 'friends' | 'chat' | 'saved';
+type Section = 'friends' | 'following' | 'chat' | 'saved';
 
 function resolveAuthorId(
   item: PrivateContentItem,
@@ -396,6 +396,11 @@ function friendStub(input: {
 
 const SECTIONS: { key: Section; labelKey: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: 'friends', labelKey: 'privateSpace.friends', icon: 'people-outline' },
+  {
+    key: 'following',
+    labelKey: 'privateSpace.followingTab',
+    icon: 'person-add-outline',
+  },
   { key: 'chat', labelKey: 'privateSpace.chat', icon: 'chatbubbles-outline' },
   { key: 'saved', labelKey: 'privateSpace.saved', icon: 'bookmark-outline' },
 ];
@@ -480,7 +485,8 @@ const SavedCard = memo(function SavedCard({
  * مساحة خاصة بالمتابع: أصدقاء + رسائل خاصة + محتوى محفوظ بنقرتين.
  */
 export default function PrivateScreen() {
-  const { currentUser, users, competitions, loading } = useTournament();
+  const { currentUser, users, competitions, loading, toggleFollowUser } =
+    useTournament();
   const theme = useAppTheme();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -538,6 +544,18 @@ export default function PrivateScreen() {
       })
       .filter(Boolean) as User[];
   }, [space.friendIds, space.items, users, me?.id]);
+
+  const followingList = useMemo(() => {
+    if (!me) return [] as User[];
+    const ids = ensureSocialLists(me).following || [];
+    return ids
+      .map((id) => {
+        const known = users.find((u) => u.id === id);
+        if (known) return known;
+        return friendStub({ id, name: id.slice(0, 8) });
+      })
+      .filter((u) => u.id !== me.id) as User[];
+  }, [me, users]);
 
   const candidates = useMemo(() => {
     if (!me) return [];
@@ -1001,7 +1019,7 @@ export default function PrivateScreen() {
         ...(section === 'chat' ? styles.contentChat : null),
       }}
       hasTabBar
-      scroll={section === 'friends'}
+      scroll={section === 'friends' || section === 'following'}
       keyboard={section === 'chat'}
       fabClearance={section !== 'chat'}
     >
@@ -1095,6 +1113,63 @@ export default function PrivateScreen() {
                 </Card>
               ) : null
             )
+          )}
+        </View>
+      ) : null}
+
+      {section === 'following' ? (
+        <View style={styles.block}>
+          <Muted>{t('privateSpace.followingHint')}</Muted>
+          {followingList.length === 0 ? (
+            <EmptyState
+              title={t('privateSpace.noFollowing')}
+              description={t('privateSpace.noFollowingDesc')}
+              icon="person-add-outline"
+            />
+          ) : (
+            followingList.map((u) => (
+              <Card key={u.id} style={styles.friendCard}>
+                <View style={styles.friendRow}>
+                  <Avatar uri={u.avatar} name={u.name} size={40} />
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{ color: theme.colors.text, fontWeight: '800' }}
+                    >
+                      {u.handle || u.name}
+                    </Text>
+                    <Muted>{u.name}</Muted>
+                  </View>
+                  {!space.friendIds.includes(u.id) ? (
+                    <Pressable
+                      onPress={() => void onAddFriend(u.id)}
+                      hitSlop={6}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('privateSpace.addFriend')}
+                    >
+                      <Ionicons
+                        name="person-add-outline"
+                        size={22}
+                        color={theme.colors.accent}
+                      />
+                    </Pressable>
+                  ) : (
+                    <Muted>{t('privateSpace.alreadyFriend')}</Muted>
+                  )}
+                  <Pressable
+                    onPress={() => toggleFollowUser(u.id)}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('account.stats.unfollow')}
+                  >
+                    <Ionicons
+                      name="remove-circle-outline"
+                      size={22}
+                      color={theme.colors.danger}
+                    />
+                  </Pressable>
+                </View>
+              </Card>
+            ))
           )}
         </View>
       ) : null}

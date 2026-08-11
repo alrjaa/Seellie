@@ -31,12 +31,6 @@ export const DEFAULT_FAB_ICONS: FabIconConfig[] = [
     icon: 'search-outline',
     href: '/search',
   },
-  {
-    id: 'fab-5',
-    label: 'Notifications',
-    icon: 'notifications-outline',
-    href: '/notifications',
-  },
 ];
 
 export const FAB_ICONS_STORAGE_KEY = 'seellie.fabIcons.v1';

@@ -554,6 +554,11 @@ export const en: TranslationTree = {
     subtitle:
       'Your friends, private chats, and content saved with a double-tap — not visible to the public app.',
     friends: 'Friends',
+    followingTab: 'Following',
+    followingHint: 'Accounts you follow — add them as friends or unfollow.',
+    noFollowing: 'Not following anyone yet',
+    noFollowingDesc:
+      'Tap + on a content author avatar in the floating buttons to add them here.',
     chat: 'Chat',
     saved: 'Saved',
     addFriend: 'Add friend',

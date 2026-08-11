@@ -20,6 +20,7 @@ type MediaItem = {
   organizerId?: string;
   organizerName?: string;
   organizerHandle?: string;
+  organizerAvatar?: string;
 };
 
 function isHttpUrl(url?: string) {
@@ -37,6 +38,7 @@ export default function HighlightsScreen() {
       const organizer = users.find((u) => u.id === comp.organizerId);
       const organizerName = organizer?.name || comp.name;
       const organizerHandle = organizer?.handle;
+      const organizerAvatar = organizer?.avatar || comp.logo;
 
       (comp.media?.photos || []).forEach((p) => {
         if (!isHttpUrl(p.url)) return;
@@ -51,6 +53,7 @@ export default function HighlightsScreen() {
           organizerId: comp.organizerId,
           organizerName,
           organizerHandle,
+          organizerAvatar,
         });
       });
       (comp.media?.videos || []).forEach((v) => {
@@ -66,6 +69,7 @@ export default function HighlightsScreen() {
           organizerId: comp.organizerId,
           organizerName,
           organizerHandle,
+          organizerAvatar,
         });
       });
 
@@ -84,6 +88,7 @@ export default function HighlightsScreen() {
               organizerId: comp.organizerId,
               organizerName,
               organizerHandle,
+              organizerAvatar,
             });
           });
           (player.media?.videos || []).forEach((v) => {
@@ -99,6 +104,7 @@ export default function HighlightsScreen() {
               organizerId: comp.organizerId,
               organizerName,
               organizerHandle,
+              organizerAvatar,
             });
           });
         });
@@ -152,6 +158,7 @@ export default function HighlightsScreen() {
         authorId: item.organizerId,
         authorName: item.organizerName || item.matchLabel,
         authorHandle: item.organizerHandle,
+        authorAvatar: item.organizerAvatar,
         title: item.matchLabel,
         subtitle:
           item.source === 'competition'

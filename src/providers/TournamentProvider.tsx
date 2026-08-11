@@ -1000,7 +1000,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         if (Array.isArray(storedFabIcons) && storedFabIcons.length > 0) {
           setFabIconsState(
             storedFabIcons.filter(
-              (i) => i?.id && i?.icon && i?.href
+              (i) =>
+                i?.id &&
+                i?.icon &&
+                i?.href &&
+                !String(i.href).includes('notifications')
             ) as FabIconConfig[]
           );
         }
@@ -1326,7 +1330,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   const setFabIcons = useCallback((icons: FabIconConfig[]) => {
     const next = icons
-      .filter((i) => i?.id && String(i.icon || '').trim() && String(i.href || '').trim())
+      .filter(
+        (i) =>
+          i?.id &&
+          String(i.icon || '').trim() &&
+          String(i.href || '').trim() &&
+          !String(i.href).includes('notifications')
+      )
       .map((i) => ({
         id: String(i.id),
         label: String(i.label || '').trim() || i.href,

@@ -40,6 +40,10 @@ import {
   noteFloatingScrollSettle,
   releaseFloatingScrollSource,
 } from '@/services/floating-scroll-bus';
+import {
+  clearContentAuthorFocus,
+  setContentAuthorFocus,
+} from '@/services/content-author-bus';
 import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
 
 export type FullScreenContent = {
@@ -443,11 +447,31 @@ function FullScreenFeedComponent({
   useEffect(() => {
     if (!focused) {
       releaseFloatingScrollSource(sourceId);
+      clearContentAuthorFocus();
       return;
     }
     claimFloatingScrollSource(sourceId);
-    return () => releaseFloatingScrollSource(sourceId);
+    return () => {
+      releaseFloatingScrollSource(sourceId);
+      clearContentAuthorFocus();
+    };
   }, [focused, sourceId]);
+
+  useEffect(() => {
+    if (!focused) return;
+    const active =
+      data.find((item) => item.id === activeId) || data[0] || null;
+    if (!active?.authorId) {
+      clearContentAuthorFocus();
+      return;
+    }
+    setContentAuthorFocus({
+      id: active.authorId,
+      name: active.authorName || active.authorHandle || active.authorId,
+      handle: active.authorHandle,
+      avatar: active.authorAvatar,
+    });
+  }, [focused, activeId, data]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
