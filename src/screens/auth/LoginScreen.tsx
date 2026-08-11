@@ -24,6 +24,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
 import { DEFAULT_LOGO, DEFAULT_LOGO_MODULE } from '@/theme/brand';
 import { cairoText } from '@/theme/fonts';
+import Constants from 'expo-constants';
+
+function webBuildLabel(): string {
+  const extra = Constants.expoConfig?.extra as { buildId?: string } | undefined;
+  const id = extra?.buildId?.trim();
+  const ver = Constants.expoConfig?.version || '';
+  if (id && ver) return `${ver} · ${id}`;
+  return ver || id || '';
+}
 
 export default function LoginScreen() {
   const {
@@ -39,6 +48,7 @@ export default function LoginScreen() {
   const { t, isRTL } = useTranslation();
   const router = useRouter();
   const { formWidth, desktop } = useResponsive();
+  const buildLabel = useMemo(() => webBuildLabel(), []);
 
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [forgotPassword, setForgotPassword] = useState(false);
@@ -426,6 +436,9 @@ export default function LoginScreen() {
               ) : null}
             </View>
           )}
+          {buildLabel ? (
+            <Muted style={styles.buildStamp}>{buildLabel}</Muted>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -553,4 +566,12 @@ const styles = StyleSheet.create({
   },
   link: { ...cairoText('bold'), fontSize: 13 },
   linkMuted: { ...cairoText('semiBold'), fontSize: 13 },
+  buildStamp: {
+    ...cairoText('regular'),
+    fontSize: 10,
+    textAlign: 'center',
+    opacity: 0.45,
+    marginTop: 8,
+    marginBottom: 16,
+  },
 });

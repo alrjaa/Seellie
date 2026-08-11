@@ -4,7 +4,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Seellie',
   slug: 'seellie-native',
-  version: '1.0.3',
+  version: '1.0.4',
   orientation: 'default',
   icon: './assets/icon.png',
   scheme: 'seellie',
@@ -16,7 +16,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     fallbackToCacheTimeout: 0,
   },
   // ثابت — بدون expo-updates لاستخدام policy appVersion
-  runtimeVersion: '1.0.3',
+  runtimeVersion: '1.0.4',
   splash: {
     image: './assets/splash-icon.png',
     resizeMode: 'contain',
@@ -113,5 +113,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       url: process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
       anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
     },
+    /** يظهر على بطاقة الدخول للتحقق أن المتصفح حمّل آخر نشر */
+    buildId:
+      (process.env.VERCEL_GIT_COMMIT_SHA ||
+        process.env.EXPO_PUBLIC_BUILD_ID ||
+        '')
+        .toString()
+        .slice(0, 7) || `local-${Date.now().toString(36).slice(-5)}`,
   },
 });
