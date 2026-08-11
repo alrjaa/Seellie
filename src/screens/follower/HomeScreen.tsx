@@ -841,26 +841,6 @@ export default function FollowerHomeScreen() {
               icon="settings-outline"
               onPress={() => router.push('/(follower)/settings' as any)}
             />
-            {currentUser?.permissions.canCreateContent ? (
-              <>
-                <ListRow
-                  title={t('home.createAnalysis')}
-                  subtitle={t('home.createAnalysisSub')}
-                  icon="analytics-outline"
-                  onPress={() =>
-                    router.push('/(follower)/analysis/create' as any)
-                  }
-                />
-                <ListRow
-                  title={t('create.contentTitle')}
-                  subtitle={t('create.contentSubtitle')}
-                  icon="create-outline"
-                  onPress={() =>
-                    router.push('/(follower)/content/create' as any)
-                  }
-                />
-              </>
-            ) : null}
           </View>
 
           <Card style={styles.highlightCard}>
