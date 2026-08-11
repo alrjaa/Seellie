@@ -278,20 +278,6 @@ export default function LoginScreen() {
                           {isSigningUp ? t('auth.haveAccount') : t('auth.newAccount')}
                         </Text>
                       </Pressable>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={t('auth.adminLogin')}
-                        onPress={() => router.push('/admin' as any)}
-                      >
-                        <Text
-                          style={[
-                            styles.linkMuted,
-                            { color: theme.colors.textMuted },
-                          ]}
-                        >
-                          {t('auth.adminLogin')}
-                        </Text>
-                      </Pressable>
                     </View>
                   ) : null}
                 </View>
@@ -434,17 +420,6 @@ export default function LoginScreen() {
                   >
                     <Text style={[styles.link, { color: theme.colors.accent }]}>
                       {isSigningUp ? t('auth.haveAccount') : t('auth.newAccount')}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('auth.adminLogin')}
-                    onPress={() => router.push('/admin' as any)}
-                  >
-                    <Text
-                      style={[styles.linkMuted, { color: theme.colors.textMuted }]}
-                    >
-                      {t('auth.adminLogin')}
                     </Text>
                   </Pressable>
                 </View>
