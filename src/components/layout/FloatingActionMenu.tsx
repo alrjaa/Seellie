@@ -15,10 +15,10 @@ import { floatingAboveTabOffset } from '@/theme/navigation';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
-import { useFloatingVisibility } from '@/hooks/useFloatingVisibility';
 import {
   forceFloatingVisible,
   isFloatingSuppressed,
+  subscribeFloatingVisibility,
 } from '@/services/floating-scroll-bus';
 import {
   setContentAuthorFocus,
@@ -30,8 +30,6 @@ import { cairoText } from '@/theme/fonts';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ensureSocialLists } from '@/utils/social-stats';
 import type { FabIconConfig } from '@/types/fab-icons';
-
-const useNativeDriver = Platform.OS !== 'web';
 
 function isHttpMedia(url?: string) {
   return !!url && /^https?:\/\//i.test(url.trim());
@@ -77,14 +75,15 @@ function FloatingActionMenuComponent() {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { visible } = useFloatingVisibility(true);
   const { desktop } = useResponsive();
+  const [chromeVisible, setChromeVisible] = useState(true);
   const opacity = useRef(new Animated.Value(1)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const [pressedKey, setPressedKey] = useState<string | null>(null);
   const [author, setAuthor] = useState<ContentAuthorFocus | null>(null);
 
   useEffect(() => subscribeContentAuthorFocus(setAuthor), []);
+  useEffect(() => subscribeFloatingVisibility(setChromeVisible), []);
 
   // بذرة فقط إن لم يُحدَّد صاحب محتوى بعد — لا تستبدل صاحب المحتوى الظاهر
   useEffect(() => {
@@ -107,7 +106,6 @@ function FloatingActionMenuComponent() {
             (m.media?.videos || []).some((x) => isHttpMedia(x.url))
         );
       if (!hasMedia || !comp.organizerId) continue;
-      // لا تستخدم صاحب الحساب الحالي كصاحب محتوى
       if (currentUser?.id && comp.organizerId === currentUser.id) continue;
       const organizer = users.find((u) => u.id === comp.organizerId);
       setContentAuthorFocus({
@@ -120,64 +118,33 @@ function FloatingActionMenuComponent() {
     }
   }, [author?.id, competitions, users, currentUser?.id]);
 
+  // عند تغيير المسار: أظهر فوراً (ما لم تكن الخاصة)
   useEffect(() => {
-    if (isFloatingSuppressed()) {
-      opacity.stopAnimation();
-      translateY.stopAnimation();
-      opacity.setValue(0);
-      translateY.setValue(22);
-      return;
-    }
+    if (isFloatingSuppressed()) return;
     forceFloatingVisible();
+  }, [pathname]);
+
+  // الحركة: ويب = CSS transition (موثوق)، أصلي = Animated
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const show = chromeVisible && !isFloatingSuppressed();
     opacity.stopAnimation();
     translateY.stopAnimation();
-    opacity.setValue(1);
-    translateY.setValue(0);
-  }, [pathname, opacity, translateY]);
-
-  useEffect(() => {
-    if (Platform.OS === 'web' && !isFloatingSuppressed()) {
-      forceFloatingVisible();
-    }
-  }, []);
-
-  useEffect(() => {
-    opacity.stopAnimation();
-    translateY.stopAnimation();
-
-    if (!visible || isFloatingSuppressed()) {
-      Animated.parallel([
-        Animated.timing(opacity, {
-          toValue: 0,
-          duration: 160,
-          easing: Easing.in(Easing.cubic),
-          useNativeDriver,
-        }),
-        Animated.timing(translateY, {
-          toValue: 28,
-          duration: 160,
-          easing: Easing.in(Easing.cubic),
-          useNativeDriver,
-        }),
-      ]).start();
-      return;
-    }
-
     Animated.parallel([
       Animated.timing(opacity, {
-        toValue: 1,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver,
+        toValue: show ? 1 : 0,
+        duration: show ? 220 : 160,
+        easing: show ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+        useNativeDriver: true,
       }),
       Animated.timing(translateY, {
-        toValue: 0,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver,
+        toValue: show ? 0 : 28,
+        duration: show ? 220 : 160,
+        easing: show ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+        useNativeDriver: true,
       }),
     ]).start();
-  }, [opacity, translateY, visible]);
+  }, [chromeVisible, opacity, translateY]);
 
   const role = currentUser?.activeRole || currentUser?.role;
   const isFollowerLike =
@@ -304,6 +271,25 @@ function FloatingActionMenuComponent() {
     ? authorProfile.handle || authorProfile.name
     : t('menu.contentAuthor');
 
+  const fabShown = chromeVisible && !isFloatingSuppressed();
+
+  const motionStyle =
+    Platform.OS === 'web'
+      ? ({
+          opacity: fabShown ? 1 : 0,
+          transform: [{ translateY: fabShown ? 0 : 28 }],
+          // CSS على الويب أكثر ثباتاً من Animated عند التمرير السريع
+          transitionProperty: 'opacity, transform',
+          transitionDuration: fabShown ? '220ms' : '160ms',
+          transitionTimingFunction: fabShown
+            ? 'cubic-bezier(0.0, 0.0, 0.2, 1)'
+            : 'cubic-bezier(0.4, 0.0, 1, 1)',
+        } as const)
+      : {
+          opacity,
+          transform: [{ translateY }],
+        };
+
   return (
     <View
       pointerEvents="box-none"
@@ -312,15 +298,14 @@ function FloatingActionMenuComponent() {
       style={[styles.layer, Platform.OS === 'web' && styles.layerWeb]}
     >
       <Animated.View
-        pointerEvents={visible ? 'box-none' : 'none'}
+        pointerEvents={fabShown ? 'box-none' : 'none'}
         style={[
           styles.wrap,
           Platform.OS === 'web' && styles.wrapWeb,
           {
             left: 10,
             bottom,
-            opacity,
-            transform: [{ translateY }],
+            ...motionStyle,
           },
         ]}
       >

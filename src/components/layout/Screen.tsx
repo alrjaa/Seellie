@@ -21,6 +21,7 @@ import { useResponsive } from '@/hooks/useResponsive';
 import {
   claimFloatingScrollSource,
   forceFloatingVisible,
+  noteFloatingScrollBegin,
   noteFloatingScrollOffset,
   noteFloatingScrollSettle,
   releaseFloatingScrollSource,
@@ -104,6 +105,14 @@ function ScreenComponent({
     },
     [focused, sourceId]
   );
+  const onScrollBeginDrag = useCallback(() => {
+    if (!focused) return;
+    noteFloatingScrollBegin(sourceId);
+  }, [focused, sourceId]);
+  const onMomentumScrollBegin = useCallback(() => {
+    if (!focused) return;
+    noteFloatingScrollBegin(sourceId);
+  }, [focused, sourceId]);
   const onScrollEndDrag = useCallback(() => {
     if (!focused) return;
     noteFloatingScrollSettle(sourceId);
@@ -165,6 +174,8 @@ function ScreenComponent({
       contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
       style={styles.scroll}
       onScroll={onScroll}
+      onScrollBeginDrag={onScrollBeginDrag}
+      onMomentumScrollBegin={onMomentumScrollBegin}
       onScrollEndDrag={onScrollEndDrag}
       onMomentumScrollEnd={onMomentumScrollEnd}
       scrollEventThrottle={16}

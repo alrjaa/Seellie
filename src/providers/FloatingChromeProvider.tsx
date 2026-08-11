@@ -9,6 +9,7 @@ import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import {
   forceFloatingHidden,
   forceFloatingVisible,
+  noteFloatingScrollBegin,
   noteFloatingScrollOffset,
   noteFloatingScrollSettle,
 } from '@/services/floating-scroll-bus';
@@ -49,8 +50,7 @@ const noopScroll: ScrollHandlersValue = {
 };
 
 /**
- * يمرّر إزاحة التمرير إلى الـ bus (اتجاه + سكون).
- * الشاشات المركّزة تستخدم sourceId عبر useListChrome / Screen.
+ * يمرّر أحداث التمرير إلى آلة حالات الظهور/الإخفاء.
  */
 export function FloatingChromeProvider({ children }: { children: ReactNode }) {
   const setVisible = useCallback((next: boolean) => {
@@ -65,8 +65,8 @@ export function FloatingChromeProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const onScrollBeginDrag = useCallback((_sourceId?: string) => {
-    // لا نخفي عند begin — ننتظر اتجاه الحركة من onScroll
+  const onScrollBeginDrag = useCallback((sourceId = ROOT_SOURCE) => {
+    noteFloatingScrollBegin(sourceId);
   }, []);
 
   const onScrollEndDrag = useCallback(
@@ -79,8 +79,8 @@ export function FloatingChromeProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const onMomentumScrollBegin = useCallback((_sourceId?: string) => {
-    // لا نخفي هنا — يمنع التعليق أثناء paging
+  const onMomentumScrollBegin = useCallback((sourceId = ROOT_SOURCE) => {
+    noteFloatingScrollBegin(sourceId);
   }, []);
 
   const onMomentumScrollEnd = useCallback((sourceId = ROOT_SOURCE) => {

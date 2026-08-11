@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   claimFloatingScrollSource,
   forceFloatingVisible,
+  noteFloatingScrollBegin,
   noteFloatingScrollOffset,
   noteFloatingScrollSettle,
   releaseFloatingScrollSource,
@@ -59,8 +60,9 @@ export function useListChrome(options: Options = {}) {
   );
 
   const onScrollBeginDrag = useCallback(() => {
-    // الاتجاه يُحسب من onScroll
-  }, []);
+    if (!enabled || !focused) return;
+    noteFloatingScrollBegin(sourceId);
+  }, [enabled, focused, sourceId]);
 
   const onScrollEndDrag = useCallback(() => {
     if (!enabled || !focused) return;
@@ -68,8 +70,9 @@ export function useListChrome(options: Options = {}) {
   }, [enabled, focused, sourceId]);
 
   const onMomentumScrollBegin = useCallback(() => {
-    // لا إخفاء عند بداية الزخم
-  }, []);
+    if (!enabled || !focused) return;
+    noteFloatingScrollBegin(sourceId);
+  }, [enabled, focused, sourceId]);
 
   const onMomentumScrollEnd = useCallback(() => {
     if (!enabled || !focused) return;

@@ -1,10 +1,13 @@
 /**
- * ظهور/اختفاء الواجهة العائمة — اتجاه التمرير + إظهار عند السكون.
+ * ظهور/اختفاء الواجهة العائمة — آلة حالات بسيطة ومستقرة.
  *
- * قواعد بسيطة وموثوقة:
- * - تمرير للأسفل → إخفاء
- * - تمرير للأعلى / قمة القائمة / سكون / انتهاء الزخم → إظهار
- * - مؤقّت أمان يعيد الإظهار إن بقيت مخفية
+ * المبدأ (مثل شريط كروم التطبيقات):
+ * - أثناء التمرير النشط → إخفاء
+ * - عند توقف التمرير (لا أحداث لمدة QUIET_MS، أو settle صريح) → إظهار
+ * - المصدر المركّز فقط يتحكّم (لا سرقة من مصادر أخرى)
+ * - suppress يفرض الإخفاء (المساحة الخاصة) حتى يُلغى
+ *
+ * لا نعتمد على عتبات dy معقّدة ولا على forceShow من كل مكان.
  */
 
 type VisibilityListener = (visible: boolean) => void;
@@ -12,29 +15,22 @@ type VisibilityListener = (visible: boolean) => void;
 const listeners = new Set<VisibilityListener>();
 
 let visible = true;
-let activeSourceId: string | null = null;
-let lastY: number | null = null;
-let idleTimer: ReturnType<typeof setTimeout> | null = null;
-let failsafeTimer: ReturnType<typeof setTimeout> | null = null;
-
-const HIDE_DY = 12;
-const SHOW_DY = 4;
-const TOP_EDGE = 20;
-const IDLE_SHOW_MS = 360;
-const FAILSAFE_SHOW_MS = 900;
-
-/** إخفاء قسري (مساحة خاصة…) */
 let suppressFloating = false;
+/** الشاشة/القائمة المركّزة فقط */
+let ownerId: string | null = null;
+let showTimer: ReturnType<typeof setTimeout> | null = null;
+/** آخر إزاحة للمصدر — لمعرفة أن هناك حركة حقيقية */
+let lastY: number | null = null;
+
+/** بعد آخر حدث تمرير — أظهر */
+const QUIET_MS = 420;
+/** بعد settle صريح — أظهر أسرع */
+const SETTLE_MS = 160;
 
 function emit(next: boolean) {
   const effective = suppressFloating ? false : next;
-  if (visible === effective) {
-    if (effective) clearFailsafe();
-    return;
-  }
+  if (visible === effective) return;
   visible = effective;
-  if (effective) clearFailsafe();
-  else armFailsafe();
   listeners.forEach((listener) => {
     try {
       listener(visible);
@@ -44,43 +40,42 @@ function emit(next: boolean) {
   });
 }
 
-function clearIdle() {
-  if (idleTimer) {
-    clearTimeout(idleTimer);
-    idleTimer = null;
+function clearShowTimer() {
+  if (showTimer) {
+    clearTimeout(showTimer);
+    showTimer = null;
   }
 }
 
-function clearFailsafe() {
-  if (failsafeTimer) {
-    clearTimeout(failsafeTimer);
-    failsafeTimer = null;
+function scheduleShow(delay: number) {
+  clearShowTimer();
+  if (suppressFloating) {
+    emit(false);
+    return;
   }
-}
-
-function armIdleShow(delay = IDLE_SHOW_MS) {
-  clearIdle();
-  idleTimer = setTimeout(() => {
-    idleTimer = null;
+  showTimer = setTimeout(() => {
+    showTimer = null;
     lastY = null;
     emit(true);
   }, delay);
 }
 
-/** إن بقيت مخفية لأي سبب — أعد الإظهار */
-function armFailsafe() {
-  clearFailsafe();
-  failsafeTimer = setTimeout(() => {
-    failsafeTimer = null;
-    lastY = null;
-    emit(true);
-  }, FAILSAFE_SHOW_MS);
+function hideForActivity() {
+  if (suppressFloating) {
+    emit(false);
+    return;
+  }
+  emit(false);
+  scheduleShow(QUIET_MS);
+}
+
+function isOwner(sourceId: string) {
+  return ownerId == null || ownerId === sourceId;
 }
 
 export function setFloatingSuppressed(suppressed: boolean) {
   suppressFloating = suppressed;
-  clearIdle();
-  clearFailsafe();
+  clearShowTimer();
   lastY = null;
   emit(!suppressed);
 }
@@ -101,86 +96,70 @@ export function isFloatingVisible() {
   return visible;
 }
 
-/** عند دخول شاشة مركّزة — أظهر فوراً */
+/** الشاشة المركّزة تملك التحكم وتُظهر فوراً */
 export function claimFloatingScrollSource(sourceId: string) {
-  activeSourceId = sourceId;
+  ownerId = sourceId;
   lastY = null;
-  clearIdle();
+  clearShowTimer();
   emit(true);
 }
 
 export function releaseFloatingScrollSource(sourceId: string) {
-  if (activeSourceId !== sourceId) return;
-  activeSourceId = null;
+  if (ownerId !== sourceId) return;
+  ownerId = null;
   lastY = null;
-  clearIdle();
+  clearShowTimer();
   emit(true);
 }
 
 /**
- * لا نسرق المصدر من فيد نشط بسبب listChrome غير المستخدم.
- * المصدر الجديد يملك التحكم فقط إن لم يوجد مصدر، أو طابق الحالي، أو بعد تمرير فعلي واضح.
+ * بداية سحب/تمرير — إخفاء فوري.
+ * يُستدعى من onScrollBeginDrag / onMomentumScrollBegin.
+ */
+export function noteFloatingScrollBegin(sourceId: string) {
+  if (suppressFloating) return;
+  if (!isOwner(sourceId)) return;
+  if (ownerId == null) ownerId = sourceId;
+  lastY = null;
+  hideForActivity();
+}
+
+/**
+ * إزاحة التمرير — أي حركة حقيقية = نشاط → إخفاء + إعادة جدولة الإظهار.
+ * يتجاهل المصادر غير المالكة بالكامل.
  */
 export function noteFloatingScrollOffset(sourceId: string, y: number) {
   if (suppressFloating) return;
+  if (!isOwner(sourceId)) return;
+  if (ownerId == null) ownerId = sourceId;
 
   const offset = Math.max(0, y);
-
-  if (activeSourceId == null) {
-    activeSourceId = sourceId;
-    lastY = offset;
-    armIdleShow();
-    emit(true);
-    return;
-  }
-
-  if (activeSourceId !== sourceId) {
-    // تمرير حقيقي من مصدر آخر → يتملّك (فيد vs قائمة)
-    activeSourceId = sourceId;
-    lastY = offset;
-    armIdleShow();
-    if (offset <= TOP_EDGE) emit(true);
-    return;
-  }
-
-  armIdleShow();
-
-  if (offset <= TOP_EDGE) {
-    lastY = offset;
-    emit(true);
-    return;
-  }
-
   if (lastY == null) {
     lastY = offset;
+    // أول إزاحة بعد claim لا تخفي — ننتظر حركة
     return;
   }
 
   const dy = offset - lastY;
-  if (Math.abs(dy) < 1.5) return;
+  if (Math.abs(dy) < 2) return;
   lastY = offset;
-
-  if (dy >= HIDE_DY) emit(false);
-  else if (dy <= -SHOW_DY) emit(true);
+  hideForActivity();
 }
 
+/**
+ * نهاية السحب/الزخم — أظهر بعد تأخير قصير.
+ */
 export function noteFloatingScrollSettle(sourceId: string) {
   if (suppressFloating) return;
-  // اسمح بالتسوية من المصدر النشط أو إن لم يُحدَّد مصدر
-  if (activeSourceId != null && activeSourceId !== sourceId) {
-    // مصدر قديم توقّف — لا تمنع الإظهار
-    armIdleShow(220);
-    return;
-  }
+  if (!isOwner(sourceId)) return;
   lastY = null;
-  armIdleShow(200);
-  emit(true);
+  scheduleShow(SETTLE_MS);
 }
 
+/** إظهار فوري (تغيير مسار / عودة للتطبيق) — ليس أثناء التمرير */
 export function forceFloatingVisible() {
   lastY = null;
-  clearIdle();
-  clearFailsafe();
+  clearShowTimer();
   if (suppressFloating) {
     emit(false);
     return;
@@ -189,7 +168,7 @@ export function forceFloatingVisible() {
 }
 
 export function forceFloatingHidden() {
-  clearIdle();
+  clearShowTimer();
   emit(false);
-  if (!suppressFloating) armIdleShow(IDLE_SHOW_MS);
+  if (!suppressFloating) scheduleShow(QUIET_MS);
 }

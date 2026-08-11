@@ -36,6 +36,7 @@ import { useFloatingVisibility } from '@/hooks/useFloatingVisibility';
 import {
   claimFloatingScrollSource,
   forceFloatingVisible,
+  noteFloatingScrollBegin,
   noteFloatingScrollOffset,
   noteFloatingScrollSettle,
   releaseFloatingScrollSource,
@@ -449,6 +450,14 @@ function FullScreenFeedComponent({
     return () => sub.remove();
   }, [focused]);
 
+  const onScrollBeginDrag = useCallback(() => {
+    if (!focused) return;
+    noteFloatingScrollBegin(sourceId);
+  }, [focused, sourceId]);
+  const onMomentumScrollBegin = useCallback(() => {
+    if (!focused) return;
+    noteFloatingScrollBegin(sourceId);
+  }, [focused, sourceId]);
   const onScroll = useCallback(
     (e: { nativeEvent: { contentOffset: { y: number } } }) => {
       if (!focused) return;
@@ -459,12 +468,10 @@ function FullScreenFeedComponent({
   const onScrollEndDrag = useCallback(() => {
     if (!focused) return;
     noteFloatingScrollSettle(sourceId);
-    forceFloatingVisible();
   }, [focused, sourceId]);
   const onMomentumScrollEnd = useCallback(() => {
     if (!focused) return;
     noteFloatingScrollSettle(sourceId);
-    forceFloatingVisible();
   }, [focused, sourceId]);
 
   const overlayPadTop = topOverlaySafeArea
@@ -514,7 +521,6 @@ function FullScreenFeedComponent({
             avatar: item.authorAvatar,
           });
         }
-        forceFloatingVisible();
       }
     }
   ).current;
@@ -565,6 +571,8 @@ function FullScreenFeedComponent({
           windowSize={5}
           removeClippedSubviews={false}
           onScroll={onScroll}
+          onScrollBeginDrag={onScrollBeginDrag}
+          onMomentumScrollBegin={onMomentumScrollBegin}
           onScrollEndDrag={onScrollEndDrag}
           onMomentumScrollEnd={onMomentumScrollEnd}
           scrollEventThrottle={16}
