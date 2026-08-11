@@ -399,12 +399,12 @@ const SECTIONS: { key: Section; labelKey: string; icon: keyof typeof Ionicons.gl
   {
     key: 'following',
     labelKey: 'privateSpace.followingTab',
-    icon: 'person-add-outline',
+    icon: 'arrow-up-outline',
   },
   {
     key: 'followers',
     labelKey: 'privateSpace.followersTab',
-    icon: 'people-circle-outline',
+    icon: 'arrow-down-outline',
   },
   { key: 'chat', labelKey: 'privateSpace.chat', icon: 'chatbubbles-outline' },
   { key: 'saved', labelKey: 'privateSpace.saved', icon: 'bookmark-outline' },
@@ -1003,6 +1003,9 @@ export default function PrivateScreen() {
           <Pressable
             key={s.key}
             onPress={() => setSection(s.key)}
+            accessibilityRole="button"
+            accessibilityLabel={t(s.labelKey)}
+            accessibilityState={{ selected: active }}
             style={[
               styles.sectionChip,
               {
@@ -1015,19 +1018,9 @@ export default function PrivateScreen() {
           >
             <Ionicons
               name={s.icon}
-              size={11}
+              size={18}
               color={active ? theme.colors.textInverse : theme.colors.text}
             />
-            <Text
-              style={{
-                color: active ? theme.colors.textInverse : theme.colors.text,
-                fontSize: 9,
-                fontWeight: '700',
-              }}
-              numberOfLines={1}
-            >
-              {t(s.labelKey)}
-            </Text>
           </Pressable>
         );
       })}
@@ -1823,15 +1816,15 @@ const styles = StyleSheet.create({
   sectionChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 5,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
     flexGrow: 1,
     flexBasis: 0,
-    justifyContent: 'center',
     minWidth: 0,
+    minHeight: 36,
   },
   block: { gap: 10 },
   chatShell: {
