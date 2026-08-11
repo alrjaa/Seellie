@@ -327,8 +327,7 @@ const Slide = memo(function Slide({
 
   const handleLikePress = useCallback(() => {
     onLike();
-    openCommentsPanel();
-  }, [onLike, openCommentsPanel]);
+  }, [onLike]);
 
   const submitComment = useCallback(() => {
     const trimmed = draft.trim().slice(0, 120);
