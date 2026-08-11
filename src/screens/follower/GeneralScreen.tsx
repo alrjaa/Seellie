@@ -625,7 +625,7 @@ export default function GeneralFeedScreen() {
           ]}
         >
           <Ionicons
-            name="add-circle-outline"
+            name="create-outline"
             size={16}
             color={theme.colors.accent}
           />
