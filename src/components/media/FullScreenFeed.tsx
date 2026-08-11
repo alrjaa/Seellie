@@ -378,7 +378,7 @@ const Slide = memo(function Slide({
           liked={item.liked}
           onPress={onLike}
           tone="light"
-          size="sm"
+          size="md"
         />
         <Pressable
           style={styles.handlePress}

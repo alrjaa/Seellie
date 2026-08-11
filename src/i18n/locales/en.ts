@@ -1941,6 +1941,6 @@ export const en: TranslationTree = {
     comment: 'Comment',
     commentA11y: 'Comment',
     profileA11y: 'Profile',
-    likesCount: '%{count} likes',
+    likesCount: '%{count}',
   },
 };

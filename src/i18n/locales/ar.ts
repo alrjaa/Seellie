@@ -1431,7 +1431,7 @@ export const ar = {
     comment: 'تعليق',
     commentA11y: 'تعليق',
     profileA11y: 'الملف الشخصي',
-    likesCount: '%{count} إعجاب',
+    likesCount: '%{count}',
   },
   superadmin: {
     dashboard: {
