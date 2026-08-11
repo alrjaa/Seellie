@@ -399,12 +399,12 @@ const SECTIONS: { key: Section; labelKey: string; icon: keyof typeof Ionicons.gl
   {
     key: 'following',
     labelKey: 'privateSpace.followingTab',
-    icon: 'arrow-up-outline',
+    icon: 'arrow-up',
   },
   {
     key: 'followers',
     labelKey: 'privateSpace.followersTab',
-    icon: 'arrow-down-outline',
+    icon: 'arrow-down',
   },
   { key: 'chat', labelKey: 'privateSpace.chat', icon: 'chatbubbles-outline' },
   { key: 'saved', labelKey: 'privateSpace.saved', icon: 'bookmark-outline' },
@@ -1018,7 +1018,7 @@ export default function PrivateScreen() {
           >
             <Ionicons
               name={s.icon}
-              size={18}
+              size={20}
               color={active ? theme.colors.textInverse : theme.colors.text}
             />
           </Pressable>
