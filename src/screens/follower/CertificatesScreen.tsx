@@ -18,7 +18,6 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { HeaderBackButton } from '@/components/layout/HeaderBackButton';
-import { AccountHeaderButton } from '@/components/layout/AccountHeaderButton';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { useResponsive } from '@/hooks/useResponsive';
 import { headerSafeTop } from '@/theme/navigation';
@@ -225,11 +224,7 @@ export default function CertificatesScreen() {
         >
           {t('certificates.title')}
         </Text>
-        <AccountHeaderButton
-          accountHref="/(follower)/settings/account"
-          settingsHref="/(follower)/settings"
-          compact
-        />
+        <View style={styles.topBarEnd} />
       </View>
       <Muted>{t('certificates.subtitle')}</Muted>
 
@@ -434,6 +429,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  topBarEnd: {
+    width: 36,
   },
   pageTitle: {
     flex: 1,

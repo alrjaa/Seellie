@@ -32,7 +32,6 @@ import { useResponsive } from '@/hooks/useResponsive';
 import { useListChrome } from '@/hooks/useListChrome';
 import { formatArabicDate } from '@/utils';
 import { userHasRole } from '@/utils/roles';
-import { AccountHeaderButton } from '@/components/layout/AccountHeaderButton';
 import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
 
 type FeedFilter = 'all' | 'media' | 'discussions' | 'posts';
@@ -794,11 +793,6 @@ export default function GeneralFeedScreen() {
             <View style={styles.mobileOverlay} pointerEvents="box-none">
               <View style={styles.topBar}>
                 <View style={styles.filtersWrap}>{filterBar}</View>
-                <AccountHeaderButton
-                  accountHref="/(follower)/settings/account"
-                  settingsHref="/(follower)/settings"
-                  compact
-                />
               </View>
               {(filter === 'all' || filter === 'discussions') && currentUser ? (
                 <View style={styles.mobileComposer}>

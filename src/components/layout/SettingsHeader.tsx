@@ -15,7 +15,7 @@ type Props = {
   titleSize?: number;
   accountHref?: string;
   settingsHref?: string;
-  /** إخفاء زر المعرف (مثلاً في وضع سطح المكتب) */
+  /** إخفاء زر المعرف — المعرف يبقى في الرئيسية فقط */
   hideAccount?: boolean;
   /** زر رجوع (مطلوب في شاشات مثل البريد) */
   showBack?: boolean;
@@ -30,7 +30,7 @@ function SettingsHeaderComponent({
   titleSize = 14,
   accountHref = '/(follower)/settings/account',
   settingsHref = '/(follower)/settings',
-  hideAccount,
+  hideAccount = true,
   showBack,
 }: Props) {
   const theme = useAppTheme();

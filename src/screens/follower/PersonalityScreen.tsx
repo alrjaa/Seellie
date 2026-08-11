@@ -30,7 +30,6 @@ import { useResponsive } from '@/hooks/useResponsive';
 import { useListChrome } from '@/hooks/useListChrome';
 import { formatArabicDate } from '@/utils';
 import { userHasRole } from '@/utils/roles';
-import { AccountHeaderButton } from '@/components/layout/AccountHeaderButton';
 import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
 
 type MediaFilter = 'all' | 'photos' | 'videos';
@@ -317,11 +316,6 @@ export default function PersonalityScreen() {
             <View style={styles.mobileOverlay} pointerEvents="box-none">
               <View style={styles.topBar}>
                 <View style={styles.filtersWrap}>{filters}</View>
-                <AccountHeaderButton
-                  accountHref="/(follower)/settings/account"
-                  settingsHref="/(follower)/settings"
-                  compact
-                />
               </View>
             </View>
           }

@@ -7,7 +7,6 @@ import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { LoadingState } from '@/components/feedback/LoadingState';
-import { AccountHeaderButton } from '@/components/layout/AccountHeaderButton';
 import { SettingsHeader } from '@/components/layout/SettingsHeader';
 import {
   DesktopShell,
@@ -156,14 +155,7 @@ export default function FollowerLayout() {
             headerTitleContainerStyle: {
               paddingTop: 2,
             },
-            headerRight: () =>
-              desktop ? null : (
-                <AccountHeaderButton
-                  accountHref="/(follower)/settings/account"
-                  settingsHref="/(follower)/settings"
-                  compact
-                />
-              ),
+            headerRight: () => null,
             tabBarStyle: desktop
               ? { display: 'none', height: 0, overflow: 'hidden' }
               : {
@@ -199,7 +191,11 @@ export default function FollowerLayout() {
               headerLeft: () => null,
               headerRight: () => null,
               header: () => (
-                <SettingsHeader title={t('screens.highlights')} titleSize={12} />
+                <SettingsHeader
+                  title={t('screens.highlights')}
+                  titleSize={12}
+                  hideAccount
+                />
               ),
               tabBarIcon: ({ color, size }) => (
                 <Ionicons name="trophy" color={color} size={size} />
@@ -285,9 +281,7 @@ export default function FollowerLayout() {
                       ? t('home.messagesSubUnread', { count: unreadMessages })
                       : undefined
                   }
-                  accountHref="/(follower)/settings/account"
-                  settingsHref="/(follower)/settings"
-                  hideAccount={desktop}
+                  hideAccount
                 />
               ),
             }}
@@ -304,6 +298,7 @@ export default function FollowerLayout() {
                 <SettingsHeader
                   title={t('settings.title')}
                   subtitle={t('settings.subtitle')}
+                  hideAccount
                 />
               ),
             }}
