@@ -27,6 +27,7 @@ export const en: TranslationTree = {
     searchPlaceholder: 'Search...',
     done: 'Done',
     close: 'Close',
+    retry: 'Try again',
     enableLight: 'Switch to light mode',
     enableDark: 'Switch to dark mode',
   },
@@ -573,6 +574,8 @@ export const en: TranslationTree = {
     title: 'Private space',
     subtitle:
       'Your friends, private chats, and content saved with a double-tap — not visible to the public app.',
+    loginRequired: 'Sign in to open the private space.',
+    screenError: 'Could not open the private screen. Please try again.',
     friends: 'Friends',
     followingTab: 'Following',
     followingHint: 'Accounts you follow — add them as friends or unfollow.',

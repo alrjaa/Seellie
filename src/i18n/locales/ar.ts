@@ -29,6 +29,7 @@ export const ar = {
     searchPlaceholder: 'بحث...',
     done: 'تم',
     close: 'إغلاق',
+    retry: 'إعادة المحاولة',
     enableLight: 'تفعيل الوضع الفاتح',
     enableDark: 'تفعيل الوضع الداكن',
   },
@@ -574,6 +575,8 @@ export const ar = {
     title: 'مساحة خاصة',
     subtitle:
       'أصدقاؤك ورسائلك الخاصة ومحتوى حفظته بنقرتين — لا يظهر لعموم التطبيق.',
+    loginRequired: 'سجّل الدخول لفتح المساحة الخاصة.',
+    screenError: 'تعذّر فتح شاشة الخاصة. أعد المحاولة.',
     friends: 'الأصدقاء',
     followingTab: 'أتابعهم',
     followingHint: 'الحسابات التي تتابعها — أضفها كأصدقاء أو ألغِ المتابعة.',

@@ -985,8 +985,21 @@ export default function PrivateScreen() {
     sendErrorDescription,
   ]);
 
-  if (loading || !space.ready) return <LoadingState />;
-  if (!currentUser) return null;
+  if (loading || !space.ready) {
+    return <LoadingState fullScreen />;
+  }
+
+  if (!currentUser) {
+    return (
+      <Screen hasTabBar>
+        <EmptyState
+          title={t('privateSpace.title')}
+          description={t('privateSpace.loginRequired')}
+          icon="lock-closed-outline"
+        />
+      </Screen>
+    );
+  }
 
   const sectionBar = (
     <View style={styles.sections}>
