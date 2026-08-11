@@ -993,15 +993,16 @@ export default function PrivateScreen() {
           >
             <Ionicons
               name={s.icon}
-              size={14}
+              size={12}
               color={active ? theme.colors.textInverse : theme.colors.text}
             />
             <Text
               style={{
                 color: active ? theme.colors.textInverse : theme.colors.text,
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: '700',
               }}
+              numberOfLines={1}
             >
               {t(s.labelKey)}
             </Text>
@@ -1717,18 +1718,22 @@ const styles = StyleSheet.create({
   },
   sections: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    flexWrap: 'nowrap',
+    gap: 6,
     flexShrink: 0,
   },
   sectionChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 999,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
+    flexGrow: 1,
+    flexBasis: 0,
+    justifyContent: 'center',
+    minWidth: 0,
   },
   block: { gap: 10 },
   chatShell: {

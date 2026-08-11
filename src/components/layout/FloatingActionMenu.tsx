@@ -224,7 +224,8 @@ function FloatingActionMenuComponent() {
   if (!currentUser) return null;
   if (!isFollowerLike && actions.length === 0) return null;
   if (desktop) return null;
-  if (!visible || isFloatingSuppressed()) return null;
+  // عند الإخفاء القسري فقط (محادثة الخاصة…) — لا تُلغَ الواجهة عند التمرير
+  if (isFloatingSuppressed()) return null;
   if (onPrivateSpace) return null;
   if (
     pathname?.includes('(auth)') ||
@@ -439,10 +440,11 @@ const styles = StyleSheet.create({
   },
   wrap: {
     position: 'absolute',
-    // العمود من الأسفل للأعلى: العنصر الأول يظهر في القمة
+    // العمود من الأسفل للأعلى: العنصر الأول في القمة
     flexDirection: 'column-reverse',
     gap: 12,
-    alignItems: 'flex-start',
+    // محاذاة مركزية على خط واحد رغم اختلاف أحجام الأزرار
+    alignItems: 'center',
     direction: 'ltr',
     overflow: 'visible',
   },
@@ -454,6 +456,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: 44,
     height: 44,
+    alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
   },
@@ -461,6 +464,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: 58,
     height: 58,
+    alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
   },

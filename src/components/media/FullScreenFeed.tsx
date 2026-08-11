@@ -85,14 +85,12 @@ const Slide = memo(function Slide({
   height,
   active,
   onLike,
-  onPressAuthor,
   onDoubleTap,
 }: {
   item: FullScreenContent;
   height: number;
   active: boolean;
   onLike: () => void;
-  onPressAuthor?: () => void;
   onDoubleTap?: () => void;
 }) {
   const theme = useAppTheme();
@@ -105,14 +103,8 @@ const Slide = memo(function Slide({
   const [loadError, setLoadError] = useState(false);
   const [frameReady, setFrameReady] = useState(false);
   const lastTapRef = useRef(0);
-  const handleLabel =
-    item.authorHandle?.trim() ||
-    (item.authorName.startsWith('@')
-      ? item.authorName
-      : item.authorName
-        ? `@${item.authorName.replace(/\s+/g, '').slice(0, 16)}`
-        : undefined);
   const bottomPad = Math.max(insets.bottom, 6) + 4;
+  // زر الإعجاب على اليمين فيزيائياً — المعرّف انتقل للأزرار العائمة
   const dockSide =
     I18nManager.isRTL && I18nManager.doLeftAndRightSwapInRTL
       ? ({ left: 14 } as const)
@@ -383,23 +375,6 @@ const Slide = memo(function Slide({
           tone="light"
           size="md"
         />
-        <Pressable
-          style={styles.handlePress}
-          onPress={onPressAuthor}
-          disabled={!onPressAuthor}
-          accessibilityRole="button"
-          accessibilityLabel={handleLabel || t('ui.profileA11y')}
-        >
-          {handleLabel ? (
-            <Text
-              style={styles.handleOnly}
-              numberOfLines={1}
-              {...({ ltr: true } as object)}
-            >
-              {handleLabel}
-            </Text>
-          ) : null}
-        </Pressable>
       </View>
     </View>
   );
@@ -538,13 +513,10 @@ function FullScreenFeedComponent({
         height={height}
         active={focused && appActive && item.id === activeId}
         onLike={() => onLike(item)}
-        onPressAuthor={
-          onPressAuthor ? () => onPressAuthor(item) : undefined
-        }
         onDoubleTap={onDoubleTap ? () => onDoubleTap(item) : undefined}
       />
     ),
-    [activeId, appActive, focused, height, onLike, onPressAuthor, onDoubleTap]
+    [activeId, appActive, focused, height, onLike, onDoubleTap]
   );
 
   const getItemLayout = useCallback(

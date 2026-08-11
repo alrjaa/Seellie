@@ -15,10 +15,10 @@ let activeSourceId: string | null = null;
 let lastY: number | null = null;
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
-const HIDE_DY = 10;
-const SHOW_DY = 8;
+const HIDE_DY = 18;
+const SHOW_DY = 6;
 const TOP_EDGE = 16;
-const IDLE_SHOW_MS = 650;
+const IDLE_SHOW_MS = 480;
 
 function emit(next: boolean) {
   const effective = suppressFloating ? false : next;
