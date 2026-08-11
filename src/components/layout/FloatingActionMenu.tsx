@@ -18,6 +18,7 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import {
   forceFloatingVisible,
   isFloatingSuppressed,
+  setFloatingSuppressed,
   subscribeFloatingVisibility,
 } from '@/services/floating-scroll-bus';
 import {
@@ -139,11 +140,18 @@ function FloatingActionMenuComponent() {
     }
   }, [author?.id, competitions, users, currentUser?.id]);
 
-  // عند تغيير المسار: أظهر فوراً (ما لم تكن الخاصة)
+  // مسار الخاصة يخفي العائمة؛ أي تبويب آخر يلغي الإخفاء فوراً
+  // (تبويبات Expo تبقى مركّبة — لا نعتمد على unmount)
   useEffect(() => {
-    setSuppressed(isFloatingSuppressed());
-    if (isFloatingSuppressed()) return;
-    forceFloatingVisible();
+    const onPrivate =
+      !!pathname &&
+      (pathname.includes('/private') ||
+        pathname.includes('(follower)/private'));
+    setFloatingSuppressed(onPrivate);
+    setSuppressed(onPrivate);
+    if (!onPrivate) {
+      forceFloatingVisible();
+    }
   }, [pathname]);
 
   const fabShown = chromeVisible && !suppressed;

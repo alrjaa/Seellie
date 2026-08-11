@@ -55,7 +55,6 @@ import type {
 } from '@/services/private-space';
 import type { User } from '@/providers/TournamentProvider';
 import { isUuid } from '@/services/supabase-messages';
-import { setFloatingSuppressed } from '@/services/floating-scroll-bus';
 
 function isHttpUrl(url?: string) {
   return !!url && /^https?:\/\//i.test(url.trim());
@@ -517,12 +516,6 @@ export default function PrivateScreen() {
     uri: string;
     kind: PrivateChatMediaKind;
   } | null>(null);
-
-  useEffect(() => {
-    // أخفِ الأزرار العائمة في كل أقسام الخاصة (محادثة/أصدقاء/محفوظ)
-    setFloatingSuppressed(true);
-    return () => setFloatingSuppressed(false);
-  }, []);
 
   const me = useMemo(
     () => (currentUser ? ensureSocialLists(currentUser) : null),
