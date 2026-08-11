@@ -139,13 +139,16 @@ export function mergeCloudCompetitions(
 }
 
 /**
- * السحابة مصدر الحقيقة للمسابقات السحابية.
- * لا تُبقى مسابقات البذرة التجريبية (comp-1…) عند الدمج مع السحابة.
+ * السحابة مصدر الحقيقة عند وجود صفوف.
+ * إن كانت السحابة فارغة نحتفظ بالمحلي (بما فيه البذرة) حتى لا تُفرَّغ شاشات التصفح.
  */
 export function reconcileCompetitionsWithCloud(
   local: Competition[],
   cloud: Competition[]
 ): Competition[] {
+  if (!cloud.length) {
+    return local;
+  }
   const cloudIds = new Set(cloud.map((c) => c.id));
   const keepLocalLive = local.filter(
     (c) => !isSeedCompetitionId(c.id) && cloudIds.has(c.id)

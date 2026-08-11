@@ -662,7 +662,7 @@ export const en: TranslationTree = {
     photosVideos: 'Photos & videos',
     forums: 'Forums',
     posts: 'Posts',
-    generalEmpty: 'No content in this section',
+    generalEmpty: 'No content yet',
     personalityEmpty: 'No freelancer content yet',
     personalityEmptyDesc:
       'When freelancers add photos or videos they will appear here.',
@@ -677,7 +677,10 @@ export const en: TranslationTree = {
     playerClipPhoto: 'Player clip · photo',
     playerClipVideo: 'Player clip · video',
     generalSubtitle: 'Photos & videos · forums & comments · posts & analysis',
-    generalEmptyDesc: 'Try another section or add a forum comment.',
+    generalEmptyDesc:
+      'Post a discussion above, or wait for organizers to upload photos and videos.',
+    generalEmptyOtherTab:
+      'Nothing in this tab. Switch back to All to see available content.',
     typePost: 'Post',
     typeAnalysis: 'Analysis',
     typeDiscussion: 'Forum discussion',

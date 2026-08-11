@@ -870,17 +870,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     [currentUser, t, toast]
   );
 
-  /** عند الحساب السحابي: أخفِ مسابقات/محتوى الحسابات التجريبية */
-  const purgeDemoSeedForCloudUser = useCallback(() => {
-    setCompetitions((prev) => filterSeedCompetitions(prev));
-    setComments((prev) => filterSeedComments(prev));
-    setQuickComments((prev) => filterSeedComments(prev));
-    setUsers((prev) => prev.map(clearSeedUserContent));
-    setOffers((prev) => filterSeedOffers(prev));
-    setGiftTransactions((prev) => filterSeedGifts(prev));
-    setCompetitionRequests((prev) => filterSeedCompetitionRequests(prev));
-  }, []);
-
   /** تحميل الكتالوج العام من السحابة (مسابقات، ملفات، منتدى، blobs) */
   const hydrateCloudPublicCatalog = useCallback(async () => {
     if (!isSupabaseConfigured()) return;
@@ -910,19 +899,41 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return merged;
       });
     }
-    if (cloudCompetitions.error !== 'no_session') {
+
+    const cloudCompCount =
+      cloudCompetitions.error === 'no_session'
+        ? -1
+        : cloudCompetitions.items.length;
+    if (cloudCompCount >= 0) {
       setCompetitions((prev) => {
         const merged = reconcileCompetitionsWithCloud(
           prev,
           cloudCompetitions.items
         );
-        void saveCompetitions(merged, { fromCloud: true });
-        return merged;
+        // أزل البذرة فقط عندما السحابة فيها مسابقات حقيقية
+        const next =
+          cloudCompCount > 0 ? filterSeedCompetitions(merged) : merged;
+        void saveCompetitions(next, { fromCloud: true });
+        return next;
       });
     }
-    if (forum.comments?.length) {
-      setComments((prev) => mergeCommentsById(forum.comments, prev));
+
+    const forumCount = forum.comments?.length || 0;
+    if (forumCount > 0) {
+      setComments((prev) =>
+        filterSeedComments(mergeCommentsById(forum.comments, prev))
+      );
+      setQuickComments((prev) => filterSeedComments(prev));
     }
+
+    // نظّف منشورات الحسابات التجريبية دائماً (الهويات المحلية لا تُعرض كمحتوى عام)
+    setUsers((prev) => prev.map(clearSeedUserContent));
+    setOffers((prev) => filterSeedOffers(prev));
+    setGiftTransactions((prev) => filterSeedGifts(prev));
+    if (cloudRequests.items.length > 0) {
+      setCompetitionRequests((prev) => filterSeedCompetitionRequests(prev));
+    }
+
     if (blobs.referees?.length) {
       setReferees((prev) => {
         const next = applyRefereesFromCloud(prev, blobs.referees!);
@@ -950,9 +961,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!currentUser || !isUuid(currentUser.id)) return;
-    purgeDemoSeedForCloudUser();
+    // لا تمسح البذرة قبل التحميل — وإلا تبقى الشاشات فارغة إن كانت السحابة بلا محتوى بعد
     void hydrateCloudPublicCatalog();
-  }, [currentUser?.id, purgeDemoSeedForCloudUser, hydrateCloudPublicCatalog]);
+  }, [currentUser?.id, hydrateCloudPublicCatalog]);
 
   useEffect(() => {
     let active = true;

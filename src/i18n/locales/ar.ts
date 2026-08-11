@@ -663,7 +663,7 @@ export const ar = {
     photosVideos: 'صور وفيديو',
     forums: 'الساحات',
     posts: 'منشورات',
-    generalEmpty: 'لا يوجد محتوى في هذا القسم',
+    generalEmpty: 'لا يوجد محتوى بعد',
     personalityEmpty: 'لا يوجد محتوى للاعبين الأحرار',
     personalityEmptyDesc:
       'عندما يضيف اللاعب الحر صوراً أو فيديوهات ستظهر هنا.',
@@ -678,7 +678,10 @@ export const ar = {
     playerClipPhoto: 'لقطة لاعب · صورة',
     playerClipVideo: 'لقطة لاعب · فيديو',
     generalSubtitle: 'صور وفيديوهات · ساحات وتعليقات · منشورات وتحليلات',
-    generalEmptyDesc: 'جرّب قسماً آخر أو أضف تعليقاً في الساحة.',
+    generalEmptyDesc:
+      'انشر نقاشاً من الزر أعلاه، أو انتظر رفع المنظّمين للصور والفيديوهات.',
+    generalEmptyOtherTab:
+      'لا يوجد عناصر في هذا التبويب. ارجع إلى «الكل» لعرض المحتوى المتاح.',
     typePost: 'منشور',
     typeAnalysis: 'تحليل',
     typeDiscussion: 'نقاش الساحة',

@@ -194,9 +194,13 @@ export default function GeneralFeedScreen() {
     addComment,
   } = useTournament();
 
-  const [filter, setFilter] = useState<FeedFilter>('discussions');
+  const [filter, setFilter] = useState<FeedFilter>('all');
   const [discussionText, setDiscussionText] = useState('');
-  const [discussionOpen, setDiscussionOpen] = useState(false);
+  const [discussionOpen, setDiscussionOpen] = useState(true);
+
+  const isHttpUrl = useCallback((url?: string) => {
+    return !!url && /^https?:\/\//i.test(url.trim());
+  }, []);
 
   const feed = useMemo(() => {
     const items: FeedItem[] = [];
@@ -218,6 +222,7 @@ export default function GeneralFeedScreen() {
         });
 
         (user.media?.photos || []).forEach((photo) => {
+          if (!isHttpUrl(photo.url)) return;
           items.push({
             id: `photo-user-${photo.id}`,
             type: 'photo',
@@ -235,6 +240,7 @@ export default function GeneralFeedScreen() {
         });
 
         (user.media?.videos || []).forEach((video) => {
+          if (!isHttpUrl(video.url)) return;
           items.push({
             id: `video-user-${video.id}`,
             type: 'video',
@@ -277,6 +283,7 @@ export default function GeneralFeedScreen() {
       const uploaderAvatar = organizer?.avatar || comp.logo;
 
       (comp.media?.photos || []).forEach((photo) => {
+        if (!isHttpUrl(photo.url)) return;
         items.push({
           id: `photo-comp-${photo.id}`,
           type: 'photo',
@@ -293,6 +300,7 @@ export default function GeneralFeedScreen() {
         });
       });
       (comp.media?.videos || []).forEach((video) => {
+        if (!isHttpUrl(video.url)) return;
         items.push({
           id: `video-comp-${video.id}`,
           type: 'video',
@@ -312,6 +320,7 @@ export default function GeneralFeedScreen() {
       comp.teams.forEach((team) => {
         team.players.forEach((player) => {
           (player.media?.photos || []).forEach((photo) => {
+            if (!isHttpUrl(photo.url)) return;
             items.push({
               id: `photo-player-${player.id}-${photo.id}`,
               type: 'photo',
@@ -328,6 +337,7 @@ export default function GeneralFeedScreen() {
             });
           });
           (player.media?.videos || []).forEach((video) => {
+            if (!isHttpUrl(video.url)) return;
             items.push({
               id: `video-player-${player.id}-${video.id}`,
               type: 'video',
@@ -347,10 +357,11 @@ export default function GeneralFeedScreen() {
       });
 
       comp.matches.forEach((match) => {
-        const t1 = comp.teams.find((t) => t.id === match.team1Id)?.name || '?';
-        const t2 = comp.teams.find((t) => t.id === match.team2Id)?.name || '?';
+        const t1 = comp.teams.find((x) => x.id === match.team1Id)?.name || '?';
+        const t2 = comp.teams.find((x) => x.id === match.team2Id)?.name || '?';
         const label = `${t1} ${t('screens.vs')} ${t2}`;
         (match.media?.photos || []).forEach((photo) => {
+          if (!isHttpUrl(photo.url)) return;
           items.push({
             id: `photo-match-${photo.id}`,
             type: 'photo',
@@ -367,6 +378,7 @@ export default function GeneralFeedScreen() {
           });
         });
         (match.media?.videos || []).forEach((video) => {
+          if (!isHttpUrl(video.url)) return;
           items.push({
             id: `video-match-${video.id}`,
             type: 'video',
@@ -424,7 +436,7 @@ export default function GeneralFeedScreen() {
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
-  }, [users, competitions, comments, quickComments, t]);
+  }, [users, competitions, comments, quickComments, t, isHttpUrl]);
 
   const filtered = useMemo(() => {
     switch (filter) {
@@ -717,6 +729,12 @@ export default function GeneralFeedScreen() {
     </View>
   );
 
+  const emptyTitle = t('screens.generalEmpty');
+  const emptyDescription =
+    filter !== 'all' && feed.length > 0
+      ? t('screens.generalEmptyOtherTab')
+      : t('screens.generalEmptyDesc');
+
   if (!tablet) {
     return (
       <Screen bleed edges={['left', 'right']}>
@@ -726,8 +744,8 @@ export default function GeneralFeedScreen() {
           onPressAuthor={onPressAuthor}
           onDoubleTap={(item) => void saveToPrivate(item)}
           authorPresentation="handleOnly"
-          emptyTitle={t('screens.generalEmpty')}
-          emptyDescription={t('screens.generalEmptyDesc')}
+          emptyTitle={emptyTitle}
+          emptyDescription={emptyDescription}
           emptyIcon="newspaper-outline"
           topOverlay={
             <View style={styles.mobileOverlay} pointerEvents="box-none">
@@ -816,8 +834,8 @@ export default function GeneralFeedScreen() {
         ListHeaderComponent={header}
         ListEmptyComponent={
           <EmptyState
-            title={t('screens.generalEmpty')}
-            description={t('screens.generalEmptyDesc')}
+            title={emptyTitle}
+            description={emptyDescription}
             icon="newspaper-outline"
           />
         }
