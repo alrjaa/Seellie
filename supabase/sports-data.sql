@@ -34,7 +34,8 @@ create table if not exists public.sports_season_payloads (
       'fixtures_next',
       'fixtures_last',
       'fixtures_live',
-      'meta'
+      'meta',
+      'topscorers'
     )
   ),
   payload jsonb not null default '{}'::jsonb,

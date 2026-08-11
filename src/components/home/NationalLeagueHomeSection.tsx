@@ -17,6 +17,7 @@ import {
   TRACKED_LEAGUES,
   type SportsFixture,
   type SportsStandingRow,
+  type SportsTopScorerRow,
 } from '@/services/sports-data';
 import { cairoText } from '@/theme/fonts';
 
@@ -116,6 +117,75 @@ const NationalStandings = memo(function NationalStandings({
   );
 });
 
+const NationalTopScorers = memo(function NationalTopScorers({
+  rows,
+}: {
+  rows: SportsTopScorerRow[];
+}) {
+  const theme = useAppTheme();
+  const { t } = useTranslation();
+  const titleDir = useTitleDir();
+  if (!rows.length) return null;
+  return (
+    <Card style={styles.card}>
+      <Subtitle style={[styles.cardTitle, titleDir]}>
+        {t('home.nationalTopScorers')}
+      </Subtitle>
+      <View style={[styles.head, { borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.thRank, { color: theme.colors.textMuted }]}>#</Text>
+        <Text style={[styles.thTeam, { color: theme.colors.textMuted }]}>
+          {t('home.player')}
+        </Text>
+        <Text style={[styles.thGoals, { color: theme.colors.textMuted }]}>
+          {t('home.goalsAbbr')}
+        </Text>
+        <Text style={[styles.thGoals, { color: theme.colors.textMuted }]}>
+          {t('home.assistsAbbr')}
+        </Text>
+      </View>
+      {rows.slice(0, 10).map((row) => (
+        <View
+          key={`${row.playerId}-${row.rank}`}
+          style={[styles.row, { borderBottomColor: theme.colors.border }]}
+        >
+          <Text style={[styles.tdRank, { color: theme.colors.textMuted }]}>
+            {row.rank}
+          </Text>
+          <View style={styles.teamCell}>
+            <Avatar
+              uri={row.playerPhoto || row.teamLogo}
+              name={row.playerName}
+              size={24}
+            />
+            <View style={styles.scorerTextCol}>
+              <Text
+                style={[styles.tdTeam, { color: theme.colors.text }]}
+                numberOfLines={1}
+              >
+                {row.playerName}
+              </Text>
+              {row.teamName ? (
+                <Text
+                  style={[styles.scorerTeam, { color: theme.colors.textMuted }]}
+                  numberOfLines={1}
+                >
+                  {row.teamName}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+          <Text style={[styles.tdGoals, { color: theme.colors.accent }]}>
+            {row.goals}
+          </Text>
+          <Text style={[styles.tdGoals, { color: theme.colors.text }]}>
+            {row.assists == null ? '—' : row.assists}
+          </Text>
+        </View>
+      ))}
+    </Card>
+  );
+});
+
 const NationalFixtures = memo(function NationalFixtures({
   title,
   fixtures,
@@ -202,7 +272,8 @@ export const NationalLeagueHomeSection = memo(
     const hasPrevious =
       !!bundle?.window?.previous &&
       ((bundle.previousStandings?.length ?? 0) > 0 ||
-        (bundle.previousLastFixtures?.length ?? 0) > 0);
+        (bundle.previousLastFixtures?.length ?? 0) > 0 ||
+        (bundle.previousTopScorers?.length ?? 0) > 0);
 
     const viewingPrevious = seasonTab === 'previous' && hasPrevious;
 
@@ -214,6 +285,9 @@ export const NationalLeagueHomeSection = memo(
       : bundle?.lastFixtures || [];
     const nextFixtures = viewingPrevious ? [] : bundle?.nextFixtures || [];
     const liveFixtures = viewingPrevious ? [] : bundle?.liveFixtures || [];
+    const topScorers = viewingPrevious
+      ? bundle?.previousTopScorers || []
+      : bundle?.topScorers || [];
     const nextMatch = liveFixtures[0] || nextFixtures[0];
     const displaySeason = viewingPrevious
       ? bundle?.window?.previous
@@ -404,6 +478,7 @@ export const NationalLeagueHomeSection = memo(
               title={t('home.nationalResults')}
               fixtures={lastFixtures}
             />
+            <NationalTopScorers rows={topScorers} />
             <NationalStandings rows={standings} />
           </>
         )}
@@ -459,6 +534,7 @@ const styles = StyleSheet.create({
   thTeam: { flex: 1, fontSize: 11 },
   th: { width: 22, fontSize: 11, textAlign: 'center' },
   thPts: { width: 26, fontSize: 11, textAlign: 'center' },
+  thGoals: { width: 28, fontSize: 11, textAlign: 'center' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -468,10 +544,18 @@ const styles = StyleSheet.create({
   },
   tdRank: { width: 22, fontSize: 12, textAlign: 'center' },
   teamCell: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  scorerTextCol: { flex: 1, gap: 1 },
   tdTeam: { flex: 1, fontSize: 12, ...cairoText('medium') },
+  scorerTeam: { fontSize: 10 },
   td: { width: 22, fontSize: 12, textAlign: 'center' },
   tdPts: {
     width: 26,
+    fontSize: 12,
+    textAlign: 'center',
+    ...cairoText('bold'),
+  },
+  tdGoals: {
+    width: 28,
     fontSize: 12,
     textAlign: 'center',
     ...cairoText('bold'),

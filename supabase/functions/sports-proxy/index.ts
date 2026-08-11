@@ -35,7 +35,9 @@ type Resource =
   | 'bundle'
   | 'sync_league'
   | 'sync_all'
-  | 'window';
+  | 'sync_topscorers'
+  | 'window'
+  | 'topscorers';
 
 type CacheEntry = { expires: number; body: unknown };
 const memoryCache = new Map<string, CacheEntry>();
@@ -109,10 +111,13 @@ async function apiFootball(path: string, apiKey: string) {
     if (!res.ok) return { ok: false as const, errorKeys: [`http_${res.status}`] };
     const data = await res.json();
     const errors = data?.errors;
-    const errorKeys =
-      errors && typeof errors === 'object' && !Array.isArray(errors)
-        ? Object.keys(errors)
-        : [];
+    let errorKeys: string[] = [];
+    if (errors && typeof errors === 'object' && !Array.isArray(errors)) {
+      errorKeys = Object.entries(errors as Record<string, unknown>)
+        .filter(([, v]) => v != null && String(v).length > 0)
+        .map(([k, v]) => `${k}:${String(v).slice(0, 80)}`);
+      if (!errorKeys.length) errorKeys = Object.keys(errors);
+    }
     return {
       ok: true as const,
       data,
@@ -181,6 +186,55 @@ function leagueMeta(raw: any, fallbackId: number, season: number) {
     season: league?.season != null ? Number(league.season) : season,
     country: league?.country ? String(league.country) : undefined,
   };
+}
+
+/** يصفّي صفوف الهدافين ويُزيل التكرار حسب playerId (أول ظهور = الأعلى ترتيباً) */
+function mapTopScorers(raw: any) {
+  const list = Array.isArray(raw?.response) ? raw.response : [];
+  const seen = new Set<number>();
+  const rows: Array<Record<string, unknown>> = [];
+
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i];
+    const player = item?.player;
+    const stats = Array.isArray(item?.statistics) ? item.statistics[0] : null;
+    const playerId = Number(player?.id);
+    if (!Number.isFinite(playerId) || playerId <= 0) continue;
+    if (seen.has(playerId)) continue;
+    seen.add(playerId);
+
+    const teamId = Number(stats?.team?.id);
+    const goals = Number(stats?.goals?.total);
+    rows.push({
+      rank: rows.length + 1,
+      playerId,
+      playerName: String(player?.name ?? '—'),
+      playerPhoto: player?.photo ? String(player.photo) : undefined,
+      teamId: Number.isFinite(teamId) && teamId > 0 ? teamId : null,
+      teamName: stats?.team?.name ? String(stats.team.name) : undefined,
+      teamLogo: stats?.team?.logo ? String(stats.team.logo) : undefined,
+      goals: Number.isFinite(goals) ? goals : 0,
+      assists:
+        stats?.goals?.assists != null && stats.goals.assists !== ''
+          ? Number(stats.goals.assists)
+          : null,
+      appearances:
+        stats?.games?.appearences != null
+          ? Number(stats.games.appearences)
+          : stats?.games?.appearances != null
+            ? Number(stats.games.appearances)
+            : null,
+      minutes:
+        stats?.games?.minutes != null ? Number(stats.games.minutes) : null,
+      position: stats?.games?.position
+        ? String(stats.games.position)
+        : undefined,
+      penaltyScored:
+        stats?.penalty?.scored != null ? Number(stats.penalty.scored) : null,
+    });
+  }
+
+  return rows;
 }
 
 async function ensureLeagueRow(
@@ -296,6 +350,61 @@ async function fetchStandingsSeason(
     standings,
     meta: leagueMeta(up.data, leagueId, season),
     season,
+  };
+}
+
+/**
+ * جلب هدّافي موسم واحد من API-Football.
+ * عند فشل الشبكة/المزود يُعاد null (لا يُمسح المخزن).
+ * عند نجاح بلا نتائج يُعاد [] (موسم بدون هدّافين بعد).
+ */
+async function fetchTopScorersSeason(
+  apiKey: string,
+  leagueId: number,
+  season: number
+): Promise<{
+  rows: Array<Record<string, unknown>> | null;
+  providerHints?: string[];
+}> {
+  const up = await apiFootball(
+    `/players/topscorers?league=${leagueId}&season=${season}`,
+    apiKey
+  );
+  if (!up.ok) {
+    return { rows: null, providerHints: up.errorKeys };
+  }
+  const mapped = mapTopScorers(up.data);
+  // إن وُجدت صفوف رغم تحذير مزود — احفظها (لا تضيّع بيانات صالحة)
+  if (mapped.length) {
+    return { rows: mapped, providerHints: up.errorKeys };
+  }
+  if (up.errorKeys.length) {
+    return { rows: null, providerHints: up.errorKeys };
+  }
+  return { rows: mapped };
+}
+
+async function upsertTopScorersIfFetched(
+  sb: ReturnType<typeof createClient>,
+  apiKey: string,
+  leagueId: number,
+  season: number
+) {
+  const fetched = await fetchTopScorersSeason(apiKey, leagueId, season);
+  if (fetched.rows == null) {
+    return {
+      ok: false as const,
+      count: 0,
+      providerHints: fetched.providerHints || [],
+    };
+  }
+  await upsertPayload(sb, leagueId, season, 'topscorers', {
+    rows: fetched.rows,
+  });
+  return {
+    ok: true as const,
+    count: fetched.rows.length,
+    providerHints: [] as string[],
   };
 }
 
@@ -428,9 +537,11 @@ async function syncLeague(
       nextFixtures: fx.nextFixtures,
       lastFixtures: fx.lastFixtures,
       liveFixtures: fx.liveFixtures,
+      topScorers: [] as any[],
       previousSeason: window.previous,
       previousStandings: prevStandings,
       previousLastFixtures: prevFx.lastFixtures,
+      previousTopScorers: [] as any[],
       partial: fx.nextFixtures.length === 0 && fx.lastFixtures.length === 0,
       fetchedAt: new Date().toISOString(),
       source: 'api-football',
@@ -450,11 +561,18 @@ async function syncLeague(
     return { ok: false, bundle: null };
   }
 
-  const fx = await fetchFixturesForSeason(apiKey, leagueId, window.current);
   await writeWindow(sb, leagueId, window);
   await upsertPayload(sb, leagueId, window.current, 'standings', {
     rows: cur.standings,
   });
+  await upsertPayload(sb, leagueId, window.current, 'meta', cur.meta);
+  // هدّافون قبل طلبات المباريات الثقيلة — فشلها لا يُلغي المزامنة
+  await upsertTopScorersIfFetched(sb, apiKey, leagueId, window.current);
+  if (window.previous != null) {
+    await upsertTopScorersIfFetched(sb, apiKey, leagueId, window.previous);
+  }
+
+  const fx = await fetchFixturesForSeason(apiKey, leagueId, window.current);
   await upsertPayload(sb, leagueId, window.current, 'fixtures_next', {
     rows: fx.nextFixtures,
   });
@@ -464,7 +582,6 @@ async function syncLeague(
   await upsertPayload(sb, leagueId, window.current, 'fixtures_live', {
     rows: fx.liveFixtures,
   });
-  await upsertPayload(sb, leagueId, window.current, 'meta', cur.meta);
 
   // اكتب السابق إن وُجدت بياناته
   if (window.previous != null) {
@@ -512,27 +629,34 @@ async function buildBundleFromStore(
   leagueId: number,
   window: SeasonWindow
 ) {
-  const [st, nx, ls, lv, meta] = await Promise.all([
+  const [st, nx, ls, lv, meta, sc] = await Promise.all([
     readPayload(sb, leagueId, window.current, 'standings'),
     readPayload(sb, leagueId, window.current, 'fixtures_next'),
     readPayload(sb, leagueId, window.current, 'fixtures_last'),
     readPayload(sb, leagueId, window.current, 'fixtures_live'),
     readPayload(sb, leagueId, window.current, 'meta'),
+    readPayload(sb, leagueId, window.current, 'topscorers'),
   ]);
 
   const standingsRaw = (st?.payload as any)?.rows;
   let standings = Array.isArray(standingsRaw) ? standingsRaw : [];
   let displaySeason = window.current;
+  const topScorers = Array.isArray((sc?.payload as any)?.rows)
+    ? (sc?.payload as any).rows
+    : [];
 
   let previousStandings: any[] = [];
   let previousLastFixtures: any[] = [];
+  let previousTopScorers: any[] = [];
   if (window.previous != null) {
-    const [pst, pls] = await Promise.all([
+    const [pst, pls, psc] = await Promise.all([
       readPayload(sb, leagueId, window.previous, 'standings'),
       readPayload(sb, leagueId, window.previous, 'fixtures_last'),
+      readPayload(sb, leagueId, window.previous, 'topscorers'),
     ]);
     previousStandings = (pst?.payload as any)?.rows || [];
     previousLastFixtures = (pls?.payload as any)?.rows || [];
+    previousTopScorers = (psc?.payload as any)?.rows || [];
   }
 
   if (!standings.length && previousStandings.length) {
@@ -552,13 +676,49 @@ async function buildBundleFromStore(
     nextFixtures: (nx?.payload as any)?.rows || [],
     lastFixtures: (ls?.payload as any)?.rows || [],
     liveFixtures: (lv?.payload as any)?.rows || [],
+    topScorers,
     previousSeason: window.previous,
     previousStandings,
     previousLastFixtures,
+    previousTopScorers,
     partial: false,
     fetchedAt: new Date().toISOString(),
     source: 'sports-store',
     storeUpdatedAt: st?.updated_at || meta?.updated_at || null,
+  };
+}
+
+/** قراءة هدّافين من المخزن فقط (لا استدعاء API) — ضمن نافذة الموسمين */
+async function buildTopScorersFromStore(
+  sb: ReturnType<typeof createClient>,
+  leagueId: number,
+  window: SeasonWindow,
+  season?: number
+) {
+  const target =
+    season != null && Number.isFinite(season) ? Number(season) : window.current;
+  if (target !== window.current && target !== window.previous) {
+    return {
+      ok: false as const,
+      error: 'season_outside_window' as const,
+    };
+  }
+
+  const row = await readPayload(sb, leagueId, target, 'topscorers');
+  const rows = Array.isArray((row?.payload as any)?.rows)
+    ? (row?.payload as any).rows
+    : [];
+
+  return {
+    ok: true as const,
+    data: {
+      leagueId,
+      season: target,
+      window,
+      rows,
+      updatedAt: row?.updated_at ?? null,
+      source: 'sports-store' as const,
+    },
   };
 }
 
@@ -574,6 +734,7 @@ serve(async (req) => {
     resource?: Resource;
     leagueId?: number;
     forceSync?: boolean;
+    season?: number;
   } = {};
   try {
     body = (await req.json()) as typeof body;
@@ -595,6 +756,14 @@ serve(async (req) => {
       store: 'two-season-operational',
       defaultLeagueId: DEFAULT_LEAGUE_ID,
       trackedLeagueIds: TRACKED_LEAGUES.map((l) => l.leagueId),
+      payloads: [
+        'standings',
+        'fixtures_next',
+        'fixtures_last',
+        'fixtures_live',
+        'meta',
+        'topscorers',
+      ],
     });
   }
 
@@ -603,6 +772,81 @@ serve(async (req) => {
     if (!sb) return safeError('store_unavailable', 503);
     const window = await readWindow(sb, leagueId);
     return json({ ok: true, data: { leagueId, window } });
+  }
+
+  if (resource === 'topscorers') {
+    const sb = adminClient();
+    if (!sb) return safeError('store_unavailable', 503);
+    const window = await readWindow(sb, leagueId);
+    if (!window?.current) return safeError('window_unavailable', 404);
+
+    // قراءة من المخزن أولاً — لا استدعاء API عند كل طلب
+    if (!body.forceSync) {
+      const fromStore = await buildTopScorersFromStore(
+        sb,
+        leagueId,
+        window,
+        body.season
+      );
+      if (!fromStore.ok) return safeError(fromStore.error, 400);
+      return json({ ok: true, cached: false, data: fromStore.data });
+    }
+
+    if (!apiKey) {
+      const fromStore = await buildTopScorersFromStore(
+        sb,
+        leagueId,
+        window,
+        body.season
+      );
+      if (fromStore.ok) return json({ ok: true, data: fromStore.data });
+      return safeError('provider_not_configured', 503);
+    }
+
+    const targetSeason =
+      typeof body.season === 'number' && Number.isFinite(body.season)
+        ? Number(body.season)
+        : window.current;
+    if (targetSeason !== window.current && targetSeason !== window.previous) {
+      return safeError('season_outside_window', 400);
+    }
+
+    const synced = await upsertTopScorersIfFetched(
+      sb,
+      apiKey,
+      leagueId,
+      targetSeason
+    );
+    if (!synced.ok) {
+      const stale = await buildTopScorersFromStore(
+        sb,
+        leagueId,
+        window,
+        targetSeason
+      );
+      if (stale.ok && (stale.data.rows.length || stale.data.updatedAt)) {
+        return json({ ok: true, stale: true, data: stale.data });
+      }
+      return json(
+        {
+          ok: false,
+          error: 'upstream_unavailable',
+          providerHints: synced.providerHints || [],
+          leagueId,
+          season: targetSeason,
+        },
+        502
+      );
+    }
+
+    const fresh = await buildTopScorersFromStore(
+      sb,
+      leagueId,
+      window,
+      targetSeason
+    );
+    if (!fresh.ok) return safeError(fresh.error, 400);
+    return json({ ok: true, data: fresh.data });
   }
 
   if (resource === 'sync_all') {
@@ -618,6 +862,72 @@ serve(async (req) => {
       });
     }
     return json({ ok: true, data: { results } });
+  }
+
+  /** مزامنة الهدافين فقط لموسمي النافذة — خفيفة على حصة API */
+  if (resource === 'sync_topscorers') {
+    if (!apiKey) return safeError('provider_not_configured', 503);
+    const sb = adminClient();
+    if (!sb) return safeError('store_unavailable', 503);
+    const window = await readWindow(sb, leagueId);
+    if (!window?.current) return safeError('window_unavailable', 404);
+
+    const current = await upsertTopScorersIfFetched(
+      sb,
+      apiKey,
+      leagueId,
+      window.current
+    );
+    let previous: {
+      ok: boolean;
+      count: number;
+      providerHints: string[];
+    } | null = null;
+    if (window.previous != null) {
+      previous = await upsertTopScorersIfFetched(
+        sb,
+        apiKey,
+        leagueId,
+        window.previous
+      );
+    }
+
+    const curStore = await buildTopScorersFromStore(
+      sb,
+      leagueId,
+      window,
+      window.current
+    );
+    const prevStore =
+      window.previous != null
+        ? await buildTopScorersFromStore(sb, leagueId, window, window.previous)
+        : null;
+
+    return json({
+      ok: current.ok || !!previous?.ok,
+      data: {
+        leagueId,
+        window,
+        current: {
+          ok: current.ok,
+          count: current.count,
+          providerHints: current.providerHints,
+          rows: curStore.ok ? curStore.data.rows : [],
+          updatedAt: curStore.ok ? curStore.data.updatedAt : null,
+        },
+        previous:
+          window.previous == null
+            ? null
+            : {
+                season: window.previous,
+                ok: !!previous?.ok,
+                count: previous?.count ?? 0,
+                providerHints: previous?.providerHints ?? [],
+                rows: prevStore?.ok ? prevStore.data.rows : [],
+                updatedAt: prevStore?.ok ? prevStore.data.updatedAt : null,
+              },
+      },
+    });
   }
 
   if (resource === 'sync_league') {

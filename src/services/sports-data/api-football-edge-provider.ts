@@ -86,6 +86,44 @@ async function invokeSports<T>(
   return invokeSportsSdk<T>(resource, extra);
 }
 
+function normalizeTopScorers(rows: unknown): SportsLeagueBundle['topScorers'] {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((raw, index) => {
+      const r = raw as Record<string, unknown>;
+      const playerId = Number(r.playerId);
+      if (!Number.isFinite(playerId) || playerId <= 0) return null;
+      const teamIdRaw = Number(r.teamId);
+      return {
+        rank: Number(r.rank) || index + 1,
+        playerId,
+        playerName: String(r.playerName ?? '—'),
+        playerPhoto: r.playerPhoto ? String(r.playerPhoto) : undefined,
+        teamId:
+          Number.isFinite(teamIdRaw) && teamIdRaw > 0 ? teamIdRaw : null,
+        teamName: r.teamName ? String(r.teamName) : undefined,
+        teamLogo: r.teamLogo ? String(r.teamLogo) : undefined,
+        goals: Number(r.goals) || 0,
+        assists:
+          r.assists == null || r.assists === ''
+            ? null
+            : Number(r.assists),
+        appearances:
+          r.appearances == null || r.appearances === ''
+            ? null
+            : Number(r.appearances),
+        minutes:
+          r.minutes == null || r.minutes === '' ? null : Number(r.minutes),
+        position: r.position ? String(r.position) : undefined,
+        penaltyScored:
+          r.penaltyScored == null || r.penaltyScored === ''
+            ? null
+            : Number(r.penaltyScored),
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => !!row);
+}
+
 function normalizeBundle(
   data: SportsLeagueBundle,
   stale?: boolean
@@ -100,6 +138,7 @@ function normalizeBundle(
     nextFixtures: Array.isArray(data.nextFixtures) ? data.nextFixtures : [],
     lastFixtures: Array.isArray(data.lastFixtures) ? data.lastFixtures : [],
     liveFixtures: Array.isArray(data.liveFixtures) ? data.liveFixtures : [],
+    topScorers: normalizeTopScorers(data.topScorers),
     previousSeason: data.previousSeason ?? data.window?.previous ?? null,
     previousStandings: Array.isArray(data.previousStandings)
       ? data.previousStandings
@@ -107,10 +146,49 @@ function normalizeBundle(
     previousLastFixtures: Array.isArray(data.previousLastFixtures)
       ? data.previousLastFixtures
       : [],
+    previousTopScorers: normalizeTopScorers(data.previousTopScorers),
     partial: data.partial,
     fetchedAt: data.fetchedAt || new Date().toISOString(),
     source: data.source || 'sports-store',
     stale: stale || data.stale,
+  };
+}
+
+async function enrichTopScorers(
+  bundle: SportsLeagueBundle
+): Promise<SportsLeagueBundle> {
+  const needsCurrent = !(bundle.topScorers && bundle.topScorers.length);
+  const needsPrevious =
+    !!bundle.window?.previous &&
+    !(bundle.previousTopScorers && bundle.previousTopScorers.length);
+
+  if (!needsCurrent && !needsPrevious) return bundle;
+
+  // قراءة من المخزن فقط — المزامنة تتم عبر sync_league / sync_topscorers في الخلفية
+  const [cur, prev] = await Promise.all([
+    needsCurrent
+      ? invokeSports<{ rows?: unknown[] }>('topscorers', {
+          leagueId: bundle.leagueId,
+        })
+      : Promise.resolve({ data: null as { rows?: unknown[] } | null }),
+    needsPrevious
+      ? invokeSports<{ rows?: unknown[] }>('topscorers', {
+          leagueId: bundle.leagueId,
+          season: bundle.window!.previous,
+        })
+      : Promise.resolve({ data: null as { rows?: unknown[] } | null }),
+  ]);
+
+  return {
+    ...bundle,
+    topScorers:
+      needsCurrent && cur.data?.rows?.length
+        ? normalizeTopScorers(cur.data.rows)
+        : bundle.topScorers || [],
+    previousTopScorers:
+      needsPrevious && prev.data?.rows?.length
+        ? normalizeTopScorers(prev.data.rows)
+        : bundle.previousTopScorers || [],
   };
 }
 
@@ -146,8 +224,9 @@ export const apiFootballViaEdgeProvider: SportsDataProvider = {
       const synced = await invokeSports<SportsLeagueBundle>('sync_league', {
         leagueId,
       });
-      if (!synced.data?.standings?.length) return data ? normalizeBundle(data, stale) : null;
-      const bundle = normalizeBundle(synced.data);
+      if (!synced.data?.standings?.length)
+        return data ? normalizeBundle(data, stale) : null;
+      let bundle = await enrichTopScorers(normalizeBundle(synced.data));
       if (bundle.window) {
         await purgeSportsCacheOutsideWindow(leagueId, bundle.window);
       }
@@ -159,7 +238,7 @@ export const apiFootballViaEdgeProvider: SportsDataProvider = {
     }
     if (!data) return null;
 
-    const bundle = normalizeBundle(data, stale);
+    let bundle = await enrichTopScorers(normalizeBundle(data, stale));
     if (!bundle.standings.length && !bundle.lastFixtures.length) return null;
 
     if (bundle.window) {
@@ -177,7 +256,7 @@ export const apiFootballViaEdgeProvider: SportsDataProvider = {
       leagueId,
     });
     if (!data) return null;
-    const bundle = normalizeBundle(data);
+    const bundle = await enrichTopScorers(normalizeBundle(data));
     if (bundle.window) {
       await purgeSportsCacheOutsideWindow(leagueId, bundle.window);
     }

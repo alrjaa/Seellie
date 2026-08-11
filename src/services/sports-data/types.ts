@@ -34,6 +34,22 @@ export type SportsFixture = {
   round?: string;
 };
 
+export type SportsTopScorerRow = {
+  rank: number;
+  playerId: number;
+  playerName: string;
+  playerPhoto?: string;
+  teamId: number | null;
+  teamName?: string;
+  teamLogo?: string;
+  goals: number;
+  assists?: number | null;
+  appearances?: number | null;
+  minutes?: number | null;
+  position?: string;
+  penaltyScored?: number | null;
+};
+
 export type SportsLeagueBundle = {
   leagueId: number;
   leagueName?: string;
@@ -44,9 +60,11 @@ export type SportsLeagueBundle = {
   nextFixtures: SportsFixture[];
   lastFixtures: SportsFixture[];
   liveFixtures: SportsFixture[];
+  topScorers?: SportsTopScorerRow[];
   previousSeason?: number | null;
   previousStandings?: SportsStandingRow[];
   previousLastFixtures?: SportsFixture[];
+  previousTopScorers?: SportsTopScorerRow[];
   partial?: boolean;
   fetchedAt: string;
   source: string;

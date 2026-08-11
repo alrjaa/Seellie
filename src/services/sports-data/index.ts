@@ -7,6 +7,7 @@ export type {
   SportsHealth,
   SportsLeagueBundle,
   SportsStandingRow,
+  SportsTopScorerRow,
   SeasonWindow,
 } from './types';
 export { SAUDI_PRO_LEAGUE_ID, TRACKED_LEAGUE_IDS } from './types';
