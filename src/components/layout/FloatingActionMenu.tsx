@@ -67,7 +67,7 @@ function isIoniconName(
 
 /**
  * أزرار تنقل عائمة — الجوال / متصفح الجوال.
- * أعلى العمود دائماً: أفاتار صاحب المحتوى (+ متابعة) — أكبر من بقية الأزرار.
+ * أسفل العمود: أفاتار صاحب المحتوى الظاهر (يتغيّر مع التمرير) + متابعة.
  */
 function FloatingActionMenuComponent() {
   const { currentUser, fabIcons, users, toggleFollowUser, competitions } =
@@ -86,9 +86,9 @@ function FloatingActionMenuComponent() {
 
   useEffect(() => subscribeContentAuthorFocus(setAuthor), []);
 
-  // إن لم يصل أفاتار بعد: عيّن منظّماً لديه وسائط، أو حدّث الصورة إن نقصت
+  // بذرة فقط إن لم يُحدَّد صاحب محتوى بعد — لا تستبدل صاحب المحتوى الظاهر
   useEffect(() => {
-    if (author?.id && pickAvatarUrl(author.avatar)) return;
+    if (author?.id) return;
     if (!competitions?.length) return;
     for (const comp of competitions) {
       const hasMedia =
@@ -107,22 +107,18 @@ function FloatingActionMenuComponent() {
             (m.media?.videos || []).some((x) => isHttpMedia(x.url))
         );
       if (!hasMedia || !comp.organizerId) continue;
-      if (author?.id && author.id !== comp.organizerId) continue;
+      // لا تستخدم صاحب الحساب الحالي كصاحب محتوى
+      if (currentUser?.id && comp.organizerId === currentUser.id) continue;
       const organizer = users.find((u) => u.id === comp.organizerId);
-      const avatar = pickAvatarUrl(
-        organizer?.avatar,
-        author?.avatar,
-        comp.logo
-      );
       setContentAuthorFocus({
-        id: author?.id || comp.organizerId,
-        name: author?.name || organizer?.name || comp.name,
-        handle: author?.handle || organizer?.handle,
-        avatar,
+        id: comp.organizerId,
+        name: organizer?.name || comp.name,
+        handle: organizer?.handle,
+        avatar: pickAvatarUrl(organizer?.avatar, comp.logo),
       });
       break;
     }
-  }, [author?.id, author?.avatar, author?.name, author?.handle, competitions, users]);
+  }, [author?.id, competitions, users, currentUser?.id]);
 
   useEffect(() => {
     if (isFloatingSuppressed()) {
@@ -243,16 +239,17 @@ function FloatingActionMenuComponent() {
     const fromCompetition = competitions?.find(
       (c) => c.organizerId === author.id || c.organizerId === known?.id
     );
+    // أولوية لصورة/بيانات المحتوى الظاهر، ثم الملف، ثم شعار البطولة
     return {
-      id: known?.id || author.id,
-      name: known?.name || author.name,
-      handle: known?.handle || author.handle,
+      id: author.id,
+      name: author.name || known?.name || author.handle || author.id,
+      handle: author.handle || known?.handle,
       avatar: pickAvatarUrl(
-        known?.avatar,
         author.avatar,
+        known?.avatar,
         fromCompetition?.logo
       ),
-      isSelf: !!(currentUser && (known?.id || author.id) === currentUser.id),
+      isSelf: !!(currentUser && author.id === currentUser.id),
     };
   }, [author, users, currentUser, competitions]);
 
@@ -348,6 +345,7 @@ function FloatingActionMenuComponent() {
             >
               {authorProfile ? (
                 <Avatar
+                  key={`fab-author-${authorProfile.id}-${authorProfile.avatar || 'x'}`}
                   uri={authorProfile.avatar}
                   name={authorProfile.name || authorProfile.handle || 'user'}
                   size={54}

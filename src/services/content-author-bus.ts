@@ -1,7 +1,7 @@
 /**
  * صاحب المحتوى الظاهر حالياً في اللقطات/عام/شخصية —
  * تقرأه الأزرار العائمة لعرض الأفاتار ومتابعته.
- * لا نمسحه عند مغادرة الشاشة حتى يبقى ظاهراً في الرئيسية.
+ * يتبدّل مع كل عنصر محتوى — ليس اختصاراً لصاحب الحساب.
  */
 
 export type ContentAuthorFocus = {
@@ -34,15 +34,14 @@ function normalizeAvatar(value?: string) {
 export function setContentAuthorFocus(author: ContentAuthorFocus | null) {
   if (!author?.id) return;
 
+  const sameId = current?.id === author.id;
   const incomingAvatar = normalizeAvatar(author.avatar);
-  const next = {
+  const next: ContentAuthorFocus = {
     id: author.id,
     name: author.name || author.handle || author.id,
-    handle: author.handle || (current?.id === author.id ? current?.handle : undefined),
-    // لا تفقد الأفاتار عند تحديث لاحق بلا صورة
-    avatar:
-      incomingAvatar ||
-      (current?.id === author.id ? normalizeAvatar(current?.avatar) : undefined),
+    handle: author.handle || (sameId ? current?.handle : undefined),
+    // عند تغيّر صاحب المحتوى لا نحتفظ بأفاتار السابق
+    avatar: incomingAvatar || (sameId ? normalizeAvatar(current?.avatar) : undefined),
   };
 
   if (

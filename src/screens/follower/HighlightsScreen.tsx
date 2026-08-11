@@ -17,6 +17,7 @@ type MediaItem = {
   type: 'photo' | 'video';
   matchLabel: string;
   likes: string[];
+  /** صاحب المحتوى (حساب النشر) — يتغيّر الأفاتار/الاسم مع العنصر */
   organizerId?: string;
   organizerName?: string;
   organizerHandle?: string;
@@ -85,8 +86,9 @@ export default function HighlightsScreen() {
               type: 'photo',
               matchLabel: `${player.name} · ${team.name}`,
               likes: p.likes,
+              // صاحب المحتوى = حساب المنظّم، والصورة/الاسم من اللاعب ليتغيّر مع اللقطة
               organizerId: comp.organizerId,
-              organizerName,
+              organizerName: player.name || organizerName,
               organizerHandle,
               organizerAvatar: player.avatar || organizerAvatar,
             });
@@ -102,7 +104,7 @@ export default function HighlightsScreen() {
               matchLabel: `${player.name} · ${team.name}`,
               likes: v.likes,
               organizerId: comp.organizerId,
-              organizerName,
+              organizerName: player.name || organizerName,
               organizerHandle,
               organizerAvatar: player.avatar || organizerAvatar,
             });

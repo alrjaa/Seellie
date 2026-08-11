@@ -503,8 +503,17 @@ function FullScreenFeedComponent({
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       const first = viewableItems.find((v) => v.isViewable && v.item);
       if (first?.item && typeof first.item === 'object' && 'id' in first.item) {
-        setActiveId((first.item as FullScreenContent).id);
-        // بعد ثبات الصفحة أعد إظهار الأزرار العائمة
+        const item = first.item as FullScreenContent;
+        setActiveId(item.id);
+        // فوراً: صاحب المحتوى الظاهر في الأزرار العائمة
+        if (item.authorId) {
+          setContentAuthorFocus({
+            id: String(item.authorId),
+            name: item.authorName || item.authorHandle || String(item.authorId),
+            handle: item.authorHandle,
+            avatar: item.authorAvatar,
+          });
+        }
         forceFloatingVisible();
       }
     }
