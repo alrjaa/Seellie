@@ -617,6 +617,11 @@ export const ar = {
     privateWith: 'محادثة خاصة مع %{name}',
     noMessages: 'لا رسائل بعد — اكتب أول رسالة.',
     messagePlaceholder: 'رسالة خاصة…',
+    privateMessageTitle: 'رسالة خاصة جديدة',
+    privateMessageSender: 'صديق',
+    privateMessageBody: 'رسالة جديدة',
+    privateMessagePhoto: 'صورة',
+    privateMessageVideo: 'فيديو',
     attachContent: 'إرفاق محتوى',
     attachFromApp:
       'اختر صورة أو فيديو — سيُرفق بالمحادثة ثم اضغط إرسال.',

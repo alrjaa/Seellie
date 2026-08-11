@@ -616,6 +616,11 @@ export const en: TranslationTree = {
     privateWith: 'Private chat with %{name}',
     noMessages: 'No messages yet — write the first one.',
     messagePlaceholder: 'Private message…',
+    privateMessageTitle: 'New private message',
+    privateMessageSender: 'Friend',
+    privateMessageBody: 'New message',
+    privateMessagePhoto: 'Photo',
+    privateMessageVideo: 'Video',
     attachContent: 'Attach content',
     attachFromApp:
       'Pick a photo or video to attach, then tap Send.',

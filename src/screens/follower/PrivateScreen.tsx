@@ -11,6 +11,7 @@ import {
   AppState,
   FlatList,
   Image,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -18,7 +19,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,13 +48,57 @@ import { useResponsive } from '@/hooks/useResponsive';
 import { usePrivateSpace } from '@/hooks/usePrivateSpace';
 import { ensureSocialLists } from '@/utils/social-stats';
 import { formatArabicDate } from '@/utils';
-import { tabBarTotalHeight } from '@/theme/navigation';
 import type {
   PrivateChatMediaKind,
   PrivateContentItem,
 } from '@/services/private-space';
 import type { User } from '@/providers/TournamentProvider';
 import { isUuid } from '@/services/supabase-messages';
+
+function useKeyboardBottomInset(enabled: boolean) {
+  const [inset, setInset] = useState(0);
+
+  useEffect(() => {
+    if (!enabled) {
+      setInset(0);
+      return;
+    }
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const vv = window.visualViewport;
+      if (!vv) return;
+      const update = () => {
+        const covered = Math.max(
+          0,
+          window.innerHeight - vv.height - vv.offsetTop
+        );
+        setInset(covered > 40 ? covered : 0);
+      };
+      vv.addEventListener('resize', update);
+      vv.addEventListener('scroll', update);
+      update();
+      return () => {
+        vv.removeEventListener('resize', update);
+        vv.removeEventListener('scroll', update);
+      };
+    }
+
+    const showEvent =
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent =
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const onShow = Keyboard.addListener(showEvent, (e) => {
+      setInset(Math.max(0, e.endCoordinates?.height || 0));
+    });
+    const onHide = Keyboard.addListener(hideEvent, () => setInset(0));
+    return () => {
+      onShow.remove();
+      onHide.remove();
+    };
+  }, [enabled]);
+
+  return inset;
+}
 
 function isHttpUrl(url?: string) {
   return !!url && /^https?:\/\//i.test(url.trim());
@@ -496,10 +540,10 @@ export default function PrivateScreen() {
   const { toast } = useToast();
   const listChrome = useListChrome();
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
   const { desktop } = useResponsive();
   const space = usePrivateSpace(currentUser?.id);
   const [section, setSection] = useState<Section>('friends');
+  const keyboardInset = useKeyboardBottomInset(section === 'chat');
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [pickOpen, setPickOpen] = useState(false);
@@ -631,31 +675,8 @@ export default function PrivateScreen() {
     ? space.chats[activeFriend.id] || []
     : [];
 
-  // شريط الكتابة داخل بطاقة المحادثة (عرض البطاقة فقط — بدون fixed على الشاشة)
-  const tabBarHeight = useMemo(
-    () => (desktop ? 0 : tabBarTotalHeight(insets.bottom)),
-    [desktop, insets.bottom]
-  );
-  const composerBlockHeight = pendingMedia ? 118 : 62;
-  const shellBottomPad = desktop ? 0 : tabBarHeight + 8;
-
-  const chatShellHeight = useMemo(() => {
-    const topChrome = desktop ? 72 : 52;
-    return Math.max(
-      280,
-      windowHeight - topChrome - shellBottomPad
-    );
-  }, [windowHeight, shellBottomPad, desktop]);
-
-  const chatMessagesHeight = useMemo(() => {
-    const chips = 48;
-    const head = 34;
-    const gaps = 20;
-    return Math.max(
-      120,
-      chatShellHeight - chips - head - gaps - composerBlockHeight
-    );
-  }, [chatShellHeight, composerBlockHeight]);
+  // عند فتح لوحة المفاتيح نستبدل خلوص التبويب بارتفاعها حتى لا تُقصّ الرسائل
+  const chatBottomPad = keyboardInset > 0 ? keyboardInset : undefined;
 
   const onAddFriend = useCallback(
     async (friendId: string, opts?: { stayOnSaved?: boolean }) => {
@@ -1025,7 +1046,14 @@ export default function PrivateScreen() {
       style={styles.screen}
       contentStyle={{
         ...styles.content,
-        ...(section === 'chat' ? styles.contentChat : null),
+        ...(section === 'chat'
+          ? {
+              ...styles.contentChat,
+              ...(chatBottomPad != null
+                ? { paddingBottom: chatBottomPad }
+                : null),
+            }
+          : null),
       }}
       hasTabBar
       scroll={
@@ -1033,7 +1061,7 @@ export default function PrivateScreen() {
         section === 'following' ||
         section === 'followers'
       }
-      keyboard={section === 'chat'}
+      keyboard={false}
       fabClearance={section !== 'chat'}
     >
       {section === 'chat' ? null : (
@@ -1260,15 +1288,7 @@ export default function PrivateScreen() {
       ) : null}
 
       {section === 'chat' ? (
-        <View
-          style={[
-            styles.chatShell,
-            {
-              height: chatShellHeight,
-              marginBottom: shellBottomPad,
-            },
-          ]}
-        >
+        <View style={styles.chatShell}>
           {friends.length === 0 ? (
             <EmptyState
               title={t('privateSpace.noFriends')}
@@ -1354,7 +1374,7 @@ export default function PrivateScreen() {
                 </View>
 
                 <ScrollView
-                  style={[styles.chatListScroll, { height: chatMessagesHeight }]}
+                  style={styles.chatListScroll}
                   contentContainerStyle={styles.chatList}
                   keyboardShouldPersistTaps="handled"
                   nestedScrollEnabled
@@ -1821,12 +1841,13 @@ const styles = StyleSheet.create({
   },
   block: { gap: 10 },
   chatShell: {
+    flex: 1,
+    minHeight: 0,
     width: '100%',
     maxWidth: '100%',
     alignSelf: 'stretch',
     gap: 8,
     overflow: 'hidden',
-    position: 'relative',
   },
   chatBlock: {
     flex: 1,
@@ -1928,8 +1949,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   chatListScroll: {
-    flexGrow: 0,
-    flexShrink: 0,
+    flex: 1,
+    minHeight: 0,
     width: '100%',
   },
   chatList: { gap: 8, paddingBottom: 8 },

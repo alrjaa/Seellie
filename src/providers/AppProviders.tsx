@@ -12,6 +12,7 @@ import { NotificationsProvider } from '@/providers/NotificationsProvider';
 import { TournamentProvider } from '@/providers/TournamentProvider';
 import { FloatingChromeProvider } from '@/providers/FloatingChromeProvider';
 import { LoadingState } from '@/components/feedback/LoadingState';
+import { PrivateIncomingAlerts } from '@/components/private/PrivateIncomingAlerts';
 
 /** ينتظر جاهزية اللغة ثم يعيد إنشاء الشجرة بمفتاح اللغة (بيانات البذرة مترجمة) */
 function LanguageReadyGate({ children }: { children: ReactNode }) {
@@ -33,7 +34,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
                 <ToastProvider>
                   <NotificationsProvider>
                     <TournamentProvider>
-                      <FloatingChromeProvider>{children}</FloatingChromeProvider>
+                      <FloatingChromeProvider>
+                        <PrivateIncomingAlerts />
+                        {children}
+                      </FloatingChromeProvider>
                     </TournamentProvider>
                   </NotificationsProvider>
                 </ToastProvider>
