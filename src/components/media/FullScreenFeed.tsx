@@ -99,8 +99,8 @@ const Slide = memo(function Slide({
   const insets = useSafeAreaInsets();
   const videoRef = useRef<Video>(null);
   const htmlVideoRef = useRef<HTMLVideoElement | null>(null);
-  /** ابدأ متوقفاً — الضغط يشغّل (مطلوب لسياسات المتصفح + أوضح للمستخدم) */
-  const [paused, setPaused] = useState(true);
+  /** تشغيل تلقائي عند الظهور — بدون زر تشغيل */
+  const [paused, setPaused] = useState(!active);
   const [loadError, setLoadError] = useState(false);
   const [frameReady, setFrameReady] = useState(false);
   const lastTapRef = useRef(0);
@@ -115,9 +115,9 @@ const Slide = memo(function Slide({
     !!item.mediaUrl && /^https?:\/\//i.test(item.mediaUrl.trim());
 
   useEffect(() => {
-    setPaused(true);
     setLoadError(false);
     setFrameReady(false);
+    setPaused(true);
     void videoRef.current?.pauseAsync().catch(() => undefined);
     const el = htmlVideoRef.current;
     if (el) {
@@ -133,7 +133,6 @@ const Slide = memo(function Slide({
       const el = htmlVideoRef.current;
       if (el) {
         el.pause();
-        // أوقف التحميل/الصوت دون تدمير العنصر حتى يبقى الإطار عند العودة
         try {
           el.removeAttribute('src');
           el.load();
@@ -144,42 +143,52 @@ const Slide = memo(function Slide({
       if (Platform.OS === 'web') {
         void videoRef.current?.unloadAsync().catch(() => undefined);
       }
+      return;
     }
+    // ظاهر على الشاشة → شغّل فوراً
+    setPaused(false);
   }, [active]);
 
-  // ويب: حمّل أول إطار صامتاً حتى لا تبقى شاشة سوداء
+  // ويب: تشغيل تلقائي صامت (سياسة المتصفح) عند الظهور
   useEffect(() => {
-    if (Platform.OS !== 'web' || !active || !playableUri || loadError) return;
+    if (Platform.OS !== 'web' || !active || !playableUri || loadError || paused) {
+      return;
+    }
     const el = htmlVideoRef.current;
     if (!el || !item.mediaUrl) return;
     if (el.getAttribute('src') !== item.mediaUrl) {
       el.src = item.mediaUrl;
     }
     el.muted = true;
+    el.defaultMuted = true;
     el.playsInline = true;
-    const warm = el.play();
-    if (warm && typeof warm.then === 'function') {
-      void warm
+    el.loop = true;
+    const run = el.play();
+    if (run && typeof run.then === 'function') {
+      void run
         .then(() => {
-          el.pause();
-          el.muted = false;
-          if (el.currentTime < 0.05) {
-            try {
-              el.currentTime = 0.05;
-            } catch {
-              // ignore
-            }
-          }
           setFrameReady(true);
+          setPaused(false);
         })
         .catch(() => {
-          // المتصفح منع التشغيل — يكفي preload/metadata
+          // إن مُنع التشغيل نُبقي بدون زر — الإطار/البوستر يكفي
           setFrameReady(true);
         });
     } else {
       setFrameReady(true);
     }
-  }, [active, playableUri, loadError, item.mediaUrl]);
+  }, [active, playableUri, loadError, paused, item.mediaUrl]);
+
+  // أصلي: تشغيل تلقائي عند الظهور
+  useEffect(() => {
+    if (Platform.OS === 'web' || !active || !playableUri || loadError || paused) {
+      return;
+    }
+    void videoRef.current?.playAsync().catch(() => {
+      setLoadError(true);
+      setPaused(true);
+    });
+  }, [active, playableUri, loadError, paused]);
 
   const toggleVideoPlayback = useCallback(async () => {
     if (!playableUri || loadError) return;
@@ -188,7 +197,7 @@ const Slide = memo(function Slide({
         const el = htmlVideoRef.current;
         if (!el) return;
         if (paused) {
-          el.muted = false;
+          el.muted = true;
           await el.play();
           setPaused(false);
         } else {
@@ -251,6 +260,9 @@ const Slide = memo(function Slide({
                   htmlVideoRef.current = node;
                 },
                 src: item.mediaUrl,
+                muted: true,
+                defaultMuted: true,
+                autoPlay: true,
                 playsInline: true,
                 preload: 'auto',
                 loop: true,
@@ -269,6 +281,10 @@ const Slide = memo(function Slide({
                   setPaused(true);
                 },
                 onLoadedData: () => setFrameReady(true),
+                onPlaying: () => {
+                  setFrameReady(true);
+                  setPaused(false);
+                },
               })
             : null}
 
@@ -292,7 +308,7 @@ const Slide = memo(function Slide({
           ) : null}
 
           {item.posterUrl &&
-          (paused || loadError || !playableUri || !active || !frameReady) ? (
+          (loadError || !playableUri || !active || (!frameReady && paused)) ? (
             <Image
               source={{ uri: item.posterUrl }}
               style={StyleSheet.absoluteFill}
@@ -304,11 +320,6 @@ const Slide = memo(function Slide({
             <View style={styles.playWrap}>
               <Ionicons name="alert-circle-outline" size={56} color="#fff" />
               <Text style={styles.playLabel}>{t('media.videoPlayFailed')}</Text>
-            </View>
-          ) : paused || !active ? (
-            <View style={styles.playWrap} pointerEvents="none">
-              <Ionicons name="play-circle" size={72} color="#fff" />
-              <Text style={styles.playLabel}>{t('media.tapToPlayVideo')}</Text>
             </View>
           ) : null}
         </Pressable>
