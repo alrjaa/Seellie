@@ -11,6 +11,7 @@ import {
   AppState,
   FlatList,
   Image,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -55,6 +56,76 @@ import type {
 } from '@/services/private-space';
 import type { User } from '@/providers/TournamentProvider';
 import { isUuid } from '@/services/supabase-messages';
+
+/**
+ * ارتفاع المنطقة المرئية فعلياً (يستثني لوحة مفاتيح Safari عبر visualViewport).
+ * يمنع قفز الصفحة وتصغير بطاقة المحادثة بشكل خاطئ.
+ */
+function useVisibleViewport(enabled: boolean, windowHeight: number) {
+  const [visibleHeight, setVisibleHeight] = useState(windowHeight);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    if (!enabled) {
+      setVisibleHeight(windowHeight);
+      setKeyboardOpen(false);
+      return;
+    }
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const vv = window.visualViewport;
+      const update = () => {
+        const next = Math.round(vv?.height || window.innerHeight || windowHeight);
+        setVisibleHeight(next);
+        // لوحة المفاتيح مفتوحة عندما ينكمش الجزء المرئي بوضوح
+        setKeyboardOpen(windowHeight - next > 120);
+      };
+      update();
+      vv?.addEventListener('resize', update);
+      vv?.addEventListener('scroll', update);
+      window.addEventListener('resize', update);
+      return () => {
+        vv?.removeEventListener('resize', update);
+        vv?.removeEventListener('scroll', update);
+        window.removeEventListener('resize', update);
+      };
+    }
+
+    const show =
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hide =
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const onShow = Keyboard.addListener(show, (e) => {
+      const kb = Math.max(0, e.endCoordinates?.height || 0);
+      setKeyboardOpen(kb > 80);
+      setVisibleHeight(Math.max(240, windowHeight - kb));
+    });
+    const onHide = Keyboard.addListener(hide, () => {
+      setKeyboardOpen(false);
+      setVisibleHeight(windowHeight);
+    });
+    setVisibleHeight(windowHeight);
+    return () => {
+      onShow.remove();
+      onHide.remove();
+    };
+  }, [enabled, windowHeight]);
+
+  return { visibleHeight, keyboardOpen };
+}
+
+function preventWebPageJump() {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  const lock = () => {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  };
+  lock();
+  requestAnimationFrame(lock);
+  setTimeout(lock, 50);
+  setTimeout(lock, 150);
+}
 
 function isHttpUrl(url?: string) {
   return !!url && /^https?:\/\//i.test(url.trim());
@@ -500,6 +571,10 @@ export default function PrivateScreen() {
   const { desktop } = useResponsive();
   const space = usePrivateSpace(currentUser?.id);
   const [section, setSection] = useState<Section>('friends');
+  const { visibleHeight, keyboardOpen } = useVisibleViewport(
+    section === 'chat',
+    windowHeight
+  );
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [pickOpen, setPickOpen] = useState(false);
@@ -631,31 +706,36 @@ export default function PrivateScreen() {
     ? space.chats[activeFriend.id] || []
     : [];
 
-  // شريط الكتابة داخل بطاقة المحادثة (عرض البطاقة فقط — بدون fixed على الشاشة)
+  // ارتفاع المحادثة من المنطقة المرئية فقط — لا نضاعف خلوص التبويب
   const tabBarHeight = useMemo(
     () => (desktop ? 0 : tabBarTotalHeight(insets.bottom)),
     [desktop, insets.bottom]
   );
-  const composerBlockHeight = pendingMedia ? 118 : 62;
-  const shellBottomPad = desktop ? 0 : tabBarHeight + 8;
+  const composerBlockHeight = pendingMedia ? 118 : 66;
+  const showFriendChips = !keyboardOpen;
 
   const chatShellHeight = useMemo(() => {
-    const topChrome = desktop ? 72 : 52;
+    // شريط الأقسام داخل الشاشة
+    const sectionBar = 44;
+    const screenPad = 8;
+    // نخصم التبويب مرة واحدة فقط من الارتفاع المرئي (بدون marginBottom إضافي)
+    const tabReserve = desktop ? 0 : tabBarHeight;
     return Math.max(
-      280,
-      windowHeight - topChrome - shellBottomPad
+      260,
+      Math.floor(visibleHeight - sectionBar - screenPad - tabReserve)
     );
-  }, [windowHeight, shellBottomPad, desktop]);
+  }, [visibleHeight, desktop, tabBarHeight]);
 
   const chatMessagesHeight = useMemo(() => {
-    const chips = 48;
+    const chips = showFriendChips ? 48 : 0;
     const head = 34;
-    const gaps = 20;
+    const gaps = 16;
+    // اترك مساحة كاملة لحقل الكتابة — لا تُخفيه تحت لوحة المفاتيح
     return Math.max(
-      120,
+      72,
       chatShellHeight - chips - head - gaps - composerBlockHeight
     );
-  }, [chatShellHeight, composerBlockHeight]);
+  }, [chatShellHeight, composerBlockHeight, showFriendChips]);
 
   const onAddFriend = useCallback(
     async (friendId: string, opts?: { stayOnSaved?: boolean }) => {
@@ -1040,13 +1120,14 @@ export default function PrivateScreen() {
         ...styles.content,
         ...(section === 'chat' ? styles.contentChat : null),
       }}
-      hasTabBar
+      hasTabBar={section !== 'chat'}
       scroll={
         section === 'friends' ||
         section === 'following' ||
         section === 'followers'
       }
-      keyboard={section === 'chat'}
+      // على الويب: KeyboardAvoidingView يسبب قفزاً؛ نعتمد visualViewport بدلًا منه
+      keyboard={Platform.OS !== 'web' && section === 'chat'}
       fabClearance={section !== 'chat'}
     >
       {section === 'chat' ? null : (
@@ -1278,7 +1359,6 @@ export default function PrivateScreen() {
             styles.chatShell,
             {
               height: chatShellHeight,
-              marginBottom: shellBottomPad,
             },
           ]}
         >
@@ -1290,6 +1370,7 @@ export default function PrivateScreen() {
             />
           ) : (
             <>
+              {showFriendChips ? (
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -1334,6 +1415,7 @@ export default function PrivateScreen() {
                   );
                 })}
               </ScrollView>
+              ) : null}
 
               <View
                 style={[
@@ -1541,6 +1623,9 @@ export default function PrivateScreen() {
                       onSubmitEditing={() => void onSend()}
                       returnKeyType="send"
                       blurOnSubmit={false}
+                      onFocus={() => {
+                        preventWebPageJump();
+                      }}
                       style={[
                         styles.composerInput,
                         {
@@ -1878,6 +1963,7 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 8,
     overflow: 'hidden',
+    justifyContent: 'flex-start',
   },
   chatCard: {
     flexGrow: 0,
