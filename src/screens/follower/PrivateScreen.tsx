@@ -19,6 +19,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -55,7 +56,7 @@ import type {
 import type { User } from '@/providers/TournamentProvider';
 import { isUuid } from '@/services/supabase-messages';
 
-function useKeyboardBottomInset(enabled: boolean) {
+function useKeyboardBottomInset(enabled: boolean, windowHeight: number) {
   const [inset, setInset] = useState(0);
 
   useEffect(() => {
@@ -63,6 +64,8 @@ function useKeyboardBottomInset(enabled: boolean) {
       setInset(0);
       return;
     }
+
+    const cap = Math.max(160, Math.floor(windowHeight * 0.55));
 
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const vv = window.visualViewport;
@@ -72,7 +75,12 @@ function useKeyboardBottomInset(enabled: boolean) {
           0,
           window.innerHeight - vv.height - vv.offsetTop
         );
-        setInset(covered > 40 ? covered : 0);
+        // تجاهل القيم الشاذة التي تبتلع الشاشة بالكامل
+        if (covered < 80 || covered > cap) {
+          setInset(0);
+          return;
+        }
+        setInset(covered);
       };
       vv.addEventListener('resize', update);
       vv.addEventListener('scroll', update);
@@ -88,14 +96,15 @@ function useKeyboardBottomInset(enabled: boolean) {
     const hideEvent =
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
     const onShow = Keyboard.addListener(showEvent, (e) => {
-      setInset(Math.max(0, e.endCoordinates?.height || 0));
+      const h = Math.max(0, e.endCoordinates?.height || 0);
+      setInset(h > 0 && h <= cap ? h : 0);
     });
     const onHide = Keyboard.addListener(hideEvent, () => setInset(0));
     return () => {
       onShow.remove();
       onHide.remove();
     };
-  }, [enabled]);
+  }, [enabled, windowHeight]);
 
   return inset;
 }
@@ -540,10 +549,14 @@ export default function PrivateScreen() {
   const { toast } = useToast();
   const listChrome = useListChrome();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const { desktop } = useResponsive();
   const space = usePrivateSpace(currentUser?.id);
   const [section, setSection] = useState<Section>('friends');
-  const keyboardInset = useKeyboardBottomInset(section === 'chat');
+  const keyboardInset = useKeyboardBottomInset(
+    section === 'chat',
+    windowHeight
+  );
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [pickOpen, setPickOpen] = useState(false);
@@ -1842,7 +1855,7 @@ const styles = StyleSheet.create({
   block: { gap: 10 },
   chatShell: {
     flex: 1,
-    minHeight: 0,
+    minHeight: 280,
     width: '100%',
     maxWidth: '100%',
     alignSelf: 'stretch',

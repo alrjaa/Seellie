@@ -18,6 +18,7 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { OfflineBanner } from '@/components/feedback/OfflineBanner';
 import { FloatingActionMenu } from '@/components/layout/FloatingActionMenu';
 import { AuthDeepLinkHandler } from '@/components/auth/AuthDeepLinkHandler';
+import { PrivateIncomingAlerts } from '@/components/private/PrivateIncomingAlerts';
 import {
   applyGlobalCairoFonts,
   cairoFontMap,
@@ -50,12 +51,12 @@ function RootNavigator() {
     <View
       style={[
         layoutDirectionStyle(isRTL),
-        { backgroundColor: theme.colors.background },
+        { flex: 1, backgroundColor: theme.colors.background },
       ]}
     >
       <OfflineBanner />
       <StatusBar style={theme.isDark ? 'light' : 'dark'} translucent />
-      <View style={layoutDirectionStyle(isRTL)}>
+      <View style={[layoutDirectionStyle(isRTL), { flex: 1 }]}>
         <Stack
           screenOptions={{
             headerShown: false,
@@ -144,6 +145,7 @@ function RootNavigator() {
           />
         </Stack>
       </View>
+      <PrivateIncomingAlerts />
       <FloatingActionMenu />
     </View>
   );

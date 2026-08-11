@@ -30,9 +30,15 @@ export function usePrivateSpace(userId: string | undefined) {
       setReady(true);
       return;
     }
-    const next = await loadPrivateSpace(userId);
-    setState(next);
-    setReady(true);
+    try {
+      const next = await loadPrivateSpace(userId);
+      setState(next);
+    } catch {
+      // لا نترك الشاشة عالقة على التحميل عند فشل الجلب
+      setState((prev) => prev);
+    } finally {
+      setReady(true);
+    }
   }, [userId]);
 
   useEffect(() => {

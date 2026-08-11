@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { usePathname } from 'expo-router';
+import { AppState } from 'react-native';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useNotifications } from '@/providers/NotificationsProvider';
 import { useToast } from '@/providers/ToastProvider';
@@ -34,8 +34,7 @@ function newestInbound(
     }
   }
   found.sort(
-    (a, b) =>
-      Date.parse(b.message.at || '') - Date.parse(a.message.at || '')
+    (a, b) => Date.parse(b.message.at || '') - Date.parse(a.message.at || '')
   );
   return found;
 }
@@ -49,10 +48,9 @@ export function PrivateIncomingAlerts() {
   const { addNotification } = useNotifications();
   const { toast } = useToast();
   const { t } = useTranslation();
-  const pathname = usePathname();
   const knownIds = useRef<Set<string> | null>(null);
-  const pathnameRef = useRef(pathname);
-  pathnameRef.current = pathname;
+  const usersRef = useRef(users);
+  usersRef.current = users;
 
   useEffect(() => {
     knownIds.current = null;
@@ -65,48 +63,51 @@ export function PrivateIncomingAlerts() {
     let cancelled = false;
 
     const scan = async () => {
-      const state = await loadPrivateSpace(userId);
-      if (cancelled) return;
-      const inbound = collectInboundIds(state);
-      if (!knownIds.current) {
+      try {
+        const state = await loadPrivateSpace(userId);
+        if (cancelled) return;
+        const inbound = collectInboundIds(state);
+        if (!knownIds.current) {
+          knownIds.current = inbound;
+          return;
+        }
+        const arrived = newestInbound(state, knownIds.current);
         knownIds.current = inbound;
-        return;
-      }
-      const arrived = newestInbound(state, knownIds.current);
-      knownIds.current = inbound;
-      if (!arrived.length) return;
+        if (!arrived.length) return;
 
-      const latest = arrived[0];
-      const friend = users.find((u) => u.id === latest.friendId);
-      const name =
-        friend?.handle || friend?.name || t('privateSpace.privateMessageSender');
-      const preview =
-        latest.message.text?.trim() ||
-        (latest.message.mediaKind === 'video'
-          ? t('privateSpace.privateMessageVideo')
-          : latest.message.mediaUrl
-            ? t('privateSpace.privateMessagePhoto')
-            : t('privateSpace.privateMessageBody'));
+        const latest = arrived[0];
+        const friend = usersRef.current.find((u) => u.id === latest.friendId);
+        const name =
+          friend?.handle ||
+          friend?.name ||
+          t('privateSpace.privateMessageSender');
+        const preview =
+          latest.message.text?.trim() ||
+          (latest.message.mediaKind === 'video'
+            ? t('privateSpace.privateMessageVideo')
+            : latest.message.mediaUrl
+              ? t('privateSpace.privateMessagePhoto')
+              : t('privateSpace.privateMessageBody'));
 
-      const onPrivateScreen = (pathnameRef.current || '').includes('private');
-
-      void playPrivateMessageTone();
-
-      addNotification({
-        id: `pm-${latest.message.id}`,
-        kind: 'message',
-        recipientId: userId,
-        title: t('privateSpace.privateMessageTitle'),
-        body: `${name}: ${preview}`,
-        href: '/(follower)/private',
-      });
-
-      if (!onPrivateScreen) {
-        toast({
-          variant: 'success',
+        addNotification({
+          id: `pm-${latest.message.id}`,
+          kind: 'message',
+          recipientId: userId,
           title: t('privateSpace.privateMessageTitle'),
-          description: `${name}: ${preview}`,
+          body: `${name}: ${preview}`,
+          href: '/(follower)/private',
         });
+
+        if (AppState.currentState === 'active') {
+          void playPrivateMessageTone();
+          toast({
+            variant: 'success',
+            title: t('privateSpace.privateMessageTitle'),
+            description: `${name}: ${preview}`,
+          });
+        }
+      } catch {
+        // تجاهل أخطاء المراقبة حتى لا تؤثر على بقية التطبيق
       }
     };
 
@@ -116,14 +117,14 @@ export function PrivateIncomingAlerts() {
     });
     const timer = setInterval(() => {
       void scan();
-    }, 5000);
+    }, 8000);
 
     return () => {
       cancelled = true;
       clearInterval(timer);
       unsub?.();
     };
-  }, [currentUser?.id, users, addNotification, toast, t]);
+  }, [currentUser?.id, addNotification, toast, t]);
 
   return null;
 }
