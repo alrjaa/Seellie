@@ -196,7 +196,7 @@ export default function GeneralFeedScreen() {
 
   const [filter, setFilter] = useState<FeedFilter>('all');
   const [discussionText, setDiscussionText] = useState('');
-  const [discussionOpen, setDiscussionOpen] = useState(true);
+  const [discussionOpen, setDiscussionOpen] = useState(false);
 
   const isHttpUrl = useCallback((url?: string) => {
     return !!url && /^https?:\/\//i.test(url.trim());
