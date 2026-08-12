@@ -40,7 +40,7 @@ import {
   requireCloudSession,
   resolvePublicMediaUrl,
 } from '@/services/cloud-write';
-import { upsertUserContentCloud } from '@/services/supabase-user-content';
+import { upsertUserContentCloud, setAnalystProfileCloud } from '@/services/supabase-user-content';
 import { trySendAnalystCodeEmail } from '@/services/analyst-code-delivery';
 import {
   appendGiftTransaction,
@@ -1320,7 +1320,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       ...currentUser,
       ...remote,
       passwordHash: currentUser.passwordHash,
-      analyst: remote.analyst ?? currentUser.analyst,
+      analyst:
+        remote.analyst?.status && remote.analyst.status !== 'none'
+          ? remote.analyst
+          : currentUser.analyst ?? remote.analyst,
       permissions: remote.permissions || currentUser.permissions,
     };
     setCurrentUser(merged);
@@ -4334,7 +4337,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       void setJson(USER_STORAGE_KEY, updated);
 
       if (isUuid(updated.id) && isSupabaseConfigured()) {
-        const sync = await upsertUserContentCloud(updated);
+        const sync = await setAnalystProfileCloud(updated.id, updated.analyst!);
         if (!sync.ok) {
           toast({
             variant: 'destructive',
@@ -4343,6 +4346,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           });
           return false;
         }
+        // حافظ على باقي المحتوى أيضاً للمالك
+        void upsertUserContentCloud(updated);
       }
 
       if (autoApprove) {
@@ -4763,9 +4768,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         void setJson(USER_STORAGE_KEY, updated);
       }
       if (isUuid(updated.id) && isSupabaseConfigured()) {
-        const sync = await upsertUserContentCloud(updated, {
-          allowCrossUser: updated.id !== currentUser?.id,
-        });
+        const sync = await setAnalystProfileCloud(updated.id, updated.analyst!);
         if (!sync.ok) {
           toast({
             variant: 'destructive',

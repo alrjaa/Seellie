@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Linking,
   Pressable,
@@ -162,11 +162,13 @@ export default function UniqueScreen() {
     currentUser,
     loading,
     users,
+    messages,
     addAnalysis,
     toggleAnalysisLike,
     applyAsAnalyst,
     verifyAnalystAccessCode,
     refreshCurrentUserFromCloud,
+    refreshCloudMessages,
   } = useTournament();
   const theme = useAppTheme();
   const { t } = useTranslation();
@@ -266,13 +268,44 @@ export default function UniqueScreen() {
 
   const analystStatus = currentUser?.analyst?.status || 'none';
   const canPublish = isActiveAnalyst(currentUser);
-  const storedAccessCode = currentUser?.analyst?.accessCode?.trim() || '';
+  const codeFromProfile = currentUser?.analyst?.accessCode?.trim() || '';
+  const codeFromMessage = useMemo(() => {
+    if (!currentUser) return '';
+    const mine = messages
+      .filter((m) => m.recipientId === currentUser.id)
+      .sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+    for (const m of mine) {
+      const body = m.body || '';
+      const match =
+        body.match(/رمز الوصول:\s*(\S+)/) ||
+        body.match(/Access code:\s*(\S+)/i);
+      if (match?.[1]) return match[1].trim();
+    }
+    return '';
+  }, [messages, currentUser]);
+  const storedAccessCode = codeFromProfile || codeFromMessage;
 
   useFocusEffect(
     useCallback(() => {
       void refreshCurrentUserFromCloud();
-    }, [refreshCurrentUserFromCloud])
+      void refreshCloudMessages();
+    }, [refreshCurrentUserFromCloud, refreshCloudMessages])
   );
+
+  // بعد الموافقة افتح لوحة الرمز تلقائياً وأظهر الرمز إن وُجد
+  useEffect(() => {
+    if (analystStatus === 'approved') {
+      setShowGatePanel(true);
+    }
+  }, [analystStatus]);
+
+  useEffect(() => {
+    if (analystStatus !== 'approved' || !storedAccessCode) return;
+    setAccessCodeInput((prev) => (prev.trim() ? prev : storedAccessCode));
+  }, [analystStatus, storedAccessCode]);
 
   const pickVideo = useCallback(async () => {
     try {

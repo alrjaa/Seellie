@@ -194,3 +194,87 @@ export async function upsertUserContentCloud(
   }
   return { ok: true };
 }
+
+/**
+ * يكتب حقل analyst فقط (موافقة/رفض/رمز) مع تحقق بعد الحفظ.
+ * أهم من replace_profile_content للمشرف لأن مسار الدمج الاجتماعي قد يتجاهل analyst.
+ */
+export async function setAnalystProfileCloud(
+  userId: string,
+  analyst: NonNullable<User['analyst']>
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || !isUuid(userId)) {
+    return { ok: false, error: 'not_cloud_user' };
+  }
+  const { session, error: sessionError } = await requireCloudSession();
+  if (!session) {
+    return { ok: false, error: sessionError || 'no_session' };
+  }
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: 'no_client' };
+
+  const payload = JSON.parse(JSON.stringify(analyst)) as Record<string, unknown>;
+
+  const { error: rpcError } = await sb.rpc('set_profile_analyst', {
+    p_id: userId,
+    p_analyst: payload,
+  });
+
+  if (rpcError) {
+    console.warn('[analyst] set_profile_analyst', rpcError.message);
+    const { data: row, error: readErr } = await sb
+      .from('profiles')
+      .select('content')
+      .eq('id', userId)
+      .maybeSingle();
+    if (readErr) {
+      return { ok: false, error: readErr.message || rpcError.message };
+    }
+    const prev =
+      row?.content && typeof row.content === 'object'
+        ? (row.content as Record<string, unknown>)
+        : {};
+    const { error: updErr } = await sb
+      .from('profiles')
+      .update({
+        content: { ...prev, analyst: payload },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
+    if (updErr) {
+      return {
+        ok: false,
+        error: `${rpcError.message} / ${updErr.message}`,
+      };
+    }
+  }
+
+  const { data: check, error: checkErr } = await sb
+    .from('profiles')
+    .select('content')
+    .eq('id', userId)
+    .maybeSingle();
+  if (checkErr) {
+    return { ok: false, error: checkErr.message };
+  }
+  const got = (check?.content as { analyst?: User['analyst'] } | null)?.analyst;
+  if (!got || got.status !== analyst.status) {
+    return {
+      ok: false,
+      error:
+        'analyst_not_persisted — نفّذ supabase/SET-PROFILE-ANALYST.sql في SQL Editor',
+    };
+  }
+  if (
+    analyst.accessCode &&
+    String(got.accessCode || '').trim() !== String(analyst.accessCode).trim()
+  ) {
+    return {
+      ok: false,
+      error:
+        'access_code_not_persisted — نفّذ supabase/SET-PROFILE-ANALYST.sql',
+    };
+  }
+  return { ok: true };
+}
+
