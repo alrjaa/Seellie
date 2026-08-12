@@ -121,10 +121,6 @@ export function subscribeFloatingVisibility(listener: VisibilityListener) {
   };
 }
 
-export function isFloatingVisible() {
-  return visible;
-}
-
 export function claimFloatingScrollSource(sourceId: string) {
   ownerId = sourceId;
   scrolling = false;

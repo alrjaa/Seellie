@@ -10,7 +10,6 @@ import { NavigationCairoProvider } from '@/providers/NavigationCairoProvider';
 import { ToastProvider } from '@/providers/ToastProvider';
 import { NotificationsProvider } from '@/providers/NotificationsProvider';
 import { TournamentProvider } from '@/providers/TournamentProvider';
-import { FloatingChromeProvider } from '@/providers/FloatingChromeProvider';
 import { LoadingState } from '@/components/feedback/LoadingState';
 
 /** ينتظر جاهزية اللغة ثم يعيد إنشاء الشجرة بمفتاح اللغة (بيانات البذرة مترجمة) */
@@ -32,9 +31,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
               <NavigationCairoProvider>
                 <ToastProvider>
                   <NotificationsProvider>
-                    <TournamentProvider>
-                      <FloatingChromeProvider>{children}</FloatingChromeProvider>
-                    </TournamentProvider>
+                    <TournamentProvider>{children}</TournamentProvider>
                   </NotificationsProvider>
                 </ToastProvider>
               </NavigationCairoProvider>

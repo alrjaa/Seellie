@@ -114,12 +114,6 @@ export function clearPendingAuthUrl(): void {
   }
 }
 
-/** @deprecated استخدم peek + clear بعد النجاح */
-export function takePendingAuthUrl(): string | null {
-  const url = peekPendingAuthUrl();
-  return url;
-}
-
 export function setPendingResetEmail(email: string | null) {
   if (typeof window === 'undefined') return;
   try {

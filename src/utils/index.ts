@@ -1,14 +1,5 @@
 import { i18n } from '@/i18n';
 
-export function cn(...parts: Array<string | false | null | undefined>) {
-  return parts.filter(Boolean).join(' ');
-}
-
-/** BCP-47 locale tag for APIs that honor it */
-export function appLocaleTag() {
-  return i18n.locale === 'en' ? 'en-US' : 'ar-SA';
-}
-
 export function isAppEnglish() {
   return i18n.locale === 'en';
 }

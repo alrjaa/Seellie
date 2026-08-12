@@ -27,7 +27,3 @@ let activeProvider: SportsDataProvider = apiFootballViaEdgeProvider;
 export function getSportsDataProvider(): SportsDataProvider {
   return activeProvider;
 }
-
-export function setSportsDataProvider(provider: SportsDataProvider): void {
-  activeProvider = provider;
-}

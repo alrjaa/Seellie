@@ -57,7 +57,7 @@ export function setContentAuthorFocus(author: ContentAuthorFocus | null) {
   emit();
 }
 
-/** مسح صريح فقط (تسجيل خروج) — لا يُستدعى عند مغادرة تبويب اللقطات */
+/** مسح صريح فقط (تسجيل خروج) — واجهة مقصودة حتى لو لم تُستدعَ بعد من كل المسارات */
 export function clearContentAuthorFocus() {
   if (!current) return;
   current = null;
