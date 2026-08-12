@@ -63,6 +63,7 @@ import {
   fetchProfile,
   mergeUsersPreferCloud,
   restoreSupabaseSession,
+  subscribeProfiles,
   supabaseSignIn,
   supabaseSignOut,
   supabaseSignUp,
@@ -1169,82 +1170,26 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
               return [...prev, normalizedUser];
             });
             void setJson(USER_STORAGE_KEY, normalizedUser);
-            const [
-              cards,
-              remoteMessagesResult,
-              cloudProfiles,
-              cloudRequests,
-              cloudCompetitions,
-            ] = await Promise.all([
-              fetchShareCardsForUser(normalizedUser.id),
-              fetchMessagesForUser(normalizedUser.id),
-              fetchAllProfiles(),
-              fetchCompetitionRequestsCloud(),
-              fetchCompetitionsCloud(),
-            ]);
-            if (cloudProfiles.length) {
-              setUsers((prev) =>
-                mergeUsersPreferCloud(prev, cloudProfiles)
-              );
-            }
-            setCompetitionRequests((prev) => {
-              const merged = reconcileCompetitionRequestsWithCloud(
-                prev,
-                cloudRequests.items
-              );
-              void saveCompetitionRequests(merged);
-              return merged;
-            });
-            setCompetitions((prev) => {
-              const merged = reconcileCompetitionsWithCloud(
-                prev,
-                cloudCompetitions.items
-              );
-              void saveCompetitions(merged, { fromCloud: true });
-              return merged;
-            });
-            if (cards.length) {
-              setShareCards((prev) => {
-                const ids = new Set(cards.map((c) => c.id));
-                return [...cards, ...prev.filter((c) => !ids.has(c.id))];
-              });
-            }
-            if (remoteMessagesResult.messages.length) {
-              setMessages((prev) =>
-                mergeMessagesById(remoteMessagesResult.messages, prev)
-              );
-            }
-
-            // تحميل نطاقات التطبيق من app_blobs
-            const blobs = await fetchGlobalAppBlobs();
-            if (blobs.referees?.length) {
-              setReferees((prev) => {
-                const next = applyRefereesFromCloud(prev, blobs.referees!);
-                setCompetitions((cprev) =>
-                  sanitizeCompetitionsRefereeIds(cprev, next)
+            // الكتالوج العام يُحمَّل في الخلفية عبر hydrateCloudPublicCatalog
+            // حتى لا تُحجَب الشاشة الأولى بانتظار كل الملفات
+            void (async () => {
+              const [cards, remoteMessagesResult] = await Promise.all([
+                fetchShareCardsForUser(normalizedUser.id),
+                fetchMessagesForUser(normalizedUser.id),
+              ]);
+              if (!active) return;
+              if (cards.length) {
+                setShareCards((prev) => {
+                  const ids = new Set(cards.map((c) => c.id));
+                  return [...cards, ...prev.filter((c) => !ids.has(c.id))];
+                });
+              }
+              if (remoteMessagesResult.messages.length) {
+                setMessages((prev) =>
+                  mergeMessagesById(remoteMessagesResult.messages, prev)
                 );
-                return next;
-              });
-            }
-            if (blobs.offers) setOffers(blobs.offers);
-            if (blobs.levels?.length) {
-              setSupportLevels(normalizeSupportLevels(blobs.levels));
-            }
-            if (blobs.gifts) {
-              setGiftTransactions(
-                blobs.gifts.map((g) => ({
-                  ...g,
-                  timestamp: new Date(g.timestamp as Date | string),
-                }))
-              );
-            }
-            if (blobs.branding?.appName) setAppNameState(blobs.branding.appName);
-            if (blobs.branding?.appLogo) setAppLogoState(blobs.branding.appLogo);
-            if (blobs.settings) {
-              setAutoApproveAnalystRequestsState(
-                !!blobs.settings.autoApproveAnalystRequests
-              );
-            }
+              }
+            })();
           }
         }
       } catch (error) {
@@ -1509,80 +1454,24 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             return [...prev, normalizedUser];
           });
           void setJson(USER_STORAGE_KEY, normalizedUser);
-          const [
-            cards,
-            remoteMessagesResult,
-            cloudProfiles,
-            cloudRequests,
-            cloudCompetitions,
-          ] = await Promise.all([
-            fetchShareCardsForUser(normalizedUser.id),
-            fetchMessagesForUser(normalizedUser.id),
-            fetchAllProfiles(),
-            fetchCompetitionRequestsCloud(),
-            fetchCompetitionsCloud(),
-          ]);
-          if (cloudProfiles.length) {
-            setUsers((prev) =>
-              mergeUsersPreferCloud(prev, cloudProfiles)
-            );
-          }
-          setCompetitionRequests((prev) => {
-            const merged = reconcileCompetitionRequestsWithCloud(
-              prev,
-              cloudRequests.items
-            );
-            void saveCompetitionRequests(merged);
-            return merged;
-          });
-          setCompetitions((prev) => {
-            const merged = reconcileCompetitionsWithCloud(
-              prev,
-              cloudCompetitions.items
-            );
-            void saveCompetitions(merged, { fromCloud: true });
-            return merged;
-          });
-          if (cards.length) {
-            setShareCards((prev) => {
-              const ids = new Set(cards.map((c) => c.id));
-              return [...cards, ...prev.filter((c) => !ids.has(c.id))];
-            });
-          }
-          if (remoteMessagesResult.messages.length) {
-            setMessages((prev) =>
-              mergeMessagesById(remoteMessagesResult.messages, prev)
-            );
-          }
-          const blobs = await fetchGlobalAppBlobs();
-          if (blobs.referees?.length) {
-            setReferees((prev) => {
-              const next = applyRefereesFromCloud(prev, blobs.referees!);
-              setCompetitions((cprev) =>
-                sanitizeCompetitionsRefereeIds(cprev, next)
+          // الكتالوج يُحمَّل في الخلفية — لا تؤخر الدخول
+          void (async () => {
+            const [cards, remoteMessagesResult] = await Promise.all([
+              fetchShareCardsForUser(normalizedUser.id),
+              fetchMessagesForUser(normalizedUser.id),
+            ]);
+            if (cards.length) {
+              setShareCards((prev) => {
+                const ids = new Set(cards.map((c) => c.id));
+                return [...cards, ...prev.filter((c) => !ids.has(c.id))];
+              });
+            }
+            if (remoteMessagesResult.messages.length) {
+              setMessages((prev) =>
+                mergeMessagesById(remoteMessagesResult.messages, prev)
               );
-              return next;
-            });
-          }
-          if (blobs.offers) setOffers(blobs.offers);
-          if (blobs.levels?.length) {
-            setSupportLevels(normalizeSupportLevels(blobs.levels));
-          }
-          if (blobs.gifts) {
-            setGiftTransactions(
-              blobs.gifts.map((g) => ({
-                ...g,
-                timestamp: new Date(g.timestamp as Date | string),
-              }))
-            );
-          }
-          if (blobs.branding?.appName) setAppNameState(blobs.branding.appName);
-          if (blobs.branding?.appLogo) setAppLogoState(blobs.branding.appLogo);
-          if (blobs.settings) {
-            setAutoApproveAnalystRequestsState(
-              !!blobs.settings.autoApproveAnalystRequests
-            );
-          }
+            }
+          })();
           toast({
             variant: 'success',
             title: t('toasts.t002_202a45'),
@@ -2560,6 +2449,37 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       clearInterval(timer);
     };
   }, [currentUser?.id, refreshCloudForumComments]);
+
+  // مزامنة فورية لمحتوى المستخدمين (تحليلات/منشورات/وسائط) + احتياطي كل 15ث
+  useEffect(() => {
+    if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
+      return;
+    }
+    const stop = subscribeProfiles((remoteUser) => {
+      setUsers((prev) => mergeUsersPreferCloud(prev, [remoteUser]));
+      setCurrentUser((prev) => {
+        if (!prev || prev.id !== remoteUser.id) return prev;
+        return {
+          ...prev,
+          ...remoteUser,
+          passwordHash: prev.passwordHash,
+          analyst:
+            remoteUser.analyst?.status && remoteUser.analyst.status !== 'none'
+              ? remoteUser.analyst
+              : prev.analyst ?? remoteUser.analyst,
+          permissions: remoteUser.permissions || prev.permissions,
+        };
+      });
+    });
+    void syncCloudUsers();
+    const timer = setInterval(() => {
+      void syncCloudUsers();
+    }, 15000);
+    return () => {
+      stop?.();
+      clearInterval(timer);
+    };
+  }, [currentUser?.id, syncCloudUsers]);
 
   const sendMessage = useCallback(
     async (payload: {

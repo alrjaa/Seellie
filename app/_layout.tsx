@@ -159,10 +159,18 @@ export default function RootLayout() {
   useEffect(() => {
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync().catch(() => undefined);
+      return;
+    }
+    // الويب: لا تُبقِ الشاشة البيضاء طويلاً بانتظار الخطوط
+    if (Platform.OS === 'web') {
+      const id = setTimeout(() => {
+        SplashScreen.hideAsync().catch(() => undefined);
+      }, 280);
+      return () => clearTimeout(id);
     }
   }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded && !fontError) return null;
+  if (!fontsLoaded && !fontError && Platform.OS !== 'web') return null;
 
   return (
     <AppProviders>

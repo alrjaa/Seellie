@@ -112,6 +112,48 @@ export async function fetchAllProfiles(): Promise<User[]> {
 }
 
 /**
+ * بث فوري لتحديثات profiles (تحليلات/منشورات/وسائط داخل content).
+ * يتطلب إضافة الجدول إلى supabase_realtime (انظر PROFILES-REALTIME.sql).
+ */
+export function subscribeProfiles(
+  onChange: (user: User) => void
+): (() => void) | null {
+  if (!isSupabaseConfigured()) return null;
+  const sb = getSupabase();
+  if (!sb) return null;
+  const channel = sb
+    .channel('profiles-content-live')
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'profiles',
+      },
+      (payload) => {
+        const row = payload.new as ProfileRow;
+        if (row?.id) onChange(profileToUser(row));
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+      },
+      (payload) => {
+        const row = payload.new as ProfileRow;
+        if (row?.id) onChange(profileToUser(row));
+      }
+    )
+    .subscribe();
+  return () => {
+    void sb.removeChannel(channel);
+  };
+}
+
+/**
  * دمج القائمة المحلية مع السحابة:
  * نفس الإيميل → الحساب السحابي (UUID) يفوز ويزيل المكرر المحلي.
  * إن كان محتوى السحابة فارغاً نحتفظ بمحتوى محلي غير فارغ حتى لا يُمسَح بعد المزامنة.

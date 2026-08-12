@@ -222,6 +222,7 @@ export default function UniqueScreen() {
     verifyAnalystAccessCode,
     refreshCurrentUserFromCloud,
     refreshCloudMessages,
+    syncCloudUsers,
   } = useTournament();
   const theme = useAppTheme();
   const { t } = useTranslation();
@@ -382,7 +383,8 @@ export default function UniqueScreen() {
     useCallback(() => {
       void refreshCurrentUserFromCloud();
       void refreshCloudMessages();
-    }, [refreshCurrentUserFromCloud, refreshCloudMessages])
+      void syncCloudUsers();
+    }, [refreshCurrentUserFromCloud, refreshCloudMessages, syncCloudUsers])
   );
 
   // بعد الموافقة افتح لوحة الرمز تلقائياً وأظهر الرمز إن وُجد
