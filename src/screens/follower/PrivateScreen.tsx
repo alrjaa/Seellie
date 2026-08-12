@@ -50,7 +50,10 @@ import { ensureSocialLists } from '@/utils/social-stats';
 import { formatArabicDate } from '@/utils';
 import { tabBarTotalHeight } from '@/theme/navigation';
 import { setPrivateChatComposerFocused } from '@/services/private-chat-focus';
-import { usePrivateChatKeyboard } from '@/hooks/usePrivateChatKeyboard';
+import {
+  getLayoutViewportHeight,
+  usePrivateChatKeyboard,
+} from '@/hooks/usePrivateChatKeyboard';
 import type {
   PrivateChatMediaKind,
   PrivateContentItem,
@@ -503,9 +506,11 @@ export default function PrivateScreen() {
   const space = usePrivateSpace(currentUser?.id);
   const [section, setSection] = useState<Section>('friends');
   const [composerFocused, setComposerFocused] = useState(false);
-  const { keyboardInset } = usePrivateChatKeyboard({
+  const chatShellRef = useRef<View>(null);
+  const { keyboardOpen, chatHeightOverride } = usePrivateChatKeyboard({
     active: section === 'chat',
     composerFocused,
+    containerRef: chatShellRef,
   });
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -528,10 +533,18 @@ export default function PrivateScreen() {
   const chatNearBottomRef = useRef(true);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // إخفاء شريط التبويب فقط عندما لوحة المفاتيح مفتوحة وملحّن المحادثة مركّز
+  useEffect(() => {
+    const hideTabs =
+      section === 'chat' &&
+      composerFocused &&
+      (Platform.OS !== 'web' || keyboardOpen);
+    setPrivateChatComposerFocused(hideTabs);
+  }, [section, composerFocused, keyboardOpen]);
+
   useEffect(() => {
     if (section !== 'chat') {
       setComposerFocused(false);
-      setPrivateChatComposerFocused(false);
     }
   }, [section]);
 
@@ -656,39 +669,47 @@ export default function PrivateScreen() {
     ? space.chats[activeFriend.id] || []
     : [];
 
-  // مصدر واحد لارتفاع الغلاف:
-  // - الويب: keyboardInset من visualViewport عند تركيز الملحّن فقط
-  // - native: لا نخصم اللوحة هنا (KeyboardAvoidingView / resize النافذة)
+  // ارتفاع أساسي من نافذة التخطيط فقط — بدون خصم لوحة المفاتيح هنا
   const tabBarHeight = useMemo(
     () => (desktop ? 0 : tabBarTotalHeight(insets.bottom)),
     [desktop, insets.bottom]
   );
   const composerBlockHeight = pendingMedia ? 118 : 66;
-  // إخفاء شريط الأقسام/الأصدقاء أثناء تركيز الحقل فقط — ليس أي لوحة مفاتيح عامة
-  const showFriendChips = !(Platform.OS === 'web' && composerFocused);
-  const showSectionBar = !(Platform.OS === 'web' && composerFocused);
-  const webKeyboardInset =
-    Platform.OS === 'web' && composerFocused ? keyboardInset : 0;
+  const layoutHeight = getLayoutViewportHeight(windowHeight);
+  // لا نخفي شريط الأقسام/الأصدقاء — يمنع قفز التخطيط ويحافظ على التصميم
+  const showFriendChips = true;
+  const showSectionBar = true;
 
   const chatShellHeight = useMemo(() => {
+    // مصدر واحد أثناء فتح اللوحة: القياس من أعلى الحاوية إلى أسفل visualViewport
+    if (
+      Platform.OS === 'web' &&
+      composerFocused &&
+      keyboardOpen &&
+      chatHeightOverride != null &&
+      chatHeightOverride > 0
+    ) {
+      return chatHeightOverride;
+    }
+
     const sectionBar = showSectionBar ? 44 : 0;
     const screenPad = 8;
-    // التبويب يُخفى عند تركيز الملحّن عبر private-chat-focus
     const tabReserve =
-      desktop || (Platform.OS === 'web' && composerFocused) ? 0 : tabBarHeight;
+      desktop || (Platform.OS === 'web' && composerFocused && keyboardOpen)
+        ? 0
+        : tabBarHeight;
     return Math.max(
       160,
-      Math.floor(
-        windowHeight - sectionBar - screenPad - tabReserve - webKeyboardInset
-      )
+      Math.floor(layoutHeight - sectionBar - screenPad - tabReserve)
     );
   }, [
-    windowHeight,
+    layoutHeight,
     desktop,
     tabBarHeight,
     showSectionBar,
     composerFocused,
-    webKeyboardInset,
+    keyboardOpen,
+    chatHeightOverride,
   ]);
 
   const chatMessagesHeight = useMemo(() => {
@@ -701,7 +722,7 @@ export default function PrivateScreen() {
     );
   }, [chatShellHeight, composerBlockHeight, showFriendChips]);
 
-  // حافظ على موضع التمرير؛ إن كان المستخدم أسفل المحادثة أبقِه أسفلها بعد تغيّر الارتفاع
+  // إن كان المستخدم أسفل المحادثة أبقِه أسفلها بعد تغيّر الارتفاع فقط
   useEffect(() => {
     if (section !== 'chat') return;
     if (!chatNearBottomRef.current) return;
@@ -1328,6 +1349,7 @@ export default function PrivateScreen() {
 
       {section === 'chat' ? (
         <View
+          ref={chatShellRef}
           style={[
             styles.chatShell,
             {
@@ -1610,17 +1632,14 @@ export default function PrivateScreen() {
                           blurTimerRef.current = null;
                         }
                         setComposerFocused(true);
-                        setPrivateChatComposerFocused(true);
                       }}
                       onBlur={() => {
-                        // تأخير قصير حتى لا يُفقد التركيز عند الضغط على إرسال/مرفق
                         if (blurTimerRef.current) {
                           clearTimeout(blurTimerRef.current);
                         }
                         blurTimerRef.current = setTimeout(() => {
                           blurTimerRef.current = null;
                           setComposerFocused(false);
-                          setPrivateChatComposerFocused(false);
                         }, 120);
                       }}
                       style={[

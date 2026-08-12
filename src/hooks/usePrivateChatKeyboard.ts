@@ -1,48 +1,71 @@
-import { useEffect, useRef, useState } from 'react';
-import { Keyboard, Platform } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { Keyboard, Platform, type View } from 'react-native';
 
 export type PrivateChatKeyboardState = {
-  /** قياس حقيقي لفتح اللوحة — مستقل عن تركيز حقل الكتابة */
+  /** فتح اللوحة — مستقل عن تركيز حقل الكتابة */
   keyboardOpen: boolean;
   /**
-   * المسافة التي تغطيها اللوحة من أسفل نافذة التخطيط.
-   * تُطبَّق على الويب فقط عندما يكون ملحّن المحادثة هو المركّز.
-   * على native تبقى 0 لأن KeyboardAvoidingView / windowSoftInputMode هما المسؤولان.
+   * ارتفاع غلاف المحادثة أثناء فتح اللوحة وتركيز الملحّن (ويب فقط).
+   * null = استخدم الارتفاع الأساسي دون تعديل لوحة المفاتيح.
    */
-  keyboardInset: number;
+  chatHeightOverride: number | null;
 };
 
 type Options = {
-  /** قسم المحادثة نشط */
   active: boolean;
-  /** تركيز حقل رسالة المحادثة الخاصة فقط */
   composerFocused: boolean;
+  /** مرجع غلاف المحادثة لقياس المساحة فوق اللوحة */
+  containerRef: RefObject<View | null>;
 };
 
 const FOCUS_CLASS = 'seellie-private-chat-composer';
 
+type LayoutSnapshot = {
+  keyboardOpen: boolean;
+  chatHeightOverride: number | null;
+};
+
 /**
- * مصدر واحد لحساب تداخل لوحة المفاتيح مع محادثة خاصة.
- * لا يغيّر body.position، ولا يخلط بين keyboardOpen وcomposerFocused.
+ * مصدر واحد لتخطيط لوحة مفاتيح محادثة خاصة.
+ *
+ * الويب: يقيس المسافة من أعلى حاوية المحادثة إلى أسفل visualViewport.
+ * لا يخصم keyboardInset من windowHeight (يمنع التصغير المزدوج مع Dimensions).
+ * لا يثبّت document.body.
+ *
+ * native: يبلّغ keyboardOpen فقط؛ الموضع عبر KeyboardAvoidingView.
  */
 export function usePrivateChatKeyboard({
   active,
   composerFocused,
+  containerRef,
 }: Options): PrivateChatKeyboardState {
-  const [state, setState] = useState<PrivateChatKeyboardState>({
+  const [state, setState] = useState<LayoutSnapshot>({
     keyboardOpen: false,
-    keyboardInset: 0,
+    chatHeightOverride: null,
   });
   const focusedRef = useRef(composerFocused);
   focusedRef.current = composerFocused;
-  const lockedScrollY = useRef(0);
   const rafRef = useRef<number | null>(null);
-  const lastInsetRef = useRef(0);
+  const lastRef = useRef<LayoutSnapshot>({
+    keyboardOpen: false,
+    chatHeightOverride: null,
+  });
+
+  const apply = useCallback((next: LayoutSnapshot) => {
+    const prev = lastRef.current;
+    if (
+      prev.keyboardOpen === next.keyboardOpen &&
+      prev.chatHeightOverride === next.chatHeightOverride
+    ) {
+      return;
+    }
+    lastRef.current = next;
+    setState(next);
+  }, []);
 
   useEffect(() => {
     if (!active) {
-      lastInsetRef.current = 0;
-      setState({ keyboardOpen: false, keyboardInset: 0 });
+      apply({ keyboardOpen: false, chatHeightOverride: null });
       if (Platform.OS === 'web' && typeof document !== 'undefined') {
         document.documentElement.classList.remove(FOCUS_CLASS);
       }
@@ -52,69 +75,60 @@ export function usePrivateChatKeyboard({
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const vv = window.visualViewport;
 
-      const publish = () => {
+      const updateChatKeyboardLayout = () => {
         if (!focusedRef.current) {
-          if (lastInsetRef.current !== 0) {
-            lastInsetRef.current = 0;
-            setState({ keyboardOpen: false, keyboardInset: 0 });
-          } else {
-            setState((prev) =>
-              prev.keyboardOpen || prev.keyboardInset
-                ? { keyboardOpen: false, keyboardInset: 0 }
-                : prev
-            );
-          }
+          apply({ keyboardOpen: false, chatHeightOverride: null });
           return;
         }
 
         const layoutH = window.innerHeight;
         const vvHeight = vv?.height ?? layoutH;
         const vvTop = vv?.offsetTop ?? 0;
-        const inset = Math.max(0, Math.round(layoutH - vvHeight - vvTop));
-        const open = inset > 0;
+        const covered = Math.max(0, layoutH - vvHeight - vvTop);
+        const open = covered > 0;
 
-        if (inset === lastInsetRef.current) {
-          setState((prev) =>
-            prev.keyboardOpen === open && prev.keyboardInset === inset
-              ? prev
-              : { keyboardOpen: open, keyboardInset: inset }
-          );
+        if (!open) {
+          apply({ keyboardOpen: false, chatHeightOverride: null });
           return;
         }
-        lastInsetRef.current = inset;
-        setState({ keyboardOpen: open, keyboardInset: inset });
+
+        const node = containerRef.current;
+        if (!node || typeof node.measureInWindow !== 'function') {
+          // بدون قياس الحاوية لا نخمّن ارتفاعًا من Dimensions (سبب الفراغ السابق)
+          apply({ keyboardOpen: true, chatHeightOverride: null });
+          return;
+        }
+
+        node.measureInWindow((_x, y) => {
+          if (!focusedRef.current) return;
+          const vvBottom = vvTop + vvHeight;
+          // المساحة الفعلية من أعلى غلاف المحادثة إلى أعلى اللوحة
+          const available = Math.round(vvBottom - y);
+          apply({
+            keyboardOpen: true,
+            chatHeightOverride: Math.max(0, available),
+          });
+        });
       };
 
       const schedule = () => {
         if (rafRef.current != null) return;
         rafRef.current = requestAnimationFrame(() => {
           rafRef.current = null;
-          publish();
+          updateChatKeyboardLayout();
         });
       };
 
       if (composerFocused) {
-        lockedScrollY.current = window.scrollY || 0;
         document.documentElement.classList.add(FOCUS_CLASS);
-        publish();
       } else {
         document.documentElement.classList.remove(FOCUS_CLASS);
-        lastInsetRef.current = 0;
-        setState({ keyboardOpen: false, keyboardInset: 0 });
+        apply({ keyboardOpen: false, chatHeightOverride: null });
       }
 
-      /** Safari يحرّك تمرير الصفحة لإظهار الحقل — نعيد الموضع المحفوظ عند التركيز فقط */
-      const onVvScroll = () => {
-        if (!focusedRef.current) return;
-        const y = lockedScrollY.current;
-        if (Math.abs((window.scrollY || 0) - y) > 0.5) {
-          window.scrollTo({ top: y, left: 0, behavior: 'auto' });
-        }
-        schedule();
-      };
-
+      schedule();
       vv?.addEventListener('resize', schedule);
-      vv?.addEventListener('scroll', onVvScroll);
+      vv?.addEventListener('scroll', schedule);
       window.addEventListener('resize', schedule);
 
       return () => {
@@ -123,15 +137,13 @@ export function usePrivateChatKeyboard({
           rafRef.current = null;
         }
         vv?.removeEventListener('resize', schedule);
-        vv?.removeEventListener('scroll', onVvScroll);
+        vv?.removeEventListener('scroll', schedule);
         window.removeEventListener('resize', schedule);
         document.documentElement.classList.remove(FOCUS_CLASS);
-        lastInsetRef.current = 0;
-        setState({ keyboardOpen: false, keyboardInset: 0 });
+        apply({ keyboardOpen: false, chatHeightOverride: null });
       };
     }
 
-    // iOS/Android: لا نخصم ارتفاعاً هنا — Screen.KeyboardAvoidingView أو resize النافذة
     const show =
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hide =
@@ -139,21 +151,32 @@ export function usePrivateChatKeyboard({
 
     const onShow = Keyboard.addListener(show, () => {
       if (!focusedRef.current) {
-        setState({ keyboardOpen: false, keyboardInset: 0 });
+        apply({ keyboardOpen: false, chatHeightOverride: null });
         return;
       }
-      setState({ keyboardOpen: true, keyboardInset: 0 });
+      apply({ keyboardOpen: true, chatHeightOverride: null });
     });
     const onHide = Keyboard.addListener(hide, () => {
-      setState({ keyboardOpen: false, keyboardInset: 0 });
+      apply({ keyboardOpen: false, chatHeightOverride: null });
     });
 
     return () => {
       onShow.remove();
       onHide.remove();
-      setState({ keyboardOpen: false, keyboardInset: 0 });
+      apply({ keyboardOpen: false, chatHeightOverride: null });
     };
-  }, [active, composerFocused]);
+  }, [active, composerFocused, containerRef, apply]);
 
   return state;
+}
+
+/**
+ * ارتفاع نافذة التخطيط على الويب (innerHeight) — لا يتبع visualViewport.
+ * على native يُعاد windowHeight كما هو.
+ */
+export function getLayoutViewportHeight(windowHeight: number): number {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.innerHeight || windowHeight;
+  }
+  return windowHeight;
 }
