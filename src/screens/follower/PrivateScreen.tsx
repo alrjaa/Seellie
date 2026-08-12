@@ -11,7 +11,6 @@ import {
   AppState,
   FlatList,
   Image,
-  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -51,126 +50,13 @@ import { ensureSocialLists } from '@/utils/social-stats';
 import { formatArabicDate } from '@/utils';
 import { tabBarTotalHeight } from '@/theme/navigation';
 import { setPrivateChatComposerFocused } from '@/services/private-chat-focus';
+import { usePrivateChatKeyboard } from '@/hooks/usePrivateChatKeyboard';
 import type {
   PrivateChatMediaKind,
   PrivateContentItem,
 } from '@/services/private-space';
 import type { User } from '@/providers/TournamentProvider';
 import { isUuid } from '@/services/supabase-messages';
-
-/**
- * إطار المنطقة المرئية على الويب (فوق لوحة مفاتيح Safari).
- * نثبّت غلاف المحادثة على هذا الإطار بالكامل — بدون bottom عائم يترك فجوة.
- */
-function useVisibleViewport(enabled: boolean, windowHeight: number) {
-  const [visibleHeight, setVisibleHeight] = useState(windowHeight);
-  const [viewportTop, setViewportTop] = useState(0);
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const lockedScrollY = useRef(0);
-
-  useEffect(() => {
-    if (!enabled) {
-      setVisibleHeight(windowHeight);
-      setViewportTop(0);
-      setKeyboardOpen(false);
-      setPrivateChatComposerFocused(false);
-      if (Platform.OS === 'web' && typeof document !== 'undefined') {
-        document.body.classList.remove('seellie-chat-focus');
-        document.body.style.position = '';
-        document.body.style.top = '';
-        document.body.style.width = '';
-        document.body.style.left = '';
-        document.body.style.right = '';
-        document.body.style.overflow = '';
-      }
-      return;
-    }
-
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const vv = window.visualViewport;
-      const update = () => {
-        const layoutH = window.innerHeight || windowHeight;
-        const height = Math.round(vv?.height || layoutH);
-        const top = Math.round(vv?.offsetTop || 0);
-        const covered = Math.max(0, layoutH - height - top);
-        const open = covered > 50 || layoutH - height > 90;
-
-        setVisibleHeight(Math.max(200, height));
-        setViewportTop(open ? top : 0);
-        setKeyboardOpen(open);
-        setPrivateChatComposerFocused(open);
-
-        if (open) {
-          document.body.classList.add('seellie-chat-focus');
-          if (document.body.style.position !== 'fixed') {
-            lockedScrollY.current = window.scrollY || 0;
-            document.body.style.position = 'fixed';
-            document.body.style.top = `-${lockedScrollY.current}px`;
-            document.body.style.left = '0';
-            document.body.style.right = '0';
-            document.body.style.width = '100%';
-            document.body.style.overflow = 'hidden';
-          }
-        } else {
-          document.body.classList.remove('seellie-chat-focus');
-          if (document.body.style.position === 'fixed') {
-            const y = lockedScrollY.current;
-            document.body.style.position = '';
-            document.body.style.top = '';
-            document.body.style.left = '';
-            document.body.style.right = '';
-            document.body.style.width = '';
-            document.body.style.overflow = '';
-            window.scrollTo(0, y);
-          }
-        }
-      };
-      update();
-      vv?.addEventListener('resize', update);
-      vv?.addEventListener('scroll', update);
-      window.addEventListener('resize', update);
-      return () => {
-        vv?.removeEventListener('resize', update);
-        vv?.removeEventListener('scroll', update);
-        window.removeEventListener('resize', update);
-        setPrivateChatComposerFocused(false);
-        document.body.classList.remove('seellie-chat-focus');
-        document.body.style.position = '';
-        document.body.style.top = '';
-        document.body.style.left = '';
-        document.body.style.right = '';
-        document.body.style.width = '';
-        document.body.style.overflow = '';
-      };
-    }
-
-    const show =
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hide =
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const onShow = Keyboard.addListener(show, (e) => {
-      const kb = Math.max(0, e.endCoordinates?.height || 0);
-      setKeyboardOpen(kb > 80);
-      setViewportTop(0);
-      setVisibleHeight(Math.max(240, windowHeight - kb));
-      setPrivateChatComposerFocused(kb > 80);
-    });
-    const onHide = Keyboard.addListener(hide, () => {
-      setKeyboardOpen(false);
-      setViewportTop(0);
-      setVisibleHeight(windowHeight);
-      setPrivateChatComposerFocused(false);
-    });
-    setVisibleHeight(windowHeight);
-    return () => {
-      onShow.remove();
-      onHide.remove();
-      setPrivateChatComposerFocused(false);
-    };
-  }, [enabled, windowHeight]);
-
-  return { visibleHeight, viewportTop, keyboardOpen };
-}
 
 function isHttpUrl(url?: string) {
   return !!url && /^https?:\/\//i.test(url.trim());
@@ -612,15 +498,15 @@ export default function PrivateScreen() {
   const { toast } = useToast();
   const listChrome = useListChrome();
   const insets = useSafeAreaInsets();
-  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const { height: windowHeight } = useWindowDimensions();
   const { desktop } = useResponsive();
   const space = usePrivateSpace(currentUser?.id);
   const [section, setSection] = useState<Section>('friends');
   const [composerFocused, setComposerFocused] = useState(false);
-  const { visibleHeight, viewportTop, keyboardOpen } = useVisibleViewport(
-    section === 'chat',
-    windowHeight
-  );
+  const { keyboardInset } = usePrivateChatKeyboard({
+    active: section === 'chat',
+    composerFocused,
+  });
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [pickOpen, setPickOpen] = useState(false);
@@ -637,10 +523,10 @@ export default function PrivateScreen() {
     uri: string;
     kind: PrivateChatMediaKind;
   } | null>(null);
-
-  useEffect(() => {
-    if (keyboardOpen) setComposerFocused(true);
-  }, [keyboardOpen]);
+  const chatListRef = useRef<ScrollView>(null);
+  const chatScrollYRef = useRef(0);
+  const chatNearBottomRef = useRef(true);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (section !== 'chat') {
@@ -648,6 +534,13 @@ export default function PrivateScreen() {
       setPrivateChatComposerFocused(false);
     }
   }, [section]);
+
+  useEffect(() => {
+    return () => {
+      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+      setPrivateChatComposerFocused(false);
+    };
+  }, []);
 
   const me = useMemo(
     () => (currentUser ? ensureSocialLists(currentUser) : null),
@@ -763,54 +656,59 @@ export default function PrivateScreen() {
     ? space.chats[activeFriend.id] || []
     : [];
 
-  // ارتفاع المحادثة من المنطقة المرئية — عند فتح لوحة المفاتيح نخفي التبويب فلا نخصمه
+  // مصدر واحد لارتفاع الغلاف:
+  // - الويب: keyboardInset من visualViewport عند تركيز الملحّن فقط
+  // - native: لا نخصم اللوحة هنا (KeyboardAvoidingView / resize النافذة)
   const tabBarHeight = useMemo(
     () => (desktop ? 0 : tabBarTotalHeight(insets.bottom)),
     [desktop, insets.bottom]
   );
-  const composerBlockHeight = pendingMedia ? 118 : 58;
-  const chatKeyboardActive =
-    Platform.OS === 'web' && (keyboardOpen || composerFocused);
-  const showFriendChips = !chatKeyboardActive;
-  const showSectionBar = !chatKeyboardActive;
-  // ثبّت الغلاف فقط بعد قياس visualViewport الحقيقي (بعد فتح اللوحة)
-  const pinChatToViewport =
-    Platform.OS === 'web' && !desktop && section === 'chat' && keyboardOpen;
+  const composerBlockHeight = pendingMedia ? 118 : 66;
+  // إخفاء شريط الأقسام/الأصدقاء أثناء تركيز الحقل فقط — ليس أي لوحة مفاتيح عامة
+  const showFriendChips = !(Platform.OS === 'web' && composerFocused);
+  const showSectionBar = !(Platform.OS === 'web' && composerFocused);
+  const webKeyboardInset =
+    Platform.OS === 'web' && composerFocused ? keyboardInset : 0;
 
   const chatShellHeight = useMemo(() => {
-    if (pinChatToViewport) {
-      return Math.max(200, Math.floor(visibleHeight));
-    }
     const sectionBar = showSectionBar ? 44 : 0;
     const screenPad = 8;
-    const tabReserve = desktop ? 0 : tabBarHeight;
+    // التبويب يُخفى عند تركيز الملحّن عبر private-chat-focus
+    const tabReserve =
+      desktop || (Platform.OS === 'web' && composerFocused) ? 0 : tabBarHeight;
     return Math.max(
-      220,
-      Math.floor(visibleHeight - sectionBar - screenPad - tabReserve)
+      160,
+      Math.floor(
+        windowHeight - sectionBar - screenPad - tabReserve - webKeyboardInset
+      )
     );
   }, [
-    pinChatToViewport,
-    visibleHeight,
+    windowHeight,
     desktop,
     tabBarHeight,
     showSectionBar,
+    composerFocused,
+    webKeyboardInset,
   ]);
 
   const chatMessagesHeight = useMemo(() => {
     const chips = showFriendChips ? 48 : 0;
     const head = 34;
-    const gaps = pinChatToViewport ? 12 : 16;
-    const panelPad = pinChatToViewport ? 16 : 0;
+    const gaps = 16;
     return Math.max(
-      80,
-      chatShellHeight - chips - head - gaps - composerBlockHeight - panelPad
+      72,
+      chatShellHeight - chips - head - gaps - composerBlockHeight
     );
-  }, [
-    chatShellHeight,
-    composerBlockHeight,
-    showFriendChips,
-    pinChatToViewport,
-  ]);
+  }, [chatShellHeight, composerBlockHeight, showFriendChips]);
+
+  // حافظ على موضع التمرير؛ إن كان المستخدم أسفل المحادثة أبقِه أسفلها بعد تغيّر الارتفاع
+  useEffect(() => {
+    if (section !== 'chat') return;
+    if (!chatNearBottomRef.current) return;
+    requestAnimationFrame(() => {
+      chatListRef.current?.scrollToEnd({ animated: false });
+    });
+  }, [chatMessagesHeight, section]);
 
   const onAddFriend = useCallback(
     async (friendId: string, opts?: { stayOnSaved?: boolean }) => {
@@ -1435,21 +1333,6 @@ export default function PrivateScreen() {
             {
               height: chatShellHeight,
             },
-            pinChatToViewport
-              ? ({
-                  position: 'fixed',
-                  top: viewportTop,
-                  left: 0,
-                  width: windowWidth,
-                  height: visibleHeight,
-                  zIndex: 10040,
-                  marginTop: 0,
-                  paddingHorizontal: 10,
-                  paddingTop: 8,
-                  paddingBottom: 6,
-                  backgroundColor: theme.colors.background,
-                } as object)
-              : null,
           ]}
         >
           {friends.length === 0 ? (
@@ -1539,11 +1422,22 @@ export default function PrivateScreen() {
                 </View>
 
                 <ScrollView
+                  ref={chatListRef}
                   style={[styles.chatListScroll, { height: chatMessagesHeight }]}
                   contentContainerStyle={styles.chatList}
                   keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="interactive"
                   nestedScrollEnabled
                   showsVerticalScrollIndicator
+                  onScroll={(e) => {
+                    const { contentOffset, contentSize, layoutMeasurement } =
+                      e.nativeEvent;
+                    chatScrollYRef.current = contentOffset.y;
+                    chatNearBottomRef.current =
+                      contentOffset.y + layoutMeasurement.height >=
+                      contentSize.height - 48;
+                  }}
+                  scrollEventThrottle={16}
                 >
                   {chatMessages.length === 0 ? (
                     <Muted>{t('privateSpace.noMessages')}</Muted>
@@ -1711,23 +1605,29 @@ export default function PrivateScreen() {
                       returnKeyType="send"
                       blurOnSubmit={false}
                       onFocus={() => {
+                        if (blurTimerRef.current) {
+                          clearTimeout(blurTimerRef.current);
+                          blurTimerRef.current = null;
+                        }
                         setComposerFocused(true);
                         setPrivateChatComposerFocused(true);
                       }}
                       onBlur={() => {
-                        // تأخير بسيط حتى لا نُسقط التركيز قبل أن يبلّغ visualViewport بفتح اللوحة
-                        setTimeout(() => {
+                        // تأخير قصير حتى لا يُفقد التركيز عند الضغط على إرسال/مرفق
+                        if (blurTimerRef.current) {
+                          clearTimeout(blurTimerRef.current);
+                        }
+                        blurTimerRef.current = setTimeout(() => {
+                          blurTimerRef.current = null;
                           setComposerFocused(false);
-                          if (Platform.OS !== 'web') {
-                            setPrivateChatComposerFocused(false);
-                          }
-                        }, 80);
+                          setPrivateChatComposerFocused(false);
+                        }, 120);
                       }}
                       style={[
                         styles.composerInput,
                         {
                           color: theme.colors.text,
-                          backgroundColor: theme.colors.background,
+                          backgroundColor: theme.colors.surfaceElevated,
                           borderColor: theme.colors.border,
                           fontSize: 16,
                         },

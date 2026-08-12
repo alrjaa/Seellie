@@ -56,21 +56,13 @@ export function injectDesktopWebStyles() {
     input, textarea, button, select {
       outline-color: #25F4EE;
     }
-    /* أثناء كتابة رسالة خاصة: امنع قفز Safari واحفظ الحقل فوق لوحة المفاتيح */
-    body.seellie-chat-focus {
-      overflow: hidden !important;
+    /* أثناء تركيز ملحّن المحادثة الخاصة: امنع زوم iOS دون تثبيت body */
+    html.seellie-private-chat-composer {
       overscroll-behavior: none;
-      touch-action: none;
     }
-    body.seellie-chat-focus input,
-    body.seellie-chat-focus textarea {
-      font-size: 16px !important; /* يمنع زوم iOS على الحقل */
-    }
-    /* صف الملحّن: لا قصّ ولا تمدد خاطئ على Safari */
-    body.seellie-chat-focus input {
-      min-width: 0 !important;
-      max-width: 100% !important;
-      box-sizing: border-box !important;
+    html.seellie-private-chat-composer input,
+    html.seellie-private-chat-composer textarea {
+      font-size: 16px !important;
     }
     a {
       color: inherit;
