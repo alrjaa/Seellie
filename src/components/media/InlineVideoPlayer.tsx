@@ -1,4 +1,12 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  createElement,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   AppState,
   Modal,
@@ -21,26 +29,32 @@ type Props = {
   /** ارتفاع ثابت اختياري — بدونها يُحسب حسب الشاشة (مناسب للكمبيوتر) */
   height?: number;
   style?: ViewStyle;
-  /** تشغيل صامت تلقائي (اختياري) */
+  /**
+   * تشغيل صامت تلقائي عند ظهور الفيديو في الشاشة.
+   * الافتراضي true على الويب؛ يتوقف عند التمرير بعيدًا.
+   */
   autoPlayMuted?: boolean;
 };
 
 /**
- * لقطة فيديو قابلة للتشغيل داخل البطاقة (ويب + جوال)
- * يتوقف تلقائياً عند مغادرة الشاشة أو خلفية التطبيق.
+ * لقطة فيديو داخل البطاقة (ويب + جوال).
+ * على الويب: يعمل عند الظهور ويتوقف عند التخطي.
  */
 function InlineVideoPlayerComponent({
   uri,
   height: heightProp,
   style,
-  autoPlayMuted = false,
+  autoPlayMuted = Platform.OS === 'web',
 }: Props) {
   const theme = useAppTheme();
   const focused = useIsFocused();
   const { width, height: winH, tablet } = useResponsive();
   const [fullscreen, setFullscreen] = useState(false);
+  const [inView, setInView] = useState(Platform.OS !== 'web');
   const videoRef = useRef<VideoType | null>(null);
   const fullRef = useRef<VideoType | null>(null);
+  const htmlRef = useRef<HTMLVideoElement | null>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   const playerHeight = useMemo(() => {
     if (typeof heightProp === 'number') return heightProp;
@@ -63,47 +77,112 @@ function InlineVideoPlayerComponent({
     return clamp(byRatio, 200, 320);
   }, [heightProp, width, winH, tablet]);
 
-  const stopAll = () => {
+  const stopInline = useCallback(() => {
     void videoRef.current?.pauseAsync().catch(() => undefined);
+    htmlRef.current?.pause();
+  }, []);
+
+  const stopAll = useCallback(() => {
+    stopInline();
     void fullRef.current?.pauseAsync().catch(() => undefined);
     if (Platform.OS === 'web') {
       void videoRef.current?.unloadAsync().catch(() => undefined);
       void fullRef.current?.unloadAsync().catch(() => undefined);
     }
     setFullscreen(false);
-  };
+  }, [stopInline]);
+
+  const bindWebVideo = useCallback(
+    (node: HTMLVideoElement | null) => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      htmlRef.current = node;
+      if (!node) return;
+
+      node.muted = true;
+      node.defaultMuted = true;
+      node.playsInline = true;
+      node.loop = true;
+
+      if (!autoPlayMuted || typeof IntersectionObserver === 'undefined') {
+        setInView(true);
+        void node.play().catch(() => undefined);
+        return;
+      }
+
+      const io = new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+          const visible =
+            !!entry?.isIntersecting && (entry.intersectionRatio ?? 0) >= 0.3;
+          setInView(visible);
+          const el = htmlRef.current;
+          if (!el) return;
+          el.muted = true;
+          if (visible && focused && !fullscreen) {
+            void el.play().catch(() => undefined);
+          } else {
+            el.pause();
+          }
+        },
+        { threshold: [0, 0.3, 0.6, 1] }
+      );
+      io.observe(node);
+      observerRef.current = io;
+      void node.play().catch(() => undefined);
+    },
+    [autoPlayMuted, focused, fullscreen]
+  );
 
   useEffect(() => {
-    if (!focused) stopAll();
+    return () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      htmlRef.current?.pause();
+    };
+  }, [uri]);
+
+  useEffect(() => {
+    if (!focused) {
+      stopAll();
+      return;
+    }
     return () => stopAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focused, uri]);
+  }, [focused, uri, stopAll]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active') stopAll();
     });
     return () => sub.remove();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [stopAll]);
+
+  const shouldAutoPlay =
+    autoPlayMuted && focused && inView && !fullscreen;
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const el = htmlRef.current;
+      if (!el) return;
+      el.muted = true;
+      if (shouldAutoPlay) void el.play().catch(() => undefined);
+      else el.pause();
+      return;
+    }
+    if (!autoPlayMuted) return;
+    if (shouldAutoPlay) {
+      void videoRef.current?.playAsync().catch(() => undefined);
+    } else {
+      stopInline();
+    }
+  }, [shouldAutoPlay, autoPlayMuted, stopInline, uri]);
 
   if (!uri) return null;
-
-  const canAutoPlay = autoPlayMuted && focused;
-
-  const videoProps = {
-    source: { uri },
-    useNativeControls: true,
-    resizeMode: ResizeMode.CONTAIN,
-    isLooping: false,
-    shouldPlay: canAutoPlay,
-    isMuted: autoPlayMuted,
-    ...(Platform.OS === 'web' ? ({ playsInline: true } as object) : null),
-  };
 
   return (
     <>
       <View
+        collapsable={false}
         style={[
           styles.wrap,
           {
@@ -114,8 +193,37 @@ function InlineVideoPlayerComponent({
           style,
         ]}
       >
-        {focused ? (
-          <Video ref={videoRef} {...videoProps} style={styles.video} />
+        {focused && Platform.OS === 'web' ? (
+          createElement('video', {
+            key: uri,
+            ref: bindWebVideo,
+            src: uri,
+            muted: true,
+            defaultMuted: true,
+            autoPlay: true,
+            loop: true,
+            playsInline: true,
+            preload: 'auto',
+            controls: !autoPlayMuted,
+            style: {
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              backgroundColor: '#000',
+              display: 'block',
+            },
+          })
+        ) : focused ? (
+          <Video
+            ref={videoRef}
+            source={{ uri }}
+            style={styles.video}
+            resizeMode={ResizeMode.CONTAIN}
+            useNativeControls={!autoPlayMuted}
+            isLooping={autoPlayMuted}
+            shouldPlay={shouldAutoPlay}
+            isMuted={autoPlayMuted}
+          />
         ) : (
           <View style={[styles.video, { backgroundColor: '#000' }]} />
         )}
@@ -144,10 +252,16 @@ function InlineVideoPlayerComponent({
         <View style={styles.fullRoot}>
           <Video
             ref={fullRef}
-            {...videoProps}
+            source={{ uri }}
             style={styles.fullVideo}
+            resizeMode={ResizeMode.CONTAIN}
+            useNativeControls
             shouldPlay
             isMuted={false}
+            isLooping={false}
+            {...(Platform.OS === 'web'
+              ? ({ playsInline: true } as object)
+              : null)}
           />
           <Pressable
             onPress={() => setFullscreen(false)}

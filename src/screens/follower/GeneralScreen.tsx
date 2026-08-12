@@ -171,7 +171,7 @@ const FeedCard = memo(function FeedCard({
         ) : null}
 
         {item.type === 'video' && item.mediaUrl ? (
-          <InlineVideoPlayer uri={item.mediaUrl} />
+          <InlineVideoPlayer uri={item.mediaUrl} autoPlayMuted />
         ) : null}
 
         <LikeButton
