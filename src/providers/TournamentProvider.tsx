@@ -2655,58 +2655,54 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
       const isGeneral = !target || target.type === 'general';
 
-      // مساهمات الساحة العامة → سحابة إلزامية للفيديو (لا ننشر blob/file محلياً فقط)
+      // مساهمات الساحة/عام → سحابة إلزامية (نص أو فيديو) حتى تظهر على كل الأجهزة
       if (isGeneral && isSupabaseConfigured()) {
         const cloud = await requireCloudSession(currentUser.id);
         if (!cloud.session) {
-          if (videoUrl) {
-            toast({
-              variant: 'destructive',
-              title: t('forums.cloudSyncFailed'),
-              description: cloudWriteErrorMessage(cloud.error || 'no_session'),
-            });
-            return false;
-          }
-          // نص فقط بدون جلسة → يبقى المسار المحلي أدناه
-        } else {
-          let finalVideoUrl = videoUrl;
-          if (finalVideoUrl) {
-            const resolved = await resolvePublicMediaUrl({
-              uri: finalVideoUrl,
-              kind: 'video',
-              folder: 'forums',
-              userId: cloud.session.userId,
-              requireCloud: true,
-            });
-            if (!resolved.url) {
-              toast({
-                variant: 'destructive',
-                title: t('forums.cloudSyncFailed'),
-                description: cloudWriteErrorMessage(resolved.error),
-              });
-              return false;
-            }
-            finalVideoUrl = resolved.url;
-          }
-          const remote = await insertForumComment({
-            authorId: cloud.session.userId,
-            authorName: currentUser.name,
-            authorAvatar: currentUser.avatar,
-            text: trimmed,
-            videoUrl: finalVideoUrl,
-            videoDurationSec: extras?.videoDurationSec,
-          });
-          if (remote.comment) {
-            publishLocal(remote.comment);
-            return true;
-          }
           toast({
             variant: 'destructive',
             title: t('forums.cloudSyncFailed'),
-            description: remote.error || cloudWriteErrorMessage('no_session'),
+            description: cloudWriteErrorMessage(cloud.error || 'no_session'),
           });
           return false;
         }
+        let finalVideoUrl = videoUrl;
+        if (finalVideoUrl) {
+          const resolved = await resolvePublicMediaUrl({
+            uri: finalVideoUrl,
+            kind: 'video',
+            folder: 'forums',
+            userId: cloud.session.userId,
+            requireCloud: true,
+          });
+          if (!resolved.url) {
+            toast({
+              variant: 'destructive',
+              title: t('forums.cloudSyncFailed'),
+              description: cloudWriteErrorMessage(resolved.error),
+            });
+            return false;
+          }
+          finalVideoUrl = resolved.url;
+        }
+        const remote = await insertForumComment({
+          authorId: cloud.session.userId,
+          authorName: currentUser.name,
+          authorAvatar: currentUser.avatar,
+          text: trimmed,
+          videoUrl: finalVideoUrl,
+          videoDurationSec: extras?.videoDurationSec,
+        });
+        if (remote.comment) {
+          publishLocal(remote.comment);
+          return true;
+        }
+        toast({
+          variant: 'destructive',
+          title: t('forums.cloudSyncFailed'),
+          description: remote.error || cloudWriteErrorMessage('no_session'),
+        });
+        return false;
       }
 
       // لا نسمح بفيديو محلي يظهر «منشوراً» على الجهاز فقط

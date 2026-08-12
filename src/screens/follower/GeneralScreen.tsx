@@ -215,10 +215,11 @@ export default function GeneralFeedScreen() {
     setDiscussionText('');
   }, []);
 
-  const publishDiscussion = useCallback(() => {
+  const publishDiscussion = useCallback(async () => {
     const value = discussionText.trim();
     if (!value) return;
-    addComment(value, undefined, { type: 'general' });
+    const ok = await addComment(value, undefined, { type: 'general' });
+    if (!ok) return;
     setDiscussionText('');
     setFilter('discussions');
     setDiscussionModalOpen(false);
@@ -443,6 +444,25 @@ export default function GeneralFeedScreen() {
     comments.forEach((c) => {
       if (c.status === 'blocked' || c.status === 'suspended') return;
       const author = users.find((u) => u.id === c.authorId);
+      const forumVideo =
+        c.videoUrl && isHttpUrl(c.videoUrl) ? c.videoUrl.trim() : undefined;
+      // فيديو الساحة يظهر في «عام» كوسائط (وليس نص نقاش فقط)
+      if (forumVideo) {
+        items.push({
+          id: `forum-video-${c.id}`,
+          type: 'video',
+          authorId: c.authorId,
+          authorName: c.authorName,
+          authorHandle: author?.handle,
+          authorAvatar: c.authorAvatar,
+          text: c.text,
+          mediaUrl: forumVideo,
+          likes: c.likes,
+          timestamp: new Date(c.timestamp),
+          subtitle: t('screens.publicForum'),
+        });
+        return;
+      }
       items.push({
         id: `discussion-${c.id}`,
         type: 'discussion',
@@ -486,7 +506,10 @@ export default function GeneralFeedScreen() {
       case 'media':
         return feed.filter((i) => i.type === 'photo' || i.type === 'video');
       case 'discussions':
-        return feed.filter((i) => i.type === 'discussion');
+        return feed.filter(
+          (i) =>
+            i.type === 'discussion' || i.id.startsWith('forum-video-')
+        );
       case 'posts':
         return feed.filter((i) => i.type === 'post' || i.type === 'analysis');
       default:
@@ -498,7 +521,9 @@ export default function GeneralFeedScreen() {
     () => ({
       all: feed.length,
       media: feed.filter((i) => i.type === 'photo' || i.type === 'video').length,
-      discussions: feed.filter((i) => i.type === 'discussion').length,
+      discussions: feed.filter(
+        (i) => i.type === 'discussion' || i.id.startsWith('forum-video-')
+      ).length,
       posts: feed.filter((i) => i.type === 'post' || i.type === 'analysis')
         .length,
     }),
@@ -518,6 +543,11 @@ export default function GeneralFeedScreen() {
       }
       if (item.type === 'analysis') {
         toggleAnalysisLike(item.authorId, item.id.replace(/^analysis-/, ''));
+        return;
+      }
+      // فيديوهات الساحة في الخلاصة العامة
+      if (item.type === 'video' && item.id.startsWith('forum-video-')) {
+        toggleCommentLike(item.id.replace(/^forum-video-/, ''));
         return;
       }
       if (item.type === 'photo' || item.type === 'video') {
@@ -612,6 +642,7 @@ export default function GeneralFeedScreen() {
       const source = filtered.find((f) => f.id === item.id);
       if (!source) return null;
       if (source.type === 'photo' || source.type === 'video') {
+        if (source.id.startsWith('forum-video-')) return null;
         if (!source.mediaId) return null;
         const created = addMediaComment(
           source.mediaOwnerId || source.authorId,
