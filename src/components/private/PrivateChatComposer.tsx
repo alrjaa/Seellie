@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ResizeMode, Video } from 'expo-av';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { Muted } from '@/components/ui';
+import { useResponsive } from '@/hooks/useResponsive';
 import { setPrivateChatComposerFocused } from '@/services/private-chat-focus';
 import type { PrivateChatMediaKind } from '@/services/private-space';
 
@@ -65,6 +66,7 @@ function PrivateChatComposerComponent({
   onKeyboardInsetChange,
 }: Props) {
   const theme = useAppTheme();
+  const { desktop } = useResponsive();
   const inputRef = useRef<TextInput>(null);
   const focusedRef = useRef(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -198,6 +200,8 @@ function PrivateChatComposerComponent({
         {
           borderColor: theme.colors.border,
           backgroundColor: theme.colors.surfaceElevated,
+          // سطح المكتب: ارفع حقل الكتابة ≈ 1 سم عن أسفل اللوحة
+          marginBottom: desktop ? 38 : 0,
         },
       ]}
     >
