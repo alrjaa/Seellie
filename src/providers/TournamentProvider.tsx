@@ -4165,7 +4165,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       const content = data.content.trim();
       let videoUrl = data.videoUrl?.trim() || undefined;
       let posterUrl = data.posterUrl?.trim() || undefined;
-      if (!title || (!content && !videoUrl && !posterUrl)) {
+      if (!title) {
         toast({
           variant: 'destructive',
           title: t('toasts.t036_3a814a'),
@@ -4226,7 +4226,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         id: createId(),
         matchId: data.matchId,
         title,
-        content: content || t('toasts.visualAnalysis'),
+        content:
+          content ||
+          (videoUrl || posterUrl ? t('toasts.visualAnalysis') : title),
         videoUrl,
         posterUrl,
         timestamp: new Date(),

@@ -79,18 +79,23 @@ function isVisualAnalysisPlaceholder(content: string) {
   );
 }
 
-function analysisHasText(item: Pick<AnalysisItem, 'title' | 'content'>) {
+/** أي نص كتبه المحلل (المحتوى أو العنوان دون وسائط فقط) */
+function analysisWrittenBody(item: Pick<AnalysisItem, 'content'>) {
   const body = (item.content || '').trim();
-  if (body && !isVisualAnalysisPlaceholder(body)) return true;
-  return !!(item.title || '').trim();
+  if (!body || isVisualAnalysisPlaceholder(body)) return '';
+  return body;
+}
+
+function analysisBelongsInTextFilter(
+  item: Pick<AnalysisItem, 'title' | 'content' | 'videoUrl' | 'posterUrl'>
+) {
+  if (analysisWrittenBody(item)) return true;
+  // تحليل نصي بحت: العنوان وحده يكفي إن لم تُرفق وسائط
+  return !item.videoUrl && !item.posterUrl && !!(item.title || '').trim();
 }
 
 function analysisIsPhotoOnly(item: Pick<AnalysisItem, 'videoUrl' | 'posterUrl'>) {
   return !!item.posterUrl && !item.videoUrl;
-}
-
-function analysisIsTextOnly(item: Pick<AnalysisItem, 'videoUrl' | 'posterUrl' | 'title' | 'content'>) {
-  return !item.videoUrl && !item.posterUrl && analysisHasText(item);
 }
 
 const AnalysisCard = memo(function AnalysisCard({
@@ -98,22 +103,28 @@ const AnalysisCard = memo(function AnalysisCard({
   liked,
   onLike,
   onShare,
+  textFocus = false,
 }: {
   item: AnalysisItem;
   liked: boolean;
   onLike: () => void;
   onShare?: () => void;
+  /** في فلتر النصوص نعرض النص فقط حتى لو وُجدت وسائط */
+  textFocus?: boolean;
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
-  const hasVideo = !!item.videoUrl;
-  const hasPhoto = !!item.posterUrl;
-  const isTextOnly = !hasVideo && !hasPhoto;
-  const kindIcon = hasVideo
-    ? 'videocam'
-    : hasPhoto
-      ? 'image'
-      : 'document-text';
+  const hasVideo = !!item.videoUrl && !textFocus;
+  const hasPhoto = !!item.posterUrl && !textFocus;
+  const body = analysisWrittenBody(item);
+  const isTextOnly = !item.videoUrl && !item.posterUrl;
+  const kindIcon = textFocus
+    ? 'document-text'
+    : item.videoUrl
+      ? 'videocam'
+      : item.posterUrl
+        ? 'image'
+        : 'document-text';
 
   return (
     <Card style={styles.card}>
@@ -124,7 +135,9 @@ const AnalysisCard = memo(function AnalysisCard({
           </Text>
           <Muted>{formatArabicDate(item.timestamp)}</Muted>
         </View>
-        {onShare && isTextOnly ? <TinyShareButton onPress={onShare} /> : null}
+        {onShare && (isTextOnly || textFocus) ? (
+          <TinyShareButton onPress={onShare} />
+        ) : null}
         <View
           style={[
             styles.kindBadge,
@@ -143,10 +156,12 @@ const AnalysisCard = memo(function AnalysisCard({
         {item.title}
       </Text>
 
-      {item.content && !isVisualAnalysisPlaceholder(item.content) ? (
+      {body ? (
         <Text style={[styles.body, { color: theme.colors.text }]}>
-          {item.content}
+          {body}
         </Text>
+      ) : textFocus && !body ? (
+        <Muted>{t('unique.textContentFromAnalyst')}</Muted>
       ) : null}
 
       {hasVideo ? (
@@ -174,7 +189,7 @@ const AnalysisCard = memo(function AnalysisCard({
         </View>
       ) : null}
 
-      {isTextOnly ? (
+      {isTextOnly && !body ? (
         <View style={styles.textTag}>
           <Ionicons
             name="create-outline"
@@ -270,7 +285,8 @@ export default function UniqueScreen() {
   const filtered = useMemo(() => {
     if (filter === 'video') return analyses.filter((a) => !!a.videoUrl);
     if (filter === 'photo') return analyses.filter((a) => analysisIsPhotoOnly(a));
-    if (filter === 'text') return analyses.filter((a) => analysisIsTextOnly(a));
+    if (filter === 'text')
+      return analyses.filter((a) => analysisBelongsInTextFilter(a));
     return analyses;
   }, [analyses, filter]);
 
@@ -279,7 +295,7 @@ export default function UniqueScreen() {
       all: analyses.length,
       video: analyses.filter((a) => !!a.videoUrl).length,
       photo: analyses.filter((a) => analysisIsPhotoOnly(a)).length,
-      text: analyses.filter((a) => analysisIsTextOnly(a)).length,
+      text: analyses.filter((a) => analysisBelongsInTextFilter(a)).length,
     }),
     [analyses]
   );
@@ -289,20 +305,34 @@ export default function UniqueScreen() {
     return filtered.map((item) => {
       const hasVideo = !!item.videoUrl;
       const hasPhoto = !!item.posterUrl;
-      const body =
-        item.content && !isVisualAnalysisPlaceholder(item.content)
-          ? item.content.trim()
-          : '';
-      const kind = hasVideo ? 'video' : hasPhoto ? 'photo' : 'text';
+      const body = analysisWrittenBody(item);
+      // في فلتر النصوص نعرض دائماً شريحة نصية حتى لو وُجدت وسائط
+      const kind =
+        filter === 'text'
+          ? 'text'
+          : hasVideo
+            ? 'video'
+            : hasPhoto
+              ? 'photo'
+              : 'text';
       return {
         id: item.id,
         kind,
-        mediaUrl: hasVideo ? item.videoUrl : hasPhoto ? item.posterUrl : undefined,
-        posterUrl: item.posterUrl,
+        mediaUrl:
+          kind === 'text'
+            ? undefined
+            : hasVideo
+              ? item.videoUrl
+              : hasPhoto
+                ? item.posterUrl
+                : undefined,
+        posterUrl: kind === 'text' ? undefined : item.posterUrl,
         title: item.title,
         text:
           kind === 'text'
-            ? body
+            ? body && body !== item.title.trim()
+              ? body
+              : ''
             : [item.title, body].filter(Boolean).join('\n'),
         authorId: item.authorId,
         authorName: item.authorName,
@@ -313,7 +343,7 @@ export default function UniqueScreen() {
         liked: item.likes.includes(currentUser.id),
       };
     });
-  }, [currentUser, filtered]);
+  }, [currentUser, filter, filtered]);
 
   const analystStatus = currentUser?.analyst?.status || 'none';
   const canPublish = isActiveAnalyst(currentUser);
@@ -488,9 +518,7 @@ export default function UniqueScreen() {
     videoUri,
   ]);
 
-  const canSubmitPublish =
-    !!title.trim() &&
-    (!!content.trim() || !!videoUri.trim() || !!videoLink.trim() || !!photoUri.trim());
+  const canSubmitPublish = !!title.trim();
 
   const onFullLike = useCallback(
     (item: FullScreenContent) => {
@@ -990,19 +1018,26 @@ export default function UniqueScreen() {
             <AnalysisCard
               key={item.id}
               item={item}
+              textFocus={filter === 'text'}
               liked={item.likes.includes(currentUser.id)}
               onLike={() => toggleAnalysisLike(item.authorId, item.id)}
               onShare={() =>
                 setSharePayload({
                   kind: 'content',
                   title: item.title,
-                  body: item.content,
-                  mediaUrl: item.videoUrl || item.posterUrl,
-                  mediaKind: item.videoUrl
-                    ? 'video'
-                    : item.posterUrl
-                      ? 'photo'
-                      : 'text',
+                  body: analysisWrittenBody(item) || item.title,
+                  mediaUrl:
+                    filter === 'text'
+                      ? undefined
+                      : item.videoUrl || item.posterUrl,
+                  mediaKind:
+                    filter === 'text'
+                      ? 'text'
+                      : item.videoUrl
+                        ? 'video'
+                        : item.posterUrl
+                          ? 'photo'
+                          : 'text',
                 })
               }
             />
