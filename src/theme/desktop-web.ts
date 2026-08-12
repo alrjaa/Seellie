@@ -56,14 +56,6 @@ export function injectDesktopWebStyles() {
     input, textarea, button, select {
       outline-color: #25F4EE;
     }
-    /* أثناء تركيز ملحّن المحادثة الخاصة: امنع زوم iOS دون تثبيت body */
-    html.seellie-private-chat-composer {
-      overscroll-behavior: none;
-    }
-    html.seellie-private-chat-composer input,
-    html.seellie-private-chat-composer textarea {
-      font-size: 16px !important;
-    }
     a {
       color: inherit;
     }

@@ -17,7 +17,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -49,11 +48,7 @@ import { usePrivateSpace } from '@/hooks/usePrivateSpace';
 import { ensureSocialLists } from '@/utils/social-stats';
 import { formatArabicDate } from '@/utils';
 import { tabBarTotalHeight } from '@/theme/navigation';
-import { setPrivateChatComposerFocused } from '@/services/private-chat-focus';
-import {
-  getLayoutViewportHeight,
-  usePrivateChatKeyboard,
-} from '@/hooks/usePrivateChatKeyboard';
+import { PrivateChatComposer } from '@/components/private/PrivateChatComposer';
 import type {
   PrivateChatMediaKind,
   PrivateContentItem,
@@ -505,13 +500,6 @@ export default function PrivateScreen() {
   const { desktop } = useResponsive();
   const space = usePrivateSpace(currentUser?.id);
   const [section, setSection] = useState<Section>('friends');
-  const [composerFocused, setComposerFocused] = useState(false);
-  const chatShellRef = useRef<View>(null);
-  const { keyboardOpen, chatHeightOverride } = usePrivateChatKeyboard({
-    active: section === 'chat',
-    composerFocused,
-    containerRef: chatShellRef,
-  });
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [pickOpen, setPickOpen] = useState(false);
@@ -528,25 +516,10 @@ export default function PrivateScreen() {
     uri: string;
     kind: PrivateChatMediaKind;
   } | null>(null);
+  /** إزاحة لوحة المفاتيح من الملحّن الجديد (ويب) — لا تخلط مع focus */
+  const [composerKeyboardInset, setComposerKeyboardInset] = useState(0);
   const chatListRef = useRef<ScrollView>(null);
-  const chatScrollYRef = useRef(0);
   const chatNearBottomRef = useRef(true);
-  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // مغادرة قسم المحادثة: ألغِ التركيز + أظهر التبويب (بدون ربط بلوحة المفاتيح)
-  useEffect(() => {
-    if (section !== 'chat') {
-      setComposerFocused(false);
-      setPrivateChatComposerFocused(false);
-    }
-  }, [section]);
-
-  useEffect(() => {
-    return () => {
-      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
-      setPrivateChatComposerFocused(false);
-    };
-  }, []);
 
   const me = useMemo(
     () => (currentUser ? ensureSocialLists(currentUser) : null),
@@ -662,69 +635,41 @@ export default function PrivateScreen() {
     ? space.chats[activeFriend.id] || []
     : [];
 
-  // ارتفاع أساسي من نافذة التخطيط فقط.
-  // إخفاء Bottom Tab لا يغيّر هذا الحساب (لا نستخدم tab visibility لتعويض اللوحة).
+  // ارتفاع غلاف المحادثة: تخطيط مستقر + خصم إزاحة اللوحة من الملحّن فقط (ويب)
   const tabBarHeight = useMemo(
     () => (desktop ? 0 : tabBarTotalHeight(insets.bottom)),
     [desktop, insets.bottom]
   );
-  const composerBlockHeight = pendingMedia ? 118 : 66;
-  const layoutHeight = getLayoutViewportHeight(windowHeight);
-  const showFriendChips = true;
-  const showSectionBar = true;
 
   const chatShellHeight = useMemo(() => {
-    // مصدر مستقل أثناء اللوحة: قياس الحاوية → أسفل visualViewport
-    // لا يعتمد على إخفاء التبويب
-    if (
-      Platform.OS === 'web' &&
-      composerFocused &&
-      keyboardOpen &&
-      chatHeightOverride != null &&
-      chatHeightOverride > 0
-    ) {
-      return chatHeightOverride;
-    }
-
-    const sectionBar = showSectionBar ? 44 : 0;
+    const sectionBar = 44;
     const screenPad = 8;
-    // احجز مساحة التبويب دائماً في الارتفاع الأساسي حتى لو كان التبويب مخفياً مؤقتاً
     const tabReserve = desktop ? 0 : tabBarHeight;
+    const layoutH =
+      Platform.OS === 'web' && typeof window !== 'undefined'
+        ? window.innerHeight || windowHeight
+        : windowHeight;
+    const kb =
+      Platform.OS === 'web' ? Math.max(0, composerKeyboardInset) : 0;
     return Math.max(
-      160,
-      Math.floor(layoutHeight - sectionBar - screenPad - tabReserve)
+      180,
+      Math.floor(layoutH - sectionBar - screenPad - tabReserve - kb)
     );
-  }, [
-    layoutHeight,
-    desktop,
-    tabBarHeight,
-    showSectionBar,
-    composerFocused,
-    keyboardOpen,
-    chatHeightOverride,
-  ]);
+  }, [windowHeight, desktop, tabBarHeight, composerKeyboardInset]);
 
-  const chatMessagesHeight = useMemo(() => {
-    const chips = showFriendChips ? 48 : 0;
-    const head = 34;
-    const gaps = 16;
-    return Math.max(
-      72,
-      chatShellHeight - chips - head - gaps - composerBlockHeight
-    );
-  }, [chatShellHeight, composerBlockHeight, showFriendChips]);
-
-  // حافظ على أسفل المحادثة فقط إن كان المستخدم أصلاً في الأسفل —
-  // ولا تربط ذلك بإخفاء التبويب (يعتمد فقط على تغيّر ارتفاع منطقة الرسائل)
+  // عند فتح اللوحة وكان المستخدم أسفل المحادثة — أبقِه أسفلها دون قفز للأعلى
   useEffect(() => {
     if (section !== 'chat') return;
     if (!chatNearBottomRef.current) return;
-    // عند القراءة في الوسط: لا نحرّك التمرير
-    if (!keyboardOpen && chatHeightOverride == null) return;
+    if (composerKeyboardInset <= 0) return;
     requestAnimationFrame(() => {
       chatListRef.current?.scrollToEnd({ animated: false });
     });
-  }, [chatMessagesHeight, section, keyboardOpen, chatHeightOverride]);
+  }, [composerKeyboardInset, section]);
+
+  useEffect(() => {
+    if (section !== 'chat') setComposerKeyboardInset(0);
+  }, [section]);
 
   const onAddFriend = useCallback(
     async (friendId: string, opts?: { stayOnSaved?: boolean }) => {
@@ -1127,7 +1072,7 @@ export default function PrivateScreen() {
           <Muted>{t('privateSpace.subtitle')}</Muted>
         </>
       )}
-      {showSectionBar ? sectionBar : null}
+      {sectionBar}
 
       {section === 'friends' ? (
         <View style={styles.block}>
@@ -1344,7 +1289,6 @@ export default function PrivateScreen() {
 
       {section === 'chat' ? (
         <View
-          ref={chatShellRef}
           style={[
             styles.chatShell,
             {
@@ -1360,7 +1304,6 @@ export default function PrivateScreen() {
             />
           ) : (
             <>
-              {showFriendChips ? (
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -1405,7 +1348,6 @@ export default function PrivateScreen() {
                   );
                 })}
               </ScrollView>
-              ) : null}
 
               <View
                 style={[
@@ -1440,7 +1382,7 @@ export default function PrivateScreen() {
 
                 <ScrollView
                   ref={chatListRef}
-                  style={[styles.chatListScroll, { height: chatMessagesHeight }]}
+                  style={styles.chatListScroll}
                   contentContainerStyle={styles.chatList}
                   keyboardShouldPersistTaps="handled"
                   keyboardDismissMode="interactive"
@@ -1449,7 +1391,6 @@ export default function PrivateScreen() {
                   onScroll={(e) => {
                     const { contentOffset, contentSize, layoutMeasurement } =
                       e.nativeEvent;
-                    chatScrollYRef.current = contentOffset.y;
                     chatNearBottomRef.current =
                       contentOffset.y + layoutMeasurement.height >=
                       contentSize.height - 48;
@@ -1465,222 +1406,98 @@ export default function PrivateScreen() {
                       const mediaKind = resolved.mediaKind;
                       const caption = resolved.caption;
                       return (
-                      <View
-                        key={m.id}
-                        style={[
-                          styles.bubble,
-                          mediaUrl ? styles.bubbleWithMedia : null,
-                          {
-                            alignSelf: m.fromMe ? 'flex-end' : 'flex-start',
-                            backgroundColor: m.fromMe
-                              ? theme.colors.accent
-                              : theme.colors.surfaceElevated,
-                          },
-                        ]}
-                      >
-                        {mediaUrl && mediaKind === 'photo' ? (
-                          <ChatMediaThumb
-                            uri={mediaUrl}
-                            kind="photo"
-                            onOpen={() =>
-                              setMediaViewer({ uri: mediaUrl, kind: 'photo' })
-                            }
-                          />
-                        ) : null}
-                        {mediaUrl && mediaKind === 'video' ? (
-                          <ChatMediaThumb
-                            uri={mediaUrl}
-                            kind="video"
-                            onOpen={() =>
-                              setMediaViewer({ uri: mediaUrl, kind: 'video' })
-                            }
-                          />
-                        ) : null}
-                        {mediaUrl && !mediaKind ? (
-                          <ChatMediaThumb
-                            uri={mediaUrl}
-                            kind={inferMediaKind(mediaUrl)}
-                            onOpen={() =>
-                              setMediaViewer({
-                                uri: mediaUrl,
-                                kind: inferMediaKind(mediaUrl),
-                              })
-                            }
-                          />
-                        ) : null}
-                        {caption ? (
-                          <Text
-                            style={{
-                              color: m.fromMe
-                                ? theme.colors.textInverse
-                                : theme.colors.text,
-                            }}
-                          >
-                            {caption}
-                          </Text>
-                        ) : null}
-                      </View>
+                        <View
+                          key={m.id}
+                          style={[
+                            styles.bubble,
+                            mediaUrl ? styles.bubbleWithMedia : null,
+                            {
+                              alignSelf: m.fromMe ? 'flex-end' : 'flex-start',
+                              backgroundColor: m.fromMe
+                                ? theme.colors.accent
+                                : theme.colors.surfaceElevated,
+                            },
+                          ]}
+                        >
+                          {mediaUrl && mediaKind === 'photo' ? (
+                            <ChatMediaThumb
+                              uri={mediaUrl}
+                              kind="photo"
+                              onOpen={() =>
+                                setMediaViewer({
+                                  uri: mediaUrl,
+                                  kind: 'photo',
+                                })
+                              }
+                            />
+                          ) : null}
+                          {mediaUrl && mediaKind === 'video' ? (
+                            <ChatMediaThumb
+                              uri={mediaUrl}
+                              kind="video"
+                              onOpen={() =>
+                                setMediaViewer({
+                                  uri: mediaUrl,
+                                  kind: 'video',
+                                })
+                              }
+                            />
+                          ) : null}
+                          {mediaUrl && !mediaKind ? (
+                            <ChatMediaThumb
+                              uri={mediaUrl}
+                              kind={inferMediaKind(mediaUrl)}
+                              onOpen={() =>
+                                setMediaViewer({
+                                  uri: mediaUrl,
+                                  kind: inferMediaKind(mediaUrl),
+                                })
+                              }
+                            />
+                          ) : null}
+                          {caption ? (
+                            <Text
+                              style={{
+                                color: m.fromMe
+                                  ? theme.colors.textInverse
+                                  : theme.colors.text,
+                              }}
+                            >
+                              {caption}
+                            </Text>
+                          ) : null}
+                        </View>
                       );
                     })
                   )}
                 </ScrollView>
 
-                <View
-                  style={[
-                    styles.composerDock,
-                    {
-                      borderColor: theme.colors.border,
-                      backgroundColor: theme.colors.surfaceElevated,
-                    },
-                  ]}
-                >
-                  {pendingMedia ? (
-                    <View
-                      style={[
-                        styles.pendingMedia,
-                        { borderColor: theme.colors.border },
-                      ]}
-                    >
-                      {pendingMedia.kind === 'photo' ? (
-                        <Image
-                          source={{ uri: pendingMedia.uri }}
-                          style={styles.pendingThumb}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View style={styles.pendingThumb}>
-                          <Video
-                            source={{ uri: pendingMedia.uri }}
-                            style={StyleSheet.absoluteFillObject}
-                            resizeMode={ResizeMode.COVER}
-                            shouldPlay={false}
-                            isMuted
-                            useNativeControls={false}
-                            {...(Platform.OS === 'web'
-                              ? ({ playsInline: true } as object)
-                              : null)}
-                          />
-                          <View style={styles.pendingVideoBadge}>
-                            <Ionicons name="play" size={14} color="#fff" />
-                          </View>
-                        </View>
-                      )}
-                      <Muted style={{ flex: 1 }} numberOfLines={1}>
-                        {pendingMedia.label ||
-                          (pendingMedia.kind === 'photo'
-                            ? t('privateSpace.attachPhotoReady')
-                            : t('privateSpace.attachVideoReady'))}
-                      </Muted>
-                      <Pressable
-                        onPress={() => setPendingMedia(null)}
-                        hitSlop={8}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('common.cancel')}
-                      >
-                        <Ionicons
-                          name="close-circle"
-                          size={22}
-                          color={theme.colors.danger}
-                        />
-                      </Pressable>
-                    </View>
-                  ) : null}
-                  <View style={styles.composerRow}>
-                    <Pressable
-                      onPress={() => {
-                        setAttachSource(
-                          savedAttachables.length
-                            ? 'saved'
-                            : highlightAttachables.length
-                              ? 'highlights'
-                              : 'content'
-                        );
-                        setAttachOpen(true);
-                      }}
-                      disabled={!activeFriend || sending}
-                      hitSlop={8}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('privateSpace.attachContent')}
-                      style={[
-                        styles.composerIconBtn,
-                        { opacity: activeFriend ? 1 : 0.35 },
-                      ]}
-                    >
-                      <Ionicons
-                        name="attach-outline"
-                        size={22}
-                        color={theme.colors.accent}
-                      />
-                    </Pressable>
-                    <TextInput
-                      value={draft}
-                      onChangeText={setDraft}
-                      placeholder={t('privateSpace.messagePlaceholder')}
-                      placeholderTextColor={theme.colors.textMuted}
-                      editable={!!activeFriend && !sending}
-                      onSubmitEditing={() => void onSend()}
-                      returnKeyType="send"
-                      blurOnSubmit={false}
-                      onFocus={() => {
-                        if (blurTimerRef.current) {
-                          clearTimeout(blurTimerRef.current);
-                          blurTimerRef.current = null;
-                        }
-                        // تركيز حقيقي للحقل فقط — وليس من visualViewport/keyboard
-                        setComposerFocused(true);
-                        setPrivateChatComposerFocused(true);
-                      }}
-                      onBlur={() => {
-                        if (blurTimerRef.current) {
-                          clearTimeout(blurTimerRef.current);
-                        }
-                        // تأخير قصير حتى لا يُلغى التركيز عند الضغط على إرسال/مرفق
-                        blurTimerRef.current = setTimeout(() => {
-                          blurTimerRef.current = null;
-                          setComposerFocused(false);
-                          setPrivateChatComposerFocused(false);
-                        }, 120);
-                      }}
-                      style={[
-                        styles.composerInput,
-                        {
-                          color: theme.colors.text,
-                          backgroundColor: theme.colors.surfaceElevated,
-                          borderColor: theme.colors.border,
-                          fontSize: 16,
-                        },
-                      ]}
-                    />
-                    <Pressable
-                      onPress={() => void onSend()}
-                      disabled={
-                        sending ||
-                        !activeFriend ||
-                        (!draft.trim() && !pendingMedia)
-                      }
-                      accessibilityRole="button"
-                      accessibilityLabel={t('common.send')}
-                      style={[
-                        styles.sendBtn,
-                        {
-                          backgroundColor: theme.colors.accent,
-                          opacity:
-                            sending ||
-                            !activeFriend ||
-                            (!draft.trim() && !pendingMedia)
-                              ? 0.45
-                              : 1,
-                        },
-                      ]}
-                    >
-                      <Ionicons
-                        name="send"
-                        size={18}
-                        color={theme.colors.textInverse}
-                      />
-                    </Pressable>
-                  </View>
-                </View>
+                <PrivateChatComposer
+                  value={draft}
+                  onChangeText={setDraft}
+                  pendingMedia={pendingMedia}
+                  onClearPending={() => setPendingMedia(null)}
+                  onAttachPress={() => {
+                    setAttachSource(
+                      savedAttachables.length
+                        ? 'saved'
+                        : highlightAttachables.length
+                          ? 'highlights'
+                          : 'content'
+                    );
+                    setAttachOpen(true);
+                  }}
+                  onSend={() => void onSend()}
+                  sending={sending}
+                  enabled={!!activeFriend}
+                  placeholder={t('privateSpace.messagePlaceholder')}
+                  attachAccessibilityLabel={t('privateSpace.attachContent')}
+                  sendAccessibilityLabel={t('common.send')}
+                  cancelAccessibilityLabel={t('common.cancel')}
+                  pendingPhotoLabel={t('privateSpace.attachPhotoReady')}
+                  pendingVideoLabel={t('privateSpace.attachVideoReady')}
+                  onKeyboardInsetChange={setComposerKeyboardInset}
+                />
               </View>
             </>
           )}
@@ -1940,7 +1757,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     gap: 8,
     overflow: 'hidden',
-    position: 'relative',
+    flexDirection: 'column',
   },
   chatBlock: {
     flex: 1,
@@ -1979,7 +1796,7 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 8,
     overflow: 'hidden',
-    justifyContent: 'flex-start',
+    flexDirection: 'column',
   },
   chatCard: {
     flexGrow: 0,
@@ -1992,53 +1809,6 @@ const styles = StyleSheet.create({
     gap: 8,
     flexShrink: 0,
   },
-  composerDock: {
-    gap: 6,
-    flexShrink: 0,
-    width: '100%',
-    maxWidth: '100%',
-    alignSelf: 'stretch',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    marginTop: 4,
-    overflow: 'visible',
-  },
-  composerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    gap: 6,
-  },
-  composerIconBtn: {
-    width: 40,
-    height: 40,
-    flexShrink: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  composerInput: {
-    flexGrow: 1,
-    flexShrink: 1,
-    flexBasis: 0,
-    minWidth: 0,
-    maxWidth: '100%',
-    height: 42,
-    fontSize: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  sendBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    flexShrink: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   chatActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2047,11 +1817,11 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   chatListScroll: {
-    flexGrow: 0,
-    flexShrink: 0,
+    flex: 1,
+    minHeight: 0,
     width: '100%',
   },
-  chatList: { gap: 8, paddingBottom: 8 },
+  chatList: { gap: 8, paddingBottom: 8, flexGrow: 1 },
   bubble: {
     maxWidth: '82%',
     minWidth: 56,
@@ -2143,31 +1913,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  pendingMedia: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    padding: 8,
-  },
-  pendingThumb: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#0b1220',
-  },
-  pendingVideo: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pendingVideoBadge: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.25)',
   },
   attachPlayBadge: {
     ...StyleSheet.absoluteFillObject,
