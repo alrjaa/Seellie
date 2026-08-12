@@ -4,9 +4,11 @@ import {
   Modal,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { useTournament, type User } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
@@ -194,6 +196,9 @@ export default function AnalystsScreen() {
     suspendAnalyst,
     banAnalyst,
     reinstateAnalyst,
+    syncCloudUsers,
+    autoApproveAnalystRequests,
+    setAutoApproveAnalystRequests,
   } = useTournament();
 
   const [target, setTarget] = useState<User | null>(null);
@@ -202,6 +207,37 @@ export default function AnalystsScreen() {
   const [fromDate, setFromDate] = useState(toInputDate());
   const [toDate, setToDate] = useState(toInputDate(new Date(Date.now() + 7 * 86400000)));
   const [query, setQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [savingAuto, setSavingAuto] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      void syncCloudUsers();
+    }, [syncCloudUsers])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await syncCloudUsers();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [syncCloudUsers]);
+
+  const onToggleAutoApprove = useCallback(
+    (enabled: boolean) => {
+      void (async () => {
+        setSavingAuto(true);
+        try {
+          await setAutoApproveAnalystRequests(enabled);
+        } finally {
+          setSavingAuto(false);
+        }
+      })();
+    },
+    [setAutoApproveAnalystRequests]
+  );
 
   const closeModal = useCallback(() => {
     setTarget(null);
@@ -337,12 +373,31 @@ export default function AnalystsScreen() {
         data={requests}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        refreshing={refreshing}
+        onRefresh={() => void onRefresh()}
         ListHeaderComponent={
           <View style={styles.header}>
             <Subtitle>{t('superadmin.analysts.title')}</Subtitle>
             <Muted>
               {t('superadmin.analysts.subtitle', { count: pendingCount })}
             </Muted>
+            <Card style={styles.autoCard}>
+              <View style={styles.autoRow}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text
+                    style={[styles.autoTitle, { color: theme.colors.text }]}
+                  >
+                    {t('superadmin.analysts.autoApproveTitle')}
+                  </Text>
+                  <Muted>{t('superadmin.analysts.autoApproveDesc')}</Muted>
+                </View>
+                <Switch
+                  value={autoApproveAnalystRequests}
+                  onValueChange={onToggleAutoApprove}
+                  disabled={savingAuto}
+                />
+              </View>
+            </Card>
             <SearchBar
               value={query}
               onChangeText={setQuery}
@@ -445,6 +500,13 @@ export default function AnalystsScreen() {
 const styles = StyleSheet.create({
   list: { paddingTop: 12, gap: 12, paddingBottom: 40, paddingHorizontal: 0 },
   header: { gap: 6, marginBottom: 8 },
+  autoCard: { gap: 8, marginTop: 4 },
+  autoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  autoTitle: { fontWeight: '700', textAlign: 'left' },
   card: { gap: 12 },
   row: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   name: { fontWeight: '800', textAlign: 'left' },

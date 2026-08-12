@@ -66,7 +66,35 @@ export function applyContentPayload(
     followers: Array.isArray(content.followers)
       ? content.followers
       : user.followers || [],
-    analyst: content.analyst ?? user.analyst,
+    analyst: content.analyst
+      ? {
+          ...content.analyst,
+          termsAcceptedAt: content.analyst.termsAcceptedAt
+            ? new Date(content.analyst.termsAcceptedAt as Date | string)
+            : undefined,
+          requestedAt: content.analyst.requestedAt
+            ? new Date(content.analyst.requestedAt as Date | string)
+            : undefined,
+          reviewedAt: content.analyst.reviewedAt
+            ? new Date(content.analyst.reviewedAt as Date | string)
+            : undefined,
+          accessCodeSentAt: content.analyst.accessCodeSentAt
+            ? new Date(content.analyst.accessCodeSentAt as Date | string)
+            : undefined,
+          warnedAt: content.analyst.warnedAt
+            ? new Date(content.analyst.warnedAt as Date | string)
+            : undefined,
+          bannedAt: content.analyst.bannedAt
+            ? new Date(content.analyst.bannedAt as Date | string)
+            : undefined,
+          suspendFrom: content.analyst.suspendFrom
+            ? new Date(content.analyst.suspendFrom as Date | string)
+            : undefined,
+          suspendTo: content.analyst.suspendTo
+            ? new Date(content.analyst.suspendTo as Date | string)
+            : undefined,
+        }
+      : user.analyst,
     permissions: content.permissions
       ? { ...user.permissions, ...content.permissions }
       : user.permissions,

@@ -1572,6 +1572,9 @@ export const en: TranslationTree = {
       title: 'Analyst requests — Unique',
       subtitle:
         'After approval: warn, temporary suspension (from — to), or permanent ban. Pending requests: %{count}',
+      autoApproveTitle: 'Auto-approve on request',
+      autoApproveDesc:
+        'When enabled, requests are approved immediately and an access code is created. When disabled, requests stay pending until admin approves or rejects.',
       analystStatus: {
         pending: 'Awaiting approval',
         approved: 'Approved — awaiting access code',

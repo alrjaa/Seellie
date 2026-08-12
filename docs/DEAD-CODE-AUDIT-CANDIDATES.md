@@ -38,6 +38,8 @@ Generated before cleanup. Classifications after dependency tracing.
 | Unused i18n keys (bulk) | Not exhaustively proven — do not mass-delete |
 | Supabase tables/RPC/policies/SQL history | No remote proof of unused — no schema deletes |
 | `isAppEnglish` | Used internally by formatters |
+| `clearContentAuthorFocus` / `getContentAuthorFocus` | Intended logout/peek API — keep |
+| `console.warn` in cloud/sync | Operational logging — keep |
 
 ## UNKNOWN — do not delete
 
@@ -47,3 +49,7 @@ Generated before cleanup. Classifications after dependency tracing.
 | Full i18n key orphan set | Needs dedicated key-usage tooling |
 | Android/iOS native projects | Managed Expo — no standalone android/ios folders to scrub |
 | Edge function season-window copy vs client copy | Both required in their runtimes |
+
+## Cleanup executed (SAFE only)
+
+Deleted files/exports/deps as listed in SAFE TO REMOVE. Verified: `tsc --noEmit`, `npm test`, `expo export --platform web`, Vercel prod **1.0.56**.

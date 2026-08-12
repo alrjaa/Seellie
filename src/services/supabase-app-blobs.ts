@@ -7,8 +7,13 @@ export type AppBlobKey =
   | 'support_levels'
   | 'gift_transactions'
   | 'app_branding'
+  | 'app_settings'
   | `announcements:${string}`
   | `prizes:${string}`;
+
+export type AppSettingsBlob = {
+  autoApproveAnalystRequests?: boolean;
+};
 
 export async function fetchAppBlob<T>(
   key: AppBlobKey

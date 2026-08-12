@@ -36,7 +36,8 @@ function defaultPermissions(role: UserRole): User['permissions'] {
     canComment: true,
     canUseVoice: true,
     canNominateToPersonality: role === 'freelancer' || role === 'follower',
-    canCreateContent: role === 'freelancer' || role === 'follower',
+    // نشر الفريد للمحللين المعتمدين فقط — لا يُفعَّل افتراضياً لكل متابع
+    canCreateContent: false,
   };
 }
 
@@ -150,6 +151,22 @@ export function mergeUsersPreferCloud(
           : local.personalityPhotos || u.personalityPhotos,
       followers: u.followers?.length ? u.followers : local.followers,
       following: u.following?.length ? u.following : local.following,
+      // لا تفقد طلب محلل محلي إن كانت السحابة بلا analyst بعد
+      analyst:
+        u.analyst?.status && u.analyst.status !== 'none'
+          ? u.analyst
+          : local.analyst || u.analyst,
+      permissions: {
+        ...(local.permissions || {}),
+        ...(u.permissions || {}),
+        canCreateContent:
+          u.permissions?.canCreateContent === true ||
+          local.permissions?.canCreateContent === true ||
+          u.analyst?.status === 'active' ||
+          u.analyst?.status === 'warned' ||
+          local.analyst?.status === 'active' ||
+          local.analyst?.status === 'warned',
+      },
     });
   }
   // إن وُجد مشرف سحابي، أخفِ حساب المشرف التجريبي المحلي لتجنب التكرار البصري

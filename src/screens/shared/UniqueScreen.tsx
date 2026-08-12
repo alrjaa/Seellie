@@ -506,7 +506,7 @@ export default function UniqueScreen() {
           </Text>
           <Button
             label={t('unique.resubmitAnalystRequest')}
-            onPress={() => applyAsAnalyst(termsAccepted)}
+            onPress={() => void applyAsAnalyst(termsAccepted)}
             disabled={!termsAccepted}
           />
         </Card>
@@ -581,7 +581,7 @@ export default function UniqueScreen() {
         ) : null}
         <Button
           label={t('unique.submitRequestNow')}
-          onPress={() => applyAsAnalyst(termsAccepted)}
+          onPress={() => void applyAsAnalyst(termsAccepted)}
           disabled={!termsAccepted}
         />
         <Button

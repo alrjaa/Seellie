@@ -50,6 +50,7 @@ import {
   upsertRefereeInBlob,
   replaceRefereesBlob,
   deleteRefereeFromBlob,
+  type AppSettingsBlob,
 } from '@/services/supabase-app-blobs';
 import {
   DEFAULT_FAB_ICONS,
@@ -107,7 +108,11 @@ import {
   toggleForumCommentLikeRemote,
   updateForumCommentStatusRemote,
 } from '@/services/supabase-forum-comments';
-import { generateAnalystAccessCode } from '@/utils/analyst';
+import {
+  generateAnalystAccessCode,
+  isActiveAnalyst,
+  isAnalystSuspendActive,
+} from '@/utils/analyst';
 import {
   clearSeedUserContent,
   filterSeedComments,
@@ -408,6 +413,7 @@ type GlobalAppBlobs = {
   levels: SupportLevel[] | null;
   gifts: GiftTransaction[] | null;
   branding: { appName?: string; appLogo?: string } | null;
+  settings: AppSettingsBlob | null;
 };
 
 async function fetchGlobalAppBlobs(): Promise<GlobalAppBlobs> {
@@ -417,6 +423,7 @@ async function fetchGlobalAppBlobs(): Promise<GlobalAppBlobs> {
     levels: null,
     gifts: null,
     branding: null,
+    settings: null,
   };
   if (!isSupabaseConfigured()) return empty;
   const [
@@ -425,12 +432,14 @@ async function fetchGlobalAppBlobs(): Promise<GlobalAppBlobs> {
     cloudLevels,
     cloudGifts,
     cloudBrand,
+    cloudSettings,
   ] = await Promise.all([
     fetchAppBlob<Referee[]>('referees'),
     fetchAppBlob<Offer[]>('offers'),
     fetchAppBlob<SupportLevel[]>('support_levels'),
     fetchAppBlob<GiftTransaction[]>('gift_transactions'),
     fetchAppBlob<{ appName?: string; appLogo?: string }>('app_branding'),
+    fetchAppBlob<AppSettingsBlob>('app_settings'),
   ]);
   return {
     referees: Array.isArray(cloudReferees.data) ? cloudReferees.data : null,
@@ -438,6 +447,7 @@ async function fetchGlobalAppBlobs(): Promise<GlobalAppBlobs> {
     levels: Array.isArray(cloudLevels.data) ? cloudLevels.data : null,
     gifts: Array.isArray(cloudGifts.data) ? cloudGifts.data : null,
     branding: cloudBrand.data || null,
+    settings: cloudSettings.data || null,
   };
 }
 
@@ -445,6 +455,8 @@ export interface TournamentContextType {
   loading: boolean;
   appName: string;
   appLogo: string;
+  /** موافقة تلقائية على طلبات المحللين عند الإرسال (إعداد المشرف) */
+  autoApproveAnalystRequests: boolean;
   fabIcons: FabIconConfig[];
   setFabIcons: (icons: FabIconConfig[]) => void;
   personalitySectionBg: string;
@@ -482,6 +494,7 @@ export interface TournamentContextType {
   switchActiveRole: (role: UserRole) => boolean;
   setAppName: (name: string) => void;
   setAppLogo: (logo: string) => void;
+  setAutoApproveAnalystRequests: (enabled: boolean) => Promise<boolean>;
   updateUser: (user: User, successMessage?: string) => void;
   /** مزامنة كل حسابات profiles من Supabase إلى قائمة إدارة المستخدمين */
   syncCloudUsers: () => Promise<number>;
@@ -715,7 +728,7 @@ export interface TournamentContextType {
     matchId?: string;
   }) => Promise<boolean>;
   /** طلب الانضمام كمحلل من صفحة الفريد بعد الموافقة على الشروط */
-  applyAsAnalyst: (termsAccepted: boolean) => boolean;
+  applyAsAnalyst: (termsAccepted: boolean) => Promise<boolean>;
   /** موافقة الإدارة على طلب المحلل + إرسال رمز عبر البريد */
   approveAnalystApplication: (userId: string) => boolean;
   rejectAnalystApplication: (userId: string, reason?: string) => boolean;
@@ -798,6 +811,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [appName, setAppNameState] = useState(APP_DISPLAY_NAME);
   const [appLogo, setAppLogoState] = useState(DEFAULT_LOGO);
+  const [autoApproveAnalystRequests, setAutoApproveAnalystRequestsState] =
+    useState(false);
   const [fabIcons, setFabIconsState] =
     useState<FabIconConfig[]>(DEFAULT_FAB_ICONS);
   const [personalitySectionBg] = useState(
@@ -965,6 +980,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     }
     if (blobs.branding?.appName) setAppNameState(blobs.branding.appName);
     if (blobs.branding?.appLogo) setAppLogoState(blobs.branding.appLogo);
+    if (blobs.settings) {
+      setAutoApproveAnalystRequestsState(
+        !!blobs.settings.autoApproveAnalystRequests
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -1215,6 +1235,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             }
             if (blobs.branding?.appName) setAppNameState(blobs.branding.appName);
             if (blobs.branding?.appLogo) setAppLogoState(blobs.branding.appLogo);
+            if (blobs.settings) {
+              setAutoApproveAnalystRequestsState(
+                !!blobs.settings.autoApproveAnalystRequests
+              );
+            }
           }
         }
       } catch (error) {
@@ -1335,6 +1360,35 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     void setJson(APP_LOGO_KEY, logo);
     void saveBrandingCloud(appName, logo);
   }, [appName]);
+
+  const setAutoApproveAnalystRequests = useCallback(
+    async (enabled: boolean) => {
+      setAutoApproveAnalystRequestsState(enabled);
+      if (!isSupabaseConfigured()) return true;
+      const cloud = await requireCloudSession(currentUser?.id);
+      if (!cloud.session) {
+        toast({
+          variant: 'destructive',
+          title: t('forums.cloudSyncFailed'),
+          description: cloudWriteErrorMessage(cloud.error || 'no_session'),
+        });
+        return false;
+      }
+      const res = await upsertAppBlob('app_settings', {
+        autoApproveAnalystRequests: enabled,
+      });
+      if (!res.ok) {
+        toast({
+          variant: 'destructive',
+          title: t('forums.cloudSyncFailed'),
+          description: cloudWriteErrorMessage(res.error),
+        });
+        return false;
+      }
+      return true;
+    },
+    [currentUser?.id, t, toast]
+  );
 
   const setFabIcons = useCallback((icons: FabIconConfig[]) => {
     const next = icons
@@ -1493,6 +1547,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           }
           if (blobs.branding?.appName) setAppNameState(blobs.branding.appName);
           if (blobs.branding?.appLogo) setAppLogoState(blobs.branding.appLogo);
+          if (blobs.settings) {
+            setAutoApproveAnalystRequestsState(
+              !!blobs.settings.autoApproveAnalystRequests
+            );
+          }
           toast({
             variant: 'success',
             title: t('toasts.t002_202a45'),
@@ -4062,10 +4121,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       matchId?: string;
     }) => {
       if (!currentUser) return false;
-      const isAnalyst =
-        currentUser.analyst?.status === 'active' ||
-        currentUser.permissions.canCreateContent;
-      if (!isAnalyst) {
+      if (!isActiveAnalyst(currentUser)) {
         toast({
           variant: 'destructive',
           title: t('toasts.t039_ceb90c'),
@@ -4151,7 +4207,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   const persistUser = useCallback(
     (updated: User) => {
-      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      setUsers((prev) => {
+        const idx = prev.findIndex((u) => u.id === updated.id);
+        if (idx < 0) return [updated, ...prev];
+        return prev.map((u) => (u.id === updated.id ? updated : u));
+      });
       setCurrentUser((prev) => (prev?.id === updated.id ? updated : prev));
       if (updated.id === currentUser?.id) {
         void setJson(USER_STORAGE_KEY, updated);
@@ -4166,7 +4226,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const applyAsAnalyst = useCallback(
-    (termsAccepted: boolean) => {
+    async (termsAccepted: boolean) => {
       if (!currentUser) {
         toast({
           variant: 'destructive',
@@ -4183,14 +4243,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
         return false;
       }
+      const status = currentUser.analyst?.status;
       if (
-        currentUser.analyst?.status === 'active' ||
-        currentUser.permissions.canCreateContent
+        status === 'active' ||
+        status === 'approved' ||
+        status === 'warned' ||
+        (status === 'suspended' && !isAnalystSuspendActive(currentUser.analyst))
       ) {
         toast({ title: t('toasts.t042_3c16c9') });
         return true;
       }
-      if (currentUser.analyst?.status === 'pending') {
+      if (status === 'pending') {
         toast({
           title: t('toasts.t043_d252d1'),
           description: t('toasts.t098_1fbde3'),
@@ -4198,24 +4261,82 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
+      if (isSupabaseConfigured()) {
+        const cloud = await requireCloudSession(currentUser.id);
+        if (!cloud.session) {
+          toast({
+            variant: 'destructive',
+            title: t('forums.cloudSyncFailed'),
+            description: cloudWriteErrorMessage(cloud.error || 'no_session'),
+          });
+          return false;
+        }
+      }
+
+      const autoApprove = autoApproveAnalystRequests;
+      const accessCode = autoApprove ? generateAnalystAccessCode(10) : undefined;
+      const now = new Date();
       const updated: User = {
         ...currentUser,
-        analyst: {
-          status: 'pending',
-          termsAcceptedAt: new Date(),
-          requestedAt: new Date(),
+        permissions: {
+          ...currentUser.permissions,
+          canCreateContent: false,
         },
+        analyst: autoApprove
+          ? {
+              status: 'approved',
+              termsAcceptedAt: now,
+              requestedAt: now,
+              reviewedAt: now,
+              accessCode,
+              accessCodeSentAt: now,
+            }
+          : {
+              status: 'pending',
+              termsAcceptedAt: now,
+              requestedAt: now,
+            },
       };
-      persistUser(updated);
-      toast({
-        variant: 'success',
-        title: t('toasts.t044_52af04'),
-        description:
-          t('toasts.t099_383f79'),
+
+      setUsers((prev) => {
+        const idx = prev.findIndex((u) => u.id === updated.id);
+        if (idx < 0) return [updated, ...prev];
+        return prev.map((u) => (u.id === updated.id ? updated : u));
       });
+      setCurrentUser(updated);
+      void setJson(USER_STORAGE_KEY, updated);
+
+      if (isUuid(updated.id) && isSupabaseConfigured()) {
+        const sync = await upsertUserContentCloud(updated);
+        if (!sync.ok) {
+          toast({
+            variant: 'destructive',
+            title: t('forums.cloudSyncFailed'),
+            description: cloudWriteErrorMessage(sync.error),
+          });
+          return false;
+        }
+      }
+
+      if (autoApprove) {
+        toast({
+          variant: 'success',
+          title: t('toasts.t052_01e592'),
+          description: t('toasts.codeEmailed', {
+            email: updated.email,
+            code: accessCode || '',
+          }),
+        });
+      } else {
+        toast({
+          variant: 'success',
+          title: t('toasts.t044_52af04'),
+          description: t('toasts.t099_383f79'),
+        });
+      }
       return true;
     },
-    [currentUser, persistUser, toast]
+    [currentUser, autoApproveAnalystRequests, toast, t]
   );
 
   const applyForCompetition = useCallback(
@@ -5847,6 +5968,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       loading,
       appName,
       appLogo,
+      autoApproveAnalystRequests,
       fabIcons,
       personalitySectionBg,
       highlightsSectionBg,
@@ -5870,6 +5992,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       switchActiveRole,
       setAppName,
       setAppLogo,
+      setAutoApproveAnalystRequests,
       setFabIcons,
       updateUser,
       syncCloudUsers,
@@ -5948,6 +6071,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       loading,
       appName,
       appLogo,
+      autoApproveAnalystRequests,
       fabIcons,
       personalitySectionBg,
       highlightsSectionBg,
@@ -5971,6 +6095,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       switchActiveRole,
       setAppName,
       setAppLogo,
+      setAutoApproveAnalystRequests,
       setFabIcons,
       updateUser,
       syncCloudUsers,
