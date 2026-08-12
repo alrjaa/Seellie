@@ -89,7 +89,7 @@ export const MEDIA_SPECS: Record<MediaUploadKind, MediaSpec> = {
   },
   analysisVideo: {
     kind: 'video',
-    maxDurationSec: 120,
+    maxDurationSec: 180,
     width: 1920,
     height: 1080,
     maxMb: 80,
