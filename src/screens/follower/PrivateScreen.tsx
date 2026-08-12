@@ -156,6 +156,17 @@ const ChatMediaThumb = memo(function ChatMediaThumb({
   const { t } = useTranslation();
   const htmlRef = useRef<HTMLVideoElement | null>(null);
 
+  useEffect(() => {
+    if (kind !== 'video' || Platform.OS !== 'web') return;
+    const node = htmlRef.current;
+    if (!node) return;
+    node.muted = true;
+    void node.play().catch(() => undefined);
+    return () => {
+      node.pause();
+    };
+  }, [kind, uri]);
+
   const wrapStyle = {
     width: CHAT_VIDEO_W,
     height: CHAT_VIDEO_H,
@@ -172,7 +183,7 @@ const ChatMediaThumb = memo(function ChatMediaThumb({
       onPress={onOpen}
       accessibilityRole="button"
       accessibilityLabel={
-        kind === 'photo' ? t('common.photo') : t('media.play')
+        kind === 'photo' ? t('common.photo') : t('common.video')
       }
       style={({ pressed }) => [wrapStyle, { opacity: pressed ? 0.88 : 1 }]}
     >
@@ -186,11 +197,18 @@ const ChatMediaThumb = memo(function ChatMediaThumb({
         createElement('video', {
           ref: (node: HTMLVideoElement | null) => {
             htmlRef.current = node;
+            if (node) {
+              node.muted = true;
+              void node.play().catch(() => undefined);
+            }
           },
           src: uri,
           muted: true,
+          autoPlay: true,
+          loop: true,
           playsInline: true,
-          preload: 'metadata',
+          preload: 'auto',
+          controls: false,
           style: {
             width: CHAT_VIDEO_W,
             height: CHAT_VIDEO_H,
@@ -200,14 +218,6 @@ const ChatMediaThumb = memo(function ChatMediaThumb({
             display: 'block',
             pointerEvents: 'none',
           },
-          onLoadedData: (e: { target: HTMLVideoElement }) => {
-            try {
-              const v = e.target;
-              if (v.currentTime < 0.05) v.currentTime = 0.05;
-            } catch {
-              // ignore
-            }
-          },
         })
       ) : (
         <Video
@@ -215,22 +225,16 @@ const ChatMediaThumb = memo(function ChatMediaThumb({
           style={{ width: CHAT_VIDEO_W, height: CHAT_VIDEO_H }}
           resizeMode={ResizeMode.COVER}
           useNativeControls={false}
-          shouldPlay={false}
+          shouldPlay
           isMuted
-          isLooping={false}
+          isLooping
         />
       )}
-      {kind === 'video' ? (
-        <View style={styles.videoPlayOverlay} pointerEvents="none">
-          <View style={styles.videoPlayBtn}>
-            <Ionicons name="play" size={28} color="#fff" />
-          </View>
-        </View>
-      ) : (
+      {kind === 'photo' ? (
         <View style={styles.photoExpandHint} pointerEvents="none">
           <Ionicons name="expand-outline" size={16} color="#fff" />
         </View>
-      )}
+      ) : null}
     </Pressable>
   );
 });
@@ -1680,16 +1684,14 @@ export default function PrivateScreen() {
                             source={{ uri: item.uri }}
                             style={StyleSheet.absoluteFillObject}
                             resizeMode={ResizeMode.COVER}
-                            shouldPlay={false}
+                            shouldPlay
                             isMuted
+                            isLooping
                             useNativeControls={false}
                             {...(Platform.OS === 'web'
                               ? ({ playsInline: true } as object)
                               : null)}
                           />
-                          <View style={styles.attachPlayBadge}>
-                            <Ionicons name="play-circle" size={28} color="#fff" />
-                          </View>
                         </View>
                       )}
                       <Text
@@ -1858,21 +1860,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  videoPlayOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.25)',
-  },
-  videoPlayBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingLeft: 3,
-  },
   photoExpandHint: {
     position: 'absolute',
     top: 8,
@@ -1913,12 +1900,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  attachPlayBadge: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.28)',
   },
   attachBackdrop: {
     flex: 1,
