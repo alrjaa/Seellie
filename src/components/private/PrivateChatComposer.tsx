@@ -70,11 +70,19 @@ function PrivateChatComposerComponent({
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rafRef = useRef<number | null>(null);
   const lastInsetRef = useRef(0);
+  const lockedScrollYRef = useRef(0);
   const [focused, setFocused] = useState(false);
 
   const publishInset = useCallback(
     (inset: number) => {
-      const next = Math.max(0, Math.round(inset));
+      // لا نرفع الحقل أعلى من منتصف الشاشة تقريبًا
+      const layoutH =
+        Platform.OS === 'web' && typeof window !== 'undefined'
+          ? window.innerHeight
+          : 0;
+      const capped =
+        layoutH > 0 ? Math.min(inset, Math.floor(layoutH * 0.5)) : inset;
+      const next = Math.max(0, Math.round(capped));
       if (next === lastInsetRef.current) return;
       lastInsetRef.current = next;
       onKeyboardInsetChange?.(next);
@@ -117,6 +125,7 @@ function PrivateChatComposerComponent({
     }
 
     const vv = window.visualViewport;
+    lockedScrollYRef.current = window.scrollY || 0;
 
     const measure = () => {
       if (!focusedRef.current) {
@@ -133,6 +142,11 @@ function PrivateChatComposerComponent({
       if (rafRef.current != null) return;
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = null;
+        // امنع قفزة Safari التي تسحب الصفحة للأعلى
+        const y = lockedScrollYRef.current;
+        if (Math.abs((window.scrollY || 0) - y) > 1) {
+          window.scrollTo({ top: y, left: 0, behavior: 'auto' });
+        }
         measure();
       });
     };
@@ -158,6 +172,9 @@ function PrivateChatComposerComponent({
 
   const onFocus = useCallback(() => {
     clearBlurTimer();
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      lockedScrollYRef.current = window.scrollY || 0;
+    }
     setFocusedState(true);
   }, [clearBlurTimer, setFocusedState]);
 

@@ -649,12 +649,12 @@ export default function PrivateScreen() {
       Platform.OS === 'web' && typeof window !== 'undefined'
         ? window.innerHeight || windowHeight
         : windowHeight;
+    const base = Math.floor(layoutH - sectionBar - screenPad - tabReserve);
     const kb =
       Platform.OS === 'web' ? Math.max(0, composerKeyboardInset) : 0;
-    return Math.max(
-      180,
-      Math.floor(layoutH - sectionBar - screenPad - tabReserve - kb)
-    );
+    // حد أدنى ≈ نصف الشاشة حتى لا يقفز الملحّن إلى أعلى الشاشة
+    const minShell = Math.floor(layoutH * 0.5);
+    return Math.max(minShell, base - kb);
   }, [windowHeight, desktop, tabBarHeight, composerKeyboardInset]);
 
   // عند فتح اللوحة وكان المستخدم أسفل المحادثة — أبقِه أسفلها دون قفز للأعلى
