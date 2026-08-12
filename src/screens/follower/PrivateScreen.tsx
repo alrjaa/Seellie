@@ -524,6 +524,13 @@ export default function PrivateScreen() {
   const [composerKeyboardInset, setComposerKeyboardInset] = useState(0);
   const chatListRef = useRef<ScrollView>(null);
   const chatNearBottomRef = useRef(true);
+  const stickToLatestRef = useRef(true);
+
+  const scrollChatToLatest = useCallback((animated = false) => {
+    requestAnimationFrame(() => {
+      chatListRef.current?.scrollToEnd({ animated });
+    });
+  }, []);
 
   const me = useMemo(
     () => (currentUser ? ensureSocialLists(currentUser) : null),
@@ -639,6 +646,10 @@ export default function PrivateScreen() {
     ? space.chats[activeFriend.id] || []
     : [];
 
+  const lastMessageId = chatMessages.length
+    ? chatMessages[chatMessages.length - 1]?.id
+    : null;
+
   // ارتفاع غلاف المحادثة: تخطيط مستقر + خصم إزاحة اللوحة من الملحّن فقط (ويب)
   const tabBarHeight = useMemo(
     () => (desktop ? 0 : tabBarTotalHeight(insets.bottom)),
@@ -661,15 +672,19 @@ export default function PrivateScreen() {
     return Math.max(minShell, base - kb);
   }, [windowHeight, desktop, tabBarHeight, composerKeyboardInset]);
 
-  // عند فتح اللوحة وكان المستخدم أسفل المحادثة — أبقِه أسفلها دون قفز للأعلى
+  // اعرض آخر رسالة دائمًا عند فتح المحادثة / وصول رسالة / تغيير الصديق
   useEffect(() => {
     if (section !== 'chat') return;
-    if (!chatNearBottomRef.current) return;
-    if (composerKeyboardInset <= 0) return;
-    requestAnimationFrame(() => {
-      chatListRef.current?.scrollToEnd({ animated: false });
-    });
-  }, [composerKeyboardInset, section]);
+    stickToLatestRef.current = true;
+    scrollChatToLatest(false);
+  }, [section, activeFriend?.id, lastMessageId, chatMessages.length, scrollChatToLatest]);
+
+  // عند الكتابة (لوحة مفاتيح / تغيّر ارتفاع الغلاف) أبقِ آخر رسالة ظاهرة
+  useEffect(() => {
+    if (section !== 'chat') return;
+    if (!stickToLatestRef.current && !chatNearBottomRef.current) return;
+    scrollChatToLatest(false);
+  }, [composerKeyboardInset, chatShellHeight, section, scrollChatToLatest]);
 
   useEffect(() => {
     if (section !== 'chat') setComposerKeyboardInset(0);
@@ -989,6 +1004,8 @@ export default function PrivateScreen() {
           description: t('privateSpace.attachMediaSqlHint'),
         });
       }
+      stickToLatestRef.current = true;
+      scrollChatToLatest(true);
     } finally {
       setSending(false);
     }
@@ -1001,6 +1018,7 @@ export default function PrivateScreen() {
     toast,
     t,
     sendErrorDescription,
+    scrollChatToLatest,
   ]);
 
   if (loading || !space.ready) {
@@ -1395,9 +1413,16 @@ export default function PrivateScreen() {
                   onScroll={(e) => {
                     const { contentOffset, contentSize, layoutMeasurement } =
                       e.nativeEvent;
-                    chatNearBottomRef.current =
+                    const nearBottom =
                       contentOffset.y + layoutMeasurement.height >=
                       contentSize.height - 48;
+                    chatNearBottomRef.current = nearBottom;
+                    stickToLatestRef.current = nearBottom;
+                  }}
+                  onContentSizeChange={() => {
+                    if (stickToLatestRef.current || chatNearBottomRef.current) {
+                      scrollChatToLatest(false);
+                    }
                   }}
                   scrollEventThrottle={16}
                 >
@@ -1501,6 +1526,12 @@ export default function PrivateScreen() {
                   pendingPhotoLabel={t('privateSpace.attachPhotoReady')}
                   pendingVideoLabel={t('privateSpace.attachVideoReady')}
                   onKeyboardInsetChange={setComposerKeyboardInset}
+                  onFocusedChange={(focused) => {
+                    if (focused) {
+                      stickToLatestRef.current = true;
+                      scrollChatToLatest(false);
+                    }
+                  }}
                 />
               </View>
             </>

@@ -38,6 +38,8 @@ type Props = {
   pendingVideoLabel: string;
   /** إزاحة أسفل الشاشة بسبب لوحة المفاتيح (ويب فقط، عند التركيز) */
   onKeyboardInsetChange?: (inset: number) => void;
+  /** عند تركيز/إلغاء تركيز حقل الكتابة */
+  onFocusedChange?: (focused: boolean) => void;
 };
 
 const INPUT_FONT = 16;
@@ -64,6 +66,7 @@ function PrivateChatComposerComponent({
   pendingPhotoLabel,
   pendingVideoLabel,
   onKeyboardInsetChange,
+  onFocusedChange,
 }: Props) {
   const theme = useAppTheme();
   const { desktop } = useResponsive();
@@ -104,9 +107,10 @@ function PrivateChatComposerComponent({
       focusedRef.current = next;
       setFocused(next);
       setPrivateChatComposerFocused(next);
+      onFocusedChange?.(next);
       if (!next) publishInset(0);
     },
-    [publishInset]
+    [publishInset, onFocusedChange]
   );
 
   useEffect(() => {
