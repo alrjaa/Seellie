@@ -515,67 +515,54 @@ const Slide = memo(function Slide({
             styles.bottomBar,
             {
               bottom: bottomPad + 8,
-              // خلوص عمود الأزرار العائمة (يمين الشاشة)
-              paddingRight: FAB_COLUMN_WIDTH,
-              paddingLeft: 14,
             },
           ]}
         >
-          <View
-            style={[
-              styles.bottomMetaRow,
-              {
-                justifyContent: isRTL ? 'flex-end' : 'flex-start',
-              },
-            ]}
-          >
-            {(item.kind === 'video' || item.kind === 'photo') &&
-            (item.title || item.text) ? (
-              <Text
-                style={[
-                  styles.titleBesideComments,
-                  cairoText('semiBold'),
-                  {
-                    flex: isRTL ? 0 : 1,
-                    maxWidth: isRTL ? '78%' : undefined,
-                    textAlign: isRTL ? 'right' : 'left',
-                    writingDirection: isRTL ? 'rtl' : 'ltr',
-                  },
-                ]}
-                numberOfLines={2}
-              >
-                {(item.title || '').trim() || (item.text || '').trim()}
+          {(item.kind === 'video' || item.kind === 'photo') &&
+          (item.title || item.text) ? (
+            <Text
+              style={[
+                styles.titleBesideComments,
+                cairoText('semiBold'),
+                {
+                  left: 14,
+                  // مساحة عمود الإعجاب/التعليقات على اليمين — لا يدخل خلفها
+                  right: 14 + 88,
+                  textAlign: isRTL ? 'right' : 'left',
+                  writingDirection: isRTL ? 'rtl' : 'ltr',
+                },
+              ]}
+              numberOfLines={2}
+            >
+              {(item.title || '').trim() || (item.text || '').trim()}
+            </Text>
+          ) : null}
+          <View style={styles.actionsColumn}>
+            <LikeButton
+              count={item.likes.length}
+              liked={item.liked}
+              onPress={handleLikePress}
+              tone="light"
+              size="md"
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('ui.comments')}
+              onPress={() => {
+                if (commentsExpanded) dismissCommentsPanel();
+                else openCommentsPanel();
+              }}
+              hitSlop={8}
+              style={({ pressed }) => [
+                styles.commentsLink,
+                { opacity: pressed ? 0.65 : 1 },
+              ]}
+            >
+              <Text style={[styles.commentsLinkText, cairoText('medium')]}>
+                {t('ui.comments')}
+                {comments.length > 0 ? ` ${comments.length}` : ''}
               </Text>
-            ) : !isRTL ? (
-              <View style={styles.bottomBarSpacer} />
-            ) : null}
-            <View style={styles.actionsColumn}>
-              <LikeButton
-                count={item.likes.length}
-                liked={item.liked}
-                onPress={handleLikePress}
-                tone="light"
-                size="md"
-              />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t('ui.comments')}
-                onPress={() => {
-                  if (commentsExpanded) dismissCommentsPanel();
-                  else openCommentsPanel();
-                }}
-                hitSlop={8}
-                style={({ pressed }) => [
-                  styles.commentsLink,
-                  { opacity: pressed ? 0.65 : 1 },
-                ]}
-              >
-                <Text style={[styles.commentsLinkText, cairoText('medium')]}>
-                  {t('ui.comments')}
-                  {comments.length > 0 ? ` ${comments.length}` : ''}
-                </Text>
-              </Pressable>
-            </View>
+            </Pressable>
           </View>
         </View>
       </View>
@@ -952,8 +939,8 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.92)',
   },
   /**
-   * شريط سفلي: العربية → النص يمين (قبل عمود FAB) بجوار التعليقات من يسارها
-   * الإنجليزية → النص يسار · التعليقات يمين · بدون تداخل مع الأزرار العائمة
+   * إعجاب + تعليقات مثبتة يمين الشاشة فيزيائياً.
+   * العنوان يسارهما: عربي بمحاذاة يمين · إنجليزي بمحاذاة يسار.
    */
   bottomBar: {
     position: 'absolute',
@@ -961,19 +948,13 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 6,
     elevation: 6,
-  },
-  bottomMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 12,
-    width: '100%',
+    minHeight: 72,
     direction: 'ltr',
   },
-  bottomBarSpacer: {
-    flex: 1,
-  },
   titleBesideComments: {
-    minWidth: 0,
+    position: 'absolute',
+    bottom: 8,
+    zIndex: 5,
     color: '#fff',
     fontSize: Platform.OS === 'android' ? 13 : 14,
     lineHeight: Platform.OS === 'android' ? 18 : 20,
@@ -982,12 +963,16 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
   },
   actionsColumn: {
+    position: 'absolute',
+    right: 14,
+    bottom: 0,
+    zIndex: 7,
+    elevation: 7,
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 4,
     width: 88,
-    flexShrink: 0,
   },
   handlePress: {
     maxWidth: 160,
