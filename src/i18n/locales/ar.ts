@@ -338,7 +338,7 @@ export const ar = {
     videoAttached: 'تم إرفاق الفيديو',
     durationApprox: 'المدة ≈ %{sec} ثانية',
     maxDuration: 'الحد الأقصى %{sec} ثانية',
-    cloudSyncFailed: 'تعذّر النشر السحابي — ظهر محلياً فقط على هذا الجهاز',
+    cloudSyncFailed: 'تعذّر النشر على السحابة — لم يُحفظ المنشور',
     saveHint: 'احفظ أي مساهمة في الخاصة عبر أيقونة الإشارة أو بنقرتين على البطاقة.',
   },
   cloud: {

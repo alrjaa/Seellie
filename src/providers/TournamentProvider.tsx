@@ -523,7 +523,7 @@ export interface TournamentContextType {
     audioUrl?: string,
     target?: CommentTarget,
     extras?: { videoUrl?: string; videoDurationSec?: number }
-  ) => void;
+  ) => Promise<boolean>;
   toggleCommentLike: (commentId: string) => void;
   updateDiscussionStatus: (
     payload: {
@@ -2601,16 +2601,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const addComment = useCallback(
-    (
+    async (
       text: string,
       _audioUrl?: string,
       target?: CommentTarget,
       extras?: { videoUrl?: string; videoDurationSec?: number }
-    ) => {
-      if (!currentUser) return;
+    ): Promise<boolean> => {
+      if (!currentUser) return false;
       const trimmed = text.trim();
       const videoUrl = extras?.videoUrl?.trim();
-      if (!trimmed && !videoUrl) return;
+      if (!trimmed && !videoUrl) return false;
 
       // فيديو الساحة يُنشر فقط من الحساب المسجّل نفسه
       if (videoUrl && extras?.videoDurationSec != null && extras.videoDurationSec > 30.5) {
@@ -2619,8 +2619,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           title: t('toasts.t018_d72661'),
           description: t('toasts.t083_f79b40'),
         });
-        return;
+        return false;
       }
+
+      const isLocalMediaUri =
+        !!videoUrl && !/^https?:\/\//i.test(videoUrl);
 
       const publishLocal = (comment: Comment) => {
         if (target?.type === 'match') {
@@ -2650,20 +2653,29 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
       };
 
-      // مساهمات الساحة العامة → سحابة إن أمكن
-      if (
-        (!target || target.type === 'general') &&
-        isSupabaseConfigured() &&
-        isUuid(currentUser.id)
-      ) {
-        void (async () => {
+      const isGeneral = !target || target.type === 'general';
+
+      // مساهمات الساحة العامة → سحابة إلزامية للفيديو (لا ننشر blob/file محلياً فقط)
+      if (isGeneral && isSupabaseConfigured()) {
+        const cloud = await requireCloudSession(currentUser.id);
+        if (!cloud.session) {
+          if (videoUrl) {
+            toast({
+              variant: 'destructive',
+              title: t('forums.cloudSyncFailed'),
+              description: cloudWriteErrorMessage(cloud.error || 'no_session'),
+            });
+            return false;
+          }
+          // نص فقط بدون جلسة → يبقى المسار المحلي أدناه
+        } else {
           let finalVideoUrl = videoUrl;
           if (finalVideoUrl) {
             const resolved = await resolvePublicMediaUrl({
               uri: finalVideoUrl,
               kind: 'video',
               folder: 'forums',
-              userId: currentUser.id,
+              userId: cloud.session.userId,
               requireCloud: true,
             });
             if (!resolved.url) {
@@ -2672,12 +2684,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
                 title: t('forums.cloudSyncFailed'),
                 description: cloudWriteErrorMessage(resolved.error),
               });
-              return;
+              return false;
             }
             finalVideoUrl = resolved.url;
           }
           const remote = await insertForumComment({
-            authorId: currentUser.id,
+            authorId: cloud.session.userId,
             authorName: currentUser.name,
             authorAvatar: currentUser.avatar,
             text: trimmed,
@@ -2686,15 +2698,27 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           });
           if (remote.comment) {
             publishLocal(remote.comment);
-            return;
+            return true;
           }
           toast({
             variant: 'destructive',
             title: t('forums.cloudSyncFailed'),
             description: remote.error || cloudWriteErrorMessage('no_session'),
           });
-        })();
-        return;
+          return false;
+        }
+      }
+
+      // لا نسمح بفيديو محلي يظهر «منشوراً» على الجهاز فقط
+      if (isLocalMediaUri) {
+        toast({
+          variant: 'destructive',
+          title: t('forums.cloudSyncFailed'),
+          description: cloudWriteErrorMessage(
+            isSupabaseConfigured() ? 'not_cloud_user' : 'not_configured'
+          ),
+        });
+        return false;
       }
 
       const comment: Comment = {
@@ -2714,8 +2738,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           : null),
       };
       publishLocal(comment);
+      return true;
     },
-    [currentUser, toast, t]
+    [currentUser, toast, t, syncCompetitions]
   );
 
   const toggleCommentLike = useCallback(

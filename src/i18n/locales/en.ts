@@ -337,7 +337,7 @@ export const en: TranslationTree = {
     videoAttached: 'Video attached',
     durationApprox: 'Duration ≈ %{sec} seconds',
     maxDuration: 'Maximum %{sec} seconds',
-    cloudSyncFailed: 'Cloud publish failed — shown locally on this device only',
+    cloudSyncFailed: 'Cloud publish failed — the post was not saved',
     saveHint: 'Save any post to Private via the bookmark icon or a double-tap on the card.',
   },
   cloud: {

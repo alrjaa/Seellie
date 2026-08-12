@@ -283,17 +283,19 @@ export default function ForumsScreen() {
     }
   }, [attachVideo, currentUser, t, toast]);
 
-  const publish = useCallback(() => {
+  const publish = useCallback(async () => {
     if (!currentUser) return;
     const value = text.trim();
     if (!value && !videoUri) return;
 
-    addComment(value, undefined, { type: 'general' }, {
+    const ok = await addComment(value, undefined, { type: 'general' }, {
       videoUrl: videoUri || undefined,
       videoDurationSec: videoDurationSec ?? undefined,
     });
-    setText('');
-    clearVideo();
+    if (ok) {
+      setText('');
+      clearVideo();
+    }
   }, [
     addComment,
     clearVideo,
