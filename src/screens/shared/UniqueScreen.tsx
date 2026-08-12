@@ -54,6 +54,7 @@ import {
   validatePickerAsset,
   videoDurationSecFromPicker,
 } from '@/utils/media-limits';
+import { setFloatingSuppressed } from '@/services/floating-scroll-bus';
 import { ar } from '@/i18n/locales/ar';
 import { en } from '@/i18n/locales/en';
 
@@ -249,6 +250,16 @@ export default function UniqueScreen() {
   const [showGatePanel, setShowGatePanel] = useState(false);
   const [sharePayload, setSharePayload] = useState<ContentSharePayload | null>(
     null
+  );
+
+  const publishPanelOpen = showGatePanel || showJoinForm;
+
+  // إخفاء الأزرار العائمة أثناء نموذج النشر/الانضمام في الفريد
+  useFocusEffect(
+    useCallback(() => {
+      setFloatingSuppressed(publishPanelOpen);
+      return () => setFloatingSuppressed(false);
+    }, [publishPanelOpen])
   );
 
   const analyses = useMemo(() => {
