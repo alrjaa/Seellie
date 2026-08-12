@@ -155,17 +155,55 @@ const ChatMediaThumb = memo(function ChatMediaThumb({
 }) {
   const { t } = useTranslation();
   const htmlRef = useRef<HTMLVideoElement | null>(null);
+  const nativeVideoRef = useRef<VideoType | null>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const [inView, setInView] = useState(true);
+
+  const bindWebVideo = useCallback((node: HTMLVideoElement | null) => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+    htmlRef.current = node;
+    if (!node || typeof IntersectionObserver === 'undefined') {
+      if (node) {
+        node.muted = true;
+        void node.play().catch(() => undefined);
+      }
+      return;
+    }
+
+    node.muted = true;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        const visible =
+          !!entry?.isIntersecting && (entry.intersectionRatio ?? 0) >= 0.3;
+        setInView(visible);
+        const video = htmlRef.current;
+        if (!video) return;
+        video.muted = true;
+        if (visible) {
+          void video.play().catch(() => undefined);
+        } else {
+          video.pause();
+        }
+      },
+      { threshold: [0, 0.3, 0.6, 1] }
+    );
+    io.observe(node);
+    observerRef.current = io;
+    // تشغيل أولي إن كان ظاهرًا
+    void node.play().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
-    if (kind !== 'video' || Platform.OS !== 'web') return;
-    const node = htmlRef.current;
-    if (!node) return;
-    node.muted = true;
-    void node.play().catch(() => undefined);
     return () => {
-      node.pause();
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      htmlRef.current?.pause();
     };
-  }, [kind, uri]);
+  }, [uri]);
 
   const wrapStyle = {
     width: CHAT_VIDEO_W,
@@ -195,13 +233,8 @@ const ChatMediaThumb = memo(function ChatMediaThumb({
         />
       ) : Platform.OS === 'web' ? (
         createElement('video', {
-          ref: (node: HTMLVideoElement | null) => {
-            htmlRef.current = node;
-            if (node) {
-              node.muted = true;
-              void node.play().catch(() => undefined);
-            }
-          },
+          key: uri,
+          ref: bindWebVideo,
           src: uri,
           muted: true,
           autoPlay: true,
@@ -221,11 +254,12 @@ const ChatMediaThumb = memo(function ChatMediaThumb({
         })
       ) : (
         <Video
+          ref={nativeVideoRef}
           source={{ uri }}
           style={{ width: CHAT_VIDEO_W, height: CHAT_VIDEO_H }}
           resizeMode={ResizeMode.COVER}
           useNativeControls={false}
-          shouldPlay
+          shouldPlay={inView}
           isMuted
           isLooping
         />
