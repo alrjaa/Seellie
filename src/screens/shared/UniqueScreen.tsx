@@ -953,7 +953,13 @@ export default function UniqueScreen() {
           emptyIcon="analytics-outline"
           topOverlaySafeArea
           topOverlay={
-            <View style={styles.mobileOverlay} pointerEvents="box-none">
+            <View
+              style={[
+                styles.mobileOverlay,
+                showPanel ? styles.mobileOverlayExpanded : null,
+              ]}
+              pointerEvents="box-none"
+            >
               <View style={styles.mobileBar}>
                 <View style={styles.topTools}>
                   <HeaderBackButton />
@@ -970,11 +976,15 @@ export default function UniqueScreen() {
               {showPanel ? (
                 <ScrollView
                   style={[
-                    styles.mobilePanel,
+                    styles.uniquePublishPanel,
                     { backgroundColor: theme.colors.surface },
                   ]}
-                  contentContainerStyle={styles.mobilePanelContent}
+                  contentContainerStyle={[
+                    styles.uniquePublishPanelContent,
+                    { paddingBottom: Math.max(insets.bottom, 12) + 16 },
+                  ]}
                   keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
                 >
                   {publishGate}
                   <Button
@@ -1076,6 +1086,11 @@ const styles = StyleSheet.create({
   mobileOverlay: {
     gap: 8,
   },
+  /** لوحة النشر في الفريد فقط — تمتد من أسفل الشريط العلوي حتى أسفل الشاشة */
+  mobileOverlayExpanded: {
+    flex: 1,
+    minHeight: 0,
+  },
   mobileBar: {
     paddingHorizontal: 12,
     paddingBottom: 10,
@@ -1087,15 +1102,17 @@ const styles = StyleSheet.create({
     gap: 8,
     direction: 'ltr',
   },
-  mobilePanel: {
-    maxHeight: 420,
+  uniquePublishPanel: {
+    flex: 1,
+    minHeight: 0,
     marginHorizontal: 12,
+    marginBottom: 8,
     borderRadius: 16,
   },
-  mobilePanelContent: {
+  uniquePublishPanelContent: {
     padding: 12,
     gap: 10,
-    paddingBottom: 20,
+    flexGrow: 1,
   },
   card: { gap: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
