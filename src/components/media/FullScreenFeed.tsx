@@ -56,6 +56,7 @@ import {
 } from '@/services/content-item-comments';
 import { createId } from '@/utils/id';
 import { cairoText } from '@/theme/fonts';
+import { FAB_COLUMN_WIDTH } from '@/theme/navigation';
 import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
 
 export type FullScreenContentComment = {
@@ -458,13 +459,38 @@ const Slide = memo(function Slide({
         {item.kind === 'text' ? (
           <Pressable
             onPress={handleContentPress}
-            style={styles.textSlide}
+            style={[
+              styles.textSlide,
+              isRTL
+                ? { paddingRight: 28, paddingLeft: FAB_COLUMN_WIDTH + 12 }
+                : { paddingLeft: 28, paddingRight: FAB_COLUMN_WIDTH + 12 },
+            ]}
           >
             {item.title ? (
-              <Text style={styles.textTitleLight}>{item.title}</Text>
+              <Text
+                style={[
+                  styles.textTitleLight,
+                  {
+                    textAlign: isRTL ? 'right' : 'left',
+                    writingDirection: isRTL ? 'rtl' : 'ltr',
+                  },
+                ]}
+              >
+                {item.title}
+              </Text>
             ) : null}
             {item.text ? (
-              <Text style={styles.textBodyLight}>{item.text}</Text>
+              <Text
+                style={[
+                  styles.textBodyLight,
+                  {
+                    textAlign: isRTL ? 'right' : 'left',
+                    writingDirection: isRTL ? 'rtl' : 'ltr',
+                  },
+                ]}
+              >
+                {item.text}
+              </Text>
             ) : null}
           </Pressable>
         ) : null}
@@ -489,47 +515,67 @@ const Slide = memo(function Slide({
             styles.bottomBar,
             {
               bottom: bottomPad + 8,
-              paddingBottom: 0,
+              // خلوص عمود الأزرار العائمة (يمين الشاشة)
+              paddingRight: FAB_COLUMN_WIDTH,
+              paddingLeft: 14,
             },
           ]}
         >
-          {(item.kind === 'video' || item.kind === 'photo') &&
-          (item.title || item.text) ? (
-            <Text
-              style={[styles.titleBesideComments, cairoText('semiBold')]}
-              numberOfLines={2}
-            >
-              {(item.title || '').trim() || (item.text || '').trim()}
-            </Text>
-          ) : (
-            <View style={styles.bottomBarSpacer} />
-          )}
-          <View style={styles.actionsColumn}>
-            <LikeButton
-              count={item.likes.length}
-              liked={item.liked}
-              onPress={handleLikePress}
-              tone="light"
-              size="md"
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('ui.comments')}
-              onPress={() => {
-                if (commentsExpanded) dismissCommentsPanel();
-                else openCommentsPanel();
-              }}
-              hitSlop={8}
-              style={({ pressed }) => [
-                styles.commentsLink,
-                { opacity: pressed ? 0.65 : 1 },
-              ]}
-            >
-              <Text style={[styles.commentsLinkText, cairoText('medium')]}>
-                {t('ui.comments')}
-                {comments.length > 0 ? ` ${comments.length}` : ''}
+          <View
+            style={[
+              styles.bottomMetaRow,
+              {
+                justifyContent: isRTL ? 'flex-end' : 'flex-start',
+              },
+            ]}
+          >
+            {(item.kind === 'video' || item.kind === 'photo') &&
+            (item.title || item.text) ? (
+              <Text
+                style={[
+                  styles.titleBesideComments,
+                  cairoText('semiBold'),
+                  {
+                    flex: isRTL ? 0 : 1,
+                    maxWidth: isRTL ? '78%' : undefined,
+                    textAlign: isRTL ? 'right' : 'left',
+                    writingDirection: isRTL ? 'rtl' : 'ltr',
+                  },
+                ]}
+                numberOfLines={2}
+              >
+                {(item.title || '').trim() || (item.text || '').trim()}
               </Text>
-            </Pressable>
+            ) : !isRTL ? (
+              <View style={styles.bottomBarSpacer} />
+            ) : null}
+            <View style={styles.actionsColumn}>
+              <LikeButton
+                count={item.likes.length}
+                liked={item.liked}
+                onPress={handleLikePress}
+                tone="light"
+                size="md"
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('ui.comments')}
+                onPress={() => {
+                  if (commentsExpanded) dismissCommentsPanel();
+                  else openCommentsPanel();
+                }}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.commentsLink,
+                  { opacity: pressed ? 0.65 : 1 },
+                ]}
+              >
+                <Text style={[styles.commentsLinkText, cairoText('medium')]}>
+                  {t('ui.comments')}
+                  {comments.length > 0 ? ` ${comments.length}` : ''}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </View>
@@ -889,37 +935,25 @@ const styles = StyleSheet.create({
   },
   textSlide: {
     ...StyleSheet.absoluteFillObject,
-    paddingHorizontal: 28,
     paddingVertical: 80,
     justifyContent: 'center',
     gap: 14,
     backgroundColor: '#0d1a26',
   },
-  textTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-  },
-  textBody: {
-    fontSize: 18,
-    lineHeight: 30,
-    fontWeight: '600',
-  },
   textTitleLight: {
     fontSize: 22,
     fontWeight: '900',
     color: '#fff',
-    textAlign: 'left',
   },
   textBodyLight: {
     fontSize: 18,
     lineHeight: 30,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.92)',
-    textAlign: 'left',
   },
   /**
-   * شريط سفلي: عنوان الفيديو يسار التعليقات · الإعجاب والتعليقات يمين الشاشة.
-   * direction:'ltr' يثبت الترتيب الفيزيائي بغض النظر عن RTL.
+   * شريط سفلي: العربية → النص يمين (قبل عمود FAB) بجوار التعليقات من يسارها
+   * الإنجليزية → النص يسار · التعليقات يمين · بدون تداخل مع الأزرار العائمة
    */
   bottomBar: {
     position: 'absolute',
@@ -927,21 +961,22 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 6,
     elevation: 6,
+  },
+  bottomMetaRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 12,
-    paddingHorizontal: 14,
+    width: '100%',
     direction: 'ltr',
   },
   bottomBarSpacer: {
     flex: 1,
   },
   titleBesideComments: {
-    flex: 1,
+    minWidth: 0,
     color: '#fff',
     fontSize: Platform.OS === 'android' ? 13 : 14,
     lineHeight: Platform.OS === 'android' ? 18 : 20,
-    textAlign: 'right',
     textShadowColor: 'rgba(0,0,0,0.55)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
@@ -951,17 +986,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 4,
-    maxWidth: 88,
-  },
-  actionsDock: {
-    position: 'absolute',
-    zIndex: 6,
-    elevation: 6,
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 4,
-    maxWidth: 88,
+    width: 88,
+    flexShrink: 0,
   },
   handlePress: {
     maxWidth: 160,
@@ -973,17 +999,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: Platform.OS === 'android' ? 11 : 12,
     textAlign: 'left',
-  },
-  caption: {
-    position: 'absolute',
-    left: 14,
-    right: 14,
-    zIndex: 5,
-    color: '#fff',
-    fontSize: Platform.OS === 'android' ? 13 : 14,
-    lineHeight: Platform.OS === 'android' ? 18 : 20,
-    fontWeight: '600',
-    textAlign: 'right',
   },
   commentsLink: {
     paddingVertical: 2,
