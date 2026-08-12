@@ -333,7 +333,7 @@ export default function UniqueScreen() {
             ? body && body !== item.title.trim()
               ? body
               : ''
-            : [item.title, body].filter(Boolean).join('\n'),
+            : '',
         authorId: item.authorId,
         authorName: item.authorName,
         authorAvatar: item.authorAvatar,

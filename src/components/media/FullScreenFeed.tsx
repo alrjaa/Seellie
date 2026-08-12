@@ -12,7 +12,6 @@ import {
   Animated,
   AppState,
   FlatList,
-  I18nManager,
   Keyboard,
   Platform,
   Pressable,
@@ -181,11 +180,6 @@ const Slide = memo(function Slide({
   const comments = useContentComments(item.id, item.comments);
   const bottomPad = Math.max(insets.bottom, 6) + 4;
   const commentsPanelHeight = 210 + Math.max(insets.bottom, 8);
-  // زر الإعجاب على اليمين فيزيائياً — المعرّف انتقل للأزرار العائمة
-  const dockSide =
-    I18nManager.isRTL && I18nManager.doLeftAndRightSwapInRTL
-      ? ({ left: 14 } as const)
-      : ({ right: 14 } as const);
 
   useEffect(() => {
     if (!active) {
@@ -489,51 +483,54 @@ const Slide = memo(function Slide({
           />
         ) : null}
 
-        {item.kind !== 'text' && item.text ? (
-          <Text
-            style={[styles.caption, { bottom: bottomPad + 24 }]}
-            numberOfLines={3}
-          >
-            {item.text}
-          </Text>
-        ) : null}
-
         <View
           pointerEvents="box-none"
           style={[
-            styles.actionsDock,
-            dockSide,
+            styles.bottomBar,
             {
               bottom: bottomPad + 8,
-              direction: 'ltr',
+              paddingBottom: 0,
             },
           ]}
         >
-          <LikeButton
-            count={item.likes.length}
-            liked={item.liked}
-            onPress={handleLikePress}
-            tone="light"
-            size="md"
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('ui.comments')}
-            onPress={() => {
-              if (commentsExpanded) dismissCommentsPanel();
-              else openCommentsPanel();
-            }}
-            hitSlop={8}
-            style={({ pressed }) => [
-              styles.commentsLink,
-              { opacity: pressed ? 0.65 : 1 },
-            ]}
-          >
-            <Text style={[styles.commentsLinkText, cairoText('medium')]}>
-              {t('ui.comments')}
-              {comments.length > 0 ? ` ${comments.length}` : ''}
+          {(item.kind === 'video' || item.kind === 'photo') &&
+          (item.title || item.text) ? (
+            <Text
+              style={[styles.titleBesideComments, cairoText('semiBold')]}
+              numberOfLines={2}
+            >
+              {(item.title || '').trim() || (item.text || '').trim()}
             </Text>
-          </Pressable>
+          ) : (
+            <View style={styles.bottomBarSpacer} />
+          )}
+          <View style={styles.actionsColumn}>
+            <LikeButton
+              count={item.likes.length}
+              liked={item.liked}
+              onPress={handleLikePress}
+              tone="light"
+              size="md"
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('ui.comments')}
+              onPress={() => {
+                if (commentsExpanded) dismissCommentsPanel();
+                else openCommentsPanel();
+              }}
+              hitSlop={8}
+              style={({ pressed }) => [
+                styles.commentsLink,
+                { opacity: pressed ? 0.65 : 1 },
+              ]}
+            >
+              <Text style={[styles.commentsLinkText, cairoText('medium')]}>
+                {t('ui.comments')}
+                {comments.length > 0 ? ` ${comments.length}` : ''}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </View>
 
@@ -921,9 +918,41 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   /**
-   * رصيف الإجراءات على يمين الشاشة فيزيائياً (عمود: إعجاب ثم تعليقات).
-   * direction:'ltr' + right يمنع انعكاس RTL لـ flex/I18nManager.
+   * شريط سفلي: عنوان الفيديو يسار التعليقات · الإعجاب والتعليقات يمين الشاشة.
+   * direction:'ltr' يثبت الترتيب الفيزيائي بغض النظر عن RTL.
    */
+  bottomBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 6,
+    elevation: 6,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 12,
+    paddingHorizontal: 14,
+    direction: 'ltr',
+  },
+  bottomBarSpacer: {
+    flex: 1,
+  },
+  titleBesideComments: {
+    flex: 1,
+    color: '#fff',
+    fontSize: Platform.OS === 'android' ? 13 : 14,
+    lineHeight: Platform.OS === 'android' ? 18 : 20,
+    textAlign: 'right',
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  actionsColumn: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+    maxWidth: 88,
+  },
   actionsDock: {
     position: 'absolute',
     zIndex: 6,
