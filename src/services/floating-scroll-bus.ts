@@ -5,7 +5,8 @@
  * 1) الافتراضي: ظاهرة
  * 2) بداية تمرير / حركة معتبرة → إخفاء
  * 3) نهاية التمرير (settle) → إظهار بعد تأخير قصير
- * 4) ضمان أقصى: لن تبقى مخفية أكثر من MAX_HIDDEN_MS (ما لم تكن suppressed)
+ * 4) ضمان أقصى: لن تبقى مخفية أكثر من MAX_HIDDEN_MS
+ * 5) suppressFloating: يخفي زر FAB فقط دون إخفاء topOverlay (نموذج النشر في الفريد / الخاصة)
  *
  * الخلل السابق: كل حدث onScroll كان يعيد جدولة مؤقّت الإظهار،
  * فأحداث الاهتزاز/الصفحات تمنع الظهور إلى الأبد. هنا أثناء الإخفاء
@@ -30,10 +31,7 @@ const SETTLE_SHOW_MS = 200;
 /** ضمان قوي: إظهار حتى لو لم يصل settle من النظام */
 const MAX_HIDDEN_MS = 850;
 
-function emit(next: boolean) {
-  const effective = suppressFloating ? false : next;
-  if (visible === effective) return;
-  visible = effective;
+function notify() {
   listeners.forEach((listener) => {
     try {
       listener(visible);
@@ -41,6 +39,12 @@ function emit(next: boolean) {
       // ignore
     }
   });
+}
+
+function emit(next: boolean) {
+  if (visible === next) return;
+  visible = next;
+  notify();
 }
 
 function clearSettleTimer() {
@@ -62,18 +66,10 @@ function showNow() {
   lastY = null;
   clearSettleTimer();
   clearFailsafeTimer();
-  if (suppressFloating) {
-    emit(false);
-    return;
-  }
   emit(true);
 }
 
 function hideForScroll() {
-  if (suppressFloating) {
-    emit(false);
-    return;
-  }
   emit(false);
   // يُفعَّل مرة واحدة لكل فترة إخفاء — لا يُعاد ضبطه بأحداث التمرير
   if (!failsafeTimer) {
@@ -86,10 +82,6 @@ function hideForScroll() {
 
 function scheduleSettleShow() {
   clearSettleTimer();
-  if (suppressFloating) {
-    emit(false);
-    return;
-  }
   settleTimer = setTimeout(() => {
     settleTimer = null;
     showNow();
@@ -100,13 +92,22 @@ function acceptsSource(sourceId: string) {
   return ownerId == null || ownerId === sourceId;
 }
 
+/**
+ * إخفاء عمود الأزرار العائمة فقط (FAB).
+ * لا يخفي topOverlay في FullScreenFeed — حتى يبقى نموذج نشر الفريد ظاهراً.
+ */
 export function setFloatingSuppressed(suppressed: boolean) {
   suppressFloating = suppressed;
   scrolling = false;
   lastY = null;
   clearSettleTimer();
   clearFailsafeTimer();
-  emit(!suppressed);
+  if (suppressed) {
+    // أبقِ chrome/overlay كما هو؛ FAB يقرأ isFloatingSuppressed()
+    notify();
+  } else {
+    emit(true);
+  }
 }
 
 export function isFloatingSuppressed() {
