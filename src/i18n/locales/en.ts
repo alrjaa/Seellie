@@ -1857,6 +1857,7 @@ export const en: TranslationTree = {
     videoPickFailed: 'Could not pick video',
     filterAll: 'All (%{count})',
     filterVideo: 'Video (%{count})',
+    filterPhoto: 'Photos (%{count})',
     filterText: 'Text (%{count})',
     actionPending: 'Your request is under review',
     actionEnterCode: 'Enter activation code',

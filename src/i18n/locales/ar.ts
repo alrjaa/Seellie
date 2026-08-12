@@ -1340,6 +1340,7 @@ export const ar = {
     videoPickFailed: 'تعذر اختيار الفيديو',
     filterAll: 'الكل (%{count})',
     filterVideo: 'فيديو (%{count})',
+    filterPhoto: 'صور (%{count})',
     filterText: 'نصي (%{count})',
     actionPending: 'طلبك قيد المراجعة',
     actionEnterCode: 'أدخل رمز التفعيل',

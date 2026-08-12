@@ -464,33 +464,30 @@ const Slide = memo(function Slide({
         {item.kind === 'text' ? (
           <Pressable
             onPress={handleContentPress}
-            style={[
-              styles.textSlide,
-              { backgroundColor: theme.colors.surfaceElevated },
-            ]}
+            style={styles.textSlide}
           >
             {item.title ? (
-              <Text style={[styles.textTitle, { color: theme.colors.text }]}>
-                {item.title}
-              </Text>
+              <Text style={styles.textTitleLight}>{item.title}</Text>
             ) : null}
-            <Text style={[styles.textBody, { color: theme.colors.text }]}>
-              {item.text || ''}
-            </Text>
+            {item.text ? (
+              <Text style={styles.textBodyLight}>{item.text}</Text>
+            ) : null}
           </Pressable>
         ) : null}
 
-        <LinearGradient
-          colors={[
-            'rgba(0,0,0,0.55)',
-            'transparent',
-            'transparent',
-            'rgba(0,0,0,0.75)',
-          ]}
-          locations={[0, 0.18, 0.55, 1]}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
+        {item.kind !== 'text' ? (
+          <LinearGradient
+            colors={[
+              'rgba(0,0,0,0.55)',
+              'transparent',
+              'transparent',
+              'rgba(0,0,0,0.75)',
+            ]}
+            locations={[0, 0.18, 0.55, 1]}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+        ) : null}
 
         {item.kind !== 'text' && item.text ? (
           <Text
@@ -899,6 +896,7 @@ const styles = StyleSheet.create({
     paddingVertical: 80,
     justifyContent: 'center',
     gap: 14,
+    backgroundColor: '#0d1a26',
   },
   textTitle: {
     fontSize: 22,
@@ -908,6 +906,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 30,
     fontWeight: '600',
+  },
+  textTitleLight: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#fff',
+    textAlign: 'left',
+  },
+  textBodyLight: {
+    fontSize: 18,
+    lineHeight: 30,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.92)',
+    textAlign: 'left',
   },
   /**
    * رصيف الإجراءات على يمين الشاشة فيزيائياً (عمود: إعجاب ثم تعليقات).

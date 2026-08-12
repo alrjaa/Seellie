@@ -57,7 +57,7 @@ import {
 import { ar } from '@/i18n/locales/ar';
 import { en } from '@/i18n/locales/en';
 
-type FeedFilter = 'all' | 'video' | 'text';
+type FeedFilter = 'all' | 'video' | 'photo' | 'text';
 
 type AnalysisItem = {
   id: string;
@@ -77,6 +77,20 @@ function isVisualAnalysisPlaceholder(content: string) {
   return (
     content === ar.toasts.visualAnalysis || content === en.toasts.visualAnalysis
   );
+}
+
+function analysisHasText(item: Pick<AnalysisItem, 'title' | 'content'>) {
+  const body = (item.content || '').trim();
+  if (body && !isVisualAnalysisPlaceholder(body)) return true;
+  return !!(item.title || '').trim();
+}
+
+function analysisIsPhotoOnly(item: Pick<AnalysisItem, 'videoUrl' | 'posterUrl'>) {
+  return !!item.posterUrl && !item.videoUrl;
+}
+
+function analysisIsTextOnly(item: Pick<AnalysisItem, 'videoUrl' | 'posterUrl' | 'title' | 'content'>) {
+  return !item.videoUrl && !item.posterUrl && analysisHasText(item);
 }
 
 const AnalysisCard = memo(function AnalysisCard({
@@ -255,8 +269,8 @@ export default function UniqueScreen() {
 
   const filtered = useMemo(() => {
     if (filter === 'video') return analyses.filter((a) => !!a.videoUrl);
-    if (filter === 'text')
-      return analyses.filter((a) => !a.videoUrl && !a.posterUrl);
+    if (filter === 'photo') return analyses.filter((a) => analysisIsPhotoOnly(a));
+    if (filter === 'text') return analyses.filter((a) => analysisIsTextOnly(a));
     return analyses;
   }, [analyses, filter]);
 
@@ -264,7 +278,8 @@ export default function UniqueScreen() {
     () => ({
       all: analyses.length,
       video: analyses.filter((a) => !!a.videoUrl).length,
-      text: analyses.filter((a) => !a.videoUrl && !a.posterUrl).length,
+      photo: analyses.filter((a) => analysisIsPhotoOnly(a)).length,
+      text: analyses.filter((a) => analysisIsTextOnly(a)).length,
     }),
     [analyses]
   );
@@ -276,7 +291,7 @@ export default function UniqueScreen() {
       const hasPhoto = !!item.posterUrl;
       const body =
         item.content && !isVisualAnalysisPlaceholder(item.content)
-          ? item.content
+          ? item.content.trim()
           : '';
       const kind = hasVideo ? 'video' : hasPhoto ? 'photo' : 'text';
       return {
@@ -287,7 +302,7 @@ export default function UniqueScreen() {
         title: item.title,
         text:
           kind === 'text'
-            ? body || item.title
+            ? body
             : [item.title, body].filter(Boolean).join('\n'),
         authorId: item.authorId,
         authorName: item.authorName,
@@ -813,9 +828,34 @@ export default function UniqueScreen() {
     <View style={styles.filters}>
       {(
         [
-          { key: 'all' as const, icon: 'grid-outline' as const, count: counts.all, label: t('unique.filterAll', { count: counts.all }) },
-          { key: 'video' as const, icon: 'videocam-outline' as const, count: counts.video, label: t('unique.filterVideo', { count: counts.video }) },
-          { key: 'text' as const, icon: 'document-text-outline' as const, count: counts.text, label: t('unique.filterText', { count: counts.text }) },
+          {
+            key: 'all' as const,
+            icon: 'grid-outline' as const,
+            count: counts.all,
+            label: t('unique.filterAll', { count: counts.all }),
+            short: t('screens.all'),
+          },
+          {
+            key: 'video' as const,
+            icon: 'videocam-outline' as const,
+            count: counts.video,
+            label: t('unique.filterVideo', { count: counts.video }),
+            short: t('screens.videos'),
+          },
+          {
+            key: 'photo' as const,
+            icon: 'image-outline' as const,
+            count: counts.photo,
+            label: t('unique.filterPhoto', { count: counts.photo }),
+            short: t('screens.photos'),
+          },
+          {
+            key: 'text' as const,
+            icon: 'document-text-outline' as const,
+            count: counts.text,
+            label: t('unique.filterText', { count: counts.text }),
+            short: t('sharesUi.texts'),
+          },
         ] as const
       ).map((f) => {
         const active = filter === f.key;
@@ -851,11 +891,7 @@ export default function UniqueScreen() {
               }}
               numberOfLines={1}
             >
-              {f.key === 'all'
-                ? t('screens.all')
-                : f.key === 'video'
-                  ? t('screens.videos')
-                  : t('sharesUi.texts')}
+              {f.short}
             </Text>
           </Pressable>
         );
