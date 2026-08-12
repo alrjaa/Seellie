@@ -46,6 +46,10 @@ type FeedItem = {
   title?: string;
   text?: string;
   mediaUrl?: string;
+  /** صورة غلاف/تحليل بدون فيديو */
+  posterUrl?: string;
+  /** نوع الوسائط لتحليلات الفريد التي تحمل فيديو أو صورة */
+  mediaKind?: 'photo' | 'video';
   mediaId?: string;
   /** معرف المالك لـ toggleMediaLike / addMediaComment (مسابقة/مباراة/لاعب/مستخدم) */
   mediaOwnerId?: string;
@@ -174,6 +178,23 @@ const FeedCard = memo(function FeedCard({
           <InlineVideoPlayer uri={item.mediaUrl} autoPlayMuted />
         ) : null}
 
+        {item.type === 'analysis' && item.mediaKind === 'video' && item.mediaUrl ? (
+          <InlineVideoPlayer uri={item.mediaUrl} autoPlayMuted />
+        ) : null}
+
+        {item.type === 'analysis' &&
+        item.mediaKind === 'photo' &&
+        (item.mediaUrl || item.posterUrl) ? (
+          <Pressable onPress={onOpenMedia}>
+            <Image
+              source={{ uri: item.mediaUrl || item.posterUrl }}
+              style={styles.media}
+              contentFit="cover"
+              transition={200}
+            />
+          </Pressable>
+        ) : null}
+
         <LikeButton
           count={item.likes.length}
           liked={liked}
@@ -291,6 +312,18 @@ export default function GeneralFeedScreen() {
 
       user.analysisContent.forEach((a) => {
         if (a.status === 'blocked' || a.status === 'suspended') return;
+        const videoUrl =
+          a.videoUrl && isHttpUrl(a.videoUrl) ? a.videoUrl.trim() : undefined;
+        const posterUrl =
+          a.posterUrl && isHttpUrl(a.posterUrl) ? a.posterUrl.trim() : undefined;
+        const mediaKind = videoUrl ? 'video' : posterUrl ? 'photo' : undefined;
+        const rawText = (a.content || '').trim();
+        const text =
+          rawText &&
+          rawText !== 'تحليل مرئي' &&
+          rawText !== 'Visual analysis'
+            ? rawText
+            : undefined;
         items.push({
           id: `analysis-${a.id}`,
           type: 'analysis',
@@ -299,10 +332,14 @@ export default function GeneralFeedScreen() {
           authorHandle: user.handle,
           authorAvatar: user.avatar,
           title: a.title,
-          text: a.content,
+          text,
+          mediaUrl: videoUrl || posterUrl,
+          posterUrl,
+          mediaKind,
           likes: a.likes,
           comments: a.comments || [],
           timestamp: new Date(a.timestamp),
+          subtitle: t('screens.typeAnalysis'),
         });
       });
     });
@@ -504,7 +541,12 @@ export default function GeneralFeedScreen() {
   const filtered = useMemo(() => {
     switch (filter) {
       case 'media':
-        return feed.filter((i) => i.type === 'photo' || i.type === 'video');
+        return feed.filter(
+          (i) =>
+            i.type === 'photo' ||
+            i.type === 'video' ||
+            (i.type === 'analysis' && !!i.mediaUrl)
+        );
       case 'discussions':
         return feed.filter(
           (i) =>
@@ -520,7 +562,12 @@ export default function GeneralFeedScreen() {
   const counts = useMemo(
     () => ({
       all: feed.length,
-      media: feed.filter((i) => i.type === 'photo' || i.type === 'video').length,
+      media: feed.filter(
+        (i) =>
+          i.type === 'photo' ||
+          i.type === 'video' ||
+          (i.type === 'analysis' && !!i.mediaUrl)
+      ).length,
       discussions: feed.filter(
         (i) => i.type === 'discussion' || i.id.startsWith('forum-video-')
       ).length,
@@ -601,31 +648,37 @@ export default function GeneralFeedScreen() {
 
   const fullScreenData = useMemo<FullScreenContent[]>(
     () =>
-      filtered.map((item) => ({
-        id: item.id,
-        kind:
+      filtered.map((item) => {
+        const kind =
           item.type === 'photo' || item.type === 'video'
             ? item.type
-            : 'text',
-        mediaUrl: item.mediaUrl,
-        title: item.title,
-        text: item.text,
-        authorId: item.authorId,
-        authorName: item.authorHandle || item.authorName || '',
-        authorHandle: item.authorHandle,
-        authorAvatar: item.authorAvatar,
-        subtitle: undefined,
-        likes: item.likes,
-        liked: !!currentUser && item.likes.includes(currentUser.id),
-        comments: (item.comments || []).map((c) => ({
-          id: c.id,
-          text: c.text,
-          authorId: c.authorId,
-          authorName: c.authorName,
-          authorAvatar: c.authorAvatar,
-          timestamp: c.timestamp,
-        })),
-      })),
+            : item.type === 'analysis' && item.mediaKind
+              ? item.mediaKind
+              : 'text';
+        return {
+          id: item.id,
+          kind,
+          mediaUrl: item.mediaUrl,
+          posterUrl: item.posterUrl,
+          title: item.title,
+          text: item.text,
+          authorId: item.authorId,
+          authorName: item.authorHandle || item.authorName || '',
+          authorHandle: item.authorHandle,
+          authorAvatar: item.authorAvatar,
+          subtitle: undefined,
+          likes: item.likes,
+          liked: !!currentUser && item.likes.includes(currentUser.id),
+          comments: (item.comments || []).map((c) => ({
+            id: c.id,
+            text: c.text,
+            authorId: c.authorId,
+            authorName: c.authorName,
+            authorAvatar: c.authorAvatar,
+            timestamp: c.timestamp,
+          })),
+        };
+      }),
     [filtered, currentUser]
   );
 
