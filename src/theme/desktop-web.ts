@@ -66,6 +66,12 @@ export function injectDesktopWebStyles() {
     body.seellie-chat-focus textarea {
       font-size: 16px !important; /* يمنع زوم iOS على الحقل */
     }
+    /* صف الملحّن: لا قصّ ولا تمدد خاطئ على Safari */
+    body.seellie-chat-focus input {
+      min-width: 0 !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }
     a {
       color: inherit;
     }

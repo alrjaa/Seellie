@@ -59,25 +59,29 @@ import type { User } from '@/providers/TournamentProvider';
 import { isUuid } from '@/services/supabase-messages';
 
 /**
- * ارتفاع المنطقة المرئية + إزاحة أسفل الملحّن على الويب (فوق لوحة مفاتيح Safari).
+ * إطار المنطقة المرئية على الويب (فوق لوحة مفاتيح Safari).
+ * نثبّت غلاف المحادثة على هذا الإطار بالكامل — بدون bottom عائم يترك فجوة.
  */
 function useVisibleViewport(enabled: boolean, windowHeight: number) {
   const [visibleHeight, setVisibleHeight] = useState(windowHeight);
+  const [viewportTop, setViewportTop] = useState(0);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const [composerBottom, setComposerBottom] = useState(0);
   const lockedScrollY = useRef(0);
 
   useEffect(() => {
     if (!enabled) {
       setVisibleHeight(windowHeight);
+      setViewportTop(0);
       setKeyboardOpen(false);
-      setComposerBottom(0);
       setPrivateChatComposerFocused(false);
       if (Platform.OS === 'web' && typeof document !== 'undefined') {
         document.body.classList.remove('seellie-chat-focus');
         document.body.style.position = '';
         document.body.style.top = '';
         document.body.style.width = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
+        document.body.style.overflow = '';
       }
       return;
     }
@@ -86,14 +90,13 @@ function useVisibleViewport(enabled: boolean, windowHeight: number) {
       const vv = window.visualViewport;
       const update = () => {
         const layoutH = window.innerHeight || windowHeight;
-        const next = Math.round(vv?.height || layoutH);
-        const bottom = Math.max(
-          0,
-          Math.round(layoutH - (vv?.height || layoutH) - (vv?.offsetTop || 0))
-        );
-        const open = bottom > 80 || layoutH - next > 120;
-        setVisibleHeight(next);
-        setComposerBottom(open ? bottom : 0);
+        const height = Math.round(vv?.height || layoutH);
+        const top = Math.round(vv?.offsetTop || 0);
+        const covered = Math.max(0, layoutH - height - top);
+        const open = covered > 50 || layoutH - height > 90;
+
+        setVisibleHeight(Math.max(200, height));
+        setViewportTop(open ? top : 0);
         setKeyboardOpen(open);
         setPrivateChatComposerFocused(open);
 
@@ -103,16 +106,21 @@ function useVisibleViewport(enabled: boolean, windowHeight: number) {
             lockedScrollY.current = window.scrollY || 0;
             document.body.style.position = 'fixed';
             document.body.style.top = `-${lockedScrollY.current}px`;
+            document.body.style.left = '0';
+            document.body.style.right = '0';
             document.body.style.width = '100%';
+            document.body.style.overflow = 'hidden';
           }
-          window.scrollTo(0, 0);
         } else {
           document.body.classList.remove('seellie-chat-focus');
           if (document.body.style.position === 'fixed') {
             const y = lockedScrollY.current;
             document.body.style.position = '';
             document.body.style.top = '';
+            document.body.style.left = '';
+            document.body.style.right = '';
             document.body.style.width = '';
+            document.body.style.overflow = '';
             window.scrollTo(0, y);
           }
         }
@@ -129,7 +137,10 @@ function useVisibleViewport(enabled: boolean, windowHeight: number) {
         document.body.classList.remove('seellie-chat-focus');
         document.body.style.position = '';
         document.body.style.top = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
         document.body.style.width = '';
+        document.body.style.overflow = '';
       };
     }
 
@@ -140,13 +151,13 @@ function useVisibleViewport(enabled: boolean, windowHeight: number) {
     const onShow = Keyboard.addListener(show, (e) => {
       const kb = Math.max(0, e.endCoordinates?.height || 0);
       setKeyboardOpen(kb > 80);
-      setComposerBottom(kb > 80 ? kb : 0);
+      setViewportTop(0);
       setVisibleHeight(Math.max(240, windowHeight - kb));
       setPrivateChatComposerFocused(kb > 80);
     });
     const onHide = Keyboard.addListener(hide, () => {
       setKeyboardOpen(false);
-      setComposerBottom(0);
+      setViewportTop(0);
       setVisibleHeight(windowHeight);
       setPrivateChatComposerFocused(false);
     });
@@ -158,7 +169,7 @@ function useVisibleViewport(enabled: boolean, windowHeight: number) {
     };
   }, [enabled, windowHeight]);
 
-  return { visibleHeight, keyboardOpen, composerBottom };
+  return { visibleHeight, viewportTop, keyboardOpen };
 }
 
 function isHttpUrl(url?: string) {
@@ -601,20 +612,15 @@ export default function PrivateScreen() {
   const { toast } = useToast();
   const listChrome = useListChrome();
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const { desktop } = useResponsive();
   const space = usePrivateSpace(currentUser?.id);
   const [section, setSection] = useState<Section>('friends');
   const [composerFocused, setComposerFocused] = useState(false);
-  const { visibleHeight, keyboardOpen, composerBottom } = useVisibleViewport(
+  const { visibleHeight, viewportTop, keyboardOpen } = useVisibleViewport(
     section === 'chat',
     windowHeight
   );
-
-  // بعد إغلاق لوحة المفاتيح أعد التخطيط الطبيعي (حتى لو بقي الحقل focused نادراً)
-  useEffect(() => {
-    if (!keyboardOpen) setComposerFocused(false);
-  }, [keyboardOpen]);
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [pickOpen, setPickOpen] = useState(false);
@@ -631,6 +637,17 @@ export default function PrivateScreen() {
     uri: string;
     kind: PrivateChatMediaKind;
   } | null>(null);
+
+  useEffect(() => {
+    if (keyboardOpen) setComposerFocused(true);
+  }, [keyboardOpen]);
+
+  useEffect(() => {
+    if (section !== 'chat') {
+      setComposerFocused(false);
+      setPrivateChatComposerFocused(false);
+    }
+  }, [section]);
 
   const me = useMemo(
     () => (currentUser ? ensureSocialLists(currentUser) : null),
@@ -751,49 +768,48 @@ export default function PrivateScreen() {
     () => (desktop ? 0 : tabBarTotalHeight(insets.bottom)),
     [desktop, insets.bottom]
   );
-  const composerBlockHeight = pendingMedia ? 118 : 66;
+  const composerBlockHeight = pendingMedia ? 118 : 58;
   const chatKeyboardActive =
     Platform.OS === 'web' && (keyboardOpen || composerFocused);
   const showFriendChips = !chatKeyboardActive;
   const showSectionBar = !chatKeyboardActive;
-  // ملحّن ثابت فوق لوحة مفاتيح Safari فقط أثناء الكتابة على جوال الويب
-  const useFixedComposer =
-    Platform.OS === 'web' && !desktop && section === 'chat' && chatKeyboardActive;
+  // ثبّت الغلاف فقط بعد قياس visualViewport الحقيقي (بعد فتح اللوحة)
+  const pinChatToViewport =
+    Platform.OS === 'web' && !desktop && section === 'chat' && keyboardOpen;
 
   const chatShellHeight = useMemo(() => {
+    if (pinChatToViewport) {
+      return Math.max(200, Math.floor(visibleHeight));
+    }
     const sectionBar = showSectionBar ? 44 : 0;
     const screenPad = 8;
-    // التبويب يُخفى أثناء الكتابة على الويب؛ لا نخصم ارتفاعه حينها
-    const tabReserve =
-      desktop || chatKeyboardActive ? 0 : tabBarHeight;
+    const tabReserve = desktop ? 0 : tabBarHeight;
     return Math.max(
       220,
       Math.floor(visibleHeight - sectionBar - screenPad - tabReserve)
     );
   }, [
+    pinChatToViewport,
     visibleHeight,
     desktop,
     tabBarHeight,
-    chatKeyboardActive,
     showSectionBar,
   ]);
 
   const chatMessagesHeight = useMemo(() => {
     const chips = showFriendChips ? 48 : 0;
     const head = 34;
-    const gaps = 16;
-    const composerReserve = useFixedComposer
-      ? composerBlockHeight + 12
-      : composerBlockHeight;
+    const gaps = pinChatToViewport ? 12 : 16;
+    const panelPad = pinChatToViewport ? 16 : 0;
     return Math.max(
-      96,
-      chatShellHeight - chips - head - gaps - composerReserve
+      80,
+      chatShellHeight - chips - head - gaps - composerBlockHeight - panelPad
     );
   }, [
     chatShellHeight,
     composerBlockHeight,
     showFriendChips,
-    useFixedComposer,
+    pinChatToViewport,
   ]);
 
   const onAddFriend = useCallback(
@@ -1419,6 +1435,21 @@ export default function PrivateScreen() {
             {
               height: chatShellHeight,
             },
+            pinChatToViewport
+              ? ({
+                  position: 'fixed',
+                  top: viewportTop,
+                  left: 0,
+                  width: windowWidth,
+                  height: visibleHeight,
+                  zIndex: 10040,
+                  marginTop: 0,
+                  paddingHorizontal: 10,
+                  paddingTop: 8,
+                  paddingBottom: 6,
+                  backgroundColor: theme.colors.background,
+                } as object)
+              : null,
           ]}
         >
           {friends.length === 0 ? (
@@ -1589,27 +1620,7 @@ export default function PrivateScreen() {
                     {
                       borderColor: theme.colors.border,
                       backgroundColor: theme.colors.surfaceElevated,
-                      width: '100%',
-                      maxWidth: '100%',
-                      alignSelf: 'stretch',
                     },
-                    useFixedComposer
-                      ? ({
-                          position: 'fixed',
-                          left: 0,
-                          right: 0,
-                          bottom: Math.max(0, composerBottom),
-                          zIndex: 10050,
-                          marginTop: 0,
-                          borderRadius: 0,
-                          borderLeftWidth: 0,
-                          borderRightWidth: 0,
-                          borderBottomWidth: 0,
-                          paddingBottom: 10,
-                          paddingHorizontal: 12,
-                          boxShadow: '0 -6px 16px rgba(0,0,0,0.35)',
-                        } as object)
-                      : null,
                   ]}
                 >
                   {pendingMedia ? (
@@ -1686,7 +1697,7 @@ export default function PrivateScreen() {
                     >
                       <Ionicons
                         name="attach-outline"
-                        size={24}
+                        size={22}
                         color={theme.colors.accent}
                       />
                     </Pressable>
@@ -1704,16 +1715,20 @@ export default function PrivateScreen() {
                         setPrivateChatComposerFocused(true);
                       }}
                       onBlur={() => {
-                        setComposerFocused(false);
-                        setPrivateChatComposerFocused(false);
+                        // تأخير بسيط حتى لا نُسقط التركيز قبل أن يبلّغ visualViewport بفتح اللوحة
+                        setTimeout(() => {
+                          setComposerFocused(false);
+                          if (Platform.OS !== 'web') {
+                            setPrivateChatComposerFocused(false);
+                          }
+                        }, 80);
                       }}
                       style={[
                         styles.composerInput,
                         {
                           color: theme.colors.text,
-                          backgroundColor: theme.colors.surfaceElevated,
+                          backgroundColor: theme.colors.background,
                           borderColor: theme.colors.border,
-                          // 16px يمنع زوم iOS Safari عند التركيز
                           fontSize: 16,
                         },
                       ]}
@@ -2060,34 +2075,37 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   composerDock: {
-    gap: 8,
+    gap: 6,
     flexShrink: 0,
     width: '100%',
     maxWidth: '100%',
     alignSelf: 'stretch',
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingVertical: 6,
     marginTop: 4,
-  },
-  composerFixed: {
-    // لم يعد يُستخدم — أُبقي للتوافق إن وُجدت مراجع قديمة
+    overflow: 'visible',
   },
   composerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    width: '100%',
+    gap: 6,
   },
   composerIconBtn: {
     width: 40,
     height: 40,
+    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
   composerInput: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
     minWidth: 0,
+    maxWidth: '100%',
     height: 42,
     fontSize: 16,
     borderWidth: StyleSheet.hairlineWidth,
@@ -2099,6 +2117,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 12,
+    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2116,12 +2135,12 @@ const styles = StyleSheet.create({
   },
   chatList: { gap: 8, paddingBottom: 8 },
   bubble: {
-    maxWidth: '85%',
+    maxWidth: '82%',
     minWidth: 56,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
-    gap: 8,
+    paddingVertical: 9,
+    borderRadius: 16,
+    gap: 6,
     overflow: 'hidden',
   },
   bubbleWithMedia: {
