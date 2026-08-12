@@ -315,7 +315,9 @@ export default function AnalystsScreen() {
     ({ item }: { item: User }) => (
       <RequestCard
         user={item}
-        onApprove={() => approveAnalystApplication(item.id)}
+        onApprove={() => {
+          void approveAnalystApplication(item.id);
+        }}
         onReject={() => {
           void (async () => {
             const ok = await confirmDestructive({

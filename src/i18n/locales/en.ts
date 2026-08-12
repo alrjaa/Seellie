@@ -892,6 +892,13 @@ export const en: TranslationTree = {
     requirementsNotMet: 'Requirements not met',
     organizerRejected: 'The organizer was notified of the rejection.',
     codeEmailed: 'An email was sent to %{email} with code: %{code}',
+    analystCodeReady:
+      'Access code: %{code} — also shown on the Unique page to activate.',
+    analystCodeDeliveredInApp:
+      'Approved. Code %{code} was sent via in-app messages to %{email} and appears on Unique for the recipient. (Real email needs send-email / Resend)',
+    analystCodeMessageSubject: 'Analyst access code — Unique',
+    analystCodeMessageBody:
+      'Your analyst request was approved.\nAccess code: %{code}\nOpen Unique and enter the code to enable publishing.',
     emailNotified: '%{email} was notified.',
     emailNotifiedNote: '%{email} was notified: %{note}',
     suspendRange: 'From %{from} to %{to}',
@@ -1808,10 +1815,12 @@ export const en: TranslationTree = {
     publishToUnique: 'Publish to Unique',
     requestPendingTitle: 'Your request is under review',
     requestPendingDesc:
-      'You accepted the terms and submitted the request. After admin approval you will receive an email at (%{email}) with an access code to enable publishing.',
-    enterAccessCodeTitle: 'Enter access code from email',
+      'You accepted the terms and submitted the request. After admin approval the code appears here and in messages (and email if enabled). Account: %{email}',
+    enterAccessCodeTitle: 'Activate analyst access code',
     enterAccessCodeDesc:
-      'Your request was approved. Open the email and enter the code here to activate the publish card.',
+      'Your request was approved. If the code appears below, use it or type it, then activate. It may also arrive in messages or email.',
+    yourAccessCode: 'Your code: %{code}',
+    useShownCode: 'Use shown code',
     accessCode: 'Access code',
     accessCodePlaceholder: 'Example: Tj#8Km!2Qx',
     activateAnalyst: 'Activate analyst account',

@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTournament } from '@/providers/TournamentProvider';
@@ -166,6 +166,7 @@ export default function UniqueScreen() {
     toggleAnalysisLike,
     applyAsAnalyst,
     verifyAnalystAccessCode,
+    refreshCurrentUserFromCloud,
   } = useTournament();
   const theme = useAppTheme();
   const { t } = useTranslation();
@@ -265,6 +266,13 @@ export default function UniqueScreen() {
 
   const analystStatus = currentUser?.analyst?.status || 'none';
   const canPublish = isActiveAnalyst(currentUser);
+  const storedAccessCode = currentUser?.analyst?.accessCode?.trim() || '';
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshCurrentUserFromCloud();
+    }, [refreshCurrentUserFromCloud])
+  );
 
   const pickVideo = useCallback(async () => {
     try {
@@ -443,6 +451,18 @@ export default function UniqueScreen() {
         <Card style={styles.card}>
           <Subtitle>{t('unique.enterAccessCodeTitle')}</Subtitle>
           <Muted>{t('unique.enterAccessCodeDesc')}</Muted>
+          {storedAccessCode ? (
+            <>
+              <Muted>
+                {t('unique.yourAccessCode', { code: storedAccessCode })}
+              </Muted>
+              <Button
+                label={t('unique.useShownCode')}
+                variant="secondary"
+                onPress={() => setAccessCodeInput(storedAccessCode)}
+              />
+            </>
+          ) : null}
           <Input
             label={t('unique.accessCode')}
             value={accessCodeInput}

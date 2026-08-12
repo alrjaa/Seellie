@@ -41,6 +41,7 @@ import {
   resolvePublicMediaUrl,
 } from '@/services/cloud-write';
 import { upsertUserContentCloud } from '@/services/supabase-user-content';
+import { trySendAnalystCodeEmail } from '@/services/analyst-code-delivery';
 import {
   appendGiftTransaction,
   fetchAppBlob,
@@ -59,6 +60,7 @@ import {
 } from '@/types/fab-icons';
 import {
   fetchAllProfiles,
+  fetchProfile,
   mergeUsersPreferCloud,
   restoreSupabaseSession,
   supabaseSignIn,
@@ -730,7 +732,9 @@ export interface TournamentContextType {
   /** طلب الانضمام كمحلل من صفحة الفريد بعد الموافقة على الشروط */
   applyAsAnalyst: (termsAccepted: boolean) => Promise<boolean>;
   /** موافقة الإدارة على طلب المحلل + إرسال رمز عبر البريد */
-  approveAnalystApplication: (userId: string) => boolean;
+  approveAnalystApplication: (userId: string) => Promise<boolean>;
+  /** تحديث ملف المستخدم الحالي من السحابة (رمز محلل، …) */
+  refreshCurrentUserFromCloud: () => Promise<boolean>;
   rejectAnalystApplication: (userId: string, reason?: string) => boolean;
   /** إنذار محلل معتمد */
   warnAnalyst: (userId: string, reason: string) => boolean;
@@ -1305,6 +1309,29 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     setUsers((prev) => mergeUsersPreferCloud(prev, cloudProfiles));
     return cloudProfiles.length;
   }, []);
+
+  const refreshCurrentUserFromCloud = useCallback(async () => {
+    if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
+      return false;
+    }
+    const remote = await fetchProfile(currentUser.id);
+    if (!remote) return false;
+    const merged: User = {
+      ...currentUser,
+      ...remote,
+      passwordHash: currentUser.passwordHash,
+      analyst: remote.analyst ?? currentUser.analyst,
+      permissions: remote.permissions || currentUser.permissions,
+    };
+    setCurrentUser(merged);
+    setUsers((prev) => {
+      const idx = prev.findIndex((u) => u.id === merged.id);
+      if (idx < 0) return [merged, ...prev];
+      return prev.map((u) => (u.id === merged.id ? merged : u));
+    });
+    void setJson(USER_STORAGE_KEY, merged);
+    return true;
+  }, [currentUser]);
 
   const refreshCloudCompetitionRequests = useCallback(async () => {
     if (!isSupabaseConfigured()) return 0;
@@ -4319,13 +4346,20 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
 
       if (autoApprove) {
+        const emailed = await trySendAnalystCodeEmail({
+          to: updated.email,
+          code: accessCode || '',
+          name: updated.name,
+        });
         toast({
           variant: 'success',
           title: t('toasts.t052_01e592'),
-          description: t('toasts.codeEmailed', {
-            email: updated.email,
-            code: accessCode || '',
-          }),
+          description: emailed.emailed
+            ? t('toasts.codeEmailed', {
+                email: updated.email,
+                code: accessCode || '',
+              })
+            : t('toasts.analystCodeReady', { code: accessCode || '' }),
         });
       } else {
         toast({
@@ -4703,39 +4737,88 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const approveAnalystApplication = useCallback(
-    (userId: string) => {
+    async (userId: string) => {
       const accessCode = generateAnalystAccessCode(10);
-      const updated = patchAnalystUser(userId, (target) => {
-        if (target.analyst?.status !== 'pending') return null;
-        return {
-          ...target,
-          analyst: {
-            ...target.analyst,
-            status: 'approved',
-            reviewedAt: new Date(),
-            accessCode,
-            accessCodeSentAt: new Date(),
-          },
-        };
-      });
-      if (!updated) {
+      const target = users.find((u) => u.id === userId);
+      if (!target || target.analyst?.status !== 'pending') {
         toast({
           variant: 'destructive',
           title: t('toasts.t049_edb446'),
         });
         return false;
       }
+      const updated: User = {
+        ...target,
+        analyst: {
+          ...target.analyst!,
+          status: 'approved',
+          reviewedAt: new Date(),
+          accessCode,
+          accessCodeSentAt: new Date(),
+        },
+      };
+      setUsers((prev) => prev.map((u) => (u.id === userId ? updated : u)));
+      setCurrentUser((prev) => (prev?.id === userId ? updated : prev));
+      if (currentUser?.id === userId) {
+        void setJson(USER_STORAGE_KEY, updated);
+      }
+      if (isUuid(updated.id) && isSupabaseConfigured()) {
+        const sync = await upsertUserContentCloud(updated, {
+          allowCrossUser: updated.id !== currentUser?.id,
+        });
+        if (!sync.ok) {
+          toast({
+            variant: 'destructive',
+            title: t('forums.cloudSyncFailed'),
+            description: cloudWriteErrorMessage(sync.error),
+          });
+          return false;
+        }
+      }
+
+      // رسالة داخل التطبيق للمستلم (بدون توست إضافي من sendMessage)
+      if (
+        currentUser &&
+        currentUser.id !== updated.id &&
+        isUuid(currentUser.id) &&
+        isUuid(updated.id) &&
+        isSupabaseConfigured()
+      ) {
+        const remoteMsg = await insertMessage({
+          senderId: currentUser.id,
+          senderName: currentUser.name,
+          senderAvatar: currentUser.avatar,
+          recipientId: updated.id,
+          subject: t('toasts.analystCodeMessageSubject'),
+          body: t('toasts.analystCodeMessageBody', { code: accessCode }),
+        });
+        if (remoteMsg.message) {
+          setMessages((prev) => mergeMessagesById([remoteMsg.message!], prev));
+        }
+      }
+
+      const emailed = await trySendAnalystCodeEmail({
+        to: updated.email,
+        code: accessCode,
+        name: updated.name,
+      });
+
       toast({
         variant: 'success',
         title: t('toasts.t052_01e592'),
-        description: t('toasts.codeEmailed', {
-          email: updated.email,
-          code: accessCode,
-        }),
+        description: emailed.emailed
+          ? t('toasts.codeEmailed', {
+              email: updated.email,
+              code: accessCode,
+            })
+          : t('toasts.analystCodeDeliveredInApp', {
+              email: updated.email,
+              code: accessCode,
+            }),
       });
       return true;
     },
-    [patchAnalystUser, toast, t]
+    [users, currentUser, toast, t]
   );
 
   const rejectAnalystApplication = useCallback(
@@ -5996,6 +6079,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setFabIcons,
       updateUser,
       syncCloudUsers,
+      refreshCurrentUserFromCloud,
       refreshCloudCompetitionRequests,
       togglePinnedCompetition,
       deleteUser,
@@ -6099,6 +6183,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setFabIcons,
       updateUser,
       syncCloudUsers,
+      refreshCurrentUserFromCloud,
       refreshCloudCompetitionRequests,
       togglePinnedCompetition,
       deleteUser,

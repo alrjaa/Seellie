@@ -890,7 +890,14 @@ export const ar = {
     competitionCreatedForOrganizer: 'أُنشئت «%{name}» للمنظم. يلزم تسجيل %{count} فرق على الأقل قبل القرعة.',
     requirementsNotMet: 'غير مستوفٍ للمتطلبات',
     organizerRejected: 'أُبلغ المنظم برفض الطلب.',
-    codeEmailed: 'تم إرسال رسالة إلى %{email} بالرمز: %{code}',
+    codeEmailed: 'تم إرسال الرمز بالبريد إلى %{email}: %{code}',
+    analystCodeReady:
+      'رمز الوصول: %{code} — يظهر أيضاً في صفحة الفريد لتفعيله.',
+    analystCodeDeliveredInApp:
+      'تمت الموافقة. الرمز %{code} أُرسل في رسائل التطبيق إلى %{email}، ويظهر للمستلم في صفحة الفريد. (البريد الحقيقي يحتاج تفعيل send-email / Resend)',
+    analystCodeMessageSubject: 'رمز وصول المحلل — الفريد',
+    analystCodeMessageBody:
+      'تمت الموافقة على طلبك كمحلل.\nرمز الوصول: %{code}\nافتح صفحة الفريد وأدخل الرمز لتفعيل النشر.',
     emailNotified: 'أُبلغت %{email} بالنتيجة.',
     emailNotifiedNote: 'أُبلغ %{email}: %{note}',
     suspendRange: 'من %{from} إلى %{to}',
@@ -1295,10 +1302,12 @@ export const ar = {
     publishToUnique: 'نشر في الفريد',
     requestPendingTitle: 'طلبك قيد المراجعة',
     requestPendingDesc:
-      'وافقت على الشروط وأرسلت الطلب. بعد موافقة الإدارة سيصلك على البريد (%{email}) رمز مكوّن من أرقام وحروف وإشارات لتفعيل النشر.',
-    enterAccessCodeTitle: 'أدخل رمز الوصول من البريد',
+      'وافقت على الشروط وأرسلت الطلب. بعد موافقة الإدارة سيظهر الرمز هنا وفي الرسائل (وقد يُرسل بالبريد إن فُعّل). الحساب: %{email}',
+    enterAccessCodeTitle: 'تفعيل رمز وصول المحلل',
     enterAccessCodeDesc:
-      'تمت الموافقة على طلبك. افتح رسالة البريد الإلكتروني وأدخل الرمز هنا لتفعيل بطاقة نشر التحليل.',
+      'تمت الموافقة على طلبك. إن ظهر الرمز أدناه فانسخه أو أدخله يدوياً، ثم اضغط تفعيل. قد يصلك أيضاً في الرسائل أو البريد.',
+    yourAccessCode: 'رمزك: %{code}',
+    useShownCode: 'استخدام الرمز الظاهر',
     accessCode: 'رمز الوصول',
     accessCodePlaceholder: 'مثال: Tj#8Km!2Qx',
     activateAnalyst: 'تفعيل حساب المحلل',
