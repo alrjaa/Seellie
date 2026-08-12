@@ -50,6 +50,7 @@ import { usePrivateSpace } from '@/hooks/usePrivateSpace';
 import { ensureSocialLists } from '@/utils/social-stats';
 import { formatArabicDate } from '@/utils';
 import { tabBarTotalHeight } from '@/theme/navigation';
+import { setPrivateChatComposerFocused } from '@/services/private-chat-focus';
 import type {
   PrivateChatMediaKind,
   PrivateContentItem,
@@ -58,27 +59,63 @@ import type { User } from '@/providers/TournamentProvider';
 import { isUuid } from '@/services/supabase-messages';
 
 /**
- * ارتفاع المنطقة المرئية فعلياً (يستثني لوحة مفاتيح Safari عبر visualViewport).
- * يمنع قفز الصفحة وتصغير بطاقة المحادثة بشكل خاطئ.
+ * ارتفاع المنطقة المرئية + إزاحة أسفل الملحّن على الويب (فوق لوحة مفاتيح Safari).
  */
 function useVisibleViewport(enabled: boolean, windowHeight: number) {
   const [visibleHeight, setVisibleHeight] = useState(windowHeight);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [composerBottom, setComposerBottom] = useState(0);
+  const lockedScrollY = useRef(0);
 
   useEffect(() => {
     if (!enabled) {
       setVisibleHeight(windowHeight);
       setKeyboardOpen(false);
+      setComposerBottom(0);
+      setPrivateChatComposerFocused(false);
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        document.body.classList.remove('seellie-chat-focus');
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+      }
       return;
     }
 
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const vv = window.visualViewport;
       const update = () => {
-        const next = Math.round(vv?.height || window.innerHeight || windowHeight);
+        const layoutH = window.innerHeight || windowHeight;
+        const next = Math.round(vv?.height || layoutH);
+        const bottom = Math.max(
+          0,
+          Math.round(layoutH - (vv?.height || layoutH) - (vv?.offsetTop || 0))
+        );
+        const open = bottom > 80 || layoutH - next > 120;
         setVisibleHeight(next);
-        // لوحة المفاتيح مفتوحة عندما ينكمش الجزء المرئي بوضوح
-        setKeyboardOpen(windowHeight - next > 120);
+        setComposerBottom(open ? bottom : 0);
+        setKeyboardOpen(open);
+        setPrivateChatComposerFocused(open);
+
+        if (open) {
+          document.body.classList.add('seellie-chat-focus');
+          if (document.body.style.position !== 'fixed') {
+            lockedScrollY.current = window.scrollY || 0;
+            document.body.style.position = 'fixed';
+            document.body.style.top = `-${lockedScrollY.current}px`;
+            document.body.style.width = '100%';
+          }
+          window.scrollTo(0, 0);
+        } else {
+          document.body.classList.remove('seellie-chat-focus');
+          if (document.body.style.position === 'fixed') {
+            const y = lockedScrollY.current;
+            document.body.style.position = '';
+            document.body.style.top = '';
+            document.body.style.width = '';
+            window.scrollTo(0, y);
+          }
+        }
       };
       update();
       vv?.addEventListener('resize', update);
@@ -88,6 +125,11 @@ function useVisibleViewport(enabled: boolean, windowHeight: number) {
         vv?.removeEventListener('resize', update);
         vv?.removeEventListener('scroll', update);
         window.removeEventListener('resize', update);
+        setPrivateChatComposerFocused(false);
+        document.body.classList.remove('seellie-chat-focus');
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
       };
     }
 
@@ -98,33 +140,25 @@ function useVisibleViewport(enabled: boolean, windowHeight: number) {
     const onShow = Keyboard.addListener(show, (e) => {
       const kb = Math.max(0, e.endCoordinates?.height || 0);
       setKeyboardOpen(kb > 80);
+      setComposerBottom(kb > 80 ? kb : 0);
       setVisibleHeight(Math.max(240, windowHeight - kb));
+      setPrivateChatComposerFocused(kb > 80);
     });
     const onHide = Keyboard.addListener(hide, () => {
       setKeyboardOpen(false);
+      setComposerBottom(0);
       setVisibleHeight(windowHeight);
+      setPrivateChatComposerFocused(false);
     });
     setVisibleHeight(windowHeight);
     return () => {
       onShow.remove();
       onHide.remove();
+      setPrivateChatComposerFocused(false);
     };
   }, [enabled, windowHeight]);
 
-  return { visibleHeight, keyboardOpen };
-}
-
-function preventWebPageJump() {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-  const lock = () => {
-    window.scrollTo(0, 0);
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-  };
-  lock();
-  requestAnimationFrame(lock);
-  setTimeout(lock, 50);
-  setTimeout(lock, 150);
+  return { visibleHeight, keyboardOpen, composerBottom };
 }
 
 function isHttpUrl(url?: string) {
@@ -571,10 +605,16 @@ export default function PrivateScreen() {
   const { desktop } = useResponsive();
   const space = usePrivateSpace(currentUser?.id);
   const [section, setSection] = useState<Section>('friends');
-  const { visibleHeight, keyboardOpen } = useVisibleViewport(
+  const [composerFocused, setComposerFocused] = useState(false);
+  const { visibleHeight, keyboardOpen, composerBottom } = useVisibleViewport(
     section === 'chat',
     windowHeight
   );
+
+  // بعد إغلاق لوحة المفاتيح أعد التخطيط الطبيعي (حتى لو بقي الحقل focused نادراً)
+  useEffect(() => {
+    if (!keyboardOpen) setComposerFocused(false);
+  }, [keyboardOpen]);
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [pickOpen, setPickOpen] = useState(false);
@@ -706,36 +746,55 @@ export default function PrivateScreen() {
     ? space.chats[activeFriend.id] || []
     : [];
 
-  // ارتفاع المحادثة من المنطقة المرئية فقط — لا نضاعف خلوص التبويب
+  // ارتفاع المحادثة من المنطقة المرئية — عند فتح لوحة المفاتيح نخفي التبويب فلا نخصمه
   const tabBarHeight = useMemo(
     () => (desktop ? 0 : tabBarTotalHeight(insets.bottom)),
     [desktop, insets.bottom]
   );
   const composerBlockHeight = pendingMedia ? 118 : 66;
-  const showFriendChips = !keyboardOpen;
+  const chatKeyboardActive =
+    Platform.OS === 'web' && (keyboardOpen || composerFocused);
+  const showFriendChips = !chatKeyboardActive;
+  const showSectionBar = !chatKeyboardActive;
+  // ملحّن ثابت فوق لوحة مفاتيح Safari فقط أثناء الكتابة على جوال الويب
+  const useFixedComposer =
+    Platform.OS === 'web' && !desktop && section === 'chat' && chatKeyboardActive;
 
   const chatShellHeight = useMemo(() => {
-    // شريط الأقسام داخل الشاشة
-    const sectionBar = 44;
+    const sectionBar = showSectionBar ? 44 : 0;
     const screenPad = 8;
-    // نخصم التبويب مرة واحدة فقط من الارتفاع المرئي (بدون marginBottom إضافي)
-    const tabReserve = desktop ? 0 : tabBarHeight;
+    // التبويب يُخفى أثناء الكتابة على الويب؛ لا نخصم ارتفاعه حينها
+    const tabReserve =
+      desktop || chatKeyboardActive ? 0 : tabBarHeight;
     return Math.max(
-      260,
+      220,
       Math.floor(visibleHeight - sectionBar - screenPad - tabReserve)
     );
-  }, [visibleHeight, desktop, tabBarHeight]);
+  }, [
+    visibleHeight,
+    desktop,
+    tabBarHeight,
+    chatKeyboardActive,
+    showSectionBar,
+  ]);
 
   const chatMessagesHeight = useMemo(() => {
     const chips = showFriendChips ? 48 : 0;
     const head = 34;
     const gaps = 16;
-    // اترك مساحة كاملة لحقل الكتابة — لا تُخفيه تحت لوحة المفاتيح
+    const composerReserve = useFixedComposer
+      ? composerBlockHeight + 12
+      : composerBlockHeight;
     return Math.max(
-      72,
-      chatShellHeight - chips - head - gaps - composerBlockHeight
+      96,
+      chatShellHeight - chips - head - gaps - composerReserve
     );
-  }, [chatShellHeight, composerBlockHeight, showFriendChips]);
+  }, [
+    chatShellHeight,
+    composerBlockHeight,
+    showFriendChips,
+    useFixedComposer,
+  ]);
 
   const onAddFriend = useCallback(
     async (friendId: string, opts?: { stayOnSaved?: boolean }) => {
@@ -1138,7 +1197,7 @@ export default function PrivateScreen() {
           <Muted>{t('privateSpace.subtitle')}</Muted>
         </>
       )}
-      {sectionBar}
+      {showSectionBar ? sectionBar : null}
 
       {section === 'friends' ? (
         <View style={styles.block}>
@@ -1534,6 +1593,23 @@ export default function PrivateScreen() {
                       maxWidth: '100%',
                       alignSelf: 'stretch',
                     },
+                    useFixedComposer
+                      ? ({
+                          position: 'fixed',
+                          left: 0,
+                          right: 0,
+                          bottom: Math.max(0, composerBottom),
+                          zIndex: 10050,
+                          marginTop: 0,
+                          borderRadius: 0,
+                          borderLeftWidth: 0,
+                          borderRightWidth: 0,
+                          borderBottomWidth: 0,
+                          paddingBottom: 10,
+                          paddingHorizontal: 12,
+                          boxShadow: '0 -6px 16px rgba(0,0,0,0.35)',
+                        } as object)
+                      : null,
                   ]}
                 >
                   {pendingMedia ? (
@@ -1624,7 +1700,12 @@ export default function PrivateScreen() {
                       returnKeyType="send"
                       blurOnSubmit={false}
                       onFocus={() => {
-                        preventWebPageJump();
+                        setComposerFocused(true);
+                        setPrivateChatComposerFocused(true);
+                      }}
+                      onBlur={() => {
+                        setComposerFocused(false);
+                        setPrivateChatComposerFocused(false);
                       }}
                       style={[
                         styles.composerInput,
@@ -1632,6 +1713,8 @@ export default function PrivateScreen() {
                           color: theme.colors.text,
                           backgroundColor: theme.colors.surfaceElevated,
                           borderColor: theme.colors.border,
+                          // 16px يمنع زوم iOS Safari عند التركيز
+                          fontSize: 16,
                         },
                       ]}
                     />
@@ -2006,11 +2089,11 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     height: 42,
+    fontSize: 16,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    fontSize: 15,
   },
   sendBtn: {
     width: 42,

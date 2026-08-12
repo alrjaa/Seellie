@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +18,10 @@ import {
   tabBarChromeStyle,
   transparentHeaderOptions,
 } from '@/theme/navigation';
+import {
+  isPrivateChatComposerFocused,
+  subscribePrivateChatComposerFocus,
+} from '@/services/private-chat-focus';
 
 export default function FollowerLayout() {
   const { currentUser, loading, routeForRole, messages } = useTournament();
@@ -25,6 +29,13 @@ export default function FollowerLayout() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { desktop } = useResponsive();
+  const [hideTabBarForChat, setHideTabBarForChat] = useState(
+    isPrivateChatComposerFocused()
+  );
+
+  useEffect(() => {
+    return subscribePrivateChatComposerFocus(setHideTabBarForChat);
+  }, []);
 
   const unreadMessages = useMemo(
     () =>
@@ -158,11 +169,18 @@ export default function FollowerLayout() {
             headerRight: () => null,
             tabBarStyle: desktop
               ? { display: 'none', height: 0, overflow: 'hidden' }
-              : {
-                  ...tabBarChromeStyle(theme, insets.bottom),
-                  direction: 'ltr',
-                  flexDirection: 'row',
-                },
+              : hideTabBarForChat
+                ? {
+                    display: 'none',
+                    height: 0,
+                    overflow: 'hidden',
+                    opacity: 0,
+                  }
+                : {
+                    ...tabBarChromeStyle(theme, insets.bottom),
+                    direction: 'ltr',
+                    flexDirection: 'row',
+                  },
             tabBarActiveTintColor: theme.colors.accent,
             tabBarInactiveTintColor: theme.colors.textMuted,
             tabBarLabelStyle: {

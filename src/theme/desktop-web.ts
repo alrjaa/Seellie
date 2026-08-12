@@ -56,6 +56,16 @@ export function injectDesktopWebStyles() {
     input, textarea, button, select {
       outline-color: #25F4EE;
     }
+    /* أثناء كتابة رسالة خاصة: امنع قفز Safari واحفظ الحقل فوق لوحة المفاتيح */
+    body.seellie-chat-focus {
+      overflow: hidden !important;
+      overscroll-behavior: none;
+      touch-action: none;
+    }
+    body.seellie-chat-focus input,
+    body.seellie-chat-focus textarea {
+      font-size: 16px !important; /* يمنع زوم iOS على الحقل */
+    }
     a {
       color: inherit;
     }
