@@ -834,7 +834,8 @@ export const en: TranslationTree = {
     t092_540005: 'Choose a team and write an offer message.',
     t093_9edd72: 'Enter a subject and message body.',
     t094_fa723f: 'You must be approved as an analyst and enter the email access code before publishing to Unique.',
-    t095_c00483: 'Enter a title with analysis text and/or an analysis video.',
+    t095_c00483:
+      'Enter a title with analysis text and/or an analysis video or photo.',
     t096_f901c9: 'Create an account or sign in from Unique to continue.',
     t097_459f7e: 'Accept the app terms before submitting the request.',
     t098_1fbde3: 'Awaiting admin approval.',
@@ -1804,14 +1805,25 @@ export const en: TranslationTree = {
     publishNewAnalysis: 'Publish new analysis',
     warningNotice: 'You have a warning: %{reason}',
     reviewTerms: 'Review the terms',
-    approvedAnalystHint: 'Approved analyst — add text and/or analysis video',
+    approvedAnalystHint:
+      'Approved analyst — add text and/or analysis video and/or photo',
     analysisTitle: 'Analysis title',
     textContent: 'Text content',
     writeAnalysisPlaceholder: 'Write your sports analysis here...',
-    videoUrlOptional: 'Analysis video link (optional)',
-    videoUrlPlaceholder: 'https://... or pick from device',
-    pickingVideo: 'Selecting...',
+    videoUrlOptional: 'External video link (optional)',
+    videoUrlPlaceholder: 'https://...',
+    pickingVideo: 'Selecting video...',
+    pickingPhoto: 'Selecting photo...',
     pickVideoFromDevice: 'Pick video from device',
+    videoSelectedFromDevice:
+      'Video selected from device — it will upload to the cloud on publish',
+    photoSelectedFromDevice:
+      'Photo selected from device — it will upload to the cloud on publish',
+    removeVideo: 'Remove video',
+    removePhoto: 'Remove photo',
+    mediaUploadHint:
+      'Device files upload to the cloud on publish. They are not saved as local links only.',
+    photoPickFailed: 'Could not pick photo',
     publishToUnique: 'Publish to Unique',
     requestPendingTitle: 'Your request is under review',
     requestPendingDesc:

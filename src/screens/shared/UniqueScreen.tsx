@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Image,
   Linking,
   Pressable,
   ScrollView,
@@ -48,7 +49,9 @@ import { formatArabicDate } from '@/utils';
 import { ANALYST_TERMS, isActiveAnalyst, isAnalystSuspendActive } from '@/utils/analyst';
 import {
   ANALYSIS_VIDEO_MAX_SEC,
+  MEDIA_SPECS,
   isVideoWithinLimit,
+  validatePickerAsset,
   videoDurationSecFromPicker,
 } from '@/utils/media-limits';
 import { ar } from '@/i18n/locales/ar';
@@ -90,7 +93,13 @@ const AnalysisCard = memo(function AnalysisCard({
   const theme = useAppTheme();
   const { t } = useTranslation();
   const hasVideo = !!item.videoUrl;
-  const isTextOnly = !hasVideo;
+  const hasPhoto = !!item.posterUrl;
+  const isTextOnly = !hasVideo && !hasPhoto;
+  const kindIcon = hasVideo
+    ? 'videocam'
+    : hasPhoto
+      ? 'image'
+      : 'document-text';
 
   return (
     <Card style={styles.card}>
@@ -101,7 +110,7 @@ const AnalysisCard = memo(function AnalysisCard({
           </Text>
           <Muted>{formatArabicDate(item.timestamp)}</Muted>
         </View>
-        {onShare && !hasVideo ? <TinyShareButton onPress={onShare} /> : null}
+        {onShare && isTextOnly ? <TinyShareButton onPress={onShare} /> : null}
         <View
           style={[
             styles.kindBadge,
@@ -109,7 +118,7 @@ const AnalysisCard = memo(function AnalysisCard({
           ]}
         >
           <Ionicons
-            name={hasVideo ? 'videocam' : 'document-text'}
+            name={kindIcon}
             size={16}
             color={theme.colors.accent}
           />
@@ -129,6 +138,20 @@ const AnalysisCard = memo(function AnalysisCard({
       {hasVideo ? (
         <View style={styles.mediaWrap}>
           <InlineVideoPlayer uri={item.videoUrl!} height={220} />
+          {onShare ? (
+            <View style={styles.mediaShare}>
+              <TinyShareButton onPress={onShare} />
+            </View>
+          ) : null}
+        </View>
+      ) : hasPhoto ? (
+        <View style={styles.mediaWrap}>
+          <Image
+            source={{ uri: item.posterUrl! }}
+            style={styles.posterImage}
+            resizeMode="cover"
+            accessibilityLabel={item.title}
+          />
           {onShare ? (
             <View style={styles.mediaShare}>
               <TinyShareButton onPress={onShare} />
@@ -180,8 +203,15 @@ export default function UniqueScreen() {
   const topPad = stackTopChromePad(insets.top);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [videoUrl, setVideoUrl] = useState('');
-  const [picking, setPicking] = useState(false);
+  /** فيديو محلي من الجهاز — يُرفع للسحابة عند النشر */
+  const [videoUri, setVideoUri] = useState('');
+  /** صورة محلية من الجهاز — تُرفع كـ posterUrl */
+  const [photoUri, setPhotoUri] = useState('');
+  /** رابط فيديو خارجي اختياري (https) */
+  const [videoLink, setVideoLink] = useState('');
+  const [pickingVideo, setPickingVideo] = useState(false);
+  const [pickingPhoto, setPickingPhoto] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [filter, setFilter] = useState<FeedFilter>('all');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [accessCodeInput, setAccessCodeInput] = useState('');
@@ -225,7 +255,8 @@ export default function UniqueScreen() {
 
   const filtered = useMemo(() => {
     if (filter === 'video') return analyses.filter((a) => !!a.videoUrl);
-    if (filter === 'text') return analyses.filter((a) => !a.videoUrl);
+    if (filter === 'text')
+      return analyses.filter((a) => !a.videoUrl && !a.posterUrl);
     return analyses;
   }, [analyses, filter]);
 
@@ -233,7 +264,7 @@ export default function UniqueScreen() {
     () => ({
       all: analyses.length,
       video: analyses.filter((a) => !!a.videoUrl).length,
-      text: analyses.filter((a) => !a.videoUrl).length,
+      text: analyses.filter((a) => !a.videoUrl && !a.posterUrl).length,
     }),
     [analyses]
   );
@@ -242,19 +273,22 @@ export default function UniqueScreen() {
     if (!currentUser) return [];
     return filtered.map((item) => {
       const hasVideo = !!item.videoUrl;
+      const hasPhoto = !!item.posterUrl;
       const body =
         item.content && !isVisualAnalysisPlaceholder(item.content)
           ? item.content
           : '';
+      const kind = hasVideo ? 'video' : hasPhoto ? 'photo' : 'text';
       return {
         id: item.id,
-        kind: hasVideo ? 'video' : 'text',
-        mediaUrl: item.videoUrl,
+        kind,
+        mediaUrl: hasVideo ? item.videoUrl : hasPhoto ? item.posterUrl : undefined,
         posterUrl: item.posterUrl,
         title: item.title,
-        text: hasVideo
-          ? [item.title, body].filter(Boolean).join('\n')
-          : body || item.title,
+        text:
+          kind === 'text'
+            ? body || item.title
+            : [item.title, body].filter(Boolean).join('\n'),
         authorId: item.authorId,
         authorName: item.authorName,
         authorAvatar: item.authorAvatar,
@@ -309,7 +343,7 @@ export default function UniqueScreen() {
 
   const pickVideo = useCallback(async () => {
     try {
-      setPicking(true);
+      setPickingVideo(true);
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
         toast({
@@ -336,33 +370,112 @@ export default function UniqueScreen() {
         });
         return;
       }
-      setVideoUrl(asset.uri);
+      setVideoUri(asset.uri);
+      setVideoLink('');
     } catch {
       toast({
         variant: 'destructive',
         title: t('unique.videoPickFailed'),
       });
     } finally {
-      setPicking(false);
+      setPickingVideo(false);
+    }
+  }, [toast, t]);
+
+  const pickPhoto = useCallback(async () => {
+    try {
+      setPickingPhoto(true);
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        toast({
+          variant: 'destructive',
+          title: t('unique.permissionRequired'),
+          description: t('unique.libraryPermissionDesc'),
+        });
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+        allowsEditing: true,
+        aspect: [1, 1],
+      });
+      if (result.canceled || !result.assets[0]?.uri) return;
+      const asset = result.assets[0];
+      const check = validatePickerAsset('photo', {
+        uri: asset.uri,
+        width: asset.width,
+        height: asset.height,
+        fileSize: asset.fileSize,
+      });
+      if (!check.ok) {
+        if (check.reason === 'size') {
+          toast({
+            variant: 'destructive',
+            title: t('media.fileTooLarge'),
+            description: t('media.fileTooLargeDesc', {
+              mb: MEDIA_SPECS.photo.maxMb,
+            }),
+          });
+        } else {
+          toast({
+            variant: 'destructive',
+            title: t('media.imageTooSmall'),
+            description: t('media.imageTooSmallDesc', {
+              w: (MEDIA_SPECS.photo as { width: number }).width,
+            }),
+          });
+        }
+        return;
+      }
+      setPhotoUri(asset.uri);
+    } catch {
+      toast({
+        variant: 'destructive',
+        title: t('unique.photoPickFailed'),
+      });
+    } finally {
+      setPickingPhoto(false);
     }
   }, [toast, t]);
 
   const publish = useCallback(() => {
-    if (!canPublish) return;
+    if (!canPublish || publishing) return;
     void (async () => {
-      const ok = await addAnalysis({
-        title,
-        content,
-        videoUrl: videoUrl.trim() || undefined,
-      });
-      if (ok) {
-        setTitle('');
-        setContent('');
-        setVideoUrl('');
-        setShowGatePanel(false);
+      setPublishing(true);
+      try {
+        const ok = await addAnalysis({
+          title,
+          content,
+          videoUrl: videoUri.trim() || videoLink.trim() || undefined,
+          posterUrl: photoUri.trim() || undefined,
+        });
+        if (ok) {
+          setTitle('');
+          setContent('');
+          setVideoUri('');
+          setPhotoUri('');
+          setVideoLink('');
+          setShowGatePanel(false);
+        }
+      } finally {
+        setPublishing(false);
       }
     })();
-  }, [addAnalysis, canPublish, content, title, videoUrl]);
+  }, [
+    addAnalysis,
+    canPublish,
+    content,
+    photoUri,
+    publishing,
+    title,
+    videoLink,
+    videoUri,
+  ]);
+
+  const canSubmitPublish =
+    !!title.trim() &&
+    (!!content.trim() || !!videoUri.trim() || !!videoLink.trim() || !!photoUri.trim());
 
   const onFullLike = useCallback(
     (item: FullScreenContent) => {
@@ -439,30 +552,77 @@ export default function UniqueScreen() {
             placeholder={t('unique.writeAnalysisPlaceholder')}
             style={{ minHeight: 100, maxHeight: 180 }}
           />
-          <Input
-            label={t('unique.videoUrlOptional')}
-            value={videoUrl}
-            onChangeText={setVideoUrl}
-            placeholder={t('unique.videoUrlPlaceholder')}
-            autoCapitalize="none"
-            ltr
-          />
           <MediaUploadSpecs
             kind="analysisVideo"
             title={t('media.specs.videoTitle')}
           />
           <Button
             label={
-              picking ? t('unique.pickingVideo') : t('unique.pickVideoFromDevice')
+              pickingVideo
+                ? t('unique.pickingVideo')
+                : t('unique.pickVideoFromDevice')
             }
             variant="secondary"
-            loading={picking}
+            loading={pickingVideo}
             onPress={() => void pickVideo()}
           />
+          {videoUri ? (
+            <View style={styles.pickedBox}>
+              <Muted>{t('unique.videoSelectedFromDevice')}</Muted>
+              <InlineVideoPlayer uri={videoUri} height={180} />
+              <Button
+                label={t('unique.removeVideo')}
+                variant="ghost"
+                onPress={() => setVideoUri('')}
+              />
+            </View>
+          ) : null}
+          <MediaUploadSpecs
+            kind="photo"
+            title={t('media.specs.photoTitle')}
+          />
+          <Button
+            label={
+              pickingPhoto
+                ? t('unique.pickingPhoto')
+                : t('media.pickPhotoFromDevice')
+            }
+            variant="secondary"
+            loading={pickingPhoto}
+            onPress={() => void pickPhoto()}
+          />
+          {photoUri ? (
+            <View style={styles.pickedBox}>
+              <Muted>{t('unique.photoSelectedFromDevice')}</Muted>
+              <Image
+                source={{ uri: photoUri }}
+                style={styles.posterImage}
+                resizeMode="cover"
+              />
+              <Button
+                label={t('unique.removePhoto')}
+                variant="ghost"
+                onPress={() => setPhotoUri('')}
+              />
+            </View>
+          ) : null}
+          <Input
+            label={t('unique.videoUrlOptional')}
+            value={videoLink}
+            onChangeText={(v) => {
+              setVideoLink(v);
+              if (v.trim()) setVideoUri('');
+            }}
+            placeholder={t('unique.videoUrlPlaceholder')}
+            autoCapitalize="none"
+            ltr
+          />
+          <Muted>{t('unique.mediaUploadHint')}</Muted>
           <Button
             label={t('unique.publishToUnique')}
             onPress={publish}
-            disabled={!title.trim() || (!content.trim() && !videoUrl.trim())}
+            loading={publishing}
+            disabled={!canSubmitPublish || publishing}
           />
         </Card>
       );
@@ -801,8 +961,12 @@ export default function UniqueScreen() {
                   kind: 'content',
                   title: item.title,
                   body: item.content,
-                  mediaUrl: item.videoUrl,
-                  mediaKind: item.videoUrl ? 'video' : 'text',
+                  mediaUrl: item.videoUrl || item.posterUrl,
+                  mediaKind: item.videoUrl
+                    ? 'video'
+                    : item.posterUrl
+                      ? 'photo'
+                      : 'text',
                 })
               }
             />
@@ -888,6 +1052,13 @@ const styles = StyleSheet.create({
     right: 8,
     zIndex: 2,
   },
+  posterImage: {
+    width: '100%',
+    height: 220,
+    borderRadius: 14,
+    backgroundColor: '#00000022',
+  },
+  pickedBox: { gap: 8 },
   textTag: {
     flexDirection: 'row',
     alignItems: 'center',

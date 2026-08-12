@@ -727,6 +727,7 @@ export interface TournamentContextType {
     title: string;
     content: string;
     videoUrl?: string;
+    posterUrl?: string;
     matchId?: string;
   }) => Promise<boolean>;
   /** طلب الانضمام كمحلل من صفحة الفريد بعد الموافقة على الشروط */
@@ -4148,6 +4149,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       title: string;
       content: string;
       videoUrl?: string;
+      posterUrl?: string;
       matchId?: string;
     }) => {
       if (!currentUser) return false;
@@ -4162,7 +4164,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       const title = data.title.trim();
       const content = data.content.trim();
       let videoUrl = data.videoUrl?.trim() || undefined;
-      if (!title || (!content && !videoUrl)) {
+      let posterUrl = data.posterUrl?.trim() || undefined;
+      if (!title || (!content && !videoUrl && !posterUrl)) {
         toast({
           variant: 'destructive',
           title: t('toasts.t036_3a814a'),
@@ -4172,7 +4175,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
 
       const cloud = await requireCloudSession(currentUser.id);
-      if (videoUrl && cloud.session) {
+      if (!cloud.session) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t036_3a814a'),
+          description: cloudWriteErrorMessage(cloud.error),
+        });
+        return false;
+      }
+
+      if (videoUrl) {
         const resolved = await resolvePublicMediaUrl({
           uri: videoUrl,
           kind: 'video',
@@ -4189,13 +4201,25 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           return false;
         }
         videoUrl = resolved.url;
-      } else if (videoUrl && !cloud.session) {
-        toast({
-          variant: 'destructive',
-          title: t('toasts.t036_3a814a'),
-          description: cloudWriteErrorMessage(cloud.error),
+      }
+
+      if (posterUrl) {
+        const resolved = await resolvePublicMediaUrl({
+          uri: posterUrl,
+          kind: 'photo',
+          folder: 'analysis',
+          userId: cloud.session.userId,
+          requireCloud: true,
         });
-        return false;
+        if (!resolved.url) {
+          toast({
+            variant: 'destructive',
+            title: t('toasts.t036_3a814a'),
+            description: cloudWriteErrorMessage(resolved.error),
+          });
+          return false;
+        }
+        posterUrl = resolved.url;
       }
 
       const analysis = {
@@ -4204,6 +4228,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         title,
         content: content || t('toasts.visualAnalysis'),
         videoUrl,
+        posterUrl,
         timestamp: new Date(),
         likes: [] as string[],
         comments: [] as Comment[],
@@ -4218,16 +4243,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       );
       setCurrentUser(updated);
       void setJson(USER_STORAGE_KEY, updated);
-      if (cloud.session) {
-        const sync = await upsertUserContentCloud(updated);
-        if (!sync.ok) {
-          toast({
-            variant: 'destructive',
-            title: t('toasts.t036_3a814a'),
-            description: cloudWriteErrorMessage(sync.error),
-          });
-          return false;
-        }
+      const sync = await upsertUserContentCloud(updated);
+      if (!sync.ok) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t036_3a814a'),
+          description: cloudWriteErrorMessage(sync.error),
+        });
+        return false;
       }
       toast({ variant: 'success', title: t('toasts.t040_286629') });
       return true;
