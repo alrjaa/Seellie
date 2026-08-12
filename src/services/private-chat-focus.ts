@@ -3,7 +3,7 @@ type Listener = (focused: boolean) => void;
 let composerFocused = false;
 const listeners = new Set<Listener>();
 
-/** يُستخدم لإخفاء شريط التبويب أثناء كتابة رسالة خاصة على الجوال */
+/** يُضبط فقط من onFocus/onBlur لملحّن الرسالة الخاصة — لإخفاء شريط التبويب */
 export function setPrivateChatComposerFocused(focused: boolean) {
   if (composerFocused === focused) return;
   composerFocused = focused;

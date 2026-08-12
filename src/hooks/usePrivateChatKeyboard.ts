@@ -31,6 +31,7 @@ type LayoutSnapshot = {
  * الويب: يقيس المسافة من أعلى حاوية المحادثة إلى أسفل visualViewport.
  * لا يخصم keyboardInset من windowHeight (يمنع التصغير المزدوج مع Dimensions).
  * لا يثبّت document.body.
+ * لا يستدعي setPrivateChatComposerFocused — التركيز مسؤولية TextInput فقط.
  *
  * native: يبلّغ keyboardOpen فقط؛ الموضع عبر KeyboardAvoidingView.
  */

@@ -533,18 +533,11 @@ export default function PrivateScreen() {
   const chatNearBottomRef = useRef(true);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // إخفاء شريط التبويب فقط عندما لوحة المفاتيح مفتوحة وملحّن المحادثة مركّز
-  useEffect(() => {
-    const hideTabs =
-      section === 'chat' &&
-      composerFocused &&
-      (Platform.OS !== 'web' || keyboardOpen);
-    setPrivateChatComposerFocused(hideTabs);
-  }, [section, composerFocused, keyboardOpen]);
-
+  // مغادرة قسم المحادثة: ألغِ التركيز + أظهر التبويب (بدون ربط بلوحة المفاتيح)
   useEffect(() => {
     if (section !== 'chat') {
       setComposerFocused(false);
+      setPrivateChatComposerFocused(false);
     }
   }, [section]);
 
@@ -669,19 +662,20 @@ export default function PrivateScreen() {
     ? space.chats[activeFriend.id] || []
     : [];
 
-  // ارتفاع أساسي من نافذة التخطيط فقط — بدون خصم لوحة المفاتيح هنا
+  // ارتفاع أساسي من نافذة التخطيط فقط.
+  // إخفاء Bottom Tab لا يغيّر هذا الحساب (لا نستخدم tab visibility لتعويض اللوحة).
   const tabBarHeight = useMemo(
     () => (desktop ? 0 : tabBarTotalHeight(insets.bottom)),
     [desktop, insets.bottom]
   );
   const composerBlockHeight = pendingMedia ? 118 : 66;
   const layoutHeight = getLayoutViewportHeight(windowHeight);
-  // لا نخفي شريط الأقسام/الأصدقاء — يمنع قفز التخطيط ويحافظ على التصميم
   const showFriendChips = true;
   const showSectionBar = true;
 
   const chatShellHeight = useMemo(() => {
-    // مصدر واحد أثناء فتح اللوحة: القياس من أعلى الحاوية إلى أسفل visualViewport
+    // مصدر مستقل أثناء اللوحة: قياس الحاوية → أسفل visualViewport
+    // لا يعتمد على إخفاء التبويب
     if (
       Platform.OS === 'web' &&
       composerFocused &&
@@ -694,10 +688,8 @@ export default function PrivateScreen() {
 
     const sectionBar = showSectionBar ? 44 : 0;
     const screenPad = 8;
-    const tabReserve =
-      desktop || (Platform.OS === 'web' && composerFocused && keyboardOpen)
-        ? 0
-        : tabBarHeight;
+    // احجز مساحة التبويب دائماً في الارتفاع الأساسي حتى لو كان التبويب مخفياً مؤقتاً
+    const tabReserve = desktop ? 0 : tabBarHeight;
     return Math.max(
       160,
       Math.floor(layoutHeight - sectionBar - screenPad - tabReserve)
@@ -722,14 +714,17 @@ export default function PrivateScreen() {
     );
   }, [chatShellHeight, composerBlockHeight, showFriendChips]);
 
-  // إن كان المستخدم أسفل المحادثة أبقِه أسفلها بعد تغيّر الارتفاع فقط
+  // حافظ على أسفل المحادثة فقط إن كان المستخدم أصلاً في الأسفل —
+  // ولا تربط ذلك بإخفاء التبويب (يعتمد فقط على تغيّر ارتفاع منطقة الرسائل)
   useEffect(() => {
     if (section !== 'chat') return;
     if (!chatNearBottomRef.current) return;
+    // عند القراءة في الوسط: لا نحرّك التمرير
+    if (!keyboardOpen && chatHeightOverride == null) return;
     requestAnimationFrame(() => {
       chatListRef.current?.scrollToEnd({ animated: false });
     });
-  }, [chatMessagesHeight, section]);
+  }, [chatMessagesHeight, section, keyboardOpen, chatHeightOverride]);
 
   const onAddFriend = useCallback(
     async (friendId: string, opts?: { stayOnSaved?: boolean }) => {
@@ -1631,15 +1626,19 @@ export default function PrivateScreen() {
                           clearTimeout(blurTimerRef.current);
                           blurTimerRef.current = null;
                         }
+                        // تركيز حقيقي للحقل فقط — وليس من visualViewport/keyboard
                         setComposerFocused(true);
+                        setPrivateChatComposerFocused(true);
                       }}
                       onBlur={() => {
                         if (blurTimerRef.current) {
                           clearTimeout(blurTimerRef.current);
                         }
+                        // تأخير قصير حتى لا يُلغى التركيز عند الضغط على إرسال/مرفق
                         blurTimerRef.current = setTimeout(() => {
                           blurTimerRef.current = null;
                           setComposerFocused(false);
+                          setPrivateChatComposerFocused(false);
                         }, 120);
                       }}
                       style={[
