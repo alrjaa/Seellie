@@ -1,6 +1,16 @@
 import type { CompetitionRequest } from '@/data/initial-data';
 import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
 import { reviveCompetitionRequest } from '@/services/competition-sync';
+import {
+  mergeCompetitionRequestsById,
+  shouldApplyCompetitionRequestsCloud,
+} from '@/services/competition-requests-merge';
+
+export {
+  mergeCompetitionRequestsById,
+  reconcileCompetitionRequestsWithCloud,
+  shouldApplyCompetitionRequestsCloud,
+} from '@/services/competition-requests-merge';
 
 type CompetitionRequestRow = {
   id: string;
@@ -82,32 +92,6 @@ function requestToRow(request: CompetitionRequest): CompetitionRequestRow {
   };
 }
 
-export function mergeCompetitionRequestsById(
-  ...lists: CompetitionRequest[][]
-): CompetitionRequest[] {
-  const map = new Map<string, CompetitionRequest>();
-  for (const list of lists) {
-    for (const item of list) {
-      const prev = map.get(item.id);
-      if (!prev) {
-        map.set(item.id, item);
-        continue;
-      }
-      const prevTime = new Date(prev.reviewedAt || prev.requestedAt).getTime();
-      const nextTime = new Date(item.reviewedAt || item.requestedAt).getTime();
-      if (item.status !== 'pending' && prev.status === 'pending') {
-        map.set(item.id, item);
-      } else if (nextTime >= prevTime) {
-        map.set(item.id, item);
-      }
-    }
-  }
-  return Array.from(map.values()).sort(
-    (a, b) =>
-      new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime()
-  );
-}
-
 async function requireSessionUserId(): Promise<
   { ok: true; userId: string } | { ok: false; error: string }
 > {
@@ -125,10 +109,14 @@ async function requireSessionUserId(): Promise<
 
 export async function fetchCompetitionRequestsCloud(): Promise<{
   items: CompetitionRequest[];
+  /** true = HTTP/query succeeded (empty array is a real empty catalog). */
+  ok: boolean;
   error?: string;
 }> {
   const session = await requireSessionUserId();
-  if (!session.ok) return { items: [], error: session.error };
+  if (!session.ok) {
+    return { items: [], ok: false, error: session.error };
+  }
   const sb = getSupabase()!;
   const { data, error } = await sb
     .from('competition_requests')
@@ -137,10 +125,11 @@ export async function fetchCompetitionRequestsCloud(): Promise<{
     .limit(300);
   if (error) {
     console.warn('[supabase] fetchCompetitionRequests', error.message);
-    return { items: [], error: error.message };
+    return { items: [], ok: false, error: error.message };
   }
   return {
     items: ((data || []) as CompetitionRequestRow[]).map(rowToRequest),
+    ok: true,
   };
 }
 
@@ -228,21 +217,6 @@ export async function deleteCompetitionRequestCloud(
   return { ok: true };
 }
 
-/**
- * السحابة مصدر الحقيقة لطلبات التنظيم السحابية (creq_*).
- * يزيل محلياً ما حُذف من Supabase.
- */
-export function reconcileCompetitionRequestsWithCloud(
-  local: CompetitionRequest[],
-  cloud: CompetitionRequest[]
-): CompetitionRequest[] {
-  const cloudIds = new Set(cloud.map((r) => r.id));
-  const keepLocalOnly = local.filter(
-    (r) => !String(r.id).startsWith('creq_') && !cloudIds.has(r.id)
-  );
-  return mergeCompetitionRequestsById(keepLocalOnly, cloud);
-}
-
 export function subscribeCompetitionRequestsCloud(
   onChange: (items: CompetitionRequest[]) => void
 ): (() => void) | null {
@@ -252,7 +226,8 @@ export function subscribeCompetitionRequestsCloud(
 
   const pull = () => {
     void fetchCompetitionRequestsCloud().then((res) => {
-      if (!res.error || res.items.length) onChange(res.items);
+      if (!shouldApplyCompetitionRequestsCloud(res)) return;
+      onChange(res.items);
     });
   };
 

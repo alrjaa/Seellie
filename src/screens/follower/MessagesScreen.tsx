@@ -98,7 +98,7 @@ export default function MessagesScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!currentUser || !cloudOk || !isSupabaseConfigured()) {
+      if (!currentUser?.id || !cloudOk || !isSupabaseConfigured()) {
         return;
       }
       // FIX-02: Realtime (provider) is primary. Focus refresh + slow fallback only.
@@ -110,7 +110,7 @@ export default function MessagesScreen() {
         }
       );
       return () => stopPoll();
-    }, [currentUser, cloudOk, refreshCloudMessages])
+    }, [currentUser?.id, cloudOk, refreshCloudMessages])
   );
 
   useEffect(() => {

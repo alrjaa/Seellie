@@ -79,7 +79,7 @@ export default function ShareCardsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
+      if (!currentUser?.id || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
         return;
       }
       void refreshCloudShareCards();
@@ -91,7 +91,7 @@ export default function ShareCardsScreen() {
         }
       );
       return () => stopPoll();
-    }, [currentUser, refreshCloudShareCards])
+    }, [currentUser?.id, refreshCloudShareCards])
   );
 
   const recipients = useMemo(() => {

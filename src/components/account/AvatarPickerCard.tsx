@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTournament } from '@/providers/TournamentProvider';
@@ -84,7 +84,7 @@ export function AvatarPickerCard() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.85,
-      allowsEditing: true,
+      allowsEditing: Platform.OS !== 'web',
       aspect: [1, 1],
     });
     if (result.canceled || !result.assets?.[0]) return;
@@ -104,7 +104,7 @@ export function AvatarPickerCard() {
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.85,
-      allowsEditing: true,
+      allowsEditing: Platform.OS !== 'web',
       aspect: [1, 1],
     });
     if (result.canceled || !result.assets?.[0]) return;

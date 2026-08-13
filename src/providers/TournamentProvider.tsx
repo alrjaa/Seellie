@@ -94,6 +94,7 @@ import {
   fetchCompetitionRequestsCloud,
   mergeCompetitionRequestsById,
   reconcileCompetitionRequestsWithCloud,
+  shouldApplyCompetitionRequestsCloud,
   subscribeCompetitionRequestsCloud,
   upsertCompetitionRequestCloud,
   updateCompetitionRequestCloud,
@@ -110,6 +111,8 @@ import {
   fetchShareCardsForUser,
   insertShareCard,
   mergeShareCardsById,
+  reconcileShareCardsWithCloud,
+  shouldApplyShareCardsCloud,
   subscribeShareCardsForUser,
   updateShareCardRemote,
 } from '@/services/supabase-share';
@@ -909,6 +912,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   /** Bumps on logout / user switch so stale cloud responses cannot re-apply A after B. */
   const sessionGen = useRef(createGenerationGate());
   const sessionUserIdRef = useRef<string | null>(null);
+  /** Latest user for stable Realtime/poll callbacks without object-identity churn. */
+  const currentUserRef = useRef<User | null>(null);
+  currentUserRef.current = currentUser;
   const router = useRouter();
   const { toast } = useToast();
   const { addNotification, clearAll: clearNotifications } = useNotifications();
@@ -969,7 +975,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     if (profilesResult.ok && profilesResult.users.length) {
       setUsers((prev) => mergeUsersPreferCloud(prev, profilesResult.users));
     }
-    if (cloudRequests.error !== 'no_session') {
+    // FIX-04 P0-1: only reconcile on successful fetch (empty success OK; errors keep local)
+    if (shouldApplyCompetitionRequestsCloud(cloudRequests)) {
       setCompetitionRequests((prev) => {
         const merged = reconcileCompetitionRequestsWithCloud(
           prev,
@@ -1010,7 +1017,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     setUsers((prev) => prev.map(clearSeedUserContent));
     setOffers((prev) => filterSeedOffers(prev));
     setGiftTransactions((prev) => filterSeedGifts(prev));
-    if (cloudRequests.items.length > 0) {
+    if (cloudRequests.ok && cloudRequests.items.length > 0) {
       setCompetitionRequests((prev) => filterSeedCompetitionRequests(prev));
     }
 
@@ -1174,18 +1181,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             const uid = normalizedUser.id;
             const token = sessionGen.current.current;
             void (async () => {
-              const [cards, remoteMessagesResult] = await Promise.all([
+              const [cardsResult, remoteMessagesResult] = await Promise.all([
                 fetchShareCardsForUser(uid),
                 fetchMessagesForUser(uid),
               ]);
               if (!active) return;
               if (!sessionGen.current.isCurrent(token)) return;
               if (sessionUserIdRef.current !== uid) return;
-              if (cards.length) {
-                setShareCards((prev) => {
-                  const ids = new Set(cards.map((c) => c.id));
-                  return [...cards, ...prev.filter((c) => !ids.has(c.id))];
-                });
+              if (shouldApplyShareCardsCloud(cardsResult)) {
+                setShareCards((prev) =>
+                  reconcileShareCardsWithCloud(prev, cardsResult.cards)
+                );
               }
               if (remoteMessagesResult.messages.length) {
                 setMessages((prev) =>
@@ -1382,21 +1388,30 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       fetchCompetitionRequestsCloud(),
       fetchCompetitionsCloud(),
     ]);
-    if (cloud.error === 'no_session') return 0;
-    if (!cloud.items.length && cloud.error) {
-      console.warn('[competition-requests]', cloud.error);
+    if (!shouldApplyCompetitionRequestsCloud(cloud)) {
+      if (cloud.error) {
+        console.warn('[competition-requests] refresh skipped', cloud.error);
+      }
+      // Still try competitions if that fetch is independent
+    } else {
+      setCompetitionRequests((prev) => {
+        const merged = reconcileCompetitionRequestsWithCloud(
+          prev,
+          cloud.items
+        );
+        void saveCompetitionRequests(merged);
+        return merged;
+      });
     }
-    setCompetitionRequests((prev) => {
-      const merged = reconcileCompetitionRequestsWithCloud(prev, cloud.items);
-      void saveCompetitionRequests(merged);
-      return merged;
-    });
+    if (comps.error === 'no_session') {
+      return shouldApplyCompetitionRequestsCloud(cloud) ? cloud.items.length : 0;
+    }
     setCompetitions((prev) => {
       const merged = reconcileCompetitionsWithCloud(prev, comps.items);
       void saveCompetitions(merged, { fromCloud: true });
       return merged;
     });
-    return cloud.items.length;
+    return shouldApplyCompetitionRequestsCloud(cloud) ? cloud.items.length : 0;
   }, []);
 
   const routeForRole = useCallback((role: UserRole) => {
@@ -1550,15 +1565,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           void setJson(USER_STORAGE_KEY, normalizedUser);
           // الكتالوج يُحمَّل في الخلفية — لا تؤخر الدخول
           void (async () => {
-            const [cards, remoteMessagesResult] = await Promise.all([
+            const [cardsResult, remoteMessagesResult] = await Promise.all([
               fetchShareCardsForUser(normalizedUser.id),
               fetchMessagesForUser(normalizedUser.id),
             ]);
-            if (cards.length) {
-              setShareCards((prev) => {
-                const ids = new Set(cards.map((c) => c.id));
-                return [...cards, ...prev.filter((c) => !ids.has(c.id))];
-              });
+            if (shouldApplyShareCardsCloud(cardsResult)) {
+              setShareCards((prev) =>
+                reconcileShareCardsWithCloud(prev, cardsResult.cards)
+              );
             }
             if (remoteMessagesResult.messages.length) {
               setMessages((prev) =>
@@ -2434,18 +2448,19 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   const notifyIncomingMessages = useCallback(
     (arrived: Message[], opts?: { toastOnArrive?: boolean }) => {
-      if (!currentUser || !arrived.length) return;
+      const user = currentUserRef.current;
+      if (!user || !arrived.length) return;
       const mine = arrived.filter(
-        (m) => m.recipientId === currentUser.id && !m.read
+        (m) => m.recipientId === user.id && !m.read
       );
       if (!mine.length) return;
       for (const msg of mine) {
         const isOrganizerPath =
-          (currentUser.activeRole || currentUser.role) === 'organizer';
+          (user.activeRole || user.role) === 'organizer';
         addNotification({
           id: `msg-${msg.id}`,
           kind: 'message',
-          recipientId: currentUser.id,
+          recipientId: user.id,
           title: msg.subject.startsWith('[نظام]')
             ? 'إشعار النظام'
             : t('home.messages'),
@@ -2471,14 +2486,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [currentUser, addNotification, t, toast]
+    [addNotification, t, toast]
   );
 
   const refreshCloudMessages = useCallback(async () => {
-    if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
+    const uid = sessionUserIdRef.current;
+    if (!uid || !isUuid(uid) || !isSupabaseConfigured()) {
       return;
     }
-    const uid = currentUser.id;
     const token = sessionGen.current.current;
     await messagesSyncLock.current.run(async () => {
       const remote = await fetchMessagesForUser(uid);
@@ -2508,14 +2523,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         notifyIncomingMessages(arrived, { toastOnArrive: true });
       }
     });
-  }, [currentUser, notifyIncomingMessages]);
+  }, [notifyIncomingMessages]);
 
   // استقبال فوري للرسائل السحابية على جهاز المستلم + إشعار محلي
   useEffect(() => {
-    if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
+    const uid = currentUser?.id;
+    if (!uid || !isUuid(uid) || !isSupabaseConfigured()) {
       return;
     }
-    const uid = currentUser.id;
     const stop = subscribeMessagesForUser(uid, (msg) => {
       if (sessionUserIdRef.current !== uid) return;
       setMessages((prev) => {
@@ -2534,31 +2549,36 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   }, [currentUser?.id, refreshCloudMessages, notifyIncomingMessages]);
 
   const refreshCloudShareCards = useCallback(async () => {
-    if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
+    const uid = sessionUserIdRef.current;
+    if (!uid || !isUuid(uid) || !isSupabaseConfigured()) {
       return;
     }
-    const uid = currentUser.id;
     const token = sessionGen.current.current;
     await shareCardsSyncLock.current.run(async () => {
-      const cards = await fetchShareCardsForUser(uid);
+      const result = await fetchShareCardsForUser(uid);
       if (!sessionGen.current.isCurrent(token) || sessionUserIdRef.current !== uid) {
         return;
       }
-      // Failed fetch returns [] — do not wipe local inbox
-      if (!cards.length) return;
+      // FIX-04 P0-2: ERROR must not wipe inbox; SUCCESS_EMPTY may reconcile
+      if (!shouldApplyShareCardsCloud(result)) {
+        if (result.error) {
+          console.warn('[share-cards] refresh skipped', result.error);
+        }
+        return;
+      }
       setShareCards((prev) => {
         if (sessionUserIdRef.current !== uid) return prev;
-        return mergeShareCardsById(cards, prev);
+        return reconcileShareCardsWithCloud(prev, result.cards);
       });
     });
-  }, [currentUser]);
+  }, []);
 
   // FIX-02: Share Cards Realtime (primary) — party-scoped filters + RLS
   useEffect(() => {
-    if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
+    const uid = currentUser?.id;
+    if (!uid || !isUuid(uid) || !isSupabaseConfigured()) {
       return;
     }
-    const uid = currentUser.id;
     const stop = subscribeShareCardsForUser(uid, (card, event) => {
       if (sessionUserIdRef.current !== uid) return;
       if (card.senderId !== uid && card.recipientId !== uid) return;
@@ -2581,7 +2601,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   }, [currentUser?.id, refreshCloudShareCards]);
 
   const refreshCloudForumComments = useCallback(async () => {
-    if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
+    const uid = sessionUserIdRef.current;
+    if (!uid || !isUuid(uid) || !isSupabaseConfigured()) {
       return;
     }
     await forumsSyncLock.current.run(async () => {
@@ -2594,11 +2615,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       if (!remote.comments.length) return;
       setComments((prev) => mergeCommentsById(remote.comments, prev));
     });
-  }, [currentUser]);
+  }, []);
 
   // مزامنة الساحات: Realtime أساسي + احتياطي أمامي أبطأ
   useEffect(() => {
-    if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
+    const uid = currentUser?.id;
+    if (!uid || !isUuid(uid) || !isSupabaseConfigured()) {
       return;
     }
     const stop = subscribeForumComments((comment) => {

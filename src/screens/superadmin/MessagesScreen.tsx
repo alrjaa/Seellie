@@ -74,9 +74,9 @@ export default function MessagesScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!currentUser || !isUuid(currentUser.id)) return;
+      if (!currentUser?.id || !isUuid(currentUser.id)) return;
       void refreshCloudMessages();
-    }, [currentUser, refreshCloudMessages])
+    }, [currentUser?.id, refreshCloudMessages])
   );
 
   const data = useMemo(() => {

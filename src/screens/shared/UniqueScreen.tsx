@@ -2,6 +2,7 @@ import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Image,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -479,7 +480,7 @@ export default function UniqueScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.85,
-        allowsEditing: true,
+        allowsEditing: Platform.OS !== 'web',
         aspect: [1, 1],
       });
       if (result.canceled || !result.assets[0]?.uri) return;

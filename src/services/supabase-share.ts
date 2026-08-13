@@ -1,6 +1,13 @@
 import type { ShareCard, ShareCardKind, ShareCardStatus } from '@/data/initial-data';
-import { getSupabase } from '@/services/supabase';
+import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
 import { uploadShareMedia } from '@/services/supabase-storage';
+
+export {
+  mergeShareCardsById,
+  reconcileShareCardsWithCloud,
+  shouldApplyShareCardsCloud,
+  applyShareCardsCloudResult,
+} from '@/services/share-cards-merge';
 
 export type ShareCardRow = {
   id: string;
@@ -54,22 +61,41 @@ export function rowToShareCard(row: ShareCardRow): ShareCard {
   };
 }
 
-export async function fetchShareCardsForUser(
-  userId: string
-): Promise<ShareCard[]> {
+/**
+ * FIX-04 P0-2 — Result type: empty success ≠ fetch error.
+ * Callers must use shouldApplyShareCardsCloud before reconcile.
+ */
+export async function fetchShareCardsForUser(userId: string): Promise<{
+  cards: ShareCard[];
+  ok: boolean;
+  error?: string;
+}> {
+  if (!isSupabaseConfigured()) {
+    return { cards: [], ok: false, error: 'not_configured' };
+  }
+  if (!userId) {
+    return { cards: [], ok: false, error: 'no_user' };
+  }
   const sb = getSupabase();
-  if (!sb) return [];
+  if (!sb) return { cards: [], ok: false, error: 'no_client' };
+  const { data: sessionData } = await sb.auth.getSession();
+  if (!sessionData.session) {
+    return { cards: [], ok: false, error: 'no_session' };
+  }
   const { data, error } = await sb
     .from('share_cards')
     .select('*')
     .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
     .order('created_at', { ascending: false })
     .limit(100);
-  if (error || !data) {
-    console.warn('[supabase] fetchShareCards', error?.message);
-    return [];
+  if (error) {
+    console.warn('[supabase] fetchShareCards', error.message);
+    return { cards: [], ok: false, error: error.message };
   }
-  return (data as ShareCardRow[]).map(rowToShareCard);
+  return {
+    cards: ((data || []) as ShareCardRow[]).map(rowToShareCard),
+    ok: true,
+  };
 }
 
 /**
@@ -153,30 +179,6 @@ export function subscribeShareCardsForUser(
   return () => {
     void sb.removeChannel(channel);
   };
-}
-
-/** Merge by id; prefer newer timestamp when both exist. */
-export function mergeShareCardsById(
-  incoming: ShareCard[],
-  existing: ShareCard[]
-): ShareCard[] {
-  const map = new Map<string, ShareCard>();
-  for (const c of existing) map.set(c.id, c);
-  for (const c of incoming) {
-    const prev = map.get(c.id);
-    if (!prev) {
-      map.set(c.id, c);
-      continue;
-    }
-    const prevTs = prev.timestamp instanceof Date ? prev.timestamp.getTime() : 0;
-    const nextTs = c.timestamp instanceof Date ? c.timestamp.getTime() : 0;
-    map.set(c.id, nextTs >= prevTs ? { ...prev, ...c } : { ...c, ...prev });
-  }
-  return Array.from(map.values()).sort((a, b) => {
-    const at = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
-    const bt = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
-    return bt - at;
-  });
 }
 
 export async function insertShareCard(input: {

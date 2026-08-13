@@ -234,9 +234,8 @@ const Slide = memo(function Slide({
           // ignore
         }
       }
-      if (Platform.OS === 'web') {
-        void videoRef.current?.unloadAsync().catch(() => undefined);
-      }
+      // FIX-04 P1: unload on native too (release AVPlayer / ExoPlayer)
+      void videoRef.current?.unloadAsync().catch(() => undefined);
       return;
     }
     // ظاهر على الشاشة → شغّل فوراً

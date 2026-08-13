@@ -2,6 +2,7 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -12,7 +13,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/providers/ThemeProvider';
@@ -33,7 +33,15 @@ type ToastContextValue = {
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
-export function ToastProvider({ children }: { children: ReactNode }) {
+/**
+ * FIX-04 P1 — toast UI state lives in ToastHost only so show/hide does not
+ * re-render the app tree under ToastProvider.
+ */
+function ToastHost({
+  register,
+}: {
+  register: (fn: (payload: ToastPayload) => void) => void;
+}) {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const [payload, setPayload] = useState<ToastPayload | null>(null);
@@ -56,7 +64,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     ]).start(() => setPayload(null));
   }, [opacity, translateY]);
 
-  const toast = useCallback(
+  const show = useCallback(
     (next: ToastPayload) => {
       if (timer.current) clearTimeout(timer.current);
       setPayload(next);
@@ -79,76 +87,96 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [hide, opacity, translateY]
   );
 
-  const value = useMemo(() => ({ toast }), [toast]);
+  useEffect(() => {
+    register(show);
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [register, show]);
+
+  if (!payload) return null;
 
   const bg =
-    payload?.variant === 'destructive'
+    payload.variant === 'destructive'
       ? theme.colors.danger
-      : payload?.variant === 'success'
+      : payload.variant === 'success'
         ? theme.colors.accent
         : theme.colors.surfaceElevated;
 
   return (
-    <ToastContext.Provider value={value}>
-      {children}
-      {payload ? (
-        <Animated.View
-          pointerEvents="box-none"
+    <Animated.View
+      pointerEvents="box-none"
+      style={[
+        styles.wrap,
+        {
+          top: headerSafeTop(insets.top),
+          opacity,
+          transform: [{ translateY }],
+        },
+      ]}
+    >
+      <Pressable
+        accessibilityRole="alert"
+        onPress={hide}
+        style={[
+          styles.toast,
+          {
+            backgroundColor: bg,
+            borderColor: theme.colors.border,
+          },
+        ]}
+      >
+        <Text
           style={[
-            styles.wrap,
+            styles.title,
             {
-              top: headerSafeTop(insets.top),
-              opacity,
-              transform: [{ translateY }],
+              color:
+                payload.variant === 'default'
+                  ? theme.colors.text
+                  : payload.variant === 'success'
+                    ? theme.colors.textInverse
+                    : theme.colors.white,
             },
           ]}
         >
-          <Pressable
-            accessibilityRole="alert"
-            onPress={hide}
+          {payload.title}
+        </Text>
+        {payload.description ? (
+          <Text
             style={[
-              styles.toast,
+              styles.desc,
               {
-                backgroundColor: bg,
-                borderColor: theme.colors.border,
+                color:
+                  payload.variant === 'default'
+                    ? theme.colors.textMuted
+                    : payload.variant === 'success'
+                      ? theme.colors.textInverse
+                      : theme.colors.white,
               },
             ]}
           >
-            <Text
-              style={[
-                styles.title,
-                {
-                  color:
-                    payload.variant === 'default'
-                      ? theme.colors.text
-                      : payload.variant === 'success'
-                        ? theme.colors.textInverse
-                        : theme.colors.white,
-                },
-              ]}
-            >
-              {payload.title}
-            </Text>
-            {payload.description ? (
-              <Text
-                style={[
-                  styles.desc,
-                  {
-                    color:
-                      payload.variant === 'default'
-                        ? theme.colors.textMuted
-                        : payload.variant === 'success'
-                          ? theme.colors.textInverse
-                          : theme.colors.white,
-                  },
-                ]}
-              >
-                {payload.description}
-              </Text>
-            ) : null}
-          </Pressable>
-        </Animated.View>
-      ) : null}
+            {payload.description}
+          </Text>
+        ) : null}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const showRef = useRef<(payload: ToastPayload) => void>(() => undefined);
+  const toast = useCallback((next: ToastPayload) => {
+    showRef.current(next);
+  }, []);
+  const register = useCallback((fn: (payload: ToastPayload) => void) => {
+    showRef.current = fn;
+  }, []);
+  const value = useMemo(() => ({ toast }), [toast]);
+
+  return (
+    <ToastContext.Provider value={value}>
+      {children}
+      <ToastHost register={register} />
     </ToastContext.Provider>
   );
 }

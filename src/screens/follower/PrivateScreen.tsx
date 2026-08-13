@@ -302,6 +302,7 @@ const ChatMediaLightbox = memo(function ChatMediaLightbox({
     return () => {
       sub.remove();
       void videoRef.current?.pauseAsync().catch(() => undefined);
+      void videoRef.current?.unloadAsync().catch(() => undefined);
       htmlRef.current?.pause();
     };
   }, []);
@@ -468,7 +469,12 @@ const SavedCard = memo(function SavedCard({
     <Card style={styles.savedCard}>
       <View style={styles.savedHead}>
         <Muted>{item.authorHandle || item.authorName}</Muted>
-        <Pressable onPress={onRemove} hitSlop={8} accessibilityRole="button">
+        <Pressable
+          onPress={onRemove}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.delete')}
+        >
           <Ionicons name="trash-outline" size={18} color={theme.colors.danger} />
         </Pressable>
       </View>

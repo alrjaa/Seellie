@@ -12,6 +12,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  StatusBar,
   StyleSheet,
   View,
   type ViewStyle,
@@ -19,9 +20,11 @@ import {
 import { ResizeMode, Video } from 'expo-av';
 import type { Video as VideoType } from 'expo-av';
 import { useIsFocused } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useResponsive } from '@/hooks/useResponsive';
+import { useTranslation } from '@/providers/LanguageProvider';
 import { clamp } from '@/theme/tokens';
 
 type Props = {
@@ -47,6 +50,8 @@ function InlineVideoPlayerComponent({
   autoPlayMuted = Platform.OS === 'web',
 }: Props) {
   const theme = useAppTheme();
+  const { t, language } = useTranslation();
+  const insets = useSafeAreaInsets();
   const focused = useIsFocused();
   const { width, height: winH, tablet } = useResponsive();
   const [fullscreen, setFullscreen] = useState(false);
@@ -85,10 +90,9 @@ function InlineVideoPlayerComponent({
   const stopAll = useCallback(() => {
     stopInline();
     void fullRef.current?.pauseAsync().catch(() => undefined);
-    if (Platform.OS === 'web') {
-      void videoRef.current?.unloadAsync().catch(() => undefined);
-      void fullRef.current?.unloadAsync().catch(() => undefined);
-    }
+    // FIX-04 P1: release native decoder resources on stop/unmount (not web-only)
+    void videoRef.current?.unloadAsync().catch(() => undefined);
+    void fullRef.current?.unloadAsync().catch(() => undefined);
     setFullscreen(false);
   }, [stopInline]);
 
@@ -232,7 +236,9 @@ function InlineVideoPlayerComponent({
           <Pressable
             onPress={() => setFullscreen(true)}
             accessibilityRole="button"
-            accessibilityLabel="تكبير الفيديو"
+            accessibilityLabel={
+              language === 'ar' ? 'تكبير الفيديو' : 'Expand video'
+            }
             style={[
               styles.expandBtn,
               { backgroundColor: 'rgba(0,0,0,0.55)' },
@@ -248,7 +254,11 @@ function InlineVideoPlayerComponent({
         animationType="fade"
         supportedOrientations={['portrait', 'landscape']}
         onRequestClose={() => setFullscreen(false)}
+        statusBarTranslucent={Platform.OS === 'android'}
       >
+        {Platform.OS !== 'web' ? (
+          <StatusBar barStyle="light-content" backgroundColor="#000" />
+        ) : null}
         <View style={styles.fullRoot}>
           <Video
             ref={fullRef}
@@ -266,8 +276,11 @@ function InlineVideoPlayerComponent({
           <Pressable
             onPress={() => setFullscreen(false)}
             accessibilityRole="button"
-            accessibilityLabel="إغلاق"
-            style={[styles.closeBtn, { top: Platform.OS === 'web' ? 20 : 48 }]}
+            accessibilityLabel={t('common.close')}
+            style={[
+              styles.closeBtn,
+              { top: Math.max(insets.top, 12) + 8 },
+            ]}
           >
             <Ionicons name="close" size={26} color="#fff" />
           </Pressable>
