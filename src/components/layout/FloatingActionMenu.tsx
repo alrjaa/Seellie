@@ -142,6 +142,7 @@ function FloatingActionMenuComponent() {
 
   // مسار الخاصة يخفي العائمة؛ أي تبويب آخر يلغي الإخفاء فوراً
   // (تبويبات Expo تبقى مركّبة — لا نعتمد على unmount)
+  // ملاحظة: شاشة الفريد تضغط setFloatingSuppressed أثناء نموذج النشر
   useEffect(() => {
     const onPrivate =
       !!pathname &&

@@ -8,6 +8,7 @@ import {
   applyContentPayload,
   type UserContentPayload,
 } from '@/services/supabase-user-content';
+import { stripAnalystAccessCode } from '@/services/analyst-secrets';
 import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
@@ -82,26 +83,30 @@ export function profileToUser(row: ProfileRow): User {
   );
 }
 
+/** أعمدة عامة للملفات — بدون اعتماد أعمى على select('*') */
+export const PROFILE_PUBLIC_COLUMNS =
+  'id,email,name,handle,visible_id,role,roles,active_role,avatar,bio,city,region,country,status,mobile,content';
+
 export async function fetchProfile(userId: string): Promise<User | null> {
   const sb = getSupabase();
   if (!sb) return null;
   const { data, error } = await sb
     .from('profiles')
-    .select('*')
+    .select(PROFILE_PUBLIC_COLUMNS)
     .eq('id', userId)
     .maybeSingle();
   if (error || !data) return null;
   return profileToUser(data as ProfileRow);
 }
 
-/** كل حسابات profiles للوحة إدارة المستخدمين */
+/** كل حسابات profiles للوحة/الخلاصة — content يُنقّى من accessCode عند التحويل */
 export async function fetchAllProfiles(): Promise<User[]> {
   if (!isSupabaseConfigured()) return [];
   const sb = getSupabase();
   if (!sb) return [];
   const { data, error } = await sb
     .from('profiles')
-    .select('*')
+    .select(PROFILE_PUBLIC_COLUMNS)
     .order('created_at', { ascending: false })
     .limit(500);
   if (error) {
@@ -193,11 +198,12 @@ export function mergeUsersPreferCloud(
           : local.personalityPhotos || u.personalityPhotos,
       followers: u.followers?.length ? u.followers : local.followers,
       following: u.following?.length ? u.following : local.following,
-      // لا تفقد طلب محلل محلي إن كانت السحابة بلا analyst بعد
-      analyst:
+      // لا تفقد طلب محلل محلي إن كانت السحابة بلا analyst بعد — بدون accessCode
+      analyst: stripAnalystAccessCode(
         u.analyst?.status && u.analyst.status !== 'none'
           ? u.analyst
-          : local.analyst || u.analyst,
+          : local.analyst || u.analyst
+      ),
       permissions: {
         ...(local.permissions || {}),
         ...(u.permissions || {}),
@@ -256,7 +262,7 @@ export async function upsertProfile(input: {
   const { data, error } = await sb
     .from('profiles')
     .upsert(payload, { onConflict: 'id' })
-    .select('*')
+    .select(PROFILE_PUBLIC_COLUMNS)
     .single();
   if (error || !data) {
     console.warn('[supabase] upsertProfile', error?.message);

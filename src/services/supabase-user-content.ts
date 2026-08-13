@@ -2,6 +2,10 @@ import type { Comment, User } from '@/data/initial-data';
 import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
 import { isUuid } from '@/services/supabase-messages';
 import { requireCloudSession } from '@/services/cloud-write';
+import {
+  setAnalystAccessCodeCloud,
+  stripAnalystAccessCode,
+} from '@/services/analyst-secrets';
 
 export type UserContentPayload = {
   posts?: User['posts'];
@@ -18,6 +22,14 @@ export type UserContentPayload = {
   country?: string;
   mobile?: string;
 };
+
+/**
+ * تصنيف حقول profiles.content (FIX-01):
+ * PUBLIC: posts, media, analysisContent, personalityPhotos, following/followers, city/region/country
+ * PRIVATE: mobile (يظهر في الملف لكن لا يجب تسريبه في سجلات)
+ * SENSITIVE: analyst.accessCode — ممنوع في content؛ جدول analyst_access_codes فقط
+ * ADMIN_ONLY: moderation reasons داخل analyst (تحذير/حظر) — تُعرض للإدارة/المالك
+ */
 
 function reviveMediaItem<T extends { timestamp?: Date | string }>(
   item: T
@@ -67,7 +79,7 @@ export function applyContentPayload(
       ? content.followers
       : user.followers || [],
     analyst: content.analyst
-      ? {
+      ? stripAnalystAccessCode({
           ...content.analyst,
           termsAcceptedAt: content.analyst.termsAcceptedAt
             ? new Date(content.analyst.termsAcceptedAt as Date | string)
@@ -93,7 +105,7 @@ export function applyContentPayload(
           suspendTo: content.analyst.suspendTo
             ? new Date(content.analyst.suspendTo as Date | string)
             : undefined,
-        }
+        })
       : user.analyst,
     permissions: content.permissions
       ? { ...user.permissions, ...content.permissions }
@@ -114,7 +126,9 @@ export function userToContentPayload(user: User): UserContentPayload {
     pinnedCompetitionIds: user.pinnedCompetitionIds || [],
     following: user.following || [],
     followers: user.followers || [],
-    analyst: user.analyst,
+    analyst: user.analyst
+      ? stripAnalystAccessCode({ ...user.analyst })
+      : user.analyst,
     permissions: user.permissions,
     city: user.city,
     region: user.region,
@@ -196,8 +210,7 @@ export async function upsertUserContentCloud(
 }
 
 /**
- * يكتب حقل analyst فقط (موافقة/رفض/رمز) مع تحقق بعد الحفظ.
- * أهم من replace_profile_content للمشرف لأن مسار الدمج الاجتماعي قد يتجاهل analyst.
+ * يكتب حقل analyst فقط (موافقة/رفض) مع حفظ الرمز في جدول سري منفصل (FIX-01).
  */
 export async function setAnalystProfileCloud(
   userId: string,
@@ -213,7 +226,11 @@ export async function setAnalystProfileCloud(
   const sb = getSupabase();
   if (!sb) return { ok: false, error: 'no_client' };
 
-  const payload = JSON.parse(JSON.stringify(analyst)) as Record<string, unknown>;
+  const secretCode = analyst.accessCode?.trim() || '';
+  const safeAnalyst = stripAnalystAccessCode({ ...analyst });
+  const payload = JSON.parse(
+    JSON.stringify(safeAnalyst)
+  ) as Record<string, unknown>;
 
   const { error: rpcError } = await sb.rpc('set_profile_analyst', {
     p_id: userId,
@@ -222,29 +239,24 @@ export async function setAnalystProfileCloud(
 
   if (rpcError) {
     console.warn('[analyst] set_profile_analyst', rpcError.message);
-    const { data: row, error: readErr } = await sb
-      .from('profiles')
-      .select('content')
-      .eq('id', userId)
-      .maybeSingle();
-    if (readErr) {
-      return { ok: false, error: readErr.message || rpcError.message };
-    }
-    const prev =
-      row?.content && typeof row.content === 'object'
-        ? (row.content as Record<string, unknown>)
-        : {};
-    const { error: updErr } = await sb
-      .from('profiles')
-      .update({
-        content: { ...prev, analyst: payload },
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', userId);
-    if (updErr) {
+    return {
+      ok: false,
+      error:
+        rpcError.message.includes('function') ||
+        rpcError.message.includes('does not exist')
+          ? 'analyst_rpc_missing — نفّذ supabase/FIX-01-ANALYST-SECRETS.sql'
+          : rpcError.message,
+    };
+  }
+
+  if (secretCode) {
+    const secret = await setAnalystAccessCodeCloud(userId, secretCode);
+    if (!secret.ok) {
       return {
         ok: false,
-        error: `${rpcError.message} / ${updErr.message}`,
+        error:
+          secret.error ||
+          'access_code_secret_failed — نفّذ supabase/FIX-01-ANALYST-SECRETS.sql',
       };
     }
   }
@@ -262,17 +274,14 @@ export async function setAnalystProfileCloud(
     return {
       ok: false,
       error:
-        'analyst_not_persisted — نفّذ supabase/SET-PROFILE-ANALYST.sql في SQL Editor',
+        'analyst_not_persisted — نفّذ supabase/FIX-01-ANALYST-SECRETS.sql',
     };
   }
-  if (
-    analyst.accessCode &&
-    String(got.accessCode || '').trim() !== String(analyst.accessCode).trim()
-  ) {
+  // يجب ألا يعود accessCode في content العام
+  if (got.accessCode) {
     return {
       ok: false,
-      error:
-        'access_code_not_persisted — نفّذ supabase/SET-PROFILE-ANALYST.sql',
+      error: 'access_code_leaked_in_content — نفّذ FIX-01-ANALYST-SECRETS.sql',
     };
   }
   return { ok: true };

@@ -137,3 +137,44 @@ export async function uploadShareMedia(
 ): Promise<string | null> {
   return uploadAppMedia(localUri, kind, userId, 'shares');
 }
+
+/**
+ * يستخرج مسار الكائن داخل bucket من رابط عام HTTPS.
+ * لا يحذف إلا مسارات مملوكة للمستخدم الحالي (أو مشرف عبر RLS).
+ */
+export function storagePathFromPublicUrl(url: string): string | null {
+  if (!url || !/^https?:\/\//i.test(url)) return null;
+  try {
+    const marker = `/object/public/${BUCKET}/`;
+    const idx = url.indexOf(marker);
+    if (idx < 0) return null;
+    const path = decodeURIComponent(url.slice(idx + marker.length).split('?')[0] || '');
+    if (!path || path.includes('..')) return null;
+    return path;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * حذف ملف من share-media عند حذف مرجع DB (MEDIA-03).
+ * يعتمد على ownership عبر RLS — لا تخمين مسارات عشوائية.
+ */
+export async function deleteAppMediaByUrl(
+  url: string,
+  expectedUserId?: string
+): Promise<{ ok: boolean; error?: string }> {
+  const path = storagePathFromPublicUrl(url);
+  if (!path) return { ok: true }; // ليس ملف سحابة — لا شيء لحذفه
+  if (expectedUserId && !path.startsWith(`${expectedUserId}/`)) {
+    return { ok: false, error: 'path_ownership_mismatch' };
+  }
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: 'no_client' };
+  const { error } = await sb.storage.from(BUCKET).remove([path]);
+  if (error) {
+    console.warn('[supabase] storage delete', error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}

@@ -41,6 +41,15 @@ import {
   resolvePublicMediaUrl,
 } from '@/services/cloud-write';
 import { upsertUserContentCloud, setAnalystProfileCloud } from '@/services/supabase-user-content';
+import {
+  stripAnalystAccessCode,
+  verifyAndActivateAnalystCloud,
+} from '@/services/analyst-secrets';
+import {
+  clearUserScopedLocalData,
+  migrateLocalSessionCredentials,
+} from '@/services/logout-isolation';
+import { deleteAppMediaByUrl } from '@/services/supabase-storage';
 import { trySendAnalystCodeEmail } from '@/services/analyst-code-delivery';
 import {
   appendGiftTransaction,
@@ -369,6 +378,17 @@ async function saveOfferRemote(offer: Offer) {
 const APP_LOGO_KEY = 'seellie.appLogo.v3';
 const APP_NAME_KEY = 'seellie.appName';
 const SUPPORT_LEVELS_KEY = 'seellie.supportLevels.v1';
+
+/** FIX-01: لا تُخزَّن accessCode ولا كلمات مرور سحابية في الجلسة المحلية */
+function sanitizeUserSecrets(user: User): User {
+  const analyst = user.analyst
+    ? stripAnalystAccessCode({ ...user.analyst })
+    : user.analyst;
+  if (isUuid(user.id)) {
+    return { ...user, analyst, passwordHash: 'supabase' };
+  }
+  return analyst === user.analyst ? user : { ...user, analyst };
+}
 
 function normalizeSupportLevels(levels: SupportLevel[]): SupportLevel[] {
   return levels
@@ -752,7 +772,7 @@ export interface TournamentContextType {
   /** إعادة تفعيل المحلل بعد إنذار/إيقاف */
   reinstateAnalyst: (userId: string) => boolean;
   /** تفعيل النشر بعد إدخال الرمز المستلم بالإيميل */
-  verifyAnalystAccessCode: (code: string) => boolean;
+  verifyAnalystAccessCode: (code: string) => Promise<boolean>;
   togglePostLike: (authorId: string, postId: string) => void;
   toggleAnalysisLike: (authorId: string, analysisId: string) => void;
   toggleMediaLike: (
@@ -1003,6 +1023,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     let active = true;
     (async () => {
       try {
+        await migrateLocalSessionCredentials();
         const [
           stored,
           storedLogo,
@@ -1262,7 +1283,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     }
     const remote = await fetchProfile(currentUser.id);
     if (!remote) return false;
-    const merged: User = {
+    const merged: User = sanitizeUserSecrets({
       ...currentUser,
       ...remote,
       passwordHash: currentUser.passwordHash,
@@ -1271,7 +1292,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           ? remote.analyst
           : currentUser.analyst ?? remote.analyst,
       permissions: remote.permissions || currentUser.permissions,
-    };
+    });
     setCurrentUser(merged);
     setUsers((prev) => {
       const idx = prev.findIndex((u) => u.id === merged.id);
@@ -1873,12 +1894,15 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(
     (options?: { to?: 'login' | 'admin'; silent?: boolean }) => {
+      const prevId = currentUser?.id;
+      const wasAdmin = currentUser?.role === 'superadmin';
       setCurrentUser(null);
-      void removeJson(USER_STORAGE_KEY);
+      setMessages([]);
+      setShareCards([]);
+      void clearUserScopedLocalData(prevId);
       void supabaseSignOut();
       if (options?.silent) return;
 
-      const wasAdmin = currentUser?.role === 'superadmin';
       const dest =
         options?.to === 'admin'
           ? '/admin'
@@ -1904,8 +1928,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         void setJson(USER_STORAGE_KEY, normalized);
         return normalized;
       });
-      // احتفظ بإيميل/كلمة مرور الحسابات التجريبية بعد إعادة التشغيل وتسجيل الخروج
+      // احتفظ بإيميل/كلمة مرور الحسابات التجريبية المحلية فقط — لا كلمات مرور سحابية
       void (async () => {
+        if (isUuid(normalized.id) || normalized.passwordHash === 'supabase') {
+          return;
+        }
         const prev =
           (await getJson<Record<string, UserCredentialOverride>>(
             USER_CREDENTIAL_OVERRIDES_KEY
@@ -4182,18 +4209,19 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   const persistUser = useCallback(
     (updated: User) => {
+      const safe = sanitizeUserSecrets(updated);
       setUsers((prev) => {
-        const idx = prev.findIndex((u) => u.id === updated.id);
-        if (idx < 0) return [updated, ...prev];
-        return prev.map((u) => (u.id === updated.id ? updated : u));
+        const idx = prev.findIndex((u) => u.id === safe.id);
+        if (idx < 0) return [safe, ...prev];
+        return prev.map((u) => (u.id === safe.id ? safe : u));
       });
-      setCurrentUser((prev) => (prev?.id === updated.id ? updated : prev));
-      if (updated.id === currentUser?.id) {
-        void setJson(USER_STORAGE_KEY, updated);
+      setCurrentUser((prev) => (prev?.id === safe.id ? safe : prev));
+      if (safe.id === currentUser?.id) {
+        void setJson(USER_STORAGE_KEY, safe);
       }
-      if (isUuid(updated.id) && isSupabaseConfigured()) {
-        void upsertUserContentCloud(updated, {
-          allowCrossUser: updated.id !== currentUser?.id,
+      if (isUuid(safe.id) && isSupabaseConfigured()) {
+        void upsertUserContentCloud(safe, {
+          allowCrossUser: safe.id !== currentUser?.id,
         });
       }
     },
@@ -4251,27 +4279,29 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       const autoApprove = autoApproveAnalystRequests;
       const accessCode = autoApprove ? generateAnalystAccessCode(10) : undefined;
       const now = new Date();
-      const updated: User = {
+      const analystPayload = autoApprove
+        ? {
+            status: 'approved' as const,
+            termsAcceptedAt: now,
+            requestedAt: now,
+            reviewedAt: now,
+            accessCode,
+            accessCodeSentAt: now,
+          }
+        : {
+            status: 'pending' as const,
+            termsAcceptedAt: now,
+            requestedAt: now,
+          };
+      // الرمز يُرسل للإيميل فقط — لا يُخزَّن في state/session العامة
+      const updated: User = sanitizeUserSecrets({
         ...currentUser,
         permissions: {
           ...currentUser.permissions,
           canCreateContent: false,
         },
-        analyst: autoApprove
-          ? {
-              status: 'approved',
-              termsAcceptedAt: now,
-              requestedAt: now,
-              reviewedAt: now,
-              accessCode,
-              accessCodeSentAt: now,
-            }
-          : {
-              status: 'pending',
-              termsAcceptedAt: now,
-              requestedAt: now,
-            },
-      };
+        analyst: stripAnalystAccessCode(analystPayload),
+      });
 
       setUsers((prev) => {
         const idx = prev.findIndex((u) => u.id === updated.id);
@@ -4282,7 +4312,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       void setJson(USER_STORAGE_KEY, updated);
 
       if (isUuid(updated.id) && isSupabaseConfigured()) {
-        const sync = await setAnalystProfileCloud(updated.id, updated.analyst!);
+        const sync = await setAnalystProfileCloud(updated.id, {
+          ...analystPayload,
+        });
         if (!sync.ok) {
           toast({
             variant: 'destructive',
@@ -4697,23 +4729,24 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
         return false;
       }
-      const updated: User = {
-        ...target,
-        analyst: {
-          ...target.analyst!,
-          status: 'approved',
-          reviewedAt: new Date(),
-          accessCode,
-          accessCodeSentAt: new Date(),
-        },
+      const analystWithSecret = {
+        ...target.analyst!,
+        status: 'approved' as const,
+        reviewedAt: new Date(),
+        accessCode,
+        accessCodeSentAt: new Date(),
       };
+      const updated: User = sanitizeUserSecrets({
+        ...target,
+        analyst: stripAnalystAccessCode(analystWithSecret),
+      });
       setUsers((prev) => prev.map((u) => (u.id === userId ? updated : u)));
       setCurrentUser((prev) => (prev?.id === userId ? updated : prev));
       if (currentUser?.id === userId) {
         void setJson(USER_STORAGE_KEY, updated);
       }
       if (isUuid(updated.id) && isSupabaseConfigured()) {
-        const sync = await setAnalystProfileCloud(updated.id, updated.analyst!);
+        const sync = await setAnalystProfileCloud(updated.id, analystWithSecret);
         if (!sync.ok) {
           toast({
             variant: 'destructive',
@@ -5015,11 +5048,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const verifyAnalystAccessCode = useCallback(
-    (code: string) => {
+    async (code: string) => {
       if (!currentUser) return false;
-      const expected = currentUser.analyst?.accessCode?.trim();
       const entered = code.trim();
-      if (currentUser.analyst?.status !== 'approved' || !expected) {
+      if (!entered || currentUser.analyst?.status !== 'approved') {
         toast({
           variant: 'destructive',
           title: t('toasts.t065_0e1830'),
@@ -5027,7 +5059,30 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
         return false;
       }
-      if (!entered || entered !== expected) {
+
+      // Cloud: server-side verify (never compare against public profile)
+      if (isUuid(currentUser.id) && isSupabaseConfigured()) {
+        const result = await verifyAndActivateAnalystCloud(entered);
+        if (!result.ok) {
+          toast({
+            variant: 'destructive',
+            title: t('toasts.t066_ef1a36'),
+            description: t('toasts.t107_c88bd8'),
+          });
+          return false;
+        }
+        await refreshCurrentUserFromCloud();
+        toast({
+          variant: 'success',
+          title: t('toasts.t067_0d3b8c'),
+          description: t('toasts.t108_1dc03a'),
+        });
+        return true;
+      }
+
+      // Local demo only (no cloud UUID)
+      const expected = currentUser.analyst?.accessCode?.trim();
+      if (!expected || entered !== expected) {
         toast({
           variant: 'destructive',
           title: t('toasts.t066_ef1a36'),
@@ -5035,7 +5090,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
         return false;
       }
-      const updated: User = {
+      const updated: User = sanitizeUserSecrets({
         ...currentUser,
         permissions: { ...currentUser.permissions, canCreateContent: true },
         analyst: {
@@ -5043,7 +5098,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           status: 'active',
           activatedAt: new Date(),
         },
-      };
+      });
       persistUser(updated);
       toast({
         variant: 'success',
@@ -5052,7 +5107,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [currentUser, persistUser, toast]
+    [currentUser, persistUser, toast, t, refreshCurrentUserFromCloud]
   );
 
   const togglePostLike = useCallback(
@@ -5559,6 +5614,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     ) => {
       if (!currentUser) return false;
       const media = currentUser.media || { photos: [], videos: [] };
+      const removed = (media[type] || []).find((m) => m.id === mediaId);
       const updated: User = {
         ...currentUser,
         media: {
@@ -5576,6 +5632,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             description: cloudWriteErrorMessage(sync.error),
           });
           return false;
+        }
+        if (removed?.url) {
+          void deleteAppMediaByUrl(removed.url, updated.id);
         }
       }
       if (successMessage) {
@@ -5726,6 +5785,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
       let found = false;
       let toUpsert: Competition = owned;
+      let removedUrl: string | undefined;
 
       if (input.playerId) {
         toUpsert = {
@@ -5736,6 +5796,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
               if (player.id !== input.playerId) return player;
               const media = player.media || { photos: [], videos: [] };
               const before = (media[input.type] || []).length;
+              const hit = (media[input.type] || []).find(
+                (m) => m.id === input.mediaId
+              );
+              if (hit?.url) removedUrl = hit.url;
               const nextList = (media[input.type] || []).filter(
                 (m) => m.id !== input.mediaId
               );
@@ -5754,6 +5818,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             if (m.id !== input.matchId) return m;
             const media = m.media || { photos: [], videos: [] };
             const before = (media[input.type] || []).length;
+            const hit = (media[input.type] || []).find(
+              (x) => x.id === input.mediaId
+            );
+            if (hit?.url) removedUrl = hit.url;
             const nextList = (media[input.type] || []).filter(
               (x) => x.id !== input.mediaId
             );
@@ -5767,6 +5835,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       } else {
         const media = owned.media || { photos: [], videos: [] };
         const before = (media[input.type] || []).length;
+        const hit = (media[input.type] || []).find(
+          (m) => m.id === input.mediaId
+        );
+        if (hit?.url) removedUrl = hit.url;
         const nextList = (media[input.type] || []).filter(
           (m) => m.id !== input.mediaId
         );
@@ -5820,6 +5892,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
               cloudUpsert.error || t('cloud.competitionSyncFailed'),
           });
           return true;
+        }
+        if (removedUrl) {
+          void deleteAppMediaByUrl(removedUrl, currentUser.id);
         }
       }
 

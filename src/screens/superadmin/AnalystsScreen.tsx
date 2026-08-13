@@ -27,6 +27,9 @@ import {
 import { formatArabicDate } from '@/utils';
 import { isAnalystSuspendActive } from '@/utils/analyst';
 import { matchesSearchQuery } from '@/utils/search';
+import { adminFetchAnalystAccessCode } from '@/services/analyst-secrets';
+import { isUuid } from '@/services/supabase-messages';
+import { isSupabaseConfigured } from '@/services/supabase';
 
 type ModerationMode = 'warn' | 'suspend' | 'ban' | null;
 
@@ -39,6 +42,7 @@ function toInputDate(d = new Date()) {
 
 const RequestCard = memo(function RequestCard({
   user,
+  displayAccessCode,
   onApprove,
   onReject,
   onWarn,
@@ -47,6 +51,7 @@ const RequestCard = memo(function RequestCard({
   onReinstate,
 }: {
   user: User;
+  displayAccessCode?: string | null;
   onApprove: () => void;
   onReject: () => void;
   onWarn: () => void;
@@ -89,12 +94,12 @@ const RequestCard = memo(function RequestCard({
               ? ` · ${formatArabicDate(user.analyst.requestedAt)}`
               : ''}
           </Muted>
-          {user.analyst?.accessCode &&
+          {displayAccessCode &&
           status !== 'pending' &&
           status !== 'banned' ? (
             <Muted>
               {t('superadmin.analysts.accessCodeSent', {
-                code: user.analyst.accessCode,
+                code: displayAccessCode,
               })}
             </Muted>
           ) : null}
@@ -209,11 +214,45 @@ export default function AnalystsScreen() {
   const [query, setQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [savingAuto, setSavingAuto] = useState(false);
+  const [adminCodes, setAdminCodes] = useState<Record<string, string>>({});
 
   useFocusEffect(
     useCallback(() => {
       void syncCloudUsers();
     }, [syncCloudUsers])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isSupabaseConfigured()) return;
+      let cancelled = false;
+      (async () => {
+        const approved = users.filter(
+          (u) =>
+            isUuid(u.id) &&
+            u.analyst &&
+            (u.analyst.status === 'approved' ||
+              u.analyst.status === 'active' ||
+              u.analyst.status === 'warned' ||
+              u.analyst.status === 'suspended')
+        );
+        const entries = await Promise.all(
+          approved.map(async (u) => {
+            const code = await adminFetchAnalystAccessCode(u.id);
+            return code ? ([u.id, code] as const) : null;
+          })
+        );
+        if (cancelled) return;
+        const next: Record<string, string> = {};
+        for (const e of entries) {
+          if (e) next[e[0]] = e[1];
+        }
+        setAdminCodes(next);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [users])
   );
 
   const onRefresh = useCallback(async () => {
@@ -286,8 +325,8 @@ export default function AnalystsScreen() {
             u.email,
             u.visibleId,
             u.mobile,
-            u.analyst?.accessCode,
-            u.analyst?.status
+            u.analyst?.status,
+            adminCodes[u.id]
           )
         )
         .sort((a, b) => {
@@ -304,7 +343,7 @@ export default function AnalystsScreen() {
           const sb = order[b.analyst!.status as keyof typeof order] ?? 9;
           return sa - sb;
         }),
-    [users, query]
+    [users, query, adminCodes]
   );
 
   const pendingCount = requests.filter(
@@ -315,6 +354,7 @@ export default function AnalystsScreen() {
     ({ item }: { item: User }) => (
       <RequestCard
         user={item}
+        displayAccessCode={adminCodes[item.id] || null}
         onApprove={() => {
           void approveAnalystApplication(item.id);
         }}
@@ -352,6 +392,7 @@ export default function AnalystsScreen() {
       />
     ),
     [
+      adminCodes,
       approveAnalystApplication,
       rejectAnalystApplication,
       openModeration,

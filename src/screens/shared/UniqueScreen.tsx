@@ -55,6 +55,9 @@ import {
   videoDurationSecFromPicker,
 } from '@/utils/media-limits';
 import { setFloatingSuppressed } from '@/services/floating-scroll-bus';
+import { fetchOwnAnalystAccessCode } from '@/services/analyst-secrets';
+import { isUuid } from '@/services/supabase-messages';
+import { isSupabaseConfigured } from '@/services/supabase';
 import { ar } from '@/i18n/locales/ar';
 import { en } from '@/i18n/locales/en';
 
@@ -359,7 +362,7 @@ export default function UniqueScreen() {
 
   const analystStatus = currentUser?.analyst?.status || 'none';
   const canPublish = isActiveAnalyst(currentUser);
-  const codeFromProfile = currentUser?.analyst?.accessCode?.trim() || '';
+  const [ownAccessCode, setOwnAccessCode] = useState('');
   const codeFromMessage = useMemo(() => {
     if (!currentUser) return '';
     const mine = messages
@@ -377,7 +380,27 @@ export default function UniqueScreen() {
     }
     return '';
   }, [messages, currentUser]);
-  const storedAccessCode = codeFromProfile || codeFromMessage;
+  // لا تعتمد على profiles.content — فقط RPC للمالك أو رسالة التسليم
+  const storedAccessCode = ownAccessCode || codeFromMessage;
+
+  useEffect(() => {
+    if (
+      analystStatus !== 'approved' ||
+      !currentUser ||
+      !isUuid(currentUser.id) ||
+      !isSupabaseConfigured()
+    ) {
+      setOwnAccessCode('');
+      return;
+    }
+    let cancelled = false;
+    void fetchOwnAnalystAccessCode().then((code) => {
+      if (!cancelled) setOwnAccessCode(code || '');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [analystStatus, currentUser?.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -723,9 +746,12 @@ export default function UniqueScreen() {
           <Button
             label={t('unique.activateAnalyst')}
             onPress={() => {
-              if (verifyAnalystAccessCode(accessCodeInput)) {
-                setAccessCodeInput('');
-              }
+              void (async () => {
+                if (await verifyAnalystAccessCode(accessCodeInput)) {
+                  setAccessCodeInput('');
+                  setOwnAccessCode('');
+                }
+              })();
             }}
             disabled={!accessCodeInput.trim()}
           />
