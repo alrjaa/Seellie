@@ -7,15 +7,16 @@
 
 الرمز **لا يُخزَّن** في `profiles.content` بعد FIX-01.
 
-## إلزامي (FIX-01)
+## إلزامي (FIX-01) — يجب تنفيذه في SQL Editor الآن
 
-نفّذ بالترتيب في SQL Editor:
+1. افتح: https://supabase.com/dashboard/project/sjfkdipgvivomllpfnkt/sql/new  
+2. الصق محتوى الملف **`supabase/FIX-01-ANALYST-SECRETS.sql`** (نسخة محصّنة)  
+3. اضغط **Run**  
+4. يجب أن تظهر notice: `leaked_in_content=0`
 
-1. `supabase/SET-PROFILE-ANALYST.sql` (إن لم يُنفَّذ سابقاً)
-2. **`supabase/FIX-01-ANALYST-SECRETS.sql`** ← يعزل accessCode في جدول سري + تحقق server-side
-3. اختياري: `supabase/FIX-01-STORAGE-ORPHAN-NOTES.sql`
+بدون هذه الخطوة يبقى `set_profile_analyst` القديم يسمح برفع الحالة إلى `active` مع بقاء الرمز في `profiles.content`.
 
-بدون (2) سيفشل حفظ موافقة المحلل / تفعيل الرمز من السحابة.
+اختياري بعد النجاح: `FIX-01-STORAGE-ORPHAN-NOTES.sql`
 
 ## بريد Resend (اختياري)
 

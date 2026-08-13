@@ -4,7 +4,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Seellie',
   slug: 'seellie-native',
-  version: '1.0.72',
+  version: '1.0.73',
   orientation: 'default',
   icon: './assets/icon.png',
   scheme: 'seellie',

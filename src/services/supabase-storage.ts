@@ -158,7 +158,8 @@ export function storagePathFromPublicUrl(url: string): string | null {
 
 /**
  * حذف ملف من share-media عند حذف مرجع DB (MEDIA-03).
- * يعتمد على ownership عبر RLS — لا تخمين مسارات عشوائية.
+ * يستخرج path من URL العام فقط؛ يرفض traversal وتغيير UUID؛
+ * يطابق مجلد المالك مع جلسة auth الحالية (لا تثق بـ expectedUserId وحده).
  */
 export async function deleteAppMediaByUrl(
   url: string,
@@ -166,11 +167,25 @@ export async function deleteAppMediaByUrl(
 ): Promise<{ ok: boolean; error?: string }> {
   const path = storagePathFromPublicUrl(url);
   if (!path) return { ok: true }; // ليس ملف سحابة — لا شيء لحذفه
-  if (expectedUserId && !path.startsWith(`${expectedUserId}/`)) {
-    return { ok: false, error: 'path_ownership_mismatch' };
+  if (path.includes('..') || path.startsWith('/') || path.includes('\\')) {
+    return { ok: false, error: 'invalid_path' };
   }
+
   const sb = getSupabase();
   if (!sb) return { ok: false, error: 'no_client' };
+
+  const { data: sess } = await sb.auth.getSession();
+  const sessionUid = sess.session?.user?.id;
+  if (!sessionUid) return { ok: false, error: 'no_session' };
+
+  // Ownership: folder must be the signed-in user (RLS is the real gate; this is defense-in-depth)
+  if (!path.startsWith(`${sessionUid}/`)) {
+    return { ok: false, error: 'path_ownership_mismatch' };
+  }
+  if (expectedUserId && expectedUserId !== sessionUid) {
+    return { ok: false, error: 'caller_mismatch' };
+  }
+
   const { error } = await sb.storage.from(BUCKET).remove([path]);
   if (error) {
     console.warn('[supabase] storage delete', error.message);
