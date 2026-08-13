@@ -5,6 +5,8 @@
 import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
 import { isUuid } from '@/services/supabase-messages';
 
+export { stripAnalystAccessCode } from '@/services/analyst-strip';
+
 export async function setAnalystAccessCodeCloud(
   userId: string,
   code: string
@@ -77,16 +79,4 @@ export async function verifyAndActivateAnalystCloud(
     return { ok: false, error: payload?.error || 'verify_failed' };
   }
   return { ok: true };
-}
-
-/** Defense-in-depth: strip secret from any analyst object before local/cloud write. */
-export function stripAnalystAccessCode<T extends { accessCode?: string } | null | undefined>(
-  analyst: T
-): T {
-  if (!analyst || typeof analyst !== 'object') return analyst;
-  if (!('accessCode' in analyst)) return analyst;
-  const { accessCode: _removed, ...rest } = analyst as {
-    accessCode?: string;
-  } & Record<string, unknown>;
-  return rest as T;
 }

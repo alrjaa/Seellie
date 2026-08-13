@@ -164,7 +164,12 @@ export default function FreelancersScreen() {
         renderItem={renderItem}
       />
 
-      <Modal visible={modalOpen} transparent animationType="fade">
+      <Modal
+        visible={modalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalOpen(false)}
+      >
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}

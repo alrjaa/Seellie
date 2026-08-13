@@ -78,6 +78,7 @@ export default function MatchDetailScreen() {
   const { competitions, addComment, currentUser, toggleCommentLike, toggleMediaLike } =
     useTournament();
   const [text, setText] = useState('');
+  const [sendingComment, setSendingComment] = useState(false);
 
   const matchData = useMemo(() => {
     for (const comp of competitions) {
@@ -106,14 +107,19 @@ export default function MatchDetailScreen() {
   );
 
   const send = useCallback(() => {
-    if (!matchData || !text.trim()) return;
-    addComment(text, undefined, {
-      type: 'match',
-      competitionId: matchData.competition.id,
-      matchId: matchData.match.id,
-    });
-    setText('');
-  }, [addComment, matchData, text]);
+    if (!matchData || !text.trim() || sendingComment) return;
+    setSendingComment(true);
+    try {
+      addComment(text, undefined, {
+        type: 'match',
+        competitionId: matchData.competition.id,
+        matchId: matchData.match.id,
+      });
+      setText('');
+    } finally {
+      setSendingComment(false);
+    }
+  }, [addComment, matchData, text, sendingComment]);
 
   if (!matchData) {
     return (
@@ -267,7 +273,8 @@ export default function MatchDetailScreen() {
             <Button
               label={t('common.send')}
               onPress={send}
-              disabled={!text.trim()}
+              disabled={!text.trim() || sendingComment}
+              loading={sendingComment}
             />
           </View>
         ) : (

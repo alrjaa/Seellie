@@ -17,6 +17,7 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { Button, Input, Muted } from '@/components/ui';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { LanguageToggle } from '@/components/ui/LanguageToggle';
 import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
 import { useResponsive } from '@/hooks/useResponsive';
 import { isValidEmail } from '@/utils';
@@ -123,8 +124,9 @@ export default function LoginScreen() {
         style={StyleSheet.absoluteFill}
       />
 
-      <SafeAreaView edges={['top']} style={styles.topBarSafe} pointerEvents="box-none">
+      <SafeAreaView edges={['top', 'bottom']} style={styles.topBarSafe} pointerEvents="box-none">
         <View style={[styles.topBar, { paddingTop: HEADER_BELOW_STATUS_GAP }]}>
+          <LanguageToggle />
           <ThemeToggle />
         </View>
       </SafeAreaView>
@@ -464,7 +466,9 @@ const styles = StyleSheet.create({
   },
   topBar: {
     paddingHorizontal: 20,
-    alignItems: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   scroll: {
     flexGrow: 1,

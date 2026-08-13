@@ -66,7 +66,7 @@ export const Input = memo(
               minHeight: multiline ? 88 : 44,
               fontSize: theme.fontSize.sm + 1,
               textAlign: 'left',
-              direction: forceLtr ? 'ltr' : 'rtl',
+              writingDirection: forceLtr ? 'ltr' : 'rtl',
             },
             style,
           ]}

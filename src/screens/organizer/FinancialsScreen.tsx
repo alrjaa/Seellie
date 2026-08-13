@@ -7,6 +7,7 @@ import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Card, Muted, Subtitle, Title } from '@/components/ui';
 import { formatArabicDate, formatAppNumber } from '@/utils';
+import { flowDirection } from '@/theme/direction';
 
 export default function FinancialsScreen() {
   const { giftTransactions, supportLevels, currentUser } = useTournament();
@@ -45,7 +46,7 @@ export default function FinancialsScreen() {
         <Card
           style={[
             styles.summaryCard,
-            { direction: isRTL ? 'rtl' : 'ltr' },
+            flowDirection(isRTL),
           ]}
         >
           <Muted>{t('organizer.financials.totalReceived')}</Muted>
@@ -64,7 +65,7 @@ export default function FinancialsScreen() {
         <Card
           style={[
             styles.summaryCard,
-            { direction: isRTL ? 'rtl' : 'ltr' },
+            flowDirection(isRTL),
           ]}
         >
           <Muted>{t('organizer.financials.giftTransactions')}</Muted>
@@ -81,7 +82,7 @@ export default function FinancialsScreen() {
         <Card
           style={[
             styles.summaryCard,
-            { direction: isRTL ? 'rtl' : 'ltr' },
+            flowDirection(isRTL),
           ]}
         >
           <Muted>{t('organizer.financials.supportLevels')}</Muted>
@@ -98,7 +99,7 @@ export default function FinancialsScreen() {
         <Card
           style={[
             styles.summaryCard,
-            { direction: isRTL ? 'rtl' : 'ltr' },
+            flowDirection(isRTL),
           ]}
         >
           <Muted>{t('organizer.financials.avgPrice')}</Muted>

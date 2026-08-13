@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
   },
   topBar: {
     minHeight: 32,
-    direction: 'ltr',
+
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,

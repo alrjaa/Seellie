@@ -611,7 +611,7 @@ export default function SharesScreen() {
           presentationStyle="pageSheet"
           onRequestClose={() => setComposerOpen(false)}
         >
-          <Screen scroll contentStyle={styles.modalContent}>
+          <Screen scroll keyboard contentStyle={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Subtitle>{t('sharesUi.publishPost')}</Subtitle>
               <Button
@@ -712,7 +712,7 @@ const styles = StyleSheet.create({
     flexWrap: 'nowrap',
     alignItems: 'center',
     gap: 6,
-    direction: 'ltr',
+
   },
   filterIconBtn: {
     minHeight: 32,
@@ -733,7 +733,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    direction: 'ltr',
+
   },
   modalContent: { paddingTop: 12, gap: 12, paddingBottom: 40 },
   modalHeader: {

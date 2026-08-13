@@ -36,6 +36,7 @@ All listed scripts are written to be **idempotent** where possible (`if not exis
 | 27 | `FIX-01-STORAGE-ORPHAN-NOTES.sql` | 09 | No | Storage delete docs + MIME allowlist note |
 | 28 | `ADMIN-PURGE-USER.sql` | 01 | Yes (admin purge) | Admin user purge |
 | 29 | `sports-data.sql` / seeds | optional | No | Sports catalog |
+| 30 | **`SHARE-CARDS-REALTIME.sql`** (FIX-02) | 01 | No | Add `share_cards` to `supabase_realtime` (RLS still applies) |
 
 ## Manual / ops (not schema)
 

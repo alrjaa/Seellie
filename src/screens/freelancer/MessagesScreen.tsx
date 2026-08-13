@@ -77,6 +77,7 @@ export default function MessagesScreen() {
   const theme = useAppTheme();
   const { t } = useTranslation();
   const [composing, setComposing] = useState(false);
+  const [sending, setSending] = useState(false);
   const [recipientId, setRecipientId] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -105,15 +106,20 @@ export default function MessagesScreen() {
   );
 
   const onSend = useCallback(async () => {
-    if (!recipientId) return;
-    const ok = await sendMessage({ recipientId, subject, body });
-    if (ok) {
-      setSubject('');
-      setBody('');
-      setRecipientId('');
-      setComposing(false);
+    if (!recipientId || sending) return;
+    setSending(true);
+    try {
+      const ok = await sendMessage({ recipientId, subject, body });
+      if (ok) {
+        setSubject('');
+        setBody('');
+        setRecipientId('');
+        setComposing(false);
+      }
+    } finally {
+      setSending(false);
     }
-  }, [recipientId, subject, body, sendMessage]);
+  }, [recipientId, subject, body, sendMessage, sending]);
 
   if (loading) return <LoadingState />;
   if (!currentUser) return <Redirect href="/(auth)/login" />;
@@ -123,7 +129,7 @@ export default function MessagesScreen() {
   }
 
   return (
-    <Screen>
+    <Screen keyboard>
       <FlatList
         data={inbox}
         keyExtractor={(item) => item.id}
@@ -186,7 +192,12 @@ export default function MessagesScreen() {
                   onChangeText={setBody}
                   multiline
                 />
-                <Button label={t('common.send')} onPress={onSend} />
+                <Button
+                  label={t('common.send')}
+                  onPress={() => void onSend()}
+                  disabled={sending || !recipientId}
+                  loading={sending}
+                />
               </Card>
             ) : null}
           </View>

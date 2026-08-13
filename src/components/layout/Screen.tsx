@@ -27,6 +27,7 @@ import {
   releaseFloatingScrollSource,
 } from '@/services/floating-scroll-bus';
 import { screenContentBottomPadding } from '@/theme/navigation';
+import { flowDirection } from '@/theme/direction';
 
 type Props = {
   children: ReactNode;
@@ -146,7 +147,7 @@ function ScreenComponent({
       style={[
         scroll ? styles.innerScroll : styles.innerFill,
         {
-          direction: isRTL ? 'rtl' : 'ltr',
+          ...flowDirection(isRTL),
           width: '100%',
         },
         bleed

@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { Subtitle } from '@/components/ui/Text';
 import { useLanguage } from '@/providers/LanguageProvider';
+import { flowDirection } from '@/theme/direction';
 
 type Props = {
   title: string;
@@ -17,7 +18,7 @@ function SectionHeaderComponent({ title, actionLabel, onAction }: Props) {
       style={[
         styles.row,
         {
-          direction: isRTL ? 'rtl' : 'ltr',
+          ...flowDirection(isRTL),
           flexDirection: 'row',
         },
       ]}

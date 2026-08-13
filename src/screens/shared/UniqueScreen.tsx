@@ -249,6 +249,7 @@ export default function UniqueScreen() {
   const [filter, setFilter] = useState<FeedFilter>('all');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [accessCodeInput, setAccessCodeInput] = useState('');
+  const [verifyingCode, setVerifyingCode] = useState(false);
   /** الانضمام اختياري — لا نفرض نموذج الطلب على كل زائر */
   const [showJoinForm, setShowJoinForm] = useState(false);
   const [showGatePanel, setShowGatePanel] = useState(false);
@@ -746,14 +747,21 @@ export default function UniqueScreen() {
           <Button
             label={t('unique.activateAnalyst')}
             onPress={() => {
+              if (verifyingCode) return;
               void (async () => {
-                if (await verifyAnalystAccessCode(accessCodeInput)) {
-                  setAccessCodeInput('');
-                  setOwnAccessCode('');
+                setVerifyingCode(true);
+                try {
+                  if (await verifyAnalystAccessCode(accessCodeInput)) {
+                    setAccessCodeInput('');
+                    setOwnAccessCode('');
+                  }
+                } finally {
+                  setVerifyingCode(false);
                 }
               })();
             }}
-            disabled={!accessCodeInput.trim()}
+            disabled={!accessCodeInput.trim() || verifyingCode}
+            loading={verifyingCode}
           />
         </Card>
       );
@@ -1109,7 +1117,7 @@ const styles = StyleSheet.create({
     flexWrap: 'nowrap',
     alignItems: 'center',
     gap: 6,
-    direction: 'ltr',
+
   },
   filterIconBtn: {
     minHeight: 32,
@@ -1139,7 +1147,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    direction: 'ltr',
+
   },
   uniquePublishPanel: {
     flex: 1,

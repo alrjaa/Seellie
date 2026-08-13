@@ -8,10 +8,13 @@ import {
   applyContentPayload,
   type UserContentPayload,
 } from '@/services/supabase-user-content';
-import { stripAnalystAccessCode } from '@/services/analyst-secrets';
+import { stripAnalystAccessCode } from '@/services/analyst-strip';
 import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+
+export { mergeUsersPreferCloud } from '@/services/merge-users';
+export { stripAnalystAccessCode } from '@/services/analyst-strip';
 
 export type ProfileRow = {
   id: string;
@@ -99,11 +102,23 @@ export async function fetchProfile(userId: string): Promise<User | null> {
   return profileToUser(data as ProfileRow);
 }
 
-/** كل حسابات profiles للوحة/الخلاصة — content يُنقّى من accessCode عند التحويل */
-export async function fetchAllProfiles(): Promise<User[]> {
-  if (!isSupabaseConfigured()) return [];
+export type FetchProfilesResult = {
+  users: User[];
+  /** false = network/RLS/query failure — must NOT be treated as “empty catalog”. */
+  ok: boolean;
+  error?: string;
+};
+
+/**
+ * كل حسابات profiles للوحة/الخلاصة — content يُنقّى من accessCode عند التحويل.
+ * FIX-02: distinguishes failure vs empty so merges never wipe on error.
+ */
+export async function fetchAllProfilesResult(): Promise<FetchProfilesResult> {
+  if (!isSupabaseConfigured()) {
+    return { users: [], ok: false, error: 'not_configured' };
+  }
   const sb = getSupabase();
-  if (!sb) return [];
+  if (!sb) return { users: [], ok: false, error: 'no_client' };
   const { data, error } = await sb
     .from('profiles')
     .select(PROFILE_PUBLIC_COLUMNS)
@@ -111,9 +126,18 @@ export async function fetchAllProfiles(): Promise<User[]> {
     .limit(500);
   if (error) {
     console.warn('[supabase] fetchAllProfiles', error.message);
-    return [];
+    return { users: [], ok: false, error: error.message };
   }
-  return ((data || []) as ProfileRow[]).map(profileToUser);
+  return {
+    users: ((data || []) as ProfileRow[]).map(profileToUser),
+    ok: true,
+  };
+}
+
+/** @deprecated Prefer fetchAllProfilesResult — empty array is ambiguous on failure. */
+export async function fetchAllProfiles(): Promise<User[]> {
+  const result = await fetchAllProfilesResult();
+  return result.ok ? result.users : [];
 }
 
 /**
@@ -159,82 +183,9 @@ export function subscribeProfiles(
 }
 
 /**
- * دمج القائمة المحلية مع السحابة:
- * نفس الإيميل → الحساب السحابي (UUID) يفوز ويزيل المكرر المحلي.
- * إن كان محتوى السحابة فارغاً نحتفظ بمحتوى محلي غير فارغ حتى لا يُمسَح بعد المزامنة.
+ * دمج القائمة المحلية مع السحابة — moved to merge-users.ts (FIX-02 pure module).
+ * Re-exported above for backward compatibility.
  */
-export function mergeUsersPreferCloud(
-  localUsers: User[],
-  cloudUsers: User[]
-): User[] {
-  const byEmail = new Map<string, User>();
-  for (const u of localUsers) {
-    const key = (u.email || '').trim().toLowerCase();
-    if (!key) continue;
-    byEmail.set(key, u);
-  }
-  for (const u of cloudUsers) {
-    const key = (u.email || '').trim().toLowerCase();
-    if (!key) continue;
-    const local = byEmail.get(key);
-    if (!local) {
-      byEmail.set(key, u);
-      continue;
-    }
-    const cloudHasMedia =
-      (u.media?.photos?.length || 0) + (u.media?.videos?.length || 0) > 0;
-    const cloudHasPosts = (u.posts?.length || 0) > 0;
-    const cloudHasAnalysis = (u.analysisContent?.length || 0) > 0;
-    byEmail.set(key, {
-      ...u,
-      media: cloudHasMedia ? u.media : local.media || u.media,
-      posts: cloudHasPosts ? u.posts : local.posts || u.posts,
-      analysisContent: cloudHasAnalysis
-        ? u.analysisContent
-        : local.analysisContent || u.analysisContent,
-      personalityPhotos:
-        (u.personalityPhotos?.length || 0) > 0
-          ? u.personalityPhotos
-          : local.personalityPhotos || u.personalityPhotos,
-      followers: u.followers?.length ? u.followers : local.followers,
-      following: u.following?.length ? u.following : local.following,
-      // لا تفقد طلب محلل محلي إن كانت السحابة بلا analyst بعد — بدون accessCode
-      analyst: stripAnalystAccessCode(
-        u.analyst?.status && u.analyst.status !== 'none'
-          ? u.analyst
-          : local.analyst || u.analyst
-      ),
-      permissions: {
-        ...(local.permissions || {}),
-        ...(u.permissions || {}),
-        canCreateContent:
-          u.permissions?.canCreateContent === true ||
-          local.permissions?.canCreateContent === true ||
-          u.analyst?.status === 'active' ||
-          u.analyst?.status === 'warned' ||
-          local.analyst?.status === 'active' ||
-          local.analyst?.status === 'warned',
-      },
-    });
-  }
-  // إن وُجد مشرف سحابي، أخفِ حساب المشرف التجريبي المحلي لتجنب التكرار البصري
-  const hasCloudAdmin = cloudUsers.some((u) => u.role === 'superadmin');
-  const merged = Array.from(byEmail.values()).filter((u) => {
-    if (!hasCloudAdmin) return true;
-    if (u.id === 'superadmin-1') return false;
-    if (
-      u.role === 'superadmin' &&
-      u.passwordHash !== 'supabase' &&
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        u.id
-      )
-    ) {
-      return false;
-    }
-    return true;
-  });
-  return merged;
-}
 
 export async function upsertProfile(input: {
   id: string;

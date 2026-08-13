@@ -10,6 +10,7 @@ import { AdminEntryChip } from '@/components/account/AdminEntryChip';
 import { useResponsive } from '@/hooks/useResponsive';
 import { cairoText } from '@/theme/fonts';
 import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
+import { flowDirection } from '@/theme/direction';
 
 type Props = {
   accountHref: string;
@@ -52,7 +53,7 @@ function HomeHeaderComponent({
           style={[
             styles.row,
             {
-              direction: isRTL ? 'rtl' : 'ltr',
+              ...flowDirection(isRTL),
               flexDirection: 'row',
               paddingVertical: desktop ? 12 : 10,
               paddingHorizontal: desktop ? 16 : 12,

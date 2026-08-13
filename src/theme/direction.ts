@@ -1,10 +1,20 @@
 import { Platform, type TextStyle, type ViewStyle } from 'react-native';
 
+/**
+ * اتجاه تدفق التخطيط.
+ * على الويب: لا تُمرَّر style.direction (RN Web يرفضها ويُغرق الـ console).
+ * الاتجاه الفعلي على الويب عبر document.documentElement.dir.
+ */
+export function flowDirection(isRTL: boolean): ViewStyle {
+  if (Platform.OS === 'web') return {};
+  return { direction: isRTL ? 'rtl' : 'ltr' };
+}
+
 /** اتجاه تخطيطي متوافق مع native وweb */
 export function layoutDirectionStyle(isRTL: boolean): ViewStyle {
   return {
     flex: 1,
-    direction: isRTL ? 'rtl' : 'ltr',
+    ...flowDirection(isRTL),
   };
 }
 
@@ -27,9 +37,7 @@ export function blockTextStyle(isRTL: boolean): TextStyle {
 }
 
 export function contentDirectionStyle(isRTL: boolean): ViewStyle {
-  return {
-    direction: isRTL ? 'rtl' : 'ltr',
-  };
+  return flowDirection(isRTL);
 }
 
 export function syncDocumentDirection(isRTL: boolean, lang: string) {

@@ -84,7 +84,7 @@ export default function FreelancerLayout() {
           screenOptions={{
             ...transparentHeaderOptions(theme, insets.top),
             headerRightContainerStyle: {
-              direction: 'ltr',
+
               marginEnd: 8,
               paddingTop: 2,
             },

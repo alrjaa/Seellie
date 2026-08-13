@@ -11,6 +11,7 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Button } from '@/components/ui/Button';
 import { cairoText } from '@/theme/fonts';
+import { flowDirection } from '@/theme/direction';
 
 type Props = {
   visible: boolean;
@@ -64,7 +65,7 @@ export function ReasonModal({
             {
               backgroundColor: theme.colors.surface,
               borderColor: theme.colors.border,
-              direction: isRTL ? 'rtl' : 'ltr',
+              ...flowDirection(isRTL),
             },
           ]}
           onPress={(e) => e.stopPropagation()}

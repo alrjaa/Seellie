@@ -64,7 +64,8 @@ export async function fetchMessagesForUser(
 /** اشتراك فوري برسائل المستلم */
 export function subscribeMessagesForUser(
   userId: string,
-  onMessage: (msg: Message) => void
+  onMessage: (msg: Message) => void,
+  onStatus?: (status: string) => void
 ): (() => void) | null {
   if (!isSupabaseConfigured() || !isUuid(userId)) return null;
   const sb = getSupabase();
@@ -84,7 +85,9 @@ export function subscribeMessagesForUser(
         if (row?.id) onMessage(rowToMessage(row));
       }
     )
-    .subscribe();
+    .subscribe((status) => {
+      onStatus?.(status);
+    });
   return () => {
     void sb.removeChannel(channel);
   };

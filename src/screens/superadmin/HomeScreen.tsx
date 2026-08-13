@@ -11,6 +11,7 @@ import { AccountSocialStats } from '@/components/account/AccountSocialStats';
 import { Card, Muted, Subtitle } from '@/components/ui';
 import { ADMIN_MODULES, type AdminModule } from './modules';
 import { useResponsive } from '@/hooks/useResponsive';
+import { flowDirection } from '@/theme/direction';
 
 function StatCard({
   label,
@@ -28,7 +29,7 @@ function StatCard({
     <Card
       style={[
         styles.statCard,
-        { direction: isRTL ? 'rtl' : 'ltr' },
+        flowDirection(isRTL),
       ]}
     >
       <View style={styles.statHeader}>
@@ -79,7 +80,7 @@ function ModuleCard({
           backgroundColor: theme.colors.card,
           borderColor: theme.colors.border,
           opacity: pressed ? 0.85 : 1,
-          direction: isRTL ? 'rtl' : 'ltr',
+          ...flowDirection(isRTL),
         },
       ]}
     >

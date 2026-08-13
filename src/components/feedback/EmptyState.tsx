@@ -5,6 +5,7 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useLanguage } from '@/providers/LanguageProvider';
 import { Button } from '@/components/ui/Button';
 import { cairoText } from '@/theme/fonts';
+import { flowDirection } from '@/theme/direction';
 
 type Props = {
   title: string;
@@ -36,7 +37,7 @@ function EmptyStateComponent({
           borderRadius: theme.radius.lg,
           padding: theme.spacing.lg,
           alignItems: edge,
-          direction: isRTL ? 'rtl' : 'ltr',
+          ...flowDirection(isRTL),
         },
       ]}
     >

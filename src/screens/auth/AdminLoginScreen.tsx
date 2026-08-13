@@ -111,7 +111,7 @@ export default function AdminLoginScreen() {
       />
 
       <SafeAreaView
-        edges={['top']}
+        edges={['top', 'bottom']}
         style={styles.topBarSafe}
         pointerEvents="box-none"
       >

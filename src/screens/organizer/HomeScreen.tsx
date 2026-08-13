@@ -15,6 +15,7 @@ import {
   type OrganizerModule,
 } from './modules';
 import { userHasRole } from '@/utils/roles';
+import { flowDirection } from '@/theme/direction';
 
 function StatCard({
   label,
@@ -32,7 +33,7 @@ function StatCard({
     <Card
       style={[
         styles.statCard,
-        { direction: isRTL ? 'rtl' : 'ltr' },
+        flowDirection(isRTL),
       ]}
     >
       <View style={styles.statHeader}>
@@ -83,7 +84,7 @@ function ModuleCard({
           backgroundColor: theme.colors.card,
           borderColor: theme.colors.border,
           opacity: pressed ? 0.85 : 1,
-          direction: isRTL ? 'rtl' : 'ltr',
+          ...flowDirection(isRTL),
         },
       ]}
     >

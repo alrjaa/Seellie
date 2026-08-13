@@ -154,12 +154,12 @@ export default function FollowerLayout() {
           screenOptions={{
             ...transparentHeaderOptions(theme, insets.top),
             headerRightContainerStyle: {
-              direction: 'ltr',
+
               marginEnd: 8,
               paddingTop: 2,
             },
             headerLeftContainerStyle: {
-              direction: 'ltr',
+
               marginStart: 4,
               paddingTop: 2,
             },
@@ -178,7 +178,7 @@ export default function FollowerLayout() {
                   }
                 : {
                     ...tabBarChromeStyle(theme, insets.bottom),
-                    direction: 'ltr',
+
                     flexDirection: 'row',
                   },
             tabBarActiveTintColor: theme.colors.accent,

@@ -17,6 +17,7 @@ import { DEFAULT_LOGO_MODULE } from '@/theme/brand';
 import { Image } from 'expo-image';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { AccountMenuButton } from '@/components/layout/AccountMenuButton';
+import { flowDirection } from '@/theme/direction';
 
 export type DesktopNavItem = {
   key: string;
@@ -84,7 +85,7 @@ function DesktopShellComponent({
         styles.root,
         {
           backgroundColor: theme.isDark ? '#071018' : '#E8EEF3',
-          direction: isRTL ? 'rtl' : 'ltr',
+          ...flowDirection(isRTL),
         },
       ]}
     >

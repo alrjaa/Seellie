@@ -77,6 +77,7 @@ export default function OrganizerMessagesScreen() {
   const { t } = useTranslation();
   const [composeOpen, setComposeOpen] = useState(false);
   const [selectedMsg, setSelectedMsg] = useState<Message | null>(null);
+  const [sending, setSending] = useState(false);
   const [recipientId, setRecipientId] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -150,7 +151,12 @@ export default function OrganizerMessagesScreen() {
         renderItem={renderItem}
       />
 
-      <Modal visible={!!selectedMsg} transparent animationType="fade">
+      <Modal
+        visible={!!selectedMsg}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedMsg(null)}
+      >
         <Pressable
           style={styles.overlay}
           onPress={() => setSelectedMsg(null)}
@@ -187,7 +193,12 @@ export default function OrganizerMessagesScreen() {
         </Pressable>
       </Modal>
 
-      <Modal visible={composeOpen} transparent animationType="fade">
+      <Modal
+        visible={composeOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setComposeOpen(false)}
+      >
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -259,13 +270,16 @@ export default function OrganizerMessagesScreen() {
                   />
                   <Button
                     label={t('common.send')}
+                    loading={sending}
+                    disabled={sending || !recipientId}
                     onPress={() => {
-                      if (!recipientId) return;
-                      void sendMessage({ recipientId, subject, body }).then(
-                        (ok) => {
+                      if (!recipientId || sending) return;
+                      setSending(true);
+                      void sendMessage({ recipientId, subject, body })
+                        .then((ok) => {
                           if (ok) setComposeOpen(false);
-                        }
-                      );
+                        })
+                        .finally(() => setSending(false));
                     }}
                     style={{ flex: 1 }}
                   />

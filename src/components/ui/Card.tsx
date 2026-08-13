@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useLanguage } from '@/providers/LanguageProvider';
+import { flowDirection } from '@/theme/direction';
 
 type Props = {
   children: ReactNode;
@@ -26,7 +27,7 @@ function CardComponent({ children, style, padded = true }: Props) {
           borderColor: theme.colors.border,
           borderRadius: theme.radius.lg,
           padding: padded ? theme.spacing.md : 0,
-          direction: isRTL ? 'rtl' : 'ltr',
+          ...flowDirection(isRTL),
         },
         style,
       ]}

@@ -109,7 +109,7 @@ export default function OrganizerLayout() {
           screenOptions={{
             ...transparentHeaderOptions(theme, insets.top),
             headerRightContainerStyle: {
-              direction: 'ltr',
+
               marginEnd: 8,
               paddingTop: 2,
             },
@@ -121,7 +121,7 @@ export default function OrganizerLayout() {
               ? { display: 'none', height: 0, overflow: 'hidden' }
               : {
                   ...tabBarChromeStyle(theme, insets.bottom),
-                  direction: 'ltr',
+
                   flexDirection: 'row',
                 },
             tabBarActiveTintColor: theme.colors.accent,

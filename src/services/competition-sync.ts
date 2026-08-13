@@ -47,6 +47,10 @@ function serializeRequest(request: CompetitionRequest): CompetitionRequest {
 export async function loadCompetitionRequests(): Promise<CompetitionRequest[]> {
   const local =
     (await getJson<CompetitionRequest[]>(COMPETITION_REQUESTS_KEY)) ?? [];
+  // Supabase is source of truth — do not block boot on legacy Firestore reads
+  if (isSupabaseConfigured()) {
+    return local.map(reviveCompetitionRequest);
+  }
   const db = getDb();
   if (!db) {
     return local.map(reviveCompetitionRequest);
@@ -115,6 +119,10 @@ export function subscribeCompetitionRequests(
 
 export async function loadStoredCompetitions(): Promise<Competition[]> {
   const local = (await getJson<Competition[]>(COMPETITIONS_KEY)) ?? [];
+  // Supabase is source of truth — do not block boot on legacy Firestore reads
+  if (isSupabaseConfigured()) {
+    return reviveCompetitions(local);
+  }
   const db = getDb();
   let stored = local;
   if (db) {

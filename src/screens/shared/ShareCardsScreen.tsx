@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
@@ -6,7 +6,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTournament } from '@/providers/TournamentProvider';
@@ -33,6 +33,12 @@ import type { ShareCard, ShareCardKind } from '@/data/initial-data';
 import { MEDIA_SPECS, PROFILE_VIDEO_MAX_SEC, validatePickerAsset } from '@/utils/media-limits';
 import { persistLocalMediaUri } from '@/utils/persist-media';
 import { userHasRole } from '@/utils/roles';
+import { isSupabaseConfigured } from '@/services/supabase';
+import { isUuid } from '@/services/supabase-messages';
+import {
+  startForegroundInterval,
+  SYNC_FALLBACK_MS,
+} from '@/services/sync-engine';
 
 type Tab = 'inbox' | 'sent' | 'compose';
 
@@ -52,6 +58,7 @@ export default function ShareCardsScreen() {
     updateShareCardStatus,
     markShareCardRead,
     routeForRole,
+    refreshCloudShareCards,
   } = useTournament();
 
   const [tab, setTab] = useState<Tab>('inbox');
@@ -68,6 +75,24 @@ export default function ShareCardsScreen() {
   const [position, setPosition] = useState('');
   const [recipientQuery, setRecipientQuery] = useState('');
   const [picking, setPicking] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
+        return;
+      }
+      void refreshCloudShareCards();
+      // Fallback while Share Cards screen focused (covers missing Realtime publication)
+      const stopPoll = startForegroundInterval(
+        SYNC_FALLBACK_MS.shareCards,
+        () => {
+          void refreshCloudShareCards();
+        }
+      );
+      return () => stopPoll();
+    }, [currentUser, refreshCloudShareCards])
+  );
 
   const recipients = useMemo(() => {
     if (!currentUser) return [];
@@ -215,6 +240,7 @@ export default function ShareCardsScreen() {
   };
 
   const submit = async () => {
+    if (sending) return;
     if (!selectedRecipient) {
       toast({
         variant: 'destructive',
@@ -222,34 +248,39 @@ export default function ShareCardsScreen() {
       });
       return;
     }
-    const ok = await sendShareCard({
-      kind,
-      recipientId: selectedRecipient.id,
-      recipientName: selectedRecipient.name,
-      recipientKind: selectedRecipient.kind,
-      title: title.trim() || undefined,
-      body: body.trim() || undefined,
-      mediaUrl: mediaUrl.trim() || undefined,
-      mediaKind: mediaUrl ? mediaKind : body ? 'text' : undefined,
-      competitionId: competitionId || undefined,
-      competitionName:
-        competitionName.trim() || selectedCompetition?.name || undefined,
-      teamId: teamId || undefined,
-      teamName:
-        teamName.trim() ||
-        teams.find((x) => x.id === teamId)?.name ||
-        undefined,
-      position: position.trim() || undefined,
-    });
-    if (ok) {
-      setTitle('');
-      setBody('');
-      setMediaUrl('');
-      setCompetitionName('');
-      setTeamName('');
-      setPosition('');
-      setRecipientId('');
-      setTab('sent');
+    setSending(true);
+    try {
+      const ok = await sendShareCard({
+        kind,
+        recipientId: selectedRecipient.id,
+        recipientName: selectedRecipient.name,
+        recipientKind: selectedRecipient.kind,
+        title: title.trim() || undefined,
+        body: body.trim() || undefined,
+        mediaUrl: mediaUrl.trim() || undefined,
+        mediaKind: mediaUrl ? mediaKind : body ? 'text' : undefined,
+        competitionId: competitionId || undefined,
+        competitionName:
+          competitionName.trim() || selectedCompetition?.name || undefined,
+        teamId: teamId || undefined,
+        teamName:
+          teamName.trim() ||
+          teams.find((x) => x.id === teamId)?.name ||
+          undefined,
+        position: position.trim() || undefined,
+      });
+      if (ok) {
+        setTitle('');
+        setBody('');
+        setMediaUrl('');
+        setCompetitionName('');
+        setTeamName('');
+        setPosition('');
+        setRecipientId('');
+        setTab('sent');
+      }
+    } finally {
+      setSending(false);
     }
   };
 
@@ -291,6 +322,7 @@ export default function ShareCardsScreen() {
       <StackTopChrome />
       <Screen
         scroll={tab === 'compose'}
+        keyboard={tab === 'compose'}
         hasTabBar={false}
         contentStyle={{ ...styles.content, paddingTop: topPad }}
       >
@@ -512,6 +544,8 @@ export default function ShareCardsScreen() {
             <Button
               label={t('shareCards.send')}
               onPress={() => void submit()}
+              disabled={sending || picking}
+              loading={sending}
             />
           </Card>
         ) : (

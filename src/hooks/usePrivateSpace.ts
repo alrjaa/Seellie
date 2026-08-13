@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   addPrivateContent,
@@ -13,6 +13,11 @@ import {
   type PrivateContentItem,
   type PrivateSpaceState,
 } from '@/services/private-space';
+import {
+  createInFlightLock,
+  startForegroundInterval,
+  SYNC_FALLBACK_MS,
+} from '@/services/sync-engine';
 
 const empty: PrivateSpaceState = {
   friendIds: [],
@@ -23,6 +28,8 @@ const empty: PrivateSpaceState = {
 export function usePrivateSpace(userId: string | undefined) {
   const [state, setState] = useState<PrivateSpaceState>(empty);
   const [ready, setReady] = useState(false);
+  const reloadLock = useRef(createInFlightLock<void>());
+  const focusedRef = useRef(false);
 
   const reload = useCallback(async () => {
     if (!userId) {
@@ -30,15 +37,17 @@ export function usePrivateSpace(userId: string | undefined) {
       setReady(true);
       return;
     }
-    try {
-      const next = await loadPrivateSpace(userId);
-      setState(next);
-    } catch {
-      // لا نترك الشاشة عالقة على التحميل عند فشل الجلب
-      setState((prev) => prev);
-    } finally {
-      setReady(true);
-    }
+    await reloadLock.current.run(async () => {
+      try {
+        const next = await loadPrivateSpace(userId);
+        setState(next);
+      } catch {
+        // لا نترك الشاشة عالقة على التحميل عند فشل الجلب — ولا نمسح الحالة
+        setState((prev) => prev);
+      } finally {
+        setReady(true);
+      }
+    });
   }, [userId]);
 
   useEffect(() => {
@@ -46,14 +55,7 @@ export function usePrivateSpace(userId: string | undefined) {
     void reload();
   }, [reload]);
 
-  useEffect(() => {
-    if (!userId) return;
-    const timer = setInterval(() => {
-      void reload();
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [userId, reload]);
-
+  // FIX-02: Realtime primary; no always-on 5s poll
   useEffect(() => {
     if (!userId) return;
     return (
@@ -63,10 +65,22 @@ export function usePrivateSpace(userId: string | undefined) {
     );
   }, [userId, reload]);
 
+  // Focus reload + slow foreground fallback only while focused
   useFocusEffect(
     useCallback(() => {
       if (!userId) return;
+      focusedRef.current = true;
       void reload();
+      const stopPoll = startForegroundInterval(
+        SYNC_FALLBACK_MS.privateSpace,
+        () => {
+          if (focusedRef.current) void reload();
+        }
+      );
+      return () => {
+        focusedRef.current = false;
+        stopPoll();
+      };
     }, [userId, reload])
   );
 

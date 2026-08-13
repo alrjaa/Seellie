@@ -525,9 +525,9 @@ const Slide = memo(function Slide({
                 styles.titleBesideComments,
                 cairoText('semiBold'),
                 {
-                  left: 14,
-                  // مساحة عمود الإعجاب/التعليقات على اليمين — لا يدخل خلفها
-                  right: 14 + 88,
+                  ...(isRTL
+                    ? { right: 14, left: 14 + 88 }
+                    : { left: 14, right: 14 + 88 }),
                   textAlign: isRTL ? 'right' : 'left',
                   writingDirection: isRTL ? 'rtl' : 'ltr',
                 },
@@ -537,7 +537,12 @@ const Slide = memo(function Slide({
               {(item.title || '').trim() || (item.text || '').trim()}
             </Text>
           ) : null}
-          <View style={styles.actionsColumn}>
+          <View
+            style={[
+              styles.actionsColumn,
+              isRTL ? styles.actionsColumnRtl : null,
+            ]}
+          >
             <LikeButton
               count={item.likes.length}
               liked={item.liked}
@@ -949,7 +954,7 @@ const styles = StyleSheet.create({
     zIndex: 6,
     elevation: 6,
     minHeight: 72,
-    direction: 'ltr',
+
   },
   titleBesideComments: {
     position: 'absolute',
@@ -973,6 +978,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 4,
     width: 88,
+  },
+  actionsColumnRtl: {
+    right: undefined,
+    left: 14,
   },
   handlePress: {
     maxWidth: 160,

@@ -12,13 +12,15 @@ import { NotificationsProvider } from '@/providers/NotificationsProvider';
 import { TournamentProvider } from '@/providers/TournamentProvider';
 import { LoadingState } from '@/components/feedback/LoadingState';
 
-/** ينتظر جاهزية اللغة ثم يعيد إنشاء الشجرة بمفتاح اللغة (بيانات البذرة مترجمة) */
+/**
+ * ينتظر جاهزية اللغة فقط.
+ * لا نُعيد إنشاء TournamentProvider عند تغيير اللغة (كان يُعيد bootstrap كامل
+ * ويُظهر «جاري التحميل...» thrashing على Login/Web).
+ */
 function LanguageReadyGate({ children }: { children: ReactNode }) {
-  const { ready, language } = useLanguage();
+  const { ready } = useLanguage();
   if (!ready) return <LoadingState />;
-  return (
-    <React.Fragment key={language}>{children}</React.Fragment>
-  );
+  return <>{children}</>;
 }
 
 export function AppProviders({ children }: { children: ReactNode }) {

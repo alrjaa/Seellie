@@ -22,6 +22,7 @@ import {
 import type { UserRole } from '@/types';
 import { cairoText } from '@/theme/fonts';
 import { Avatar } from '@/components/ui/Avatar';
+import { flowDirection } from '@/theme/direction';
 
 type Props = {
   accountHref: string;
@@ -221,7 +222,7 @@ function AccountMenuButtonComponent({
                 backgroundColor: theme.colors.card,
                 borderColor: theme.colors.border,
                 marginTop: headerSafeTop(insets.top),
-                direction: isRTL ? 'rtl' : 'ltr',
+                ...flowDirection(isRTL),
               },
             ]}
           >

@@ -6,6 +6,7 @@ import { useFloatingVisibility } from '@/hooks/useFloatingVisibility';
 import { useLanguage } from '@/providers/LanguageProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
+import { flowDirection } from '@/theme/direction';
 
 type Props = {
   /** أزرار إضافية بجانب الرجوع (فلاتر أيقونية…) */
@@ -62,7 +63,7 @@ function StackTopChromeComponent({ children }: Props) {
           styles.row,
           {
             flexDirection: 'row',
-            direction: isRTL ? 'rtl' : 'ltr',
+            ...flowDirection(isRTL),
           },
         ]}
       >

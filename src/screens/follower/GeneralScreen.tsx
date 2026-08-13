@@ -1012,7 +1012,7 @@ const styles = StyleSheet.create({
   },
   topBar: {
     minHeight: 36,
-    direction: 'ltr',
+
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

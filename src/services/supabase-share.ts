@@ -72,6 +72,113 @@ export async function fetchShareCardsForUser(
   return (data as ShareCardRow[]).map(rowToShareCard);
 }
 
+/**
+ * FIX-02 — Live share card inbox for sender|recipient.
+ * Relies on RLS + Realtime publication (see SHARE-CARDS-REALTIME.sql).
+ * Client filters by party id so C never applies B’s cards.
+ */
+export function subscribeShareCardsForUser(
+  userId: string,
+  onChange: (
+    card: ShareCard,
+    event: 'INSERT' | 'UPDATE' | 'DELETE'
+  ) => void,
+  onStatus?: (status: string) => void
+): (() => void) | null {
+  const sb = getSupabase();
+  if (!sb || !userId) return null;
+  const apply = (
+    event: 'INSERT' | 'UPDATE' | 'DELETE',
+    row: ShareCardRow | null | undefined
+  ) => {
+    if (!row?.id) return;
+    if (event === 'DELETE') {
+      // DELETE payloads may be partial; provider only needs id + party check when present
+      if (
+        row.sender_id &&
+        row.recipient_id &&
+        row.sender_id !== userId &&
+        row.recipient_id !== userId
+      ) {
+        return;
+      }
+      onChange({ id: row.id } as ShareCard, 'DELETE');
+      return;
+    }
+    if (row.sender_id !== userId && row.recipient_id !== userId) return;
+    onChange(rowToShareCard(row), event);
+  };
+  const bind = (
+    channel: ReturnType<NonNullable<ReturnType<typeof getSupabase>>['channel']>,
+    filter: string
+  ) =>
+    channel
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'share_cards',
+          filter,
+        },
+        (payload) => apply('INSERT', payload.new as ShareCardRow)
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'share_cards',
+          filter,
+        },
+        (payload) => apply('UPDATE', payload.new as ShareCardRow)
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'share_cards',
+          filter,
+        },
+        (payload) => apply('DELETE', payload.old as ShareCardRow)
+      );
+
+  let channel = sb.channel(`share-cards-live-${userId}`);
+  channel = bind(channel, `recipient_id=eq.${userId}`);
+  channel = bind(channel, `sender_id=eq.${userId}`);
+  channel.subscribe((status) => {
+    onStatus?.(status);
+  });
+  return () => {
+    void sb.removeChannel(channel);
+  };
+}
+
+/** Merge by id; prefer newer timestamp when both exist. */
+export function mergeShareCardsById(
+  incoming: ShareCard[],
+  existing: ShareCard[]
+): ShareCard[] {
+  const map = new Map<string, ShareCard>();
+  for (const c of existing) map.set(c.id, c);
+  for (const c of incoming) {
+    const prev = map.get(c.id);
+    if (!prev) {
+      map.set(c.id, c);
+      continue;
+    }
+    const prevTs = prev.timestamp instanceof Date ? prev.timestamp.getTime() : 0;
+    const nextTs = c.timestamp instanceof Date ? c.timestamp.getTime() : 0;
+    map.set(c.id, nextTs >= prevTs ? { ...prev, ...c } : { ...c, ...prev });
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    const at = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
+    const bt = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
+    return bt - at;
+  });
+}
+
 export async function insertShareCard(input: {
   kind: ShareCardKind;
   senderId: string;

@@ -9,7 +9,8 @@ if [[ -z "$KEY" ]]; then
   KEY=$(grep '^EXPO_PUBLIC_SUPABASE_ANON_KEY=' "$(dirname "$0")/../.env" | cut -d= -f2-)
 fi
 TS=$(date +%s)
-PASS='Fix01-Verify-Pass-9x!'
+# Ephemeral password for throwaway signup users (not a production account secret).
+PASS="Fix01-Ephemeral-${TS}-$(openssl rand -hex 4)!"
 EA="fix01va${TS}@example.com"
 EB="fix01vb${TS}@example.com"
 
@@ -48,12 +49,19 @@ if [[ "$BODY" == "[]" || "$ACODE" == "401" || "$ACODE" == "403" ]]; then check "
 elif echo "$BODY" | grep -q PGRST205; then check "anon_select_secrets" FAIL
 else check "anon_select_secrets" PASS; fi
 
-# Content leak scan
+# Content leak scan — exact JSON key "accessCode", not accessCodeSentAt metadata
 curl -sS "$URL/rest/v1/profiles?select=content&limit=500" -H "apikey: $KEY" -H "Authorization: Bearer $TOKEN_A" -o /tmp/p.json
 python3 - <<'PY'
-import json
+import json,re
 rows=json.load(open('/tmp/p.json'))
-hits=sum(1 for r in rows if isinstance(r,dict) and 'accessCode' in json.dumps(r.get('content') or {}))
+hits=0
+for r in rows:
+  if not isinstance(r,dict):
+    continue
+  s=json.dumps(r.get('content') or {})
+  # secret field only: "accessCode": ... — ignore accessCodeSentAt etc.
+  if re.search(r'"accessCode"\s*:', s):
+    hits += 1
 open('/tmp/leak_count','w').write(str(hits))
 print('content_accessCode_hits', hits)
 PY

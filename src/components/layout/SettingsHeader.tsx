@@ -7,6 +7,7 @@ import { AccountHeaderButton } from '@/components/layout/AccountHeaderButton';
 import { HeaderBackButton } from '@/components/layout/HeaderBackButton';
 import { fontFamily } from '@/theme/fonts';
 import { headerSafeTop } from '@/theme/navigation';
+import { flowDirection } from '@/theme/direction';
 
 type Props = {
   title?: string;
@@ -53,7 +54,7 @@ function SettingsHeaderComponent({
         style={[
           styles.row,
           {
-            direction: isRTL ? 'rtl' : 'ltr',
+            ...flowDirection(isRTL),
           },
         ]}
       >

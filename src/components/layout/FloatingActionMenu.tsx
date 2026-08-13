@@ -85,7 +85,7 @@ function FloatingActionMenuComponent() {
   const { currentUser, fabIcons, users, toggleFollowUser, competitions } =
     useTournament();
   const theme = useAppTheme();
-  const { t } = useTranslation();
+  const { t, isRTL } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
@@ -355,7 +355,7 @@ function FloatingActionMenuComponent() {
           styles.wrap,
           Platform.OS === 'web' && styles.wrapWeb,
           {
-            left: 10,
+            ...(isRTL ? { right: 10 } : { left: 10 }),
             bottom,
             ...motionStyle,
           },
@@ -446,6 +446,7 @@ function FloatingActionMenuComponent() {
                   pointerEvents="none"
                   style={[
                     styles.tooltip,
+                    isRTL ? { left: undefined, right: 54 } : null,
                     {
                       backgroundColor: theme.colors.surfaceElevated,
                       borderColor: theme.colors.border,
@@ -511,7 +512,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 999,
     elevation: 999,
-    direction: 'ltr',
+
     overflow: 'visible',
   },
   layerWeb: {
@@ -529,7 +530,7 @@ const styles = StyleSheet.create({
     gap: 12,
     // محاذاة مركزية على خط واحد رغم اختلاف أحجام الأزرار
     alignItems: 'center',
-    direction: 'ltr',
+
     overflow: 'visible',
   },
   wrapWeb: {

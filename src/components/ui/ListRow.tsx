@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useLanguage } from '@/providers/LanguageProvider';
 import { AppText, Muted } from '@/components/ui/Text';
+import { flowDirection } from '@/theme/direction';
 
 type Props = {
   title: string;
@@ -42,7 +43,7 @@ function ListRowComponent({
           paddingVertical: theme.spacing.sm + 6,
           paddingHorizontal: theme.spacing.sm + 6,
           gap: theme.spacing.sm + 4,
-          direction: isRTL ? 'rtl' : 'ltr',
+          ...flowDirection(isRTL),
           flexDirection: 'row',
         },
       ]}

@@ -22,6 +22,10 @@ import {
   findSuperadminProfile,
   isUuid,
 } from '@/services/supabase-messages';
+import {
+  startForegroundInterval,
+  SYNC_FALLBACK_MS,
+} from '@/services/sync-engine';
 
 const MessageRow = memo(function MessageRow({
   item,
@@ -97,11 +101,15 @@ export default function MessagesScreen() {
       if (!currentUser || !cloudOk || !isSupabaseConfigured()) {
         return;
       }
+      // FIX-02: Realtime (provider) is primary. Focus refresh + slow fallback only.
       void refreshCloudMessages();
-      const timer = setInterval(() => {
-        void refreshCloudMessages();
-      }, 2500);
-      return () => clearInterval(timer);
+      const stopPoll = startForegroundInterval(
+        SYNC_FALLBACK_MS.messagesDegraded,
+        () => {
+          void refreshCloudMessages();
+        }
+      );
+      return () => stopPoll();
     }, [currentUser, cloudOk, refreshCloudMessages])
   );
 
@@ -225,7 +233,7 @@ export default function MessagesScreen() {
   }
 
   return (
-    <Screen>
+    <Screen keyboard>
       <FlatList
         data={inbox}
         keyExtractor={(item) => item.id}

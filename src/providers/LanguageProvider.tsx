@@ -80,6 +80,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       setLanguageState(lang);
 
       const wantRtl = shouldUseRTL(lang);
+      setAppRTL(wantRtl);
+      syncDocumentDirection(wantRtl, lang);
       const nativeMatches = I18nManager.isRTL === wantRtl;
 
       // إن كان الاتجاه الأصلي مطابقاً — لا حاجة لإعادة تحميل
@@ -124,7 +126,15 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     setI18nLocale(lang);
     setLanguageState(lang);
 
-    if (Platform.OS === 'web') return;
+    const wantRtl = shouldUseRTL(lang);
+    // Web: طبّق dir فوراً (لا reload) حتى لا يبقى documentElement على rtl بعد EN
+    setAppRTL(wantRtl);
+    syncDocumentDirection(wantRtl, lang);
+
+    if (Platform.OS === 'web') {
+      setReady(true);
+      return;
+    }
 
     applyNativeDirection(lang);
     try {

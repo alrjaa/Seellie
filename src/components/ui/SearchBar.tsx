@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useLanguage, useTranslation } from '@/providers/LanguageProvider';
 import { cairoText } from '@/theme/fonts';
+import { flowDirection } from '@/theme/direction';
 
 type Props = TextInputProps & {
   onClear?: () => void;
@@ -27,7 +28,7 @@ function SearchBarComponent({
         {
           backgroundColor: theme.colors.inputBg,
           borderColor: theme.colors.border,
-          direction: isRTL ? 'rtl' : 'ltr',
+          ...flowDirection(isRTL),
           flexDirection: 'row',
         },
       ]}
