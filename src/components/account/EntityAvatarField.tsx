@@ -378,7 +378,12 @@ export function EntityAvatarEditModal({
         >
           <View style={styles.modalHead}>
             <Subtitle style={{ flex: 1 }}>{title}</Subtitle>
-            <Pressable onPress={onClose} hitSlop={10}>
+            <Pressable
+              onPress={onClose}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.close')}
+            >
               <Ionicons name="close" size={22} color={theme.colors.text} />
             </Pressable>
           </View>

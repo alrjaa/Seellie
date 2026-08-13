@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ResizeMode, Video } from 'expo-av';
+import type { Video as VideoType } from 'expo-av';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { Muted } from '@/components/ui';
 import { useResponsive } from '@/hooks/useResponsive';
@@ -71,12 +72,20 @@ function PrivateChatComposerComponent({
   const theme = useAppTheme();
   const { desktop } = useResponsive();
   const inputRef = useRef<TextInput>(null);
+  const pendingVideoRef = useRef<VideoType | null>(null);
   const focusedRef = useRef(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rafRef = useRef<number | null>(null);
   const lastInsetRef = useRef(0);
   const lockedScrollYRef = useRef(0);
   const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      void pendingVideoRef.current?.pauseAsync().catch(() => undefined);
+      void pendingVideoRef.current?.unloadAsync().catch(() => undefined);
+    };
+  }, [pendingMedia?.uri, pendingMedia?.kind]);
 
   const publishInset = useCallback(
     (inset: number) => {
@@ -222,6 +231,7 @@ function PrivateChatComposerComponent({
           ) : (
             <View style={styles.thumb}>
               <Video
+                ref={pendingVideoRef}
                 source={{ uri: pendingMedia.uri }}
                 style={StyleSheet.absoluteFillObject}
                 resizeMode={ResizeMode.COVER}
@@ -244,7 +254,11 @@ function PrivateChatComposerComponent({
                 : pendingVideoLabel)}
           </Muted>
           <Pressable
-            onPress={onClearPending}
+            onPress={() => {
+              void pendingVideoRef.current?.pauseAsync().catch(() => undefined);
+              void pendingVideoRef.current?.unloadAsync().catch(() => undefined);
+              onClearPending();
+            }}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={cancelAccessibilityLabel}

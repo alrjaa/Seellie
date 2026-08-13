@@ -201,6 +201,8 @@ function Pledge({
         { flexDirection: isRTL ? 'row-reverse' : 'row' },
       ]}
       accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      accessibilityLabel={label}
     >
       <View
         style={[

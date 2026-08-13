@@ -202,6 +202,8 @@ const ChatMediaThumb = memo(function ChatMediaThumb({
       observerRef.current?.disconnect();
       observerRef.current = null;
       htmlRef.current?.pause();
+      void nativeVideoRef.current?.pauseAsync().catch(() => undefined);
+      void nativeVideoRef.current?.unloadAsync().catch(() => undefined);
     };
   }, [uri]);
 
@@ -1193,6 +1195,8 @@ export default function PrivateScreen() {
                         setSection('chat');
                       }}
                       hitSlop={6}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('privateSpace.chat')}
                     >
                       <Ionicons
                         name="chatbubble-ellipses-outline"
@@ -1655,6 +1659,7 @@ export default function PrivateScreen() {
                 onPress={() => setAttachOpen(false)}
                 hitSlop={8}
                 accessibilityRole="button"
+                accessibilityLabel={t('common.close')}
               >
                 <Ionicons
                   name="close"

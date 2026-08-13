@@ -403,7 +403,12 @@ function ShareTargetModalComponent({ visible, onClose, payload }: Props) {
             <Subtitle style={{ flex: 1 }}>
               {isJoin ? t('shareCards.typeJoin') : t('shareCards.shareThis')}
             </Subtitle>
-            <Pressable onPress={onClose} hitSlop={8}>
+            <Pressable
+              onPress={onClose}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.close')}
+            >
               <Ionicons name="close" size={20} color={theme.colors.textMuted} />
             </Pressable>
           </View>

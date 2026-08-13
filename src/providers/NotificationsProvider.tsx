@@ -25,10 +25,7 @@ export type AppNotification = {
   recipientId?: string;
 };
 
-type Ctx = {
-  notifications: AppNotification[];
-  /** غير المقروء للمستخدم الحالي فقط (أو العامة بلا مستلم) */
-  unreadCountFor: (userId: string | undefined) => number;
+type NotificationsApi = {
   addNotification: (
     input: Omit<AppNotification, 'id' | 'createdAt' | 'read'> & {
       read?: boolean;
@@ -39,10 +36,23 @@ type Ctx = {
   markRead: (id: string, userId?: string) => void;
   markAllRead: (userId: string | undefined) => void;
   clearAll: (userId: string | undefined) => void;
+};
+
+type NotificationsState = {
+  notifications: AppNotification[];
+  /** غير المقروء للمستخدم الحالي فقط (أو العامة بلا مستلم) */
+  unreadCountFor: (userId: string | undefined) => number;
   forUser: (userId: string | undefined) => AppNotification[];
 };
 
-const NotificationsContext = createContext<Ctx | undefined>(undefined);
+type Ctx = NotificationsApi & NotificationsState;
+
+const NotificationsApiContext = createContext<NotificationsApi | undefined>(
+  undefined
+);
+const NotificationsStateContext = createContext<NotificationsState | undefined>(
+  undefined
+);
 
 const SEED: AppNotification[] = [
   {
@@ -64,6 +74,11 @@ function visibleToUser(
   return !n.recipientId || n.recipientId === userId;
 }
 
+/**
+ * FIX-05 P1 — split API (stable) from list state so TournamentProvider
+ * (addNotification/clearAll only) does not re-render on every inbox tick.
+ * Behavior / persistence / kinds unchanged.
+ */
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<AppNotification[]>(SEED);
   const hydrated = useRef(false);
@@ -138,10 +153,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const clearAll = useCallback((userId: string | undefined) => {
     setNotifications((prev) => {
       if (!userId) {
-        // امسح العامة فقط
         return prev.filter((n) => !!n.recipientId);
       }
-      // احذف إشعارات هذا المستخدم + العامة؛ أبقِ إشعارات الآخرين
       return prev.filter(
         (n) => n.recipientId && n.recipientId !== userId
       );
@@ -160,38 +173,50 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     [notifications]
   );
 
-  const value = useMemo(
+  const api = useMemo(
+    () => ({
+      addNotification,
+      markRead,
+      markAllRead,
+      clearAll,
+    }),
+    [addNotification, markRead, markAllRead, clearAll]
+  );
+
+  const state = useMemo(
     () => ({
       notifications,
       unreadCountFor,
-      addNotification,
-      markRead,
-      markAllRead,
-      clearAll,
       forUser,
     }),
-    [
-      notifications,
-      unreadCountFor,
-      addNotification,
-      markRead,
-      markAllRead,
-      clearAll,
-      forUser,
-    ]
+    [notifications, unreadCountFor, forUser]
   );
 
   return (
-    <NotificationsContext.Provider value={value}>
-      {children}
-    </NotificationsContext.Provider>
+    <NotificationsApiContext.Provider value={api}>
+      <NotificationsStateContext.Provider value={state}>
+        {children}
+      </NotificationsStateContext.Provider>
+    </NotificationsApiContext.Provider>
   );
 }
 
-export function useNotifications() {
-  const ctx = useContext(NotificationsContext);
+/** Stable mutators only — safe for TournamentProvider. */
+export function useNotificationsApi() {
+  const ctx = useContext(NotificationsApiContext);
   if (!ctx) {
-    throw new Error('useNotifications must be used within NotificationsProvider');
+    throw new Error(
+      'useNotificationsApi must be used within NotificationsProvider'
+    );
   }
   return ctx;
+}
+
+export function useNotifications(): Ctx {
+  const api = useContext(NotificationsApiContext);
+  const state = useContext(NotificationsStateContext);
+  if (!api || !state) {
+    throw new Error('useNotifications must be used within NotificationsProvider');
+  }
+  return useMemo(() => ({ ...api, ...state }), [api, state]);
 }

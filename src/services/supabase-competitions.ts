@@ -2,6 +2,9 @@ import type { Competition } from '@/data/initial-data';
 import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
 import { mergeCompetitionsById } from '@/services/competition-sync';
 import { isSeedCompetitionId } from '@/utils/seed-data';
+import { shouldApplyCloudResult } from '@/services/cloud-result';
+
+export { shouldApplyCloudResult as shouldApplyCompetitionsCloud } from '@/services/cloud-result';
 
 type CompetitionCloudRow = {
   id: string;
@@ -37,16 +40,18 @@ function rowToCompetition(row: CompetitionCloudRow): Competition | null {
 
 export async function fetchCompetitionsCloud(): Promise<{
   items: Competition[];
+  /** true = query succeeded (empty array is a real empty catalog). */
+  ok: boolean;
   error?: string;
 }> {
   if (!isSupabaseConfigured()) {
-    return { items: [], error: 'not_configured' };
+    return { items: [], ok: false, error: 'not_configured' };
   }
   const sb = getSupabase();
-  if (!sb) return { items: [], error: 'no_client' };
+  if (!sb) return { items: [], ok: false, error: 'no_client' };
   const { data: sessionData } = await sb.auth.getSession();
   if (!sessionData.session) {
-    return { items: [], error: 'no_session' };
+    return { items: [], ok: false, error: 'no_session' };
   }
   const { data, error } = await sb
     .from('app_competitions')
@@ -55,12 +60,12 @@ export async function fetchCompetitionsCloud(): Promise<{
     .limit(300);
   if (error) {
     console.warn('[supabase] fetchCompetitions', error.message);
-    return { items: [], error: error.message };
+    return { items: [], ok: false, error: error.message };
   }
   const items = ((data || []) as CompetitionCloudRow[])
     .map(rowToCompetition)
     .filter((c): c is Competition => !!c);
-  return { items };
+  return { items, ok: true };
 }
 
 export async function upsertCompetitionCloud(
@@ -165,7 +170,8 @@ export function subscribeCompetitionsCloud(
 
   const pull = () => {
     void fetchCompetitionsCloud().then((res) => {
-      if (res.error && !res.items.length) return;
+      // FIX-05: only apply successful fetches (ERROR ≠ EMPTY)
+      if (!shouldApplyCloudResult(res)) return;
       onChange(res.items);
     });
   };

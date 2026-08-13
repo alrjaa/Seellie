@@ -37,7 +37,13 @@ function PledgeRow({
 }) {
   const theme = useAppTheme();
   return (
-    <Pressable onPress={onToggle} style={styles.pledgeRow} accessibilityRole="checkbox">
+    <Pressable
+      onPress={onToggle}
+      style={styles.pledgeRow}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      accessibilityLabel={label}
+    >
       <View
         style={[
           styles.checkbox,

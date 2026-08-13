@@ -53,19 +53,38 @@ const RefereeRow = memo(function RefereeRow({
         </View>
       </View>
       <View style={styles.actions}>
-        <Pressable onPress={onChangePhoto} hitSlop={8}>
+        <Pressable
+          onPress={onChangePhoto}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('media.changeHandleIcon')}
+        >
           <Text style={{ color: theme.colors.accent, fontWeight: '700', fontSize: 12 }}>
             {t('media.changeHandleIcon')}
           </Text>
         </Pressable>
-        <Pressable onPress={onToggle} hitSlop={8}>
+        <Pressable
+          onPress={onToggle}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={
+            item.status === 'active'
+              ? t('superadmin.actions.suspend')
+              : t('superadmin.actions.activate')
+          }
+        >
           <Text style={{ color: theme.colors.accent, fontWeight: '700', fontSize: 12 }}>
             {item.status === 'active'
               ? t('superadmin.actions.suspend')
               : t('superadmin.actions.activate')}
           </Text>
         </Pressable>
-        <Pressable onPress={onDelete} hitSlop={8}>
+        <Pressable
+          onPress={onDelete}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('superadmin.actions.delete')}
+        >
           <Text style={{ color: theme.colors.danger, fontWeight: '800', fontSize: 12 }}>
             {t('superadmin.actions.delete')}
           </Text>

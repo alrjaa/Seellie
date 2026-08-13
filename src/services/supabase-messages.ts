@@ -36,15 +36,15 @@ export function rowToMessage(row: MessageRow): Message {
 
 export async function fetchMessagesForUser(
   userId: string
-): Promise<{ messages: Message[]; error?: string }> {
+): Promise<{ messages: Message[]; ok: boolean; error?: string }> {
   if (!isSupabaseConfigured() || !isUuid(userId)) {
-    return { messages: [], error: 'not_cloud_user' };
+    return { messages: [], ok: false, error: 'not_cloud_user' };
   }
   const sb = getSupabase();
-  if (!sb) return { messages: [], error: 'no_client' };
+  if (!sb) return { messages: [], ok: false, error: 'no_client' };
   const { data: sessionData } = await sb.auth.getSession();
   if (!sessionData.session) {
-    return { messages: [], error: 'no_session' };
+    return { messages: [], ok: false, error: 'no_session' };
   }
   const { data, error } = await sb
     .from('messages')
@@ -54,10 +54,11 @@ export async function fetchMessagesForUser(
     .limit(200);
   if (error) {
     console.warn('[supabase] fetchMessages', error.message);
-    return { messages: [], error: error.message };
+    return { messages: [], ok: false, error: error.message };
   }
   return {
     messages: ((data || []) as MessageRow[]).map(rowToMessage),
+    ok: true,
   };
 }
 

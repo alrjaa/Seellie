@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -10,6 +10,7 @@ import { Redirect, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { ResizeMode, Video } from 'expo-av';
+import type { Video as VideoType } from 'expo-av';
 import { useTournament, type Comment } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
@@ -62,6 +63,14 @@ const CommentCard = memo(function CommentCard({
   const theme = useAppTheme();
   const { t } = useTranslation();
   const lastTapRef = React.useRef(0);
+  const feedVideoRef = useRef<VideoType | null>(null);
+
+  useEffect(() => {
+    return () => {
+      void feedVideoRef.current?.pauseAsync().catch(() => undefined);
+      void feedVideoRef.current?.unloadAsync().catch(() => undefined);
+    };
+  }, [item.videoUrl]);
 
   const onPressCard = useCallback(() => {
     const now = Date.now();
@@ -117,6 +126,7 @@ const CommentCard = memo(function CommentCard({
         {item.videoUrl ? (
           <View style={styles.mediaWrap}>
             <Video
+              ref={feedVideoRef}
               source={{ uri: item.videoUrl }}
               style={styles.video}
               useNativeControls
@@ -155,10 +165,25 @@ export default function ForumsScreen() {
   const [videoUri, setVideoUri] = useState<string | null>(null);
   const [videoDurationSec, setVideoDurationSec] = useState<number | null>(null);
   const [picking, setPicking] = useState(false);
+  const previewVideoRef = useRef<VideoType | null>(null);
   const [sharePayload, setSharePayload] = useState<ContentSharePayload | null>(
     null
   );
   const saveToPrivate = useSaveToPrivateSpace();
+
+  useEffect(() => {
+    return () => {
+      void previewVideoRef.current?.pauseAsync().catch(() => undefined);
+      void previewVideoRef.current?.unloadAsync().catch(() => undefined);
+    };
+  }, [videoUri]);
+
+  const clearVideo = useCallback(() => {
+    void previewVideoRef.current?.pauseAsync().catch(() => undefined);
+    void previewVideoRef.current?.unloadAsync().catch(() => undefined);
+    setVideoUri(null);
+    setVideoDurationSec(null);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -181,11 +206,6 @@ export default function ForumsScreen() {
     () => currentUser?.media?.videos || [],
     [currentUser]
   );
-
-  const clearVideo = useCallback(() => {
-    setVideoUri(null);
-    setVideoDurationSec(null);
-  }, []);
 
   const attachVideo = useCallback(
     (uri: string, durationSec: number | null, fromAccount: boolean) => {
@@ -463,6 +483,7 @@ export default function ForumsScreen() {
               {videoUri ? (
                 <View style={styles.previewWrap}>
                   <Video
+                    ref={previewVideoRef}
                     source={{ uri: videoUri }}
                     style={styles.preview}
                     useNativeControls

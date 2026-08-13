@@ -47,16 +47,17 @@ export function mergeCommentsById(
 
 export async function fetchForumComments(): Promise<{
   comments: Comment[];
+  ok: boolean;
   error?: string;
 }> {
   if (!isSupabaseConfigured()) {
-    return { comments: [], error: 'not_configured' };
+    return { comments: [], ok: false, error: 'not_configured' };
   }
   const sb = getSupabase();
-  if (!sb) return { comments: [], error: 'no_client' };
+  if (!sb) return { comments: [], ok: false, error: 'no_client' };
   const { data: sessionData } = await sb.auth.getSession();
   if (!sessionData.session) {
-    return { comments: [], error: 'no_session' };
+    return { comments: [], ok: false, error: 'no_session' };
   }
   const { data, error } = await sb
     .from('forum_comments')
@@ -65,10 +66,11 @@ export async function fetchForumComments(): Promise<{
     .limit(300);
   if (error) {
     console.warn('[forum] fetch', error.message);
-    return { comments: [], error: error.message };
+    return { comments: [], ok: false, error: error.message };
   }
   return {
     comments: ((data || []) as ForumCommentRow[]).map(rowToForumComment),
+    ok: true,
   };
 }
 
