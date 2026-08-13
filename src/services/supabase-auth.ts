@@ -134,12 +134,6 @@ export async function fetchAllProfilesResult(): Promise<FetchProfilesResult> {
   };
 }
 
-/** @deprecated Prefer fetchAllProfilesResult — empty array is ambiguous on failure. */
-export async function fetchAllProfiles(): Promise<User[]> {
-  const result = await fetchAllProfilesResult();
-  return result.ok ? result.users : [];
-}
-
 /**
  * بث فوري لتحديثات profiles (تحليلات/منشورات/وسائط داخل content).
  * يتطلب إضافة الجدول إلى supabase_realtime (انظر PROFILES-REALTIME.sql).

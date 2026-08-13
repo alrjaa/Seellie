@@ -263,6 +263,7 @@ export default function LoginScreen() {
                       />
                       <Pressable
                         accessibilityRole="button"
+                        accessibilityLabel={t('auth.forgotPassword')}
                         onPress={() => setForgotPassword(true)}
                         style={[
                           styles.forgotWrap,
@@ -288,6 +289,9 @@ export default function LoginScreen() {
                     <View style={styles.footer}>
                       <Pressable
                         accessibilityRole="button"
+                        accessibilityLabel={
+                          isSigningUp ? t('auth.haveAccount') : t('auth.newAccount')
+                        }
                         onPress={() => {
                           setIsSigningUp((v) => !v);
                           setEmailError('');
@@ -407,6 +411,7 @@ export default function LoginScreen() {
                   />
                   <Pressable
                     accessibilityRole="button"
+                    accessibilityLabel={t('auth.forgotPassword')}
                     onPress={() => setForgotPassword(true)}
                     style={[
                       styles.forgotWrap,
@@ -432,6 +437,9 @@ export default function LoginScreen() {
                 <View style={styles.footer}>
                   <Pressable
                     accessibilityRole="button"
+                    accessibilityLabel={
+                      isSigningUp ? t('auth.haveAccount') : t('auth.newAccount')
+                    }
                     onPress={() => {
                       setIsSigningUp((v) => !v);
                       setEmailError('');

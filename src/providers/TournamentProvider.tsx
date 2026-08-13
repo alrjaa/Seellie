@@ -938,14 +938,15 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const syncCompetitions = useCallback(
     async (next: Competition[], options?: { fromCloud?: boolean }) => {
       const res = await saveCompetitions(next, options);
+      const user = currentUserRef.current;
       if (
         !options?.fromCloud &&
         !res.ok &&
         res.error &&
         res.error !== 'no_session' &&
         res.error !== 'not_configured' &&
-        currentUser &&
-        isUuid(currentUser.id)
+        user &&
+        isUuid(user.id)
       ) {
         toast({
           variant: 'destructive',
@@ -955,7 +956,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
       return res.ok;
     },
-    [currentUser, t, toast]
+    [t, toast]
   );
 
   /** تحميل الكتالوج العام من السحابة (مسابقات، ملفات، منتدى، blobs) */
@@ -2005,8 +2006,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(
     (options?: { to?: 'login' | 'admin'; silent?: boolean }) => {
-      const prevId = currentUser?.id;
-      const wasAdmin = currentUser?.role === 'superadmin';
+      const user = currentUserRef.current;
+      const prevId = user?.id;
+      const wasAdmin = user?.role === 'superadmin';
       // Invalidate in-flight merges before clearing state (FIX-02 user-switch safety)
       sessionGen.current.next();
       sessionUserIdRef.current = null;
@@ -2029,7 +2031,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       router.replace(dest as any);
       toast({ title: t('toasts.t012_fbdcd1') });
     },
-    [currentUser, router, toast, t, clearNotifications]
+    [router, toast, t, clearNotifications]
   );
 
   const updateUser = useCallback(
@@ -6235,25 +6237,25 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const scopedCompetitions = useMemo(() => {
-    if (currentUser?.role === 'organizer') {
+    if (currentUser?.role === 'organizer' && currentUser.id) {
       return competitions.filter((c) => c.organizerId === currentUser.id);
     }
     return competitions;
-  }, [competitions, currentUser]);
+  }, [competitions, currentUser?.id, currentUser?.role]);
 
   const scopedOffers = useMemo(() => {
-    if (currentUser?.role === 'organizer') {
+    if (currentUser?.role === 'organizer' && currentUser.id) {
       return offers.filter((o) => o.organizerId === currentUser.id);
     }
     return offers;
-  }, [offers, currentUser]);
+  }, [offers, currentUser?.id, currentUser?.role]);
 
   const scopedGiftTransactions = useMemo(() => {
-    if (currentUser?.role === 'organizer') {
+    if (currentUser?.role === 'organizer' && currentUser.id) {
       return giftTransactions.filter((g) => g.recipientId === currentUser.id);
     }
     return giftTransactions;
-  }, [giftTransactions, currentUser]);
+  }, [giftTransactions, currentUser?.id, currentUser?.role]);
 
   const value = useMemo(
     () => ({

@@ -117,6 +117,7 @@ function ToastHost({
     >
       <Pressable
         accessibilityRole="alert"
+        accessibilityLabel={payload.title}
         onPress={hide}
         style={[
           styles.toast,

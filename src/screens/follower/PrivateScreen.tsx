@@ -144,6 +144,32 @@ type AttachableItem = {
 const CHAT_VIDEO_W = 200;
 const CHAT_VIDEO_H = 120;
 
+/** FIX-06 P1-04 — attach-sheet video thumbs: no autoplay; unload on unmount. */
+const AttachVideoThumb = memo(function AttachVideoThumb({ uri }: { uri: string }) {
+  const videoRef = useRef<VideoType | null>(null);
+
+  useEffect(() => {
+    return () => {
+      void videoRef.current?.pauseAsync().catch(() => undefined);
+      void videoRef.current?.unloadAsync().catch(() => undefined);
+    };
+  }, [uri]);
+
+  return (
+    <Video
+      ref={videoRef}
+      source={{ uri }}
+      style={StyleSheet.absoluteFillObject}
+      resizeMode={ResizeMode.COVER}
+      shouldPlay={false}
+      isMuted
+      isLooping={false}
+      useNativeControls={false}
+      {...(Platform.OS === 'web' ? ({ playsInline: true } as object) : null)}
+    />
+  );
+});
+
 const ChatMediaThumb = memo(function ChatMediaThumb({
   uri,
   kind,
@@ -332,7 +358,12 @@ const ChatMediaLightbox = memo(function ChatMediaLightbox({
         </Pressable>
 
         {kind === 'photo' ? (
-          <Pressable style={styles.lightboxMediaWrap} onPress={onClose}>
+          <Pressable
+            style={styles.lightboxMediaWrap}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close')}
+          >
             <Image
               source={{ uri }}
               style={styles.lightboxImage}
@@ -1156,6 +1187,8 @@ export default function PrivateScreen() {
                     key={u.id}
                     style={styles.friendRow}
                     onPress={() => void onAddFriend(u.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('privateSpace.addFriend')}
                   >
                     <Avatar uri={u.avatar} name={u.name} size={36} />
                     <View style={{ flex: 1 }}>
@@ -1700,6 +1733,9 @@ export default function PrivateScreen() {
                   <Pressable
                     key={tab.key}
                     onPress={() => setAttachSource(tab.key)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${tab.label} (${tab.count})`}
+                    accessibilityState={{ selected: active }}
                     style={[
                       styles.attachTab,
                       {
@@ -1743,6 +1779,13 @@ export default function PrivateScreen() {
                       key={item.id}
                       onPress={() => onSelectAttachable(item)}
                       disabled={!activeFriend}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        item.label ||
+                        (item.kind === 'photo'
+                          ? t('common.photo')
+                          : t('common.video'))
+                      }
                       style={[
                         styles.attachCell,
                         { backgroundColor: theme.colors.surfaceElevated },
@@ -1756,18 +1799,10 @@ export default function PrivateScreen() {
                         />
                       ) : (
                         <View style={styles.attachThumb}>
-                          <Video
-                            source={{ uri: item.uri }}
-                            style={StyleSheet.absoluteFillObject}
-                            resizeMode={ResizeMode.COVER}
-                            shouldPlay
-                            isMuted
-                            isLooping
-                            useNativeControls={false}
-                            {...(Platform.OS === 'web'
-                              ? ({ playsInline: true } as object)
-                              : null)}
-                          />
+                          <AttachVideoThumb uri={item.uri} />
+                          <View style={styles.attachVideoBadge} pointerEvents="none">
+                            <Ionicons name="play" size={14} color="#fff" />
+                          </View>
                         </View>
                       )}
                       <Text
@@ -2039,6 +2074,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: '#0b1220',
+  },
+  attachVideoBadge: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.28)',
   },
   savedCard: { gap: 8, marginBottom: 10 },
   savedList: { flex: 1, minHeight: 280 },
