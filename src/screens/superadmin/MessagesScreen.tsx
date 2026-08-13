@@ -27,7 +27,13 @@ const MessageRow = memo(function MessageRow({
 }) {
   const theme = useAppTheme();
   return (
-    <Pressable onPress={onPress} hitSlop={6}>
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.subject} — ${item.senderName}`}
+      accessibilityState={{ selected: !item.read }}
+    >
       <Card
         style={
           !item.read

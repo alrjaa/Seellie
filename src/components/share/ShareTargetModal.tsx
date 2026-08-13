@@ -386,13 +386,14 @@ function ShareTargetModalComponent({ visible, onClose, payload }: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')}>
         <Pressable
           style={[
             styles.sheet,
             { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
           ]}
           onPress={(e) => e.stopPropagation()}
+          accessibilityViewIsModal
         >
           <View
             style={[
@@ -515,6 +516,8 @@ function ShareTargetModalComponent({ visible, onClose, payload }: Props) {
                       }}
                       hitSlop={8}
                       style={styles.clearMedia}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('shareCards.removeMedia')}
                     >
                       <Muted>{t('shareCards.removeMedia')}</Muted>
                     </Pressable>
@@ -549,6 +552,9 @@ function ShareTargetModalComponent({ visible, onClose, payload }: Props) {
                   setRecipientId(h.id);
                   setQuery(h.handle ? `${h.name} · ${h.handle}` : h.name);
                 }}
+                accessibilityRole="button"
+                accessibilityLabel={h.handle ? `${h.name} · ${h.handle}` : h.name}
+                accessibilityState={{ selected: recipientId === h.id }}
                 style={[
                   styles.hit,
                   {

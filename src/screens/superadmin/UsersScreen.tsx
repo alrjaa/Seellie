@@ -74,7 +74,11 @@ const UserRow = memo(function UserRow({
       {user.role !== 'superadmin' ? (
         <View style={styles.actions}>
           {isBlocked ? (
-            <Pressable onPress={() => onAction(user, 'delete')}>
+            <Pressable
+              onPress={() => onAction(user, 'delete')}
+              accessibilityRole="button"
+              accessibilityLabel={t('superadmin.actions.delete')}
+            >
               <Text
                 style={{
                   color: theme.colors.danger,
@@ -88,7 +92,11 @@ const UserRow = memo(function UserRow({
           ) : (
             <>
               {user.role === 'organizer' && onEdit ? (
-                <Pressable onPress={() => onEdit(user)}>
+                <Pressable
+                  onPress={() => onEdit(user)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('superadmin.actions.edit')}
+                >
                   <Text
                     style={{
                       color: theme.colors.accent,
@@ -100,7 +108,11 @@ const UserRow = memo(function UserRow({
                   </Text>
                 </Pressable>
               ) : null}
-              <Pressable onPress={() => onAction(user, 'active')}>
+              <Pressable
+                onPress={() => onAction(user, 'active')}
+                accessibilityRole="button"
+                accessibilityLabel={t('superadmin.actions.activate')}
+              >
                 <Text
                   style={{
                     color: theme.colors.accent,
@@ -111,7 +123,11 @@ const UserRow = memo(function UserRow({
                   {t('superadmin.actions.activate')}
                 </Text>
               </Pressable>
-              <Pressable onPress={() => onAction(user, 'warned')}>
+              <Pressable
+                onPress={() => onAction(user, 'warned')}
+                accessibilityRole="button"
+                accessibilityLabel={t('superadmin.actions.warn')}
+              >
                 <Text
                   style={{
                     color: theme.colors.warning,
@@ -122,7 +138,11 @@ const UserRow = memo(function UserRow({
                   {t('superadmin.actions.warn')}
                 </Text>
               </Pressable>
-              <Pressable onPress={() => onAction(user, 'suspended')}>
+              <Pressable
+                onPress={() => onAction(user, 'suspended')}
+                accessibilityRole="button"
+                accessibilityLabel={t('superadmin.actions.suspend')}
+              >
                 <Text
                   style={{
                     color: theme.colors.danger,
@@ -133,7 +153,11 @@ const UserRow = memo(function UserRow({
                   {t('superadmin.actions.suspend')}
                 </Text>
               </Pressable>
-              <Pressable onPress={() => onAction(user, 'delete')}>
+              <Pressable
+                onPress={() => onAction(user, 'delete')}
+                accessibilityRole="button"
+                accessibilityLabel={t('superadmin.actions.delete')}
+              >
                 <Text
                   style={{
                     color: theme.colors.danger,

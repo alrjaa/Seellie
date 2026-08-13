@@ -170,6 +170,7 @@ const AttachVideoThumb = memo(function AttachVideoThumb({ uri }: { uri: string }
   );
 });
 
+/** FIX-07 S1 — chat list video thumbs: no autoplay/loop; unload on unmount; play via lightbox. */
 const ChatMediaThumb = memo(function ChatMediaThumb({
   uri,
   kind,
@@ -180,54 +181,10 @@ const ChatMediaThumb = memo(function ChatMediaThumb({
   onOpen: () => void;
 }) {
   const { t } = useTranslation();
-  const htmlRef = useRef<HTMLVideoElement | null>(null);
   const nativeVideoRef = useRef<VideoType | null>(null);
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const [inView, setInView] = useState(true);
-
-  const bindWebVideo = useCallback((node: HTMLVideoElement | null) => {
-    if (observerRef.current) {
-      observerRef.current.disconnect();
-      observerRef.current = null;
-    }
-    htmlRef.current = node;
-    if (!node || typeof IntersectionObserver === 'undefined') {
-      if (node) {
-        node.muted = true;
-        void node.play().catch(() => undefined);
-      }
-      return;
-    }
-
-    node.muted = true;
-    const io = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        const visible =
-          !!entry?.isIntersecting && (entry.intersectionRatio ?? 0) >= 0.3;
-        setInView(visible);
-        const video = htmlRef.current;
-        if (!video) return;
-        video.muted = true;
-        if (visible) {
-          void video.play().catch(() => undefined);
-        } else {
-          video.pause();
-        }
-      },
-      { threshold: [0, 0.3, 0.6, 1] }
-    );
-    io.observe(node);
-    observerRef.current = io;
-    // تشغيل أولي إن كان ظاهرًا
-    void node.play().catch(() => undefined);
-  }, []);
 
   useEffect(() => {
     return () => {
-      observerRef.current?.disconnect();
-      observerRef.current = null;
-      htmlRef.current?.pause();
       void nativeVideoRef.current?.pauseAsync().catch(() => undefined);
       void nativeVideoRef.current?.unloadAsync().catch(() => undefined);
     };
@@ -259,38 +216,23 @@ const ChatMediaThumb = memo(function ChatMediaThumb({
           style={{ width: CHAT_VIDEO_W, height: CHAT_VIDEO_H }}
           resizeMode="cover"
         />
-      ) : Platform.OS === 'web' ? (
-        createElement('video', {
-          key: uri,
-          ref: bindWebVideo,
-          src: uri,
-          muted: true,
-          autoPlay: true,
-          loop: true,
-          playsInline: true,
-          preload: 'auto',
-          controls: false,
-          style: {
-            width: CHAT_VIDEO_W,
-            height: CHAT_VIDEO_H,
-            objectFit: 'cover',
-            borderRadius: 10,
-            backgroundColor: '#0b1220',
-            display: 'block',
-            pointerEvents: 'none',
-          },
-        })
       ) : (
-        <Video
-          ref={nativeVideoRef}
-          source={{ uri }}
-          style={{ width: CHAT_VIDEO_W, height: CHAT_VIDEO_H }}
-          resizeMode={ResizeMode.COVER}
-          useNativeControls={false}
-          shouldPlay={inView}
-          isMuted
-          isLooping
-        />
+        <View style={{ width: CHAT_VIDEO_W, height: CHAT_VIDEO_H }}>
+          <Video
+            ref={nativeVideoRef}
+            source={{ uri }}
+            style={{ width: CHAT_VIDEO_W, height: CHAT_VIDEO_H }}
+            resizeMode={ResizeMode.COVER}
+            useNativeControls={false}
+            shouldPlay={false}
+            isMuted
+            isLooping={false}
+            {...(Platform.OS === 'web' ? ({ playsInline: true } as object) : null)}
+          />
+          <View style={styles.attachVideoBadge} pointerEvents="none">
+            <Ionicons name="play" size={18} color="#fff" />
+          </View>
+        </View>
       )}
       {kind === 'photo' ? (
         <View style={styles.photoExpandHint} pointerEvents="none">

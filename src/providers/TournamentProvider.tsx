@@ -1043,11 +1043,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return next;
       });
     }
-    if (blobs.offers) setOffers(blobs.offers);
+    // FIX-07 S2 — apply offers/gifts only on non-empty SUCCESS (ERROR→null already skips)
+    if (blobs.offers && blobs.offers.length > 0) setOffers(blobs.offers);
     if (blobs.levels?.length) {
       setSupportLevels(normalizeSupportLevels(blobs.levels));
     }
-    if (blobs.gifts) {
+    if (blobs.gifts && blobs.gifts.length > 0) {
       setGiftTransactions(
         blobs.gifts.map((g) => ({
           ...g,
@@ -3897,10 +3898,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   const markShareCardRead = useCallback(
     (cardId: string) => {
-      if (!currentUser) return;
+      const user = currentUserRef.current;
+      if (!user) return;
       setShareCards((prev) =>
         prev.map((c) =>
-          c.id === cardId && c.recipientId === currentUser.id
+          c.id === cardId && c.recipientId === user.id
             ? { ...c, read: true }
             : c
         )
@@ -3909,7 +3911,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         void updateShareCardRemote(cardId, { read: true });
       }
     },
-    [currentUser]
+    []
   );
 
   const addTeam = useCallback(
@@ -5300,8 +5302,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   const togglePostLike = useCallback(
     (authorId: string, postId: string) => {
-      if (!currentUser) return;
-      const uid = currentUser.id;
+      const user = currentUserRef.current;
+      if (!user) return;
+      const uid = user.id;
       const apply = (u: User): User => {
         if (u.id !== authorId) return u;
         return {
@@ -5335,13 +5338,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return prev;
       });
     },
-    [currentUser]
+    []
   );
 
   const toggleAnalysisLike = useCallback(
     (authorId: string, analysisId: string) => {
-      if (!currentUser) return;
-      const uid = currentUser.id;
+      const user = currentUserRef.current;
+      if (!user) return;
+      const uid = user.id;
       const apply = (u: User): User => {
         if (u.id !== authorId) return u;
         return {
@@ -5374,7 +5378,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return prev;
       });
     },
-    [currentUser]
+    []
   );
 
   const toggleMediaLike = useCallback(
@@ -5384,8 +5388,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       mediaType: 'photo' | 'video',
       source: 'user' | 'player' | 'match' | 'competition' = 'user'
     ) => {
-      if (!currentUser) return;
-      const uid = currentUser.id;
+      const user = currentUserRef.current;
+      if (!user) return;
+      const uid = user.id;
       const key = mediaType === 'photo' ? 'photos' : 'videos';
 
       const toggleList = <
@@ -5487,7 +5492,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return next;
       });
     },
-    [currentUser, syncCompetitions]
+    [syncCompetitions]
   );
 
   const addMediaComment = useCallback(

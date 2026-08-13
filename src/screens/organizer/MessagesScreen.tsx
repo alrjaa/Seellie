@@ -30,7 +30,13 @@ const MessageRow = memo(function MessageRow({
 }) {
   const theme = useAppTheme();
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" hitSlop={6}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.subject} — ${item.senderName}`}
+      accessibilityState={{ selected: !item.read }}
+      hitSlop={6}
+    >
       <Card
         style={
           !item.read
@@ -160,6 +166,8 @@ export default function OrganizerMessagesScreen() {
         <Pressable
           style={styles.overlay}
           onPress={() => setSelectedMsg(null)}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.close')}
         >
           <Pressable
             style={[
@@ -170,6 +178,7 @@ export default function OrganizerMessagesScreen() {
               },
             ]}
             onPress={(e) => e.stopPropagation()}
+            accessibilityViewIsModal
           >
             {selectedMsg ? (
               <ScrollView contentContainerStyle={{ gap: 10 }}>

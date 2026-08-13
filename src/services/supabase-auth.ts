@@ -125,7 +125,7 @@ export async function fetchAllProfilesResult(): Promise<FetchProfilesResult> {
     .order('created_at', { ascending: false })
     .limit(500);
   if (error) {
-    console.warn('[supabase] fetchAllProfiles', error.message);
+    console.warn('[supabase] fetchAllProfilesResult', error.message);
     return { users: [], ok: false, error: error.message };
   }
   return {
