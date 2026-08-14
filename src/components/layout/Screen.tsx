@@ -3,6 +3,7 @@ import {
   AppState,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   View,
@@ -56,6 +57,11 @@ type Props = {
    * الافتراضي true.
    */
   hasTabBar?: boolean;
+  /** Pull-to-refresh on the existing Screen ScrollView (no nested scroll). */
+  refreshing?: boolean;
+  onRefresh?: () => void | Promise<void>;
+  /** Accessible name for the refresh control (e.g. t('common.refresh')). */
+  refreshAccessibilityLabel?: string;
 };
 
 function ScreenComponent({
@@ -70,6 +76,9 @@ function ScreenComponent({
   keyboard = false,
   fabClearance,
   hasTabBar = true,
+  refreshing = false,
+  onRefresh,
+  refreshAccessibilityLabel,
 }: Props) {
   const theme = useAppTheme();
   const { isRTL } = useLanguage();
@@ -167,6 +176,7 @@ function ScreenComponent({
     </View>
   );
 
+  const allowPullRefresh = Boolean(scroll && onRefresh);
   const scrollView = scroll ? (
     <ScrollView
       keyboardShouldPersistTaps="handled"
@@ -182,9 +192,21 @@ function ScreenComponent({
       scrollEventThrottle={16}
       removeClippedSubviews={false}
       decelerationRate={Platform.OS === 'ios' ? 'normal' : 0.985}
-      overScrollMode="never"
+      overScrollMode={allowPullRefresh ? 'auto' : 'never'}
       bounces
-      alwaysBounceVertical={false}
+      alwaysBounceVertical={allowPullRefresh}
+      refreshControl={
+        allowPullRefresh ? (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              void onRefresh?.();
+            }}
+            title={refreshAccessibilityLabel}
+            accessibilityLabel={refreshAccessibilityLabel}
+          />
+        ) : undefined
+      }
     >
       {body}
     </ScrollView>

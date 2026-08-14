@@ -1,5 +1,5 @@
-import React, { memo, useCallback, useMemo } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import React, { memo, useCallback, useMemo, useState } from 'react';
+import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useTournament, type Offer } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
@@ -69,9 +69,16 @@ const OfferRow = memo(function OfferRow({
 });
 
 export default function OffersScreen() {
-  const { currentUser, loading, offers, updateOfferStatus, routeForRole } =
-    useTournament();
+  const {
+    currentUser,
+    loading,
+    offers,
+    updateOfferStatus,
+    routeForRole,
+    refreshCloudPublicCatalog,
+  } = useTournament();
   const { t } = useTranslation();
+  const [refreshing, setRefreshing] = useState(false);
 
   const myOffers = useMemo(
     () =>
@@ -95,6 +102,15 @@ export default function OffersScreen() {
     [updateOfferStatus, t]
   );
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshCloudPublicCatalog();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshCloudPublicCatalog]);
+
   if (loading) return <LoadingState />;
   if (!currentUser) return <Redirect href="/(auth)/login" />;
   const active = currentUser.activeRole || currentUser.role;
@@ -102,12 +118,24 @@ export default function OffersScreen() {
     return <Redirect href={routeForRole(active) as any} />;
   }
 
+  const refreshLabel = t('common.refresh');
+
   return (
     <Screen>
       <FlatList
         data={myOffers}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              void onRefresh();
+            }}
+            title={refreshLabel}
+            accessibilityLabel={refreshLabel}
+          />
+        }
         ListHeaderComponent={
           <View style={{ gap: 4, marginBottom: 8 }}>
             <Subtitle>{t('freelancer.joinOffers')}</Subtitle>

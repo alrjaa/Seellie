@@ -28,6 +28,7 @@ export const en: TranslationTree = {
     done: 'Done',
     close: 'Close',
     retry: 'Try again',
+    refresh: 'Refresh',
     enableLight: 'Switch to light mode',
     enableDark: 'Switch to dark mode',
   },

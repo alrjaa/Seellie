@@ -30,6 +30,7 @@ export const ar = {
     done: 'تم',
     close: 'إغلاق',
     retry: 'إعادة المحاولة',
+    refresh: 'تحديث',
     enableLight: 'تفعيل الوضع الفاتح',
     enableDark: 'تفعيل الوضع الداكن',
   },

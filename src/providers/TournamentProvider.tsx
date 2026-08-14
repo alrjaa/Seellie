@@ -664,6 +664,11 @@ export interface TournamentContextType {
   refreshCloudMessages: () => Promise<void>;
   refreshCloudShareCards: () => Promise<void>;
   refreshCloudForumComments: () => Promise<void>;
+  /**
+   * Same-session catalog rehydrate (offers/gifts + public blobs).
+   * Used by pull-to-refresh — does not clear local offers/gifts on empty/error.
+   */
+  refreshCloudPublicCatalog: () => Promise<void>;
   sendShareCard: (input: {
     kind: ShareCardKind;
     recipientId: string;
@@ -910,6 +915,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const forumsSyncLock = useRef(createInFlightLock<void>());
   const messagesSyncLock = useRef(createInFlightLock<void>());
   const shareCardsSyncLock = useRef(createInFlightLock<void>());
+  const catalogSyncLock = useRef(createInFlightLock<void>());
   const profilesGen = useRef(createGenerationGate());
   /** Bumps on logout / user switch so stale cloud responses cannot re-apply A after B. */
   const sessionGen = useRef(createGenerationGate());
@@ -1065,11 +1071,19 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /** Pull-to-refresh / same-user rehydrate — deduped; preserves S2 empty/error/network semantics */
+  const refreshCloudPublicCatalog = useCallback(async () => {
+    if (!isSupabaseConfigured()) return;
+    await catalogSyncLock.current.run(async () => {
+      await hydrateCloudPublicCatalog();
+    });
+  }, [hydrateCloudPublicCatalog]);
+
   useEffect(() => {
     if (!currentUser || !isUuid(currentUser.id)) return;
     // لا تمسح البذرة قبل التحميل — وإلا تبقى الشاشات فارغة إن كانت السحابة بلا محتوى بعد
-    void hydrateCloudPublicCatalog();
-  }, [currentUser?.id, hydrateCloudPublicCatalog]);
+    void refreshCloudPublicCatalog();
+  }, [currentUser?.id, refreshCloudPublicCatalog]);
 
   useEffect(() => {
     let active = true;
@@ -1781,7 +1795,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           setCurrentUser(newUser);
           void setJson(USER_STORAGE_KEY, newUser);
           // لا تعتمد على البذرة التجريبية — حمّل الكتالوج العام فوراً بعد التسجيل
-          await hydrateCloudPublicCatalog();
+          await refreshCloudPublicCatalog();
           toast({
             variant: 'success',
             title: t('toasts.t006_e4142f'),
@@ -1856,7 +1870,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       router.replace(routeForRole('follower') as any);
       return true;
     },
-    [users, toast, router, routeForRole, t, hydrateCloudPublicCatalog]
+    [users, toast, router, routeForRole, t, refreshCloudPublicCatalog]
   );
 
   const switchActiveRole = useCallback(
@@ -6331,6 +6345,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       refreshCloudMessages,
       refreshCloudShareCards,
       refreshCloudForumComments,
+      refreshCloudPublicCatalog,
       sendShareCard,
       updateShareCardStatus,
       markShareCardRead,
@@ -6436,6 +6451,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       refreshCloudMessages,
       refreshCloudShareCards,
       refreshCloudForumComments,
+      refreshCloudPublicCatalog,
       sendShareCard,
       updateShareCardStatus,
       markShareCardRead,

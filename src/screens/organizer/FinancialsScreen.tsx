@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
@@ -10,11 +10,26 @@ import { formatArabicDate, formatAppNumber } from '@/utils';
 import { flowDirection } from '@/theme/direction';
 
 export default function FinancialsScreen() {
-  const { giftTransactions, supportLevels, currentUser } = useTournament();
+  const {
+    giftTransactions,
+    supportLevels,
+    currentUser,
+    refreshCloudPublicCatalog,
+  } = useTournament();
   const theme = useAppTheme();
   const { t, isRTL } = useTranslation();
+  const [refreshing, setRefreshing] = useState(false);
   const align = (isRTL ? 'right' : 'left') as 'left' | 'right';
   const writingDirection = (isRTL ? 'rtl' : 'ltr') as 'rtl' | 'ltr';
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshCloudPublicCatalog();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshCloudPublicCatalog]);
 
   const myTransactions = useMemo(() => {
     if (!currentUser) return [];
@@ -38,7 +53,13 @@ export default function FinancialsScreen() {
   }, [supportLevels]);
 
   return (
-    <Screen scroll contentStyle={styles.content}>
+    <Screen
+      scroll
+      contentStyle={styles.content}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      refreshAccessibilityLabel={t('common.refresh')}
+    >
       <Title>{t('organizer.financials.title')}</Title>
       <Muted>{t('organizer.financials.subtitle')}</Muted>
 
