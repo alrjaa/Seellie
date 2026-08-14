@@ -86,6 +86,7 @@ export default function FreelancersScreen() {
   const [sharePayload, setSharePayload] = useState<ContentSharePayload | null>(
     null
   );
+  const [sendingOffer, setSendingOffer] = useState(false);
 
   const freelancers = useMemo(
     () => users.filter((u) => userHasRole(u, 'freelancer')),
@@ -247,14 +248,21 @@ export default function FreelancersScreen() {
                 />
                 <Button
                   label={t('common.send')}
+                  loading={sendingOffer}
+                  disabled={sendingOffer || !selectedFreelancer || !selectedTeamId}
                   onPress={() => {
-                    if (!selectedFreelancer || !selectedTeamId) return;
-                    const ok = sendOffer(
-                      selectedFreelancer.id,
-                      selectedTeamId,
-                      offerMessage
-                    );
-                    if (ok) setModalOpen(false);
+                    if (!selectedFreelancer || !selectedTeamId || sendingOffer) return;
+                    setSendingOffer(true);
+                    try {
+                      const ok = sendOffer(
+                        selectedFreelancer.id,
+                        selectedTeamId,
+                        offerMessage
+                      );
+                      if (ok) setModalOpen(false);
+                    } finally {
+                      setSendingOffer(false);
+                    }
                   }}
                   style={{ flex: 1 }}
                 />

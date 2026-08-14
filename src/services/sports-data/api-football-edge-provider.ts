@@ -76,11 +76,41 @@ async function invokeSportsSdk<T>(
   }
 }
 
+const SYNC_RESOURCES = new Set([
+  'sync_league',
+  'sync_topscorers',
+  'sync_all',
+]);
+
+/**
+ * FIX-08 F08-S05: privileged sync / forceSync must use the user session JWT
+ * (anon key alone is rejected by Edge for these resources).
+ */
+async function invokeSportsAuthed<T>(
+  resource: string,
+  extra?: Record<string, unknown>
+): Promise<{ data: T | null; stale?: boolean }> {
+  if (!isSupabaseConfigured()) return { data: null };
+  const sb = getSupabase();
+  if (!sb) return { data: null };
+  try {
+    const { data: sessionData } = await sb.auth.getSession();
+    if (!sessionData.session?.access_token) return { data: null };
+    return invokeSportsSdk<T>(resource, extra);
+  } catch {
+    return { data: null };
+  }
+}
+
 async function invokeSports<T>(
   resource: string,
   extra?: Record<string, unknown>
 ): Promise<{ data: T | null; stale?: boolean }> {
-  // الويب: fetch مباشر أولاً (أكثر موثوقية)
+  const forceSync = !!(extra && extra.forceSync);
+  if (SYNC_RESOURCES.has(resource) || forceSync) {
+    return invokeSportsAuthed<T>(resource, extra);
+  }
+  // الويب: fetch مباشر أولاً للقراءة العامة (أكثر موثوقية)
   const viaFetch = await invokeSportsFetch<T>(resource, extra);
   if (viaFetch.data) return viaFetch;
   return invokeSportsSdk<T>(resource, extra);

@@ -92,6 +92,7 @@ export default function RequestCompetitionScreen() {
   const [minTeamsPledge, setMinTeamsPledge] = useState(false);
   const [firstAidPledge, setFirstAidPledge] = useState(false);
   const [orderPledge, setOrderPledge] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const myRequests = useMemo(
     () =>
@@ -129,6 +130,9 @@ export default function RequestCompetitionScreen() {
     orderPledge;
 
   const submit = useCallback(async () => {
+    if (submitting || !canSubmit) return;
+    setSubmitting(true);
+    try {
     const ok = await applyForCompetition({
       name,
       region,
@@ -155,7 +159,10 @@ export default function RequestCompetitionScreen() {
       setFirstAidPledge(false);
       setOrderPledge(false);
     }
-  }, [
+    } finally {
+      setSubmitting(false);
+    }
+  }, [submitting, canSubmit, 
     applyForCompetition,
     name,
     region,
@@ -252,7 +259,8 @@ export default function RequestCompetitionScreen() {
           <Button
             label={t('organizer.requestCompetition.submit')}
             onPress={submit}
-            disabled={!canSubmit}
+            loading={submitting}
+            disabled={!canSubmit || submitting}
           />
         </Card>
 

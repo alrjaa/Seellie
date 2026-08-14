@@ -128,14 +128,14 @@ export default function MessagesScreen() {
               await refreshCloudMessages();
               setRefreshing(false);
             }}
+            accessibilityLabel={t('common.refresh')}
+            title={t('common.refresh')}
           />
         }
         ListHeaderComponent={
           <View style={{ gap: 8, marginBottom: 8 }}>
             <Subtitle>{t('superadmin.modules.messages.title')}</Subtitle>
-            <Muted>
-              وارد الدعم من المتابعين. للرد أو المراسلة استخدم شاشة البريد.
-            </Muted>
+            <Muted>{t('superadmin.modules.messages.inboxHint')}</Muted>
             <SearchBar
               value={query}
               onChangeText={setQuery}

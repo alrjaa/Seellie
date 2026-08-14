@@ -1,12 +1,12 @@
 /**
- * send-email — رسائل معاملات Seellie (رمز محلل، …)
+ * send-email — رسائل معاملات Seellie (رمز محلل فقط)
  *
- * Secrets (Supabase Dashboard → Edge Functions → Secrets):
- *   RESEND_API_KEY   — مفتاح Resend
- *   EMAIL_FROM       — اختياري، مثل: Seellie <onboarding@resend.dev>
+ * FIX-08 (F08-S04): لا يُسمح بترحيل بريد عشوائي لأي مستخدم مصادق.
+ * فقط المشرف + type=analyst_access_code + حقول إلزامية + حد معدل.
  *
- * Deploy:
- *   supabase functions deploy send-email --project-ref <ref>
+ * Secrets (Dashboard → Edge Functions → Secrets):
+ *   RESEND_API_KEY
+ *   EMAIL_FROM (اختياري)
  */
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
@@ -22,9 +22,21 @@ type Body = {
   to?: string;
   code?: string;
   name?: string;
-  subject?: string;
-  text?: string;
 };
+
+const rateBucket = new Map<string, { count: number; resetAt: number }>();
+
+function checkRate(userId: string, limit: number, windowMs: number): boolean {
+  const now = Date.now();
+  const cur = rateBucket.get(userId);
+  if (!cur || now > cur.resetAt) {
+    rateBucket.set(userId, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (cur.count >= limit) return false;
+  cur.count += 1;
+  return true;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -39,10 +51,7 @@ serve(async (req) => {
       Deno.env.get('EMAIL_FROM') || 'Seellie <onboarding@resend.dev>';
 
     if (!resendKey) {
-      return json(
-        { ok: false, error: 'RESEND_API_KEY_missing' },
-        503
-      );
+      return json({ ok: false, error: 'RESEND_API_KEY_missing' }, 503);
     }
 
     const authHeader = req.headers.get('Authorization') || '';
@@ -54,46 +63,62 @@ serve(async (req) => {
       return json({ ok: false, error: 'unauthorized' }, 401);
     }
 
+    const { data: isAdmin, error: adminErr } = await sb.rpc('is_app_superadmin');
+    if (adminErr || isAdmin !== true) {
+      return json({ ok: false, error: 'forbidden' }, 403);
+    }
+
+    if (!checkRate(userData.user.id, 10, 60_000)) {
+      return json({ ok: false, error: 'rate_limited' }, 429);
+    }
+
     const body = (await req.json()) as Body;
+
+    // F08-S04: allowlist only — no arbitrary subject/text relay
+    if (body.type !== 'analyst_access_code') {
+      return json({ ok: false, error: 'type_not_allowed' }, 403);
+    }
+
     const to = (body.to || '').trim().toLowerCase();
     if (!to || !to.includes('@')) {
       return json({ ok: false, error: 'invalid_to' }, 400);
     }
 
-    let subject = (body.subject || '').trim();
-    let html = '';
-    let text = (body.text || '').trim();
+    const code = (body.code || '').trim();
+    if (!code) return json({ ok: false, error: 'missing_code' }, 400);
 
-    if (body.type === 'analyst_access_code') {
-      const code = (body.code || '').trim();
-      if (!code) return json({ ok: false, error: 'missing_code' }, 400);
-      const name = (body.name || '').trim();
-      subject = 'رمز وصول المحلل — Seellie';
-      text = [
-        name ? `مرحباً ${name},` : 'مرحباً,',
-        '',
-        'تمت الموافقة على طلبك للانضمام كمحلل في مساحة الفريد.',
-        `رمز الوصول: ${code}`,
-        '',
-        'افتح صفحة الفريد في Seellie وأدخل الرمز لتفعيل النشر.',
-        'لا تشارك الرمز مع أحد.',
-      ].join('\n');
-      html = `
+    // Recipient must be a real profile email (context binding)
+    const { data: profile, error: profileErr } = await sb
+      .from('profiles')
+      .select('id, email, name')
+      .eq('email', to)
+      .maybeSingle();
+    if (profileErr || !profile) {
+      return json({ ok: false, error: 'recipient_not_found' }, 400);
+    }
+
+    const name = (body.name || profile.name || '').trim();
+    const subject = 'رمز وصول المحلل — Seellie';
+    const text = [
+      name ? `مرحباً ${name},` : 'مرحباً,',
+      '',
+      'تمت الموافقة على طلبك للانضمام كمحلل في مساحة الفريد.',
+      `رمز الوصول: ${code}`,
+      '',
+      'افتح صفحة الفريد في Seellie وأدخل الرمز لتفعيل النشر.',
+      'لا تشارك الرمز مع أحد.',
+    ].join('\n');
+    const html = `
         <div dir="rtl" style="font-family:sans-serif;line-height:1.6">
           <h2>رمز وصول المحلل — Seellie</h2>
           <p>${name ? `مرحباً ${name},` : 'مرحباً,'}</p>
           <p>تمت الموافقة على طلبك للانضمام كمحلل في مساحة الفريد.</p>
-          <p style="font-size:22px;letter-spacing:2px"><strong>${code}</strong></p>
+          <p style="font-size:22px;letter-spacing:2px"><strong>${escapeHtml(
+            code
+          )}</strong></p>
           <p>افتح صفحة الفريد وأدخل الرمز لتفعيل النشر. لا تشارك الرمز مع أحد.</p>
         </div>
       `;
-    } else if (!subject || !text) {
-      return json({ ok: false, error: 'invalid_payload' }, 400);
-    } else {
-      html = `<pre style="font-family:sans-serif;white-space:pre-wrap">${escapeHtml(
-        text
-      )}</pre>`;
-    }
 
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -130,16 +155,17 @@ serve(async (req) => {
   }
 });
 
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...cors },
+  });
 }
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...cors, 'Content-Type': 'application/json' },
-  });
+function escapeHtml(s: string) {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }

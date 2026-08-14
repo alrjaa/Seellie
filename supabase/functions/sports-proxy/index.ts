@@ -99,6 +99,51 @@ function adminClient() {
   });
 }
 
+/** FIX-08 F08-S05 — auth helpers (never expose service_role to client) */
+const syncRate = new Map<string, { count: number; resetAt: number }>();
+
+function checkSyncRate(key: string, limit: number, windowMs: number): boolean {
+  const now = Date.now();
+  const cur = syncRate.get(key);
+  if (!cur || now > cur.resetAt) {
+    syncRate.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (cur.count >= limit) return false;
+  cur.count += 1;
+  return true;
+}
+
+function userClientFromRequest(req: Request) {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+  const anon = Deno.env.get('SUPABASE_ANON_KEY') || '';
+  const authHeader = req.headers.get('Authorization') || '';
+  if (!supabaseUrl || !anon || !authHeader) return null;
+  // Reject bare anon key as a "user" — require a real JWT session
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token || token === anon) return null;
+  return createClient(supabaseUrl, anon, {
+    global: { headers: { Authorization: authHeader } },
+  });
+}
+
+async function requireAuth(req: Request): Promise<{ id: string } | null> {
+  const sb = userClientFromRequest(req);
+  if (!sb) return null;
+  const { data, error } = await sb.auth.getUser();
+  if (error || !data.user) return null;
+  return { id: data.user.id };
+}
+
+async function requireSuperadmin(req: Request): Promise<boolean> {
+  const sb = userClientFromRequest(req);
+  if (!sb) return false;
+  const { data: userData, error } = await sb.auth.getUser();
+  if (error || !userData.user) return false;
+  const { data: isAdmin, error: adminErr } = await sb.rpc('is_app_superadmin');
+  return !adminErr && isAdmin === true;
+}
+
 async function apiFootball(path: string, apiKey: string) {
   try {
     const res = await fetch(`${UPSTREAM}${path}`, {
@@ -747,6 +792,31 @@ serve(async (req) => {
     typeof body.leagueId === 'number' && body.leagueId > 0
       ? body.leagueId
       : DEFAULT_LEAGUE_ID;
+
+  // FIX-08 F08-S05: privileged sync requires auth; sync_all requires superadmin
+  if (resource === 'sync_all') {
+    if (!(await requireSuperadmin(req))) {
+      return safeError('forbidden', 403);
+    }
+    if (!checkSyncRate('sync_all:global', 3, 60_000)) {
+      return safeError('rate_limited', 429);
+    }
+  } else if (resource === 'sync_league' || resource === 'sync_topscorers') {
+    const user = await requireAuth(req);
+    if (!user) return safeError('unauthorized', 401);
+    if (!checkSyncRate(`sync:${user.id}`, 8, 60_000)) {
+      return safeError('rate_limited', 429);
+    }
+  } else if (
+    (resource === 'bundle' || resource === 'topscorers') &&
+    body.forceSync
+  ) {
+    const user = await requireAuth(req);
+    if (!user) return safeError('unauthorized', 401);
+    if (!checkSyncRate(`force:${user.id}`, 6, 60_000)) {
+      return safeError('rate_limited', 429);
+    }
+  }
 
   if (resource === 'health') {
     return json({

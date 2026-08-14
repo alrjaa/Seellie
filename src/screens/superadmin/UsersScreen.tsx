@@ -86,7 +86,7 @@ const UserRow = memo(function UserRow({
                   fontSize: 12,
                 }}
               >
-                حذف نهائي من Auth
+                {t('superadmin.users.deleteFromAuth')}
               </Text>
             </Pressable>
           ) : (
@@ -165,7 +165,7 @@ const UserRow = memo(function UserRow({
                     fontSize: 12,
                   }}
                 >
-                  حذف نهائي
+                  {t('superadmin.users.purgeTitle')}
                 </Text>
               </Pressable>
             </>
@@ -202,7 +202,7 @@ export default function UsersScreen() {
       const count = await syncCloudUsers();
       toast({
         variant: 'success',
-        title: 'تمت المزامنة',
+        title: t('superadmin.users.syncedTitle'),
         description:
           count > 0
             ? `تم جلب ${count} حساباً من السحابة.`
@@ -233,13 +233,19 @@ export default function UsersScreen() {
     async (user: User, action: 'active' | 'suspended' | 'warned' | 'delete') => {
       if (action === 'delete') {
         const ok = await confirmDestructive({
-          title: 'حذف نهائي',
-          message: `سيتم حذف ${user.name} (${user.email}) من Authentication بالكامل حتى يمكن التسجيل بنفس البريد لاحقاً.`,
-          cancelLabel: 'إلغاء',
-          confirmLabel: 'تأكيد',
+          title: t('superadmin.users.purgeTitle'),
+          message: t('superadmin.users.deleteAuthConfirm', {
+            name: user.name,
+            email: user.email,
+          }),
+          cancelLabel: t('common.cancel'),
+          confirmLabel: t('common.confirm'),
         });
         if (!ok) return;
-        await deleteUser(user.id, `تم حذف ${user.name} نهائياً.`);
+        await deleteUser(
+          user.id,
+          t('superadmin.users.deletedPermanently', { name: user.name })
+        );
         return;
       }
       const messages = {
@@ -255,10 +261,10 @@ export default function UsersScreen() {
   const onPurgeEmail = useCallback(async () => {
     if (purging) return;
     const ok = await confirmDestructive({
-      title: 'تحرير بريد للتسجيل',
-      message: `حذف نهائي لكل حساب مرتبط بـ ${purgeEmail.trim()} من Authentication؟`,
-      cancelLabel: 'إلغاء',
-      confirmLabel: 'تأكيد',
+      title: t('superadmin.users.freeEmailTitle'),
+      message: t('superadmin.users.purgeAuthConfirm', { email: purgeEmail.trim() }),
+      cancelLabel: t('common.cancel'),
+      confirmLabel: t('common.confirm'),
     });
     if (!ok) return;
     setPurging(true);
@@ -285,7 +291,7 @@ export default function UsersScreen() {
           <View style={{ gap: 10, marginBottom: 8 }}>
             <Subtitle>{t('nav.users')}</Subtitle>
             <Muted>
-              حذف نهائي = إزالة من Authentication. بعد الحذف يمكن إنشاء حساب جديد
+              {t('superadmin.users.purgeHint')}
               بنفس البريد.
             </Muted>
             {isSupabaseConfigured() ? (
@@ -295,7 +301,7 @@ export default function UsersScreen() {
                 style={styles.syncBtn}
               >
                 <Text style={{ color: theme.colors.accent, fontWeight: '800' }}>
-                  {syncing ? 'جاري المزامنة…' : 'مزامنة من السحابة'}
+                  {syncing ? t('superadmin.users.syncing') : t('superadmin.users.syncFromCloud')}
                 </Text>
               </Pressable>
             ) : null}
@@ -303,10 +309,10 @@ export default function UsersScreen() {
             {isSupabaseConfigured() ? (
               <Card style={{ gap: 8 }}>
                 <Text style={{ color: theme.colors.text, fontWeight: '800' }}>
-                  تحرير بريد عالق
+                  {t('superadmin.users.freeEmailCardTitle')}
                 </Text>
                 <Muted>
-                  إذا ظهر «البريد موجود» عند التسجيل: الصق الإيميل هنا واضغط تحرير.
+                  {t('superadmin.users.freeEmailCardHint')}
                 </Muted>
                 <TextInput
                   value={purgeEmail}
@@ -336,7 +342,7 @@ export default function UsersScreen() {
                   ]}
                 >
                   <Text style={{ color: '#fff', fontWeight: '800' }}>
-                    {purging ? 'جاري التحرير…' : 'حذف نهائي وتحرير البريد'}
+                    {purging ? t('superadmin.users.purging') : t('superadmin.users.purgeAndFreeEmail')}
                   </Text>
                 </Pressable>
               </Card>
@@ -363,7 +369,11 @@ export default function UsersScreen() {
                     key === 'all'
                       ? t('common.all')
                       : key === 'blocked'
-                        ? `محظور/عالق${blockedCount ? ` (${blockedCount})` : ''}`
+                        ? blockedCount
+                          ? t('superadmin.users.filterBlockedCount', {
+                              count: blockedCount,
+                            })
+                          : t('superadmin.users.filterBlocked')
                         : t(`roles.${key}`)
                   }
                   active={filter === key}

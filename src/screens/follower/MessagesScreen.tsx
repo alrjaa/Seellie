@@ -246,7 +246,12 @@ export default function MessagesScreen() {
         contentContainerStyle={styles.list}
         keyboardShouldPersistTaps="handled"
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            accessibilityLabel={t('common.refresh')}
+            title={t('common.refresh')}
+          />
         }
         ListHeaderComponent={
           <View style={{ gap: 10, marginBottom: 8 }}>

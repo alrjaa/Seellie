@@ -697,15 +697,28 @@ export default function CompetitionDetailScreen() {
                       </Pressable>
                     </View>
                     <Pressable
-                      onPress={() =>
-                        removeStaffFromCompetition(
-                          competition.id,
-                          member.id,
-                          t('organizer.competitionManage.staffRemoved', {
-                            name: member.name,
-                          })
-                        )
-                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={t('organizer.competitionManage.remove')}
+                      onPress={() => {
+                        void (async () => {
+                          const ok = await confirmDestructive({
+                            title: t('organizer.competitions.removeStaffConfirmTitle'),
+                            message: t('organizer.competitions.removeStaffConfirmMessage', {
+                              name: member.name,
+                            }),
+                            cancelLabel: t('common.cancel'),
+                            confirmLabel: t('common.delete'),
+                          });
+                          if (!ok) return;
+                          removeStaffFromCompetition(
+                            competition.id,
+                            member.id,
+                            t('organizer.competitionManage.staffRemoved', {
+                              name: member.name,
+                            })
+                          );
+                        })();
+                      }}
                     >
                       <Text
                         style={{
@@ -1271,15 +1284,28 @@ export default function CompetitionDetailScreen() {
                         </Text>
                       </Pressable>
                       <Pressable
-                        onPress={() =>
-                          removeRefereeFromCompetition(
-                            competition.id,
-                            ref.id,
-                            t('superadmin.competitionDetail.removedReferee', {
-                              name: ref.name,
-                            })
-                          )
-                        }
+                        accessibilityRole="button"
+                        accessibilityLabel={t('superadmin.actions.removeFromCompetition')}
+                        onPress={() => {
+                          void (async () => {
+                            const ok = await confirmDestructive({
+                              title: t('organizer.competitions.removeRefereeConfirmTitle'),
+                              message: t('organizer.competitions.removeRefereeConfirmMessage', {
+                                name: ref.name,
+                              }),
+                              cancelLabel: t('common.cancel'),
+                              confirmLabel: t('common.delete'),
+                            });
+                            if (!ok) return;
+                            removeRefereeFromCompetition(
+                              competition.id,
+                              ref.id,
+                              t('superadmin.competitionDetail.removedReferee', {
+                                name: ref.name,
+                              })
+                            );
+                          })();
+                        }}
                       >
                         <Text style={{ color: theme.colors.textMuted, fontWeight: '800', fontSize: 11 }}>
                           {t('superadmin.actions.removeFromCompetition')}

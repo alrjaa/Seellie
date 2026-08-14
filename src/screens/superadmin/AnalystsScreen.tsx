@@ -3,6 +3,7 @@ import {
   FlatList,
   Modal,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Switch,
   Text,
@@ -416,8 +417,14 @@ export default function AnalystsScreen() {
         data={requests}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
-        refreshing={refreshing}
-        onRefresh={() => void onRefresh()}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void onRefresh()}
+            accessibilityLabel={t('common.refresh')}
+            title={t('common.refresh')}
+          />
+        }
         ListHeaderComponent={
           <View style={styles.header}>
             <Subtitle>{t('superadmin.analysts.title')}</Subtitle>

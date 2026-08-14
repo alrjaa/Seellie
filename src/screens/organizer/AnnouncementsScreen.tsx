@@ -6,6 +6,7 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { useTournament } from '@/providers/TournamentProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { confirmDestructive } from '@/utils/confirm';
 import { Button, Card, Input, Muted, Subtitle, Title } from '@/components/ui';
 import { formatArabicDate } from '@/utils';
 import { createId } from '@/utils/id';
@@ -85,7 +86,15 @@ export default function AnnouncementsScreen() {
   const mine = items.filter((a) => a.organizerId === currentUser?.id);
 
   const addAnnouncement = () => {
-    if (!currentUser || !title.trim() || !body.trim()) return;
+    if (!currentUser) return;
+    if (!title.trim() || !body.trim()) {
+      toast({
+        variant: 'destructive',
+        title: t('toasts.t045_e1da8e'),
+        description: t('organizer.announcements.fieldsRequired'),
+      });
+      return;
+    }
     setItems((prev) => [
       {
         id: createId('ann'),
@@ -164,11 +173,20 @@ export default function AnnouncementsScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={t('superadmin.actions.delete')}
                 onPress={() => {
-                  setItems((prev) => prev.filter((x) => x.id !== a.id));
-                  toast({
-                    title: t('organizer.announcements.deleted'),
-                    description: t('organizer.announcements.deletedDesc'),
-                  });
+                  void (async () => {
+                    const ok = await confirmDestructive({
+                      title: t('organizer.announcements.deleteConfirmTitle'),
+                      message: t('organizer.announcements.deleteConfirmMessage'),
+                      cancelLabel: t('common.cancel'),
+                      confirmLabel: t('common.delete'),
+                    });
+                    if (!ok) return;
+                    setItems((prev) => prev.filter((x) => x.id !== a.id));
+                    toast({
+                      title: t('organizer.announcements.deleted'),
+                      description: t('organizer.announcements.deletedDesc'),
+                    });
+                  })();
                 }}
               >
                 <Text style={{ color: theme.colors.danger, fontWeight: '800' }}>

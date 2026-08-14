@@ -31,6 +31,8 @@ export const ar = {
     close: 'إغلاق',
     retry: 'إعادة المحاولة',
     refresh: 'تحديث',
+    all: 'الكل',
+    expandVideo: 'تكبير الفيديو',
     enableLight: 'تفعيل الوضع الفاتح',
     enableDark: 'تفعيل الوضع الداكن',
   },
@@ -141,6 +143,8 @@ export const ar = {
     editProfileSub: 'الاسم، النبذة، كلمة المرور',
     currentTheme: 'الوضع الحالي',
     account: 'حسابي',
+    createPost: 'إنشاء منشور',
+    createPostSub: 'اكتب منشوراً قصيراً يظهر في ملفك',
   },
   paths: {
     title: 'مسارات الحساب — التبديل والتفعيل',
@@ -367,6 +371,11 @@ export const ar = {
     playerNoPhotos: 'لم يُضف هذا اللاعب صوراً بعد.',
     setAsAvatar: 'تعيين كصورة شخصية',
     deletePhoto: 'حذف الصورة',
+    deletePhotoConfirmTitle: 'حذف الصورة؟',
+    deletePhotoConfirmMessage: 'سيتم حذف هذه الصورة. لا يمكن التراجع.',
+    deleteVideo: 'حذف الفيديو',
+    deleteVideoConfirmTitle: 'حذف الفيديو؟',
+    deleteVideoConfirmMessage: 'سيتم حذف هذا الفيديو. لا يمكن التراجع.',
     addPhotoHint: 'إضافة صورة من الجهاز أو عبر رابط',
     picking: 'جاري الاختيار...',
     pickPhotoFromDevice: 'اختيار صورة من الجهاز',
@@ -882,6 +891,16 @@ export const ar = {
     giftDemoPendingTitle: 'تم تسجيل هدية تجريبية (بانتظار الدفع)',
     giftDemoPendingDesc:
       'رقم %{number} · %{name} — لا تُحتسب كإيراد مدفوع حتى ربط بوابة الدفع',
+    deletedPermanentlyTitle: 'تم الحذف نهائياً',
+    deletedPermanentlyDesc:
+      'أُزيل الحساب من Authentication ويمكن التسجيل بنفس البريد.',
+    purgeFailedTitle: 'الحذف النهائي فشل',
+    purgeFailedDesc:
+      'افتح Supabase → SQL Editor ونفّذ ملف ADMIN-PURGE-USER.sql مرة واحدة، ثم أعد الحذف من هنا.',
+    emailFreedTitle: 'تم تحرير البريد',
+    emailFreedDesc: '%{email} جاهز للتسجيل من جديد.',
+    signupRateLimited:
+      'تم تجاوز حد إيميلات Supabase. انتظر بضع دقائق ثم أنشئ حساباً جديداً.',
     certificateLine: 'رقم الشهادة %{number} · للمستفيد %{name}',
     needMinTeams: 'يلزم وجود %{count} فرق على الأقل.',
     fixturesCreated: 'تم إنشاء %{count} مباراة بنظام الدوري.',
@@ -1010,6 +1029,10 @@ export const ar = {
       requestNew: 'طلب تنظيم مسابقة جديدة',
       manageLink: 'إدارة المسابقة ←',
       empty: 'لا توجد مسابقات بعد',
+      removeStaffConfirmTitle: 'إزالة الموظف؟',
+      removeStaffConfirmMessage: 'سيتم إزالة %{name} من طاقم المسابقة.',
+      removeRefereeConfirmTitle: 'إزالة الحكم؟',
+      removeRefereeConfirmMessage: 'سيتم إزالة %{name} من حكام المسابقة.',
     },
     requestCompetition: {
       title: 'طلب تنظيم مسابقة',
@@ -1156,6 +1179,9 @@ export const ar = {
       publishedDesc: 'تمت إضافة الإعلان بنجاح.',
       deleted: 'تم الحذف',
       deletedDesc: 'تم حذف الإعلان.',
+      fieldsRequired: 'أدخل عنوان الإعلان ومحتواه.',
+      deleteConfirmTitle: 'حذف الإعلان؟',
+      deleteConfirmMessage: 'سيتم حذف هذا الإعلان نهائياً من قائمتك.',
     },
     prizes: {
       title: 'الجوائز',
@@ -1167,6 +1193,9 @@ export const ar = {
       empty: 'لا توجد جوائز بعد',
       emptyDesc: 'أضف جوائز المراكز لتظهر هنا وتُحفظ على الجهاز.',
       added: 'تمت إضافة الجائزة',
+      fieldsRequired: 'أدخل المركز واسم الجائزة.',
+      deleteConfirmTitle: 'حذف الجائزة؟',
+      deleteConfirmMessage: 'سيتم حذف هذه الجائزة من قائمتك.',
     },
     statistics: {
       title: 'الإحصائيات',
@@ -1539,6 +1568,8 @@ export const ar = {
       messages: {
         title: 'المراسلات',
         description: 'صندوق الرسائل الواردة',
+        inboxHint:
+          'وارد الدعم من المتابعين. للرد أو المراسلة استخدم شاشة البريد.',
       },
       emails: {
         title: 'البريد الإلكتروني',
@@ -1645,6 +1676,10 @@ export const ar = {
       sentMessages: 'الرسائل المرسلة',
       toLine: 'إلى: %{name}',
       emptySent: 'لا توجد رسائل مرسلة',
+      notConfigured: 'Supabase غير مهيأ',
+      noCloudSession:
+        'لا توجد جلسة سحابية على هذا الجوال. اخرج وادخل من /admin بإيميل Sign up (ليس الحساب التجريبي).',
+      checking: 'جارٍ التحقق...',
     },
     competitions: {
       subtitle: 'المكان · المنظم · الطاقم · الحكام · القرعة · الترتيب · الحالة',
@@ -1749,16 +1784,35 @@ export const ar = {
       },
     },
     users: {
-      subtitle: 'تفعيل / إنذار / إيقاف / حذف',
-      regIdLine: 'رقم التسجيل: %{id}',
+      subtitle: 'Activate / warn / suspend / delete',
+      regIdLine: 'Registration ID: %{id}',
       searchPlaceholder: 'بحث بالاسم أو الإيميل أو المعرف أو رقم التسجيل أو الجوال',
       noSearchResults: 'لا توجد نتائج مطابقة للبحث',
       deleteConfirm: 'حذف %{name}؟',
+      deleteAuthConfirm:
+        'سيتم حذف %{name} (%{email}) من Authentication بالكامل حتى يمكن التسجيل بنفس البريد لاحقاً.',
+      deletedPermanently: 'تم حذف %{name} نهائياً.',
+      freeEmailTitle: 'تحرير بريد للتسجيل',
       empty: 'لا يوجد مستخدمون',
       deleted: 'تم حذف %{name}',
       activated: 'تم تفعيل حساب %{name}.',
       suspended: 'تم إيقاف حساب %{name}.',
       warned: 'تم توجيه إنذار لـ %{name}.',
+      syncedTitle: 'تمت المزامنة',
+      purgeTitle: 'حذف نهائي',
+      purgeAuthConfirm: 'حذف نهائي لكل حساب مرتبط بـ %{email} من Authentication؟',
+      purgeHint:
+        'حذف نهائي = إزالة من Authentication. بعد الحذف يمكن إنشاء حساب جديد بنفس البريد.',
+      syncFromCloud: 'مزامنة من السحابة',
+      syncing: 'جاري المزامنة…',
+      purgeAndFreeEmail: 'حذف نهائي وتحرير البريد',
+      purging: 'جاري التحرير…',
+      deleteFromAuth: 'حذف نهائي من Auth',
+      filterBlocked: 'محظور/عالق/موقوف/محذوف',
+      filterBlockedCount: 'محظور/عالق (%{count})',
+      freeEmailCardTitle: 'تحرير بريد عالق',
+      freeEmailCardHint:
+        'إذا ظهر «البريد موجود» عند التسجيل: الصق الإيميل هنا واضغط تحرير.',
     },
     analytics: {
       subtitle: 'مؤشرات أداء المنصة الحالية',

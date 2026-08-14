@@ -29,6 +29,8 @@ export const en: TranslationTree = {
     close: 'Close',
     retry: 'Try again',
     refresh: 'Refresh',
+    all: 'All',
+    expandVideo: 'Expand video',
     enableLight: 'Switch to light mode',
     enableDark: 'Switch to dark mode',
   },
@@ -140,6 +142,8 @@ export const en: TranslationTree = {
     editProfileSub: 'Name, bio, password',
     currentTheme: 'Current theme',
     account: 'My account',
+    createPost: 'Create post',
+    createPostSub: 'Write a short post for your profile',
   },
   paths: {
     title: 'Account paths — switch & activate',
@@ -366,6 +370,11 @@ export const en: TranslationTree = {
     playerNoPhotos: 'This player has not added photos yet.',
     setAsAvatar: 'Set as profile photo',
     deletePhoto: 'Delete photo',
+    deletePhotoConfirmTitle: 'Delete photo?',
+    deletePhotoConfirmMessage: 'This photo will be removed. This cannot be undone.',
+    deleteVideo: 'Delete video',
+    deleteVideoConfirmTitle: 'Delete video?',
+    deleteVideoConfirmMessage: 'This video will be removed. This cannot be undone.',
     addPhotoHint: 'Add a photo from device or via link',
     picking: 'Choosing...',
     pickPhotoFromDevice: 'Choose photo from device',
@@ -884,6 +893,16 @@ export const en: TranslationTree = {
     giftDemoPendingTitle: 'Demo gift recorded (payment pending)',
     giftDemoPendingDesc:
       'No. %{number} · %{name} — not counted as paid revenue until a payment gateway is connected',
+    deletedPermanentlyTitle: 'Permanently deleted',
+    deletedPermanentlyDesc:
+      'The account was removed from Authentication and the email can be used again.',
+    purgeFailedTitle: 'Permanent delete failed',
+    purgeFailedDesc:
+      'Open Supabase → SQL Editor, run ADMIN-PURGE-USER.sql once, then retry delete here.',
+    emailFreedTitle: 'Email freed',
+    emailFreedDesc: '%{email} is ready for a new signup.',
+    signupRateLimited:
+      'Supabase email signup limit reached. Wait a few minutes, then create a new account.',
     certificateLine: 'Certificate %{number} · for %{name}',
     needMinTeams: 'At least %{count} teams are required.',
     fixturesCreated: 'Created %{count} round-robin matches.',
@@ -1012,6 +1031,10 @@ export const en: TranslationTree = {
       requestNew: 'Request a new competition',
       manageLink: 'Manage competition →',
       empty: 'No competitions yet',
+      removeStaffConfirmTitle: 'Remove staff member?',
+      removeStaffConfirmMessage: '%{name} will be removed from the competition staff.',
+      removeRefereeConfirmTitle: 'Remove referee?',
+      removeRefereeConfirmMessage: '%{name} will be removed from competition referees.',
     },
     requestCompetition: {
       title: 'Request a competition',
@@ -1159,6 +1182,9 @@ export const en: TranslationTree = {
       publishedDesc: 'Announcement added successfully.',
       deleted: 'Deleted',
       deletedDesc: 'Announcement removed.',
+      fieldsRequired: 'Enter an announcement title and body.',
+      deleteConfirmTitle: 'Delete announcement?',
+      deleteConfirmMessage: 'This announcement will be removed from your list.',
     },
     prizes: {
       title: 'Prizes',
@@ -1170,6 +1196,9 @@ export const en: TranslationTree = {
       empty: 'No prizes yet',
       emptyDesc: 'Add placement prizes to show and persist them on this device.',
       added: 'Prize added',
+      fieldsRequired: 'Enter place and prize name.',
+      deleteConfirmTitle: 'Delete prize?',
+      deleteConfirmMessage: 'This prize will be removed from your list.',
     },
     statistics: {
       title: 'Statistics',
@@ -1282,6 +1311,8 @@ export const en: TranslationTree = {
       messages: {
         title: 'Messages',
         description: 'Inbox for incoming messages',
+        inboxHint:
+          'Support inbox from followers. Use Email to reply or message users.',
       },
       emails: {
         title: 'Email',
@@ -1388,6 +1419,10 @@ export const en: TranslationTree = {
       sentMessages: 'Sent messages',
       toLine: 'To: %{name}',
       emptySent: 'No sent messages',
+      notConfigured: 'Supabase is not configured',
+      noCloudSession:
+        'No cloud session on this device. Sign out and sign in from /admin with a Sign up email (not a demo account).',
+      checking: 'Checking...',
     },
     competitions: {
       subtitle: 'Venue · organizer · staff · referees · draw · standings · status',
@@ -1497,11 +1532,31 @@ export const en: TranslationTree = {
       searchPlaceholder: 'Search by name, email, handle, registration ID, or mobile',
       noSearchResults: 'No matching users',
       deleteConfirm: 'Delete %{name}?',
+      deleteAuthConfirm:
+        '%{name} (%{email}) will be removed from Authentication so the email can be used again.',
+      deletedPermanently: '%{name} was permanently deleted.',
+      freeEmailTitle: 'Free email for signup',
       empty: 'No users',
       deleted: 'Deleted %{name}',
       activated: 'Activated account %{name}.',
       suspended: 'Suspended account %{name}.',
       warned: 'Issued a warning to %{name}.',
+      syncedTitle: 'Synced',
+      purgeTitle: 'Permanent delete',
+      purgeAuthConfirm:
+        'Permanently delete every Auth account linked to %{email}?',
+      purgeHint:
+        'Permanent delete removes the account from Authentication. After that a new account can be created with the same email.',
+      syncFromCloud: 'Sync from cloud',
+      syncing: 'Syncing…',
+      purgeAndFreeEmail: 'Permanently delete and free email',
+      purging: 'Freeing…',
+      deleteFromAuth: 'Permanently delete from Auth',
+      filterBlocked: 'Blocked / stuck / suspended / deleted',
+      filterBlockedCount: 'Blocked/stuck (%{count})',
+      freeEmailCardTitle: 'Free stuck email',
+      freeEmailCardHint:
+        'If signup says the email already exists, paste it here and free it.',
     },
     analytics: {
       subtitle: 'Current platform performance indicators',

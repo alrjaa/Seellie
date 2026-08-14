@@ -1812,7 +1812,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           variant: 'destructive',
           title: t('toasts.t004_8fdbe1'),
           description: rateLimited
-            ? 'تم تجاوز حد إيميلات Supabase. انتظر بضع دقائق ثم أنشئ حساباً جديداً.'
+            ? t('toasts.signupRateLimited')
             : alreadyExists
               ? 'البريد مسجّل مسبقاً. سجّل الدخول، أو اطلب من المشرف «تحرير بريد عالق» في إدارة المستخدمين.'
               : remote.error ||
@@ -2146,10 +2146,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         if (!purged.ok) {
           toast({
             variant: 'destructive',
-            title: 'الحذف النهائي فشل',
-            description:
-              purged.error ||
-              'افتح Supabase → SQL Editor ونفّذ ملف ADMIN-PURGE-USER.sql مرة واحدة، ثم أعد الحذف من هنا.',
+            title: t('toasts.purgeFailedTitle'),
+            description: purged.error || t('toasts.purgeFailedDesc'),
           });
           return false;
         }
@@ -2158,10 +2156,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setUsers((prev) => prev.filter((u) => u.id !== userId));
       toast({
         variant: 'success',
-        title: 'تم الحذف نهائياً',
+        title: t('toasts.deletedPermanentlyTitle'),
         description:
           successMessage ||
-          'أُزيل الحساب من Authentication ويمكن التسجيل بنفس البريد.',
+          t('toasts.deletedPermanentlyDesc'),
       });
       return true;
     },
@@ -2204,8 +2202,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       );
       toast({
         variant: 'success',
-        title: 'تم تحرير البريد',
-        description: `${normalized} جاهز للتسجيل من جديد.`,
+        title: t('toasts.emailFreedTitle'),
+        description: t('toasts.emailFreedDesc', { email: normalized }),
       });
       return true;
     },

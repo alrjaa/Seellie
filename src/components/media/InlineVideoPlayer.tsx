@@ -50,7 +50,7 @@ function InlineVideoPlayerComponent({
   autoPlayMuted = Platform.OS === 'web',
 }: Props) {
   const theme = useAppTheme();
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const focused = useIsFocused();
   const { width, height: winH, tablet } = useResponsive();
@@ -236,9 +236,7 @@ function InlineVideoPlayerComponent({
           <Pressable
             onPress={() => setFullscreen(true)}
             accessibilityRole="button"
-            accessibilityLabel={
-              language === 'ar' ? 'تكبير الفيديو' : 'Expand video'
-            }
+            accessibilityLabel={t('common.expandVideo')}
             style={[
               styles.expandBtn,
               { backgroundColor: 'rgba(0,0,0,0.55)' },

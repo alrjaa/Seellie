@@ -52,8 +52,12 @@ export default function EmailsScreen() {
   const [query, setQuery] = useState('');
   const [cloudHits, setCloudHits] = useState<RecipientChip[]>([]);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
-  const [cloudStatus, setCloudStatus] = useState('جارٍ التحقق...');
+  const [cloudStatus, setCloudStatus] = useState('');
   const cloudAdmin = !!currentUser && isUuid(currentUser.id);
+
+  useEffect(() => {
+    setCloudStatus(t('superadmin.emails.checking'));
+  }, [t]);
 
   useEffect(() => {
     void refreshCloudMessages();
@@ -65,7 +69,7 @@ export default function EmailsScreen() {
       if (!isSupabaseConfigured()) {
         if (!cancelled) {
           setSessionEmail(null);
-          setCloudStatus('Supabase غير مهيأ');
+          setCloudStatus(t('superadmin.emails.notConfigured'));
         }
         return;
       }
@@ -73,9 +77,7 @@ export default function EmailsScreen() {
       if (cancelled) return;
       setSessionEmail(email);
       if (!email) {
-        setCloudStatus(
-          'لا توجد جلسة سحابية على هذا الجوال. اخرج وادخل من /admin بإيميل Sign up (ليس الحساب التجريبي).'
-        );
+        setCloudStatus(t('superadmin.emails.noCloudSession'));
         return;
       }
       if (!cloudAdmin) {

@@ -6,6 +6,7 @@ import { useTournament } from '@/providers/TournamentProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { confirmDestructive } from '@/utils/confirm';
 import { Button, Card, Input, Muted, Subtitle, Title } from '@/components/ui';
 import { createId } from '@/utils/id';
 import { getJson, setJson } from '@/services/storage';
@@ -81,7 +82,15 @@ export default function PrizesScreen() {
   const mine = prizes.filter((p) => p.organizerId === currentUser?.id);
 
   const addPrize = () => {
-    if (!currentUser || !place.trim() || !title.trim()) return;
+    if (!currentUser) return;
+    if (!place.trim() || !title.trim()) {
+      toast({
+        variant: 'destructive',
+        title: t('toasts.t045_e1da8e'),
+        description: t('organizer.prizes.fieldsRequired'),
+      });
+      return;
+    }
     setPrizes((prev) => [
       ...prev,
       {
@@ -140,9 +149,18 @@ export default function PrizesScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t('superadmin.actions.delete')}
-                onPress={() =>
-                  setPrizes((prev) => prev.filter((x) => x.id !== p.id))
-                }
+                onPress={() => {
+                  void (async () => {
+                    const ok = await confirmDestructive({
+                      title: t('organizer.prizes.deleteConfirmTitle'),
+                      message: t('organizer.prizes.deleteConfirmMessage'),
+                      cancelLabel: t('common.cancel'),
+                      confirmLabel: t('common.delete'),
+                    });
+                    if (!ok) return;
+                    setPrizes((prev) => prev.filter((x) => x.id !== p.id));
+                  })();
+                }}
               >
                 <Text style={{ color: theme.colors.danger, fontWeight: '800' }}>
                   {t('superadmin.actions.delete')}

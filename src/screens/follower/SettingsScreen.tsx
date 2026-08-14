@@ -107,6 +107,12 @@ export default function SettingsScreen() {
         onPress={() => router.push('/(follower)/messages' as any)}
       />
       <ListRow
+        title={t('settings.createPost')}
+        subtitle={t('settings.createPostSub')}
+        icon="create-outline"
+        onPress={() => router.push('/(follower)/content/create' as any)}
+      />
+      <ListRow
         title={t('shareCards.menu')}
         subtitle={t('shareCards.subtitle')}
         icon="share-outline"

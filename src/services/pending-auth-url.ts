@@ -54,8 +54,10 @@ function persistCapturedUrl(href: string) {
   pendingAuthUrl = href;
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(WEB_CAPTURE_KEY, href);
+    // FIX-08 F08-S06: never persist token-bearing auth URLs in localStorage.
+    // In-memory + sessionStorage (tab-scoped) is enough for SPA router races.
     window.sessionStorage.setItem(WEB_CAPTURE_KEY, href);
+    window.localStorage.removeItem(WEB_CAPTURE_KEY);
   } catch {
     // ignore
   }
@@ -93,10 +95,20 @@ export function peekPendingAuthUrl(): string | null {
   if (pendingAuthUrl) return pendingAuthUrl;
   if (typeof window === 'undefined') return null;
   try {
-    return (
-      window.localStorage.getItem(WEB_CAPTURE_KEY) ||
-      window.sessionStorage.getItem(WEB_CAPTURE_KEY)
-    );
+    const fromSession = window.sessionStorage.getItem(WEB_CAPTURE_KEY);
+    if (fromSession) return fromSession;
+    // One-time migration: consume legacy localStorage then wipe it
+    const legacy = window.localStorage.getItem(WEB_CAPTURE_KEY);
+    if (legacy) {
+      try {
+        window.sessionStorage.setItem(WEB_CAPTURE_KEY, legacy);
+      } catch {
+        // ignore
+      }
+      window.localStorage.removeItem(WEB_CAPTURE_KEY);
+      return legacy;
+    }
+    return null;
   } catch {
     return null;
   }

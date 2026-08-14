@@ -20,6 +20,7 @@ import {
   type ContentSharePayload,
 } from '@/components/share/ShareTargetModal';
 import { Button, Card, Input, LikeButton, Muted, Subtitle } from '@/components/ui';
+import { confirmDestructive } from '@/utils/confirm';
 import {
   PROFILE_VIDEO_MAX_SEC,
   MEDIA_SPECS,
@@ -212,7 +213,17 @@ function PlayerMediaSectionComponent({
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={t('media.deletePhoto')}
-                      onPress={() => onRemovePhoto?.(photo.id)}
+                      onPress={() => {
+                        void (async () => {
+                          const ok = await confirmDestructive({
+                            title: t('media.deletePhotoConfirmTitle'),
+                            message: t('media.deletePhotoConfirmMessage'),
+                            cancelLabel: t('common.cancel'),
+                            confirmLabel: t('common.delete'),
+                          });
+                          if (ok) await onRemovePhoto?.(photo.id);
+                        })();
+                      }}
                       style={[
                         styles.iconBtn,
                         { backgroundColor: theme.colors.danger },
@@ -316,7 +327,17 @@ function PlayerMediaSectionComponent({
                   <Button
                     label={t('media.delete')}
                     variant="danger"
-                    onPress={() => onRemoveVideo?.(video.id)}
+                    onPress={() => {
+                      void (async () => {
+                        const ok = await confirmDestructive({
+                          title: t('media.deleteVideoConfirmTitle'),
+                          message: t('media.deleteVideoConfirmMessage'),
+                          cancelLabel: t('common.cancel'),
+                          confirmLabel: t('common.delete'),
+                        });
+                        if (ok) await onRemoveVideo?.(video.id);
+                      })();
+                    }}
                     style={{ flex: 1 }}
                   />
                 ) : null}
