@@ -15,7 +15,18 @@ import {
   type SportsLeagueBundle,
 } from './types';
 
+/** كاش محلي قصير للعرض الفوري فقط — المصدر التشغيلي هو مخزن Edge. */
 const BUNDLE_TTL_MS = 90 * 1000;
+
+function bundleHasRows(bundle: SportsLeagueBundle | null | undefined): boolean {
+  if (!bundle) return false;
+  return !!(
+    bundle.standings?.length ||
+    bundle.lastFixtures?.length ||
+    bundle.nextFixtures?.length ||
+    bundle.liveFixtures?.length
+  );
+}
 
 type InvokeOk<T> = { ok: true; cached?: boolean; stale?: boolean; data: T };
 type InvokeErr = { ok: false; error?: string };
@@ -239,24 +250,35 @@ export const apiFootballViaEdgeProvider: SportsDataProvider = {
   async getNationalLeagueBundle(opts) {
     const leagueId = opts?.leagueId ?? SAUDI_PRO_LEAGUE_ID;
     const cacheKey = `bundle:${leagueId}:active`;
+    const forceSync = !!opts?.forceSync;
 
-    if (!opts?.forceSync) {
-      const cached = await readSportsCache<SportsLeagueBundle>(cacheKey);
-      if (cached?.standings?.length) return cached;
-    }
-
+    // لا نعيد الكاش المحلي قبل الشبكة: نقرأ المخزن التشغيلي فورًا (F09-P1-01:
+    // بدون forceSync لا يوجد upstream). الكاش يبقى للعرض الفوري في الـ hook فقط.
     const { data, stale } = await invokeSports<SportsLeagueBundle>('bundle', {
       leagueId,
-      forceSync: !!opts?.forceSync,
+      forceSync,
     });
-    if (!data?.standings?.length && !data?.lastFixtures?.length) {
-      // محاولة مزامنة صريحة مرة واحدة
+
+    if (!bundleHasRows(data)) {
+      // F09-P1-01: Edge public bundle is read-only. Explicit sync_league uses
+      // session JWT only (invokeSportsAuthed) — anonymous never hits upstream.
       const synced = await invokeSports<SportsLeagueBundle>('sync_league', {
         leagueId,
       });
-      if (!synced.data?.standings?.length)
-        return data ? normalizeBundle(data, stale) : null;
-      let bundle = await enrichTopScorers(normalizeBundle(synced.data));
+      if (!bundleHasRows(synced.data)) {
+        if (data) {
+          const partial = await enrichTopScorers(normalizeBundle(data, stale));
+          await writeSportsCache(cacheKey, partial, BUNDLE_TTL_MS, {
+            leagueId,
+            season: partial.season,
+          });
+          return partial;
+        }
+        // Offline / store empty: last known local paint
+        const cached = await readSportsCache<SportsLeagueBundle>(cacheKey);
+        return cached && bundleHasRows(cached) ? cached : null;
+      }
+      let bundle = await enrichTopScorers(normalizeBundle(synced.data!));
       if (bundle.window) {
         await purgeSportsCacheOutsideWindow(leagueId, bundle.window);
       }
@@ -266,10 +288,9 @@ export const apiFootballViaEdgeProvider: SportsDataProvider = {
       });
       return bundle;
     }
-    if (!data) return null;
 
-    let bundle = await enrichTopScorers(normalizeBundle(data, stale));
-    if (!bundle.standings.length && !bundle.lastFixtures.length) return null;
+    let bundle = await enrichTopScorers(normalizeBundle(data!, stale));
+    if (!bundleHasRows(bundle)) return null;
 
     if (bundle.window) {
       await purgeSportsCacheOutsideWindow(leagueId, bundle.window);
