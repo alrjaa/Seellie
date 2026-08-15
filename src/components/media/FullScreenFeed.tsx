@@ -876,6 +876,25 @@ function FullScreenFeedComponent({
     return () => sub.remove();
   }, []);
 
+  // ويب: تأكيد interactive-widget=resizes-visual حتى لو لم يُدمَج +html في تصدير Expo
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) return;
+    const current = meta.getAttribute('content') || '';
+    if (current.includes('interactive-widget=resizes-visual')) return;
+    const parts = current
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .filter((p) => !p.startsWith('interactive-widget='));
+    if (!parts.some((p) => p.startsWith('viewport-fit='))) {
+      parts.push('viewport-fit=cover');
+    }
+    parts.push('interactive-widget=resizes-visual');
+    meta.setAttribute('content', parts.join(', '));
+  }, []);
+
   useEffect(() => {
     if (!focused) {
       releaseFloatingScrollSource(sourceId);
