@@ -3,7 +3,10 @@ type Listener = (focused: boolean) => void;
 let composerFocused = false;
 const listeners = new Set<Listener>();
 
-/** يُضبط فقط من onFocus/onBlur لملحّن الرسالة الخاصة — لإخفاء شريط التبويب */
+/**
+ * يُضبط من onFocus/onBlur لملحّن الكتابة (خاصة / تعليقات المحتوى)
+ * لإخفاء شريط التبويب أثناء لوحة المفاتيح — نفس النظام الحالي.
+ */
 export function setPrivateChatComposerFocused(focused: boolean) {
   if (composerFocused === focused) return;
   composerFocused = focused;

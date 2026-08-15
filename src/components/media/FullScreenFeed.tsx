@@ -47,6 +47,7 @@ import {
 import {
   setContentAuthorFocus,
 } from '@/services/content-author-bus';
+import { setPrivateChatComposerFocused } from '@/services/private-chat-focus';
 import {
   addContentItemComment,
   getContentItemComments,
@@ -157,6 +158,7 @@ const Slide = memo(function Slide({
   onLike,
   onComment,
   onDoubleTap,
+  onComposerFocusChange,
 }: {
   item: FullScreenContent;
   height: number;
@@ -167,6 +169,8 @@ const Slide = memo(function Slide({
     text: string
   ) => FullScreenContentComment | null | void;
   onDoubleTap?: () => void;
+  /** يجمّد ارتفاع الـ feed أثناء التركيز — لا يُمرَّر ارتفاع visualViewport إلى الشريحة */
+  onComposerFocusChange?: (focused: boolean) => void;
 }) {
   const theme = useAppTheme();
   const { t, isRTL } = useTranslation();
@@ -182,24 +186,138 @@ const Slide = memo(function Slide({
   /** لوحة تعليقات هذا المحتوى — تمتد أسفل شاشة المحتوى */
   const [commentsExpanded, setCommentsExpanded] = useState(false);
   const [draft, setDraft] = useState('');
+  /** إزاحة لوحة المفاتيح فقط — لا تغيّر ارتفاع الـ feed الأساسي */
+  const [keyboardInset, setKeyboardInset] = useState(0);
+  const [composerFocused, setComposerFocused] = useState(false);
+  const composerFocusedRef = useRef(false);
   const lastTapRef = useRef(0);
+  const lockedScrollYRef = useRef(0);
+  const insetRafRef = useRef<number | null>(null);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const comments = useContentComments(item.id, item.comments);
   const bottomPad = Math.max(insets.bottom, 6) + 4;
   const commentsPanelHeight = 210 + Math.max(insets.bottom, 8);
+
+  const clearComposerFocus = useCallback(() => {
+    if (blurTimerRef.current) {
+      clearTimeout(blurTimerRef.current);
+      blurTimerRef.current = null;
+    }
+    composerFocusedRef.current = false;
+    setComposerFocused(false);
+    setKeyboardInset(0);
+    setPrivateChatComposerFocused(false);
+    onComposerFocusChange?.(false);
+  }, [onComposerFocusChange]);
+
+  const publishKeyboardInset = useCallback((inset: number) => {
+    if (!composerFocusedRef.current) {
+      setKeyboardInset(0);
+      return;
+    }
+    const layoutH =
+      Platform.OS === 'web' && typeof window !== 'undefined'
+        ? window.innerHeight
+        : 0;
+    const capped =
+      layoutH > 0 ? Math.min(inset, Math.floor(layoutH * 0.45)) : inset;
+    setKeyboardInset(Math.max(0, Math.round(capped)));
+  }, []);
 
   useEffect(() => {
     if (!active) {
       setCommentsExpanded(false);
       setDraft('');
       Keyboard.dismiss();
+      clearComposerFocus();
     }
-  }, [active, item.id]);
+  }, [active, item.id, clearComposerFocus]);
 
   useEffect(() => {
     if (!commentsExpanded) return;
     const tmr = setTimeout(() => inputRef.current?.focus(), 80);
     return () => clearTimeout(tmr);
   }, [commentsExpanded]);
+
+  // ويب: قياس keyboard inset من visualViewport دون تغيير ارتفاع الـ feed
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    if (!commentsExpanded || !composerFocused) {
+      publishKeyboardInset(0);
+      return;
+    }
+
+    const vv = window.visualViewport;
+    lockedScrollYRef.current = window.scrollY || 0;
+
+    const measure = () => {
+      if (!composerFocusedRef.current) {
+        publishKeyboardInset(0);
+        return;
+      }
+      const layoutH = window.innerHeight;
+      const vvH = vv?.height ?? layoutH;
+      const vvTop = vv?.offsetTop ?? 0;
+      publishKeyboardInset(Math.max(0, layoutH - vvH - vvTop));
+    };
+
+    const schedule = () => {
+      if (insetRafRef.current != null) return;
+      insetRafRef.current = requestAnimationFrame(() => {
+        insetRafRef.current = null;
+        const y = lockedScrollYRef.current;
+        if (Math.abs((window.scrollY || 0) - y) > 1) {
+          window.scrollTo({ top: y, left: 0, behavior: 'auto' });
+        }
+        measure();
+      });
+    };
+
+    measure();
+    vv?.addEventListener('resize', schedule);
+    vv?.addEventListener('scroll', schedule);
+    window.addEventListener('resize', schedule);
+
+    return () => {
+      if (insetRafRef.current != null) {
+        cancelAnimationFrame(insetRafRef.current);
+        insetRafRef.current = null;
+      }
+      vv?.removeEventListener('resize', schedule);
+      vv?.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+    };
+  }, [commentsExpanded, composerFocused, publishKeyboardInset]);
+
+  // أصلي: Keyboard API — إزاحة اللوحة فقط
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    if (!commentsExpanded) {
+      setKeyboardInset(0);
+      return;
+    }
+    const showEvt =
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt =
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvt, (e) => {
+      if (!composerFocusedRef.current) return;
+      publishKeyboardInset(e.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener(hideEvt, () => {
+      publishKeyboardInset(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [commentsExpanded, publishKeyboardInset]);
+
+  useEffect(() => {
+    return () => {
+      clearComposerFocus();
+    };
+  }, [clearComposerFocus]);
 
   const openCommentsPanel = useCallback(() => {
     setCommentsExpanded(true);
@@ -208,7 +326,30 @@ const Slide = memo(function Slide({
   const dismissCommentsPanel = useCallback(() => {
     setCommentsExpanded(false);
     Keyboard.dismiss();
-  }, []);
+    clearComposerFocus();
+  }, [clearComposerFocus]);
+
+  const onComposerFocus = useCallback(() => {
+    if (blurTimerRef.current) {
+      clearTimeout(blurTimerRef.current);
+      blurTimerRef.current = null;
+    }
+    composerFocusedRef.current = true;
+    setComposerFocused(true);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      lockedScrollYRef.current = window.scrollY || 0;
+    }
+    setPrivateChatComposerFocused(true);
+    onComposerFocusChange?.(true);
+  }, [onComposerFocusChange]);
+
+  const onComposerBlur = useCallback(() => {
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    blurTimerRef.current = setTimeout(() => {
+      blurTimerRef.current = null;
+      clearComposerFocus();
+    }, 140);
+  }, [clearComposerFocus]);
 
   const playableUri =
     !!item.mediaUrl && /^https?:\/\//i.test(item.mediaUrl.trim());
@@ -604,6 +745,11 @@ const Slide = memo(function Slide({
             {
               height: commentsPanelHeight,
               paddingBottom: Math.max(insets.bottom, 10),
+              // ارفع الـ composer فوق اللوحة فقط — بدون إعادة تحجيم الـ feed
+              transform:
+                keyboardInset > 0
+                  ? [{ translateY: -keyboardInset }]
+                  : undefined,
             },
           ]}
         >
@@ -621,6 +767,8 @@ const Slide = memo(function Slide({
               }
               placeholder={t('ui.addCommentPlaceholder')}
               placeholderTextColor="#666"
+              onFocus={onComposerFocus}
+              onBlur={onComposerBlur}
               style={[
                 styles.addCommentInput,
                 cairoText('regular'),
@@ -711,6 +859,8 @@ function FullScreenFeedComponent({
   const reactId = useId();
   const sourceId = `feed:${reactId}`;
   const [height, setHeight] = useState(0);
+  const heightRef = useRef(0);
+  const freezeFeedHeightRef = useRef(false);
   const [activeId, setActiveId] = useState<string | null>(data[0]?.id ?? null);
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   const overlayOpacity = useRef(new Animated.Value(1)).current;
@@ -811,7 +961,21 @@ function FullScreenFeedComponent({
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const next = Math.round(e.nativeEvent.layout.height);
-    if (next > 0) setHeight(next);
+    if (next <= 0) return;
+    // أثناء تركيز حقل التعليق: لا تسمح لـ visualViewport/keyboard بتقليص ارتفاع الـ feed
+    if (
+      freezeFeedHeightRef.current &&
+      heightRef.current > 0 &&
+      next < heightRef.current - 1
+    ) {
+      return;
+    }
+    heightRef.current = next;
+    setHeight(next);
+  }, []);
+
+  const onComposerFocusChange = useCallback((focused: boolean) => {
+    freezeFeedHeightRef.current = focused;
   }, []);
 
   const onViewableItemsChanged = useRef(
@@ -842,9 +1006,19 @@ function FullScreenFeedComponent({
         onLike={() => onLike(item)}
         onComment={onComment}
         onDoubleTap={onDoubleTap ? () => onDoubleTap(item) : undefined}
+        onComposerFocusChange={onComposerFocusChange}
       />
     ),
-    [activeId, appActive, focused, height, onLike, onComment, onDoubleTap]
+    [
+      activeId,
+      appActive,
+      focused,
+      height,
+      onLike,
+      onComment,
+      onDoubleTap,
+      onComposerFocusChange,
+    ]
   );
 
   const getItemLayout = useCallback(
@@ -1072,8 +1246,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     color: '#111',
-    fontSize: 14,
-    lineHeight: 18,
+    // ويب: ≥16 يمنع زوم iOS Safari عند التركيز — أصلي يبقى 14 كما كان
+    fontSize: Platform.OS === 'web' ? 16 : 14,
+    lineHeight: Platform.OS === 'web' ? 20 : 18,
     // ويب: منع إطار التركيز الأزرق الافتراضي
     ...(Platform.OS === 'web'
       ? ({ outlineStyle: 'none', outlineWidth: 0 } as object)
