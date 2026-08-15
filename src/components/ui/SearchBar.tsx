@@ -1,10 +1,17 @@
 import React, { memo } from 'react';
-import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
+import {
+  Platform,
+  StyleSheet,
+  TextInput,
+  View,
+  type TextInputProps,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useLanguage, useTranslation } from '@/providers/LanguageProvider';
 import { cairoText } from '@/theme/fonts';
 import { flowDirection } from '@/theme/direction';
+import { WEB_INPUT_MIN_FONT_SIZE } from '@/theme/web-keyboard-viewport';
 
 type Props = TextInputProps & {
   onClear?: () => void;
@@ -76,5 +83,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     minHeight: 44,
   },
-  input: { flex: 1, fontSize: 14, paddingVertical: 8 },
+  input: {
+    flex: 1,
+    fontSize: Platform.OS === 'web' ? WEB_INPUT_MIN_FONT_SIZE : 14,
+    paddingVertical: 8,
+  },
 });

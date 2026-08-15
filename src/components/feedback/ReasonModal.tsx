@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -12,6 +13,7 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { Button } from '@/components/ui/Button';
 import { cairoText } from '@/theme/fonts';
 import { flowDirection } from '@/theme/direction';
+import { WEB_INPUT_MIN_FONT_SIZE } from '@/theme/web-keyboard-viewport';
 
 type Props = {
   visible: boolean;
@@ -180,7 +182,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 10,
     padding: 12,
-    fontSize: 14,
+    fontSize: Platform.OS === 'web' ? WEB_INPUT_MIN_FONT_SIZE : 14,
   },
   actions: { gap: 8, marginTop: 4 },
 });

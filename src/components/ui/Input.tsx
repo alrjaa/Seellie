@@ -1,5 +1,6 @@
 import React, { memo, forwardRef } from 'react';
 import {
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -9,6 +10,7 @@ import {
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useLanguage } from '@/providers/LanguageProvider';
 import { cairoText } from '@/theme/fonts';
+import { WEB_INPUT_MIN_FONT_SIZE } from '@/theme/web-keyboard-viewport';
 
 type Props = TextInputProps & {
   label?: string;
@@ -64,7 +66,11 @@ export const Input = memo(
               paddingHorizontal: theme.spacing.sm + 4,
               paddingVertical: multiline ? theme.spacing.sm : 10,
               minHeight: multiline ? 88 : 44,
-              fontSize: theme.fontSize.sm + 1,
+              // ويب: ≥16 يمنع زوم Safari عند التركيز — أصلي يبقى حجم التصميم
+              fontSize:
+                Platform.OS === 'web'
+                  ? Math.max(WEB_INPUT_MIN_FONT_SIZE, theme.fontSize.sm + 1)
+                  : theme.fontSize.sm + 1,
               textAlign: 'left',
               writingDirection: forceLtr ? 'ltr' : 'rtl',
             },

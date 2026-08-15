@@ -1,8 +1,12 @@
 import { Platform } from 'react-native';
+import { injectWebKeyboardViewport } from '@/theme/web-keyboard-viewport';
 
-/** أنماط عامة لسطح المكتب في المتصفح فقط */
+/** أنماط عامة لسطح المكتب في المتصفح فقط + حماية لوحة المفاتيح للجوال */
 export function injectDesktopWebStyles() {
   if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+
+  // مركزي: viewport + منع زوم الإدخال + overflow-x (كل الشاشات)
+  injectWebKeyboardViewport();
 
   const id = 'seellie-desktop-web-styles';
   if (document.getElementById(id)) return;

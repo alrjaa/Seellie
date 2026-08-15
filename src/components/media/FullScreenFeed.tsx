@@ -60,6 +60,7 @@ import { createId } from '@/utils/id';
 import { cairoText } from '@/theme/fonts';
 import { FAB_COLUMN_WIDTH } from '@/theme/navigation';
 import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
+import { WEB_INPUT_MIN_FONT_SIZE } from '@/theme/web-keyboard-viewport';
 
 export type FullScreenContentComment = {
   id: string;
@@ -871,25 +872,7 @@ function FullScreenFeedComponent({
     return () => sub.remove();
   }, []);
 
-  // ويب: تأكيد interactive-widget=resizes-visual حتى لو لم يُدمَج +html في تصدير Expo
-  useEffect(() => {
-    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
-    const meta = document.querySelector('meta[name="viewport"]');
-    if (!meta) return;
-    const current = meta.getAttribute('content') || '';
-    if (current.includes('interactive-widget=resizes-visual')) return;
-    const parts = current
-      .split(',')
-      .map((p) => p.trim())
-      .filter(Boolean)
-      .filter((p) => !p.startsWith('interactive-widget='));
-    if (!parts.some((p) => p.startsWith('viewport-fit='))) {
-      parts.push('viewport-fit=cover');
-    }
-    parts.push('interactive-widget=resizes-visual');
-    meta.setAttribute('content', parts.join(', '));
-  }, []);
-
+  // ويب: حماية لوحة المفاتيح/الزوم مركزية عبر injectWebKeyboardViewport في جذر التطبيق
   useEffect(() => {
     if (!focused) {
       releaseFloatingScrollSource(sourceId);
@@ -1261,7 +1244,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     color: '#111',
     // ويب: ≥16 يمنع زوم iOS Safari عند التركيز — أصلي يبقى 14 كما كان
-    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontSize: Platform.OS === 'web' ? WEB_INPUT_MIN_FONT_SIZE : 14,
     lineHeight: Platform.OS === 'web' ? 20 : 18,
     // ويب: منع إطار التركيز الأزرق الافتراضي
     ...(Platform.OS === 'web'

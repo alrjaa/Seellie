@@ -15,6 +15,7 @@ import { Muted } from '@/components/ui';
 import { useResponsive } from '@/hooks/useResponsive';
 import { setPrivateChatComposerFocused } from '@/services/private-chat-focus';
 import type { PrivateChatMediaKind } from '@/services/private-space';
+import { WEB_INPUT_MIN_FONT_SIZE } from '@/theme/web-keyboard-viewport';
 
 export type PrivateComposerPendingMedia = {
   uri: string;
@@ -43,7 +44,7 @@ type Props = {
   onFocusedChange?: (focused: boolean) => void;
 };
 
-const INPUT_FONT = 16;
+const INPUT_FONT = WEB_INPUT_MIN_FONT_SIZE;
 const BTN = 40;
 const BLUR_DELAY_MS = 140;
 
