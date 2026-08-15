@@ -43,6 +43,7 @@ import {
   noteFloatingScrollOffset,
   noteFloatingScrollSettle,
   releaseFloatingScrollSource,
+  setFloatingSuppressed,
 } from '@/services/floating-scroll-bus';
 import {
   setContentAuthorFocus,
@@ -207,6 +208,7 @@ const Slide = memo(function Slide({
     setComposerFocused(false);
     setKeyboardInset(0);
     setPrivateChatComposerFocused(false);
+    setFloatingSuppressed(false);
     onComposerFocusChange?.(false);
   }, [onComposerFocusChange]);
 
@@ -215,13 +217,8 @@ const Slide = memo(function Slide({
       setKeyboardInset(0);
       return;
     }
-    const layoutH =
-      Platform.OS === 'web' && typeof window !== 'undefined'
-        ? window.innerHeight
-        : 0;
-    const capped =
-      layoutH > 0 ? Math.min(inset, Math.floor(layoutH * 0.45)) : inset;
-    setKeyboardInset(Math.max(0, Math.round(capped)));
+    // كامل ارتفاع اللوحة المحجوز أسفل الـ viewport — بدون سقف يمنع ظهور الحقل
+    setKeyboardInset(Math.max(0, Math.round(inset)));
   }, []);
 
   useEffect(() => {
@@ -233,13 +230,10 @@ const Slide = memo(function Slide({
     }
   }, [active, item.id, clearComposerFocus]);
 
-  useEffect(() => {
-    if (!commentsExpanded) return;
-    const tmr = setTimeout(() => inputRef.current?.focus(), 80);
-    return () => clearTimeout(tmr);
-  }, [commentsExpanded]);
+  // لا تركيز تلقائي: يبقى Composer ظاهرًا قبل الضغط على الحقل
+  // (المستخدم يضغط «إضافة تعليق» لفتح اللوحة)
 
-  // ويب: قياس keyboard inset من visualViewport دون تغيير ارتفاع الـ feed
+  // ويب: قياس keyboard inset من visualViewport — حجز سفلي فقط، بلا تحريك الشاشة
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
     if (!commentsExpanded || !composerFocused) {
@@ -289,7 +283,7 @@ const Slide = memo(function Slide({
     };
   }, [commentsExpanded, composerFocused, publishKeyboardInset]);
 
-  // أصلي: Keyboard API — إزاحة اللوحة فقط
+  // أصلي: Keyboard API — حجز سفلي فقط
   useEffect(() => {
     if (Platform.OS === 'web') return;
     if (!commentsExpanded) {
@@ -339,7 +333,9 @@ const Slide = memo(function Slide({
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       lockedScrollYRef.current = window.scrollY || 0;
     }
+    // أنظمة موجودة: إخفاء التبويب + FAB أثناء الكتابة (لا نظام جديد)
     setPrivateChatComposerFocused(true);
+    setFloatingSuppressed(true);
     onComposerFocusChange?.(true);
   }, [onComposerFocusChange]);
 
@@ -737,19 +733,18 @@ const Slide = memo(function Slide({
         </View>
       </View>
 
-      {/* تظهر فقط بعد النقر على «تعليقات»: حقل كتابة + قائمة تعليقات هذا المحتوى */}
+      {/* تظهر فقط بعد النقر على «تعليقات»: Composer ظاهر ثم قائمة التعليقات */}
       {commentsExpanded ? (
         <View
           style={[
             styles.commentsExpandPanel,
             {
               height: commentsPanelHeight,
-              paddingBottom: Math.max(insets.bottom, 10),
-              // ارفع الـ composer فوق اللوحة فقط — بدون إعادة تحجيم الـ feed
-              transform:
-                keyboardInset > 0
-                  ? [{ translateY: -keyboardInset }]
-                  : undefined,
+              // Safe area عندما لا توجد لوحة؛ مع اللوحة يُحجز ارتفاعها بـ marginBottom
+              paddingBottom:
+                keyboardInset > 0 ? 8 : Math.max(insets.bottom, 10),
+              // حجز مساحة لوحة المفاتيح أسفل اللوحة (layout) — ليس translateY
+              marginBottom: keyboardInset > 0 ? keyboardInset : 0,
             },
           ]}
         >
