@@ -7,6 +7,7 @@ import {
   type FullScreenContent,
 } from '@/components/media/FullScreenFeed';
 import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
+import { resolveLocationLabel } from '@/utils/location-label';
 
 type MediaItem = {
   id: string;
@@ -23,6 +24,8 @@ type MediaItem = {
   organizerName?: string;
   organizerHandle?: string;
   organizerAvatar?: string;
+  locationCity?: string;
+  locationRegion?: string;
 };
 
 function isHttpUrl(url?: string) {
@@ -42,6 +45,8 @@ export default function HighlightsScreen() {
       const organizerName = organizer?.name || comp.name;
       const organizerHandle = organizer?.handle;
       const organizerAvatar = organizer?.avatar || comp.logo;
+      const locationCity = comp.venue?.city;
+      const locationRegion = comp.venue?.region;
 
       (comp.media?.photos || []).forEach((p) => {
         if (!isHttpUrl(p.url)) return;
@@ -58,6 +63,8 @@ export default function HighlightsScreen() {
           organizerName,
           organizerHandle,
           organizerAvatar,
+          locationCity,
+          locationRegion,
         });
       });
       (comp.media?.videos || []).forEach((v) => {
@@ -75,6 +82,8 @@ export default function HighlightsScreen() {
           organizerName,
           organizerHandle,
           organizerAvatar,
+          locationCity,
+          locationRegion,
         });
       });
 
@@ -96,6 +105,8 @@ export default function HighlightsScreen() {
               organizerName: player.name || organizerName,
               organizerHandle,
               organizerAvatar: player.avatar || organizerAvatar,
+              locationCity,
+              locationRegion,
             });
           });
           (player.media?.videos || []).forEach((v) => {
@@ -113,6 +124,8 @@ export default function HighlightsScreen() {
               organizerName: player.name || organizerName,
               organizerHandle,
               organizerAvatar: player.avatar || organizerAvatar,
+              locationCity,
+              locationRegion,
             });
           });
         });
@@ -137,6 +150,8 @@ export default function HighlightsScreen() {
             organizerName,
             organizerHandle,
             organizerAvatar,
+            locationCity,
+            locationRegion,
           });
         });
         match.media?.videos?.forEach((v) => {
@@ -154,6 +169,8 @@ export default function HighlightsScreen() {
             organizerName,
             organizerHandle,
             organizerAvatar,
+            locationCity,
+            locationRegion,
           });
         });
       });
@@ -172,6 +189,10 @@ export default function HighlightsScreen() {
         authorHandle: item.organizerHandle,
         authorAvatar: item.organizerAvatar,
         title: item.matchLabel,
+        locationLabel: resolveLocationLabel({
+          city: item.locationCity,
+          region: item.locationRegion,
+        }),
         subtitle:
           item.source === 'competition'
             ? item.type === 'photo'

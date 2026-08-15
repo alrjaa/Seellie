@@ -31,6 +31,7 @@ import { useListChrome } from '@/hooks/useListChrome';
 import { formatArabicDate } from '@/utils';
 import { userHasRole } from '@/utils/roles';
 import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
+import { resolveLocationLabel } from '@/utils/location-label';
 
 type MediaFilter = 'all' | 'photos' | 'videos';
 
@@ -66,6 +67,8 @@ type PersonalityItem = {
   handle?: string;
   timestamp: Date;
   likes: string[];
+  locationCity?: string;
+  locationRegion?: string;
   comments: {
     id: string;
     text: string;
@@ -152,6 +155,8 @@ export default function PersonalityScreen() {
             timestamp: new Date(photo.timestamp || Date.now()),
             likes: photo.likes,
             comments: photo.comments || [],
+            locationCity: u.city,
+            locationRegion: u.region,
           });
         });
         (u.media?.videos || []).forEach((video) => {
@@ -167,6 +172,8 @@ export default function PersonalityScreen() {
             timestamp: new Date(video.timestamp || Date.now()),
             likes: video.likes,
             comments: video.comments || [],
+            locationCity: u.city,
+            locationRegion: u.region,
           });
         });
       });
@@ -212,6 +219,10 @@ export default function PersonalityScreen() {
         }`,
         likes: item.likes,
         liked: !!currentUser && item.likes.includes(currentUser.id),
+        locationLabel: resolveLocationLabel({
+          city: item.locationCity,
+          region: item.locationRegion,
+        }),
         comments: (item.comments || []).map((c) => ({
           id: c.id,
           text: c.text,

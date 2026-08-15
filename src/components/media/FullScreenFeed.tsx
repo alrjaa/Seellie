@@ -80,6 +80,11 @@ export type FullScreenContent = {
   authorHandle?: string;
   authorAvatar?: string;
   subtitle?: string;
+  /**
+   * مدينة/منطقة للعرض بجانب زر التعليقات (نفس سطر وحجم خط التعليقات).
+   * يُمرَّر من الشاشات عند توفر البيانات فقط.
+   */
+  locationLabel?: string;
   likes: string[];
   liked: boolean;
   /** تعليقات مرتبطة بالمحتوى (وسائط / تحليل …) */
@@ -529,6 +534,8 @@ const Slide = memo(function Slide({
                   // مساحة ثابتة يمين العنوان لأزرار الإعجاب/التعليقات (يمين فيزيائي)
                   left: 14,
                   right: 14 + 88,
+                  // ارفع العنوان إن وُجدت تسمية موقع على سطر التعليقات
+                  bottom: item.locationLabel?.trim() ? 28 : 8,
                   textAlign: isRTL ? 'right' : 'left',
                   writingDirection: isRTL ? 'rtl' : 'ltr',
                 },
@@ -565,6 +572,27 @@ const Slide = memo(function Slide({
               </Text>
             </Pressable>
           </View>
+          {/* موقع المدينة/المنطقة — نفس سطر وحجم خط زر التعليقات (مرجع اللقطات) */}
+          {item.locationLabel?.trim() ? (
+            <Text
+              style={[
+                styles.locationBesideComments,
+                styles.commentsLinkText,
+                cairoText('medium'),
+                {
+                  left: 14,
+                  right: 14 + 88,
+                  // دائماً بجوار عمود التعليقات (يمين فيزيائي) — اتجاه الكتابة فقط يتبع اللغة
+                  textAlign: 'right',
+                  writingDirection: isRTL ? 'rtl' : 'ltr',
+                },
+              ]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {item.locationLabel.trim()}
+            </Text>
+          ) : null}
         </View>
       </View>
 
@@ -967,6 +995,16 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: Platform.OS === 'android' ? 13 : 14,
     lineHeight: Platform.OS === 'android' ? 18 : 20,
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  /** محاذاة رأسية مع زر التعليقات داخل actionsColumn (bottom: 0) */
+  locationBesideComments: {
+    position: 'absolute',
+    bottom: 2,
+    zIndex: 5,
+    lineHeight: 16,
     textShadowColor: 'rgba(0,0,0,0.55)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,

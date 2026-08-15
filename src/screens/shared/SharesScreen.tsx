@@ -34,6 +34,7 @@ import {
   FullScreenFeed,
   type FullScreenContent,
 } from '@/components/media/FullScreenFeed';
+import { resolveLocationLabel } from '@/utils/location-label';
 import {
   Avatar,
   Button,
@@ -65,6 +66,8 @@ type ShareItem = {
   timestamp: Date;
   likes: string[];
   source: 'user' | 'player';
+  locationCity?: string;
+  locationRegion?: string;
 };
 
 const ShareCard = memo(function ShareCard({
@@ -221,6 +224,8 @@ export default function SharesScreen() {
             timestamp: new Date(p.timestamp),
             likes: p.likes,
             source: 'user',
+            locationCity: u.city,
+            locationRegion: u.region,
           });
         });
         (u.media?.photos || []).forEach((photo) => {
@@ -236,6 +241,8 @@ export default function SharesScreen() {
             timestamp: new Date(photo.timestamp || Date.now()),
             likes: photo.likes,
             source: 'user',
+            locationCity: u.city,
+            locationRegion: u.region,
           });
         });
         (u.media?.videos || []).forEach((video) => {
@@ -251,11 +258,15 @@ export default function SharesScreen() {
             timestamp: new Date(video.timestamp || Date.now()),
             likes: video.likes,
             source: 'user',
+            locationCity: u.city,
+            locationRegion: u.region,
           });
         });
       });
 
     competitions.forEach((comp) => {
+      const locationCity = comp.venue?.city;
+      const locationRegion = comp.venue?.region;
       comp.teams.forEach((team) => {
         team.players.forEach((player) => {
           (player.media?.photos || []).forEach((photo) => {
@@ -271,6 +282,8 @@ export default function SharesScreen() {
               timestamp: new Date(photo.timestamp || Date.now()),
               likes: photo.likes,
               source: 'player',
+              locationCity,
+              locationRegion,
             });
           });
           (player.media?.videos || []).forEach((video) => {
@@ -286,6 +299,8 @@ export default function SharesScreen() {
               timestamp: new Date(video.timestamp || Date.now()),
               likes: video.likes,
               source: 'player',
+              locationCity,
+              locationRegion,
             });
           });
         });
@@ -360,6 +375,10 @@ export default function SharesScreen() {
         }${item.teamName ? ` · ${item.teamName}` : ''}`,
         likes: item.likes,
         liked: !!currentUser && item.likes.includes(currentUser.id),
+        locationLabel: resolveLocationLabel({
+          city: item.locationCity,
+          region: item.locationRegion,
+        }),
       })),
     [filtered, currentUser, t]
   );

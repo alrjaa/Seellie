@@ -33,6 +33,7 @@ import { useListChrome } from '@/hooks/useListChrome';
 import { formatArabicDate } from '@/utils';
 import { userHasRole } from '@/utils/roles';
 import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
+import { resolveLocationLabel } from '@/utils/location-label';
 
 type FeedFilter = 'all' | 'media' | 'discussions' | 'posts';
 
@@ -65,6 +66,8 @@ type FeedItem = {
   timestamp: Date;
   mediaSource?: 'user' | 'player' | 'match' | 'competition';
   subtitle?: string;
+  locationCity?: string;
+  locationRegion?: string;
 };
 
 const FILTERS: {
@@ -273,6 +276,8 @@ export default function GeneralFeedScreen() {
             text: p.text,
             likes: p.likes,
             timestamp: new Date(p.timestamp),
+            locationCity: user.city,
+            locationRegion: user.region,
           });
         });
 
@@ -293,6 +298,8 @@ export default function GeneralFeedScreen() {
             timestamp: new Date(photo.timestamp || Date.now()),
             mediaSource: 'user',
             subtitle: t('home.freelancerPlayer'),
+            locationCity: user.city,
+            locationRegion: user.region,
           });
         });
 
@@ -313,6 +320,8 @@ export default function GeneralFeedScreen() {
             timestamp: new Date(video.timestamp || Date.now()),
             mediaSource: 'user',
             subtitle: t('home.freelancerPlayer'),
+            locationCity: user.city,
+            locationRegion: user.region,
           });
         });
       }
@@ -347,6 +356,8 @@ export default function GeneralFeedScreen() {
           comments: a.comments || [],
           timestamp: new Date(a.timestamp),
           subtitle: t('screens.typeAnalysis'),
+          locationCity: user.city,
+          locationRegion: user.region,
         });
       });
     });
@@ -357,6 +368,8 @@ export default function GeneralFeedScreen() {
       const uploaderName = organizer?.name || comp.name;
       const uploaderHandle = organizer?.handle;
       const uploaderAvatar = organizer?.avatar || comp.logo;
+      const locationCity = comp.venue?.city;
+      const locationRegion = comp.venue?.region;
 
       (comp.media?.photos || []).forEach((photo) => {
         if (!isHttpUrl(photo.url)) return;
@@ -375,6 +388,8 @@ export default function GeneralFeedScreen() {
           timestamp: new Date(photo.timestamp || Date.now()),
           mediaSource: 'competition',
           subtitle: t('screens.competitionMedia'),
+          locationCity,
+          locationRegion,
         });
       });
       (comp.media?.videos || []).forEach((video) => {
@@ -394,6 +409,8 @@ export default function GeneralFeedScreen() {
           timestamp: new Date(video.timestamp || Date.now()),
           mediaSource: 'competition',
           subtitle: t('screens.competitionMedia'),
+          locationCity,
+          locationRegion,
         });
       });
 
@@ -416,6 +433,8 @@ export default function GeneralFeedScreen() {
               timestamp: new Date(photo.timestamp || Date.now()),
               mediaSource: 'player',
               subtitle: `${team.name} · ${player.name}`,
+              locationCity,
+              locationRegion,
             });
           });
           (player.media?.videos || []).forEach((video) => {
@@ -435,6 +454,8 @@ export default function GeneralFeedScreen() {
               timestamp: new Date(video.timestamp || Date.now()),
               mediaSource: 'player',
               subtitle: `${team.name} · ${player.name}`,
+              locationCity,
+              locationRegion,
             });
           });
         });
@@ -461,6 +482,8 @@ export default function GeneralFeedScreen() {
             timestamp: new Date(photo.timestamp || match.date),
             mediaSource: 'match',
             subtitle: `${comp.name} · ${label}`,
+            locationCity,
+            locationRegion,
           });
         });
         (match.media?.videos || []).forEach((video) => {
@@ -480,6 +503,8 @@ export default function GeneralFeedScreen() {
             timestamp: new Date(video.timestamp || match.date),
             mediaSource: 'match',
             subtitle: `${comp.name} · ${label}`,
+            locationCity,
+            locationRegion,
           });
         });
       });
@@ -504,6 +529,8 @@ export default function GeneralFeedScreen() {
           likes: c.likes,
           timestamp: new Date(c.timestamp),
           subtitle: t('screens.publicForum'),
+          locationCity: author?.city,
+          locationRegion: author?.region,
         });
         return;
       }
@@ -518,6 +545,8 @@ export default function GeneralFeedScreen() {
         likes: c.likes,
         timestamp: new Date(c.timestamp),
         subtitle: t('screens.publicForum'),
+        locationCity: author?.city,
+        locationRegion: author?.region,
       });
     });
 
@@ -536,6 +565,8 @@ export default function GeneralFeedScreen() {
         likes: c.likes,
         timestamp: new Date(c.timestamp),
         subtitle: t('screens.quickDiscuss'),
+        locationCity: author?.city,
+        locationRegion: author?.region,
       });
     });
 
@@ -676,6 +707,10 @@ export default function GeneralFeedScreen() {
           subtitle: undefined,
           likes: item.likes,
           liked: !!currentUser && item.likes.includes(currentUser.id),
+          locationLabel: resolveLocationLabel({
+            city: item.locationCity,
+            region: item.locationRegion,
+          }),
           comments: (item.comments || []).map((c) => ({
             id: c.id,
             text: c.text,

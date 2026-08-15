@@ -45,6 +45,7 @@ import {
 import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
+import { resolveLocationLabel } from '@/utils/location-label';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatArabicDate } from '@/utils';
 import { ANALYST_TERMS, isActiveAnalyst, isAnalystSuspendActive } from '@/utils/analyst';
@@ -358,9 +359,16 @@ export default function UniqueScreen() {
         subtitle: undefined,
         likes: item.likes,
         liked: item.likes.includes(currentUser.id),
+        locationLabel: (() => {
+          const author = users.find((u) => u.id === item.authorId);
+          return resolveLocationLabel({
+            city: author?.city,
+            region: author?.region,
+          });
+        })(),
       };
     });
-  }, [currentUser, filter, filtered]);
+  }, [currentUser, filter, filtered, users]);
 
   const analystStatus = currentUser?.analyst?.status || 'none';
   const canPublish = isActiveAnalyst(currentUser);
