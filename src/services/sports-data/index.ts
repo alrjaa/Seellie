@@ -19,6 +19,7 @@ export {
   pickLatestAvailableSeason,
   rotateToNewSeason,
   seasonProbeList,
+  expectedSeasonBase,
   windowFromAvailableSeasons,
 } from './season-window';
 

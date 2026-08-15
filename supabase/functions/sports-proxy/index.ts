@@ -388,14 +388,47 @@ async function fetchStandingsSeason(
     `/standings?league=${leagueId}&season=${season}`,
     apiKey
   );
-  if (!up.ok) return null;
+  if (!up.ok) {
+    return {
+      ok: false as const,
+      standings: [] as any[],
+      meta: null as any,
+      errorKeys: up.errorKeys,
+    };
+  }
   const standings = mapStandings(up.data);
-  if (!standings.length) return null;
+  if (!standings.length) {
+    return {
+      ok: false as const,
+      standings: [],
+      meta: leagueMeta(up.data, leagueId, season),
+      errorKeys: up.errorKeys.length ? up.errorKeys : ['empty_standings'],
+    };
+  }
   return {
+    ok: true as const,
     standings,
     meta: leagueMeta(up.data, leagueId, season),
-    season,
+    errorKeys: up.errorKeys,
   };
+}
+
+/** مواسم الدوري كما يعلنها المزوّد (سنة البداية) */
+async function listProviderSeasonYears(
+  apiKey: string,
+  leagueId: number
+): Promise<number[]> {
+  const up = await apiFootball(`/leagues?id=${leagueId}`, apiKey);
+  if (!up.ok) return [];
+  const seasons = up.data?.response?.[0]?.seasons;
+  if (!Array.isArray(seasons)) return [];
+  return [
+    ...new Set(
+      seasons
+        .map((s: any) => Number(s?.year))
+        .filter((y: number) => Number.isFinite(y) && y >= 2018 && y <= 2100)
+    ),
+  ].sort((a, b) => b - a);
 }
 
 /**
@@ -529,14 +562,77 @@ async function syncLeague(
     number,
     { standings: any[]; meta: any }
   >();
+  const discoveryLog: Array<Record<string, unknown>> = [];
 
-  for (const season of seasonProbeList()) {
+  // مواسم المزوّد المعلنة + مرشحو التقويم (حتى لا نعلق على نافذة قديمة)
+  const providerYears = await listProviderSeasonYears(apiKey, leagueId);
+  const probeYears = [
+    ...new Set([...seasonProbeList(), ...providerYears]),
+  ]
+    .filter((y) => y >= 2018 && y <= 2100)
+    .sort((a, b) => b - a)
+    .slice(0, 8);
+
+  for (const season of probeYears) {
     const hit = await fetchStandingsSeason(apiKey, leagueId, season);
-    if (hit) {
+    if (hit.ok) {
       withData.push(season);
       standingsBySeason.set(season, {
         standings: hit.standings,
         meta: hit.meta,
+      });
+      discoveryLog.push({
+        season,
+        standings: hit.standings.length,
+        source: 'standings',
+        errors: hit.errorKeys,
+      });
+      continue;
+    }
+
+    const expectedBase = seasonProbeList()[0] ?? new Date().getUTCFullYear();
+    // لا نحرق حصة المباريات إلا للمواسم القريبة من التقويم الحالي
+    if (season < expectedBase - 1) {
+      discoveryLog.push({
+        season,
+        standings: 0,
+        source: 'skipped_fixtures',
+        errors: hit.errorKeys,
+      });
+      continue;
+    }
+
+    // موسم جديد قد يملك مباريات قبل اكتمال جدول الترتيب
+    const fx = await fetchFixturesForSeason(apiKey, leagueId, season);
+    const fxCount =
+      (fx.nextFixtures?.length || 0) +
+      (fx.lastFixtures?.length || 0) +
+      (fx.liveFixtures?.length || 0);
+    if (fxCount > 0) {
+      withData.push(season);
+      standingsBySeason.set(season, {
+        standings: [],
+        meta: {
+          leagueId,
+          leagueName: tracked.name,
+          season,
+          country: tracked.country,
+        },
+      });
+      discoveryLog.push({
+        season,
+        standings: 0,
+        fixtures: fxCount,
+        source: 'fixtures',
+        errors: hit.errorKeys,
+      });
+    } else {
+      discoveryLog.push({
+        season,
+        standings: 0,
+        fixtures: 0,
+        source: 'empty',
+        errors: hit.errorKeys,
       });
     }
   }
@@ -545,6 +641,7 @@ async function syncLeague(
   if (!withData.length) {
     if (existingWindow && sb) {
       const bundle = await buildBundleFromStore(sb, leagueId, existingWindow);
+      if (bundle) (bundle as any).discovery = { probeYears, providerYears, discoveryLog };
       return { ok: !!bundle, bundle };
     }
     return { ok: false, bundle: null };
@@ -637,7 +734,7 @@ async function syncLeague(
         leagueId,
         window.previous
       );
-      if (fetched) {
+      if (fetched.ok) {
         prev = { standings: fetched.standings, meta: fetched.meta };
       }
     }
@@ -666,6 +763,18 @@ async function syncLeague(
   }
 
   const bundle = await buildBundleFromStore(sb, leagueId, window);
+  if (bundle) {
+    (bundle as any).discovery = {
+      probeYears,
+      providerYears: providerYears.slice(0, 12),
+      discoveryLog,
+      rotated: rotation.rotated,
+    };
+    // وقت المخزن الحقيقي — لا تختم «الآن» في كل قراءة عامة
+    if ((bundle as any).storeUpdatedAt) {
+      bundle.fetchedAt = (bundle as any).storeUpdatedAt;
+    }
+  }
   return { ok: !!bundle, bundle, rotated: rotation.rotated };
 }
 
@@ -711,6 +820,12 @@ async function buildBundleFromStore(
   if (!standings.length) return null;
 
   const metaObj = (meta?.payload as any) || {};
+  const storeUpdatedAt =
+    st?.updated_at ||
+    nx?.updated_at ||
+    ls?.updated_at ||
+    meta?.updated_at ||
+    null;
   return {
     leagueId,
     leagueName: metaObj.leagueName,
@@ -727,9 +842,9 @@ async function buildBundleFromStore(
     previousLastFixtures,
     previousTopScorers,
     partial: false,
-    fetchedAt: new Date().toISOString(),
+    fetchedAt: storeUpdatedAt || new Date().toISOString(),
     source: 'sports-store',
-    storeUpdatedAt: st?.updated_at || meta?.updated_at || null,
+    storeUpdatedAt,
   };
 }
 
@@ -826,6 +941,11 @@ serve(async (req) => {
       store: 'two-season-operational',
       defaultLeagueId: DEFAULT_LEAGUE_ID,
       trackedLeagueIds: TRACKED_LEAGUES.map((l) => l.leagueId),
+      expectedSeasonBase: (() => {
+        const y = new Date().getUTCFullYear();
+        const m = new Date().getUTCMonth() + 1;
+        return m >= 7 ? y : y - 1;
+      })(),
       payloads: [
         'standings',
         'fixtures_next',
@@ -1010,35 +1130,44 @@ serve(async (req) => {
 
   if (resource === 'bundle') {
     const cacheKey = `bundle:${leagueId}`;
+
+    // F09-P1-01: public/anonymous (and any !forceSync) read is durable/cache ONLY.
+    // Never start upstream syncLeague / background refresh from this path.
+    // Explicit refresh requires forceSync (already gated by requireAuth above).
     if (!body.forceSync) {
       const cached = cacheGet(cacheKey);
       if (cached) return json({ ok: true, cached: true, data: cached });
-    }
 
-    const sb = adminClient();
-    if (sb && !body.forceSync) {
-      const window = await readWindow(sb, leagueId);
-      if (window) {
-        const fromStore = await buildBundleFromStore(sb, leagueId, window);
-        if (fromStore?.standings?.length) {
-          cacheSet(cacheKey, fromStore, TTL_MS.bundle);
-          // تحديث خلفي إن وُجد مفتاح — لا يحذف عند الفشل
-          if (apiKey) {
-            void syncLeague(apiKey, leagueId).catch(() => undefined);
-          }
-          return json({ ok: true, cached: false, data: fromStore });
-        }
-      }
-    }
-
-    if (!apiKey) {
-      // حاول المخزن فقط
+      const sb = adminClient();
       if (sb) {
         const window = await readWindow(sb, leagueId);
         if (window) {
           const fromStore = await buildBundleFromStore(sb, leagueId, window);
           if (fromStore) {
+            if (
+              fromStore.standings?.length ||
+              fromStore.lastFixtures?.length ||
+              fromStore.nextFixtures?.length
+            ) {
+              cacheSet(cacheKey, fromStore, TTL_MS.bundle);
+            }
             return json({ ok: true, cached: false, data: fromStore });
+          }
+        }
+      }
+      // Empty / missing store — do not burn API-Football quota on public reads
+      return safeError('store_unavailable', 503);
+    }
+
+    // Authenticated forceSync: sync then fall back to stale store on failure
+    const sb = adminClient();
+    if (!apiKey) {
+      if (sb) {
+        const window = await readWindow(sb, leagueId);
+        if (window) {
+          const fromStore = await buildBundleFromStore(sb, leagueId, window);
+          if (fromStore) {
+            return json({ ok: true, stale: true, data: fromStore });
           }
         }
       }
@@ -1047,7 +1176,6 @@ serve(async (req) => {
 
     const r = await syncLeague(apiKey, leagueId);
     if (!r.ok || !r.bundle) {
-      // فشل مؤقت: لا حذف — أعد آخر مخزن
       if (sb) {
         const window = await readWindow(sb, leagueId);
         if (window) {

@@ -130,13 +130,22 @@ export function pickLatestAvailableSeason(
   return windowFromAvailableSeasons(seasonsWithData)?.current ?? null;
 }
 
-/** مرشحو المواسم للفحص من API — حوالي 4 سنوات حول الآن */
+/** مرشحو المواسم للفحص من API — حول الموسم الرياضي الحالي (+ سنة قادمة) */
 export function seasonProbeList(referenceYear?: number): number[] {
   const now = new Date();
   const y = referenceYear ?? now.getUTCFullYear();
   const m = now.getUTCMonth() + 1;
+  // موسم كروي يبدأ عادة من يوليو/أغسطس — سنة البداية = base
   const base = m >= 7 ? y : y - 1;
-  return [...new Set([base, base - 1, base - 2, base - 3, base + 1])].filter(
-    (s) => s >= 2018 && s <= 2100
-  );
+  return [
+    ...new Set([base + 1, base, base - 1, base - 2, base - 3, base - 4]),
+  ].filter((s) => s >= 2018 && s <= 2100);
+}
+
+/** سنة بداية الموسم الرياضي المتوقع حسب التقويم */
+export function expectedSeasonBase(referenceDate?: Date): number {
+  const now = referenceDate ?? new Date();
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth() + 1;
+  return m >= 7 ? y : y - 1;
 }
