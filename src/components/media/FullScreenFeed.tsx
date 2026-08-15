@@ -460,9 +460,11 @@ const Slide = memo(function Slide({
             onPress={handleContentPress}
             style={[
               styles.textSlide,
-              isRTL
-                ? { paddingRight: 28, paddingLeft: FAB_COLUMN_WIDTH + 12 }
-                : { paddingLeft: 28, paddingRight: FAB_COLUMN_WIDTH + 12 },
+              {
+                // عمود FAB ثابت يساراً — لا عكس padding مع RTL
+                paddingLeft: FAB_COLUMN_WIDTH + 12,
+                paddingRight: 28,
+              },
             ]}
           >
             {item.title ? (
@@ -524,9 +526,9 @@ const Slide = memo(function Slide({
                 styles.titleBesideComments,
                 cairoText('semiBold'),
                 {
-                  ...(isRTL
-                    ? { right: 14, left: 14 + 88 }
-                    : { left: 14, right: 14 + 88 }),
+                  // مساحة ثابتة يمين العنوان لأزرار الإعجاب/التعليقات (يمين فيزيائي)
+                  left: 14,
+                  right: 14 + 88,
                   textAlign: isRTL ? 'right' : 'left',
                   writingDirection: isRTL ? 'rtl' : 'ltr',
                 },
@@ -536,12 +538,7 @@ const Slide = memo(function Slide({
               {(item.title || '').trim() || (item.text || '').trim()}
             </Text>
           ) : null}
-          <View
-            style={[
-              styles.actionsColumn,
-              isRTL ? styles.actionsColumnRtl : null,
-            ]}
-          >
+          <View style={styles.actionsColumn}>
             <LikeButton
               count={item.likes.length}
               liked={item.liked}
@@ -837,7 +834,10 @@ function FullScreenFeedComponent({
 
   return (
     <View
-      style={[styles.root, { backgroundColor: theme.colors.background }]}
+      style={[
+        styles.root,
+        { backgroundColor: theme.colors.background },
+      ]}
       onLayout={onLayout}
     >
       {height > 0 ? (
@@ -896,11 +896,16 @@ function FullScreenFeedComponent({
 export const FullScreenFeed = memo(FullScreenFeedComponent);
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: {
+    flex: 1,
+    // عزل مواضع absolute عن RTL الأب حتى لا يختلف الإطار بين ar/en
+    direction: 'ltr',
+  },
   slide: {
     width: '100%',
     overflow: 'hidden',
     flexDirection: 'column',
+    direction: 'ltr',
   },
   contentPane: {
     flex: 1,
@@ -943,8 +948,8 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.92)',
   },
   /**
-   * إعجاب + تعليقات مثبتة يمين الشاشة فيزيائياً.
-   * العنوان يسارهما: عربي بمحاذاة يمين · إنجليزي بمحاذاة يسار.
+   * إعجاب + تعليقات مثبتة يمين الشاشة فيزيائياً في اللغتين.
+   * العنوان يسارهما؛ اتجاه النص فقط يتبع اللغة.
    */
   bottomBar: {
     position: 'absolute',
@@ -953,7 +958,7 @@ const styles = StyleSheet.create({
     zIndex: 6,
     elevation: 6,
     minHeight: 72,
-
+    direction: 'ltr',
   },
   titleBesideComments: {
     position: 'absolute',
@@ -977,10 +982,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 4,
     width: 88,
-  },
-  actionsColumnRtl: {
-    right: undefined,
-    left: 14,
   },
   handlePress: {
     maxWidth: 160,
@@ -1014,6 +1015,7 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     paddingTop: 8,
     zIndex: 8,
+    direction: 'ltr',
   },
   addCommentRow: {
     alignItems: 'center',

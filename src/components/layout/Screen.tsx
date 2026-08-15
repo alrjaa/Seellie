@@ -156,7 +156,9 @@ function ScreenComponent({
       style={[
         scroll ? styles.innerScroll : styles.innerFill,
         {
-          ...flowDirection(isRTL),
+          // شاشات bleed (اللقطات/التغذية): لا تطبّق direction:rtl على الحاوية
+          // حتى لا ينعكس موضع الوسائط/الأزرار بين العربية والإنجليزية.
+          ...(bleed ? null : flowDirection(isRTL)),
           width: '100%',
         },
         bleed

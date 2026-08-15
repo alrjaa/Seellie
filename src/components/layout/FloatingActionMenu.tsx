@@ -85,7 +85,7 @@ function FloatingActionMenuComponent() {
   const { currentUser, fabIcons, users, toggleFollowUser, competitions } =
     useTournament();
   const theme = useAppTheme();
-  const { t, isRTL } = useTranslation();
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
@@ -355,7 +355,10 @@ function FloatingActionMenuComponent() {
           styles.wrap,
           Platform.OS === 'web' && styles.wrapWeb,
           {
-            ...(isRTL ? { right: 10 } : { left: 10 }),
+            // ثابت فيزيائياً يسار الشاشة في العربية والإنجليزية —
+            // لا left/right حسب isRTL (كان ينقل العمود يميناً مع RTL).
+            left: Math.max(insets.left, 10),
+            right: undefined,
             bottom,
             ...motionStyle,
           },
@@ -446,7 +449,6 @@ function FloatingActionMenuComponent() {
                   pointerEvents="none"
                   style={[
                     styles.tooltip,
-                    isRTL ? { left: undefined, right: 54 } : null,
                     {
                       backgroundColor: theme.colors.surfaceElevated,
                       borderColor: theme.colors.border,
@@ -525,6 +527,8 @@ const styles = StyleSheet.create({
   },
   wrap: {
     position: 'absolute',
+    // عزل عن RTL الأب حتى تبقى left = يسار الشاشة فعلياً
+    direction: 'ltr',
     // العمود من الأسفل للأعلى: العنصر الأول في القمة
     flexDirection: 'column-reverse',
     gap: 12,
