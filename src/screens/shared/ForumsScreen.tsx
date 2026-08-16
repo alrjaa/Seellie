@@ -46,6 +46,10 @@ import {
   videoDurationSecFromPicker,
 } from '@/utils/media-limits';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  startForegroundInterval,
+  SYNC_FALLBACK_MS,
+} from '@/services/sync-engine';
 
 const CommentCard = memo(function CommentCard({
   item,
@@ -189,6 +193,10 @@ export default function ForumsScreen() {
   useFocusEffect(
     useCallback(() => {
       void refreshCloudForumComments();
+      const stopPoll = startForegroundInterval(SYNC_FALLBACK_MS.forums, () => {
+        void refreshCloudForumComments();
+      });
+      return () => stopPoll();
     }, [refreshCloudForumComments])
   );
   const discussions = useMemo(() => {

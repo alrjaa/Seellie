@@ -2781,7 +2781,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // مزامنة الساحات: Realtime أساسي + احتياطي أمامي أبطأ
+  // مزامنة الساحات: Realtime أساسي — الاحتياطي فقط أثناء فتح شاشة الساحات (P1-04)
   useEffect(() => {
     const uid = currentUser?.id;
     if (!uid || !isUuid(uid) || !isSupabaseConfigured()) {
@@ -2791,16 +2791,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setComments((prev) => mergeCommentsById([comment], prev));
     });
     void refreshCloudForumComments();
-    const stopPoll = startForegroundInterval(SYNC_FALLBACK_MS.forums, () => {
-      void refreshCloudForumComments();
-    });
     return () => {
       stop?.();
-      stopPoll();
     };
   }, [currentUser?.id, refreshCloudForumComments]);
 
-  // مزامنة فورية لمحتوى المستخدمين + احتياطي أمامي كل 60ث (كان 15ث)
+  // مزامنة فورية لمحتوى المستخدمين + احتياطي أمامي أبطأ (Realtime أساسي)
   useEffect(() => {
     if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
       return;

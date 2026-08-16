@@ -1,10 +1,10 @@
 import React, { memo, useEffect, useState } from 'react';
-import { AppState, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, StyleSheet, Text, View } from 'react-native';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { cairoText } from '@/theme/fonts';
 
-/** Lightweight offline banner (best-effort via fetch probe). */
+/** Lightweight offline banner — event-driven on web; no 15s network spam (P1-04). */
 function OfflineBannerComponent() {
   const theme = useAppTheme();
   const { t } = useTranslation();
@@ -12,12 +12,17 @@ function OfflineBannerComponent() {
 
   useEffect(() => {
     let active = true;
-    const probe = async () => {
+
+    const applyNavigator = () => {
+      if (typeof navigator !== 'undefined' && 'onLine' in navigator) {
+        if (active) setOffline(!navigator.onLine);
+        return true;
+      }
+      return false;
+    };
+
+    const probeFetch = async () => {
       try {
-        if (typeof navigator !== 'undefined' && 'onLine' in navigator) {
-          if (active) setOffline(!navigator.onLine);
-          return;
-        }
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 2500);
         await fetch('https://clients3.google.com/generate_204', {
@@ -30,14 +35,37 @@ function OfflineBannerComponent() {
         if (active) setOffline(true);
       }
     };
-    probe();
-    const id = setInterval(probe, 15000);
+
+    applyNavigator();
+    if (typeof navigator === 'undefined' || !('onLine' in navigator)) {
+      void probeFetch();
+    }
+
+    const onOnline = () => {
+      if (active) setOffline(false);
+    };
+    const onOffline = () => {
+      if (active) setOffline(true);
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.addEventListener('online', onOnline);
+      window.addEventListener('offline', onOffline);
+    }
+
     const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') probe();
+      if (s !== 'active') return;
+      if (!applyNavigator()) {
+        void probeFetch();
+      }
     });
+
     return () => {
       active = false;
-      clearInterval(id);
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.removeEventListener('online', onOnline);
+        window.removeEventListener('offline', onOffline);
+      }
       sub.remove();
     };
   }, []);

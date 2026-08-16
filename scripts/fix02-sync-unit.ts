@@ -42,10 +42,11 @@ function mergeShareCardsById(
 }
 
 async function main() {
-  assert.equal(SYNC_FALLBACK_MS.profiles, 60_000);
-  assert.equal(SYNC_FALLBACK_MS.forums, 60_000);
-  assert.ok(SYNC_FALLBACK_MS.messagesDegraded > 2500);
-  assert.ok(SYNC_FALLBACK_MS.privateSpace > 5000);
+  assert.equal(SYNC_FALLBACK_MS.profiles, 120_000);
+  assert.equal(SYNC_FALLBACK_MS.forums, 90_000);
+  assert.ok(SYNC_FALLBACK_MS.messagesDegraded >= 30_000);
+  assert.ok(SYNC_FALLBACK_MS.privateSpace >= 45_000);
+  assert.ok(SYNC_FALLBACK_MS.shareCards >= 45_000);
 
   const lock = createInFlightLock<number>();
   let runs = 0;
