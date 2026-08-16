@@ -11,7 +11,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTournament } from '@/providers/TournamentProvider';
+import { useTournamentCore } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { headerSafeTop } from '@/theme/navigation';
@@ -64,7 +64,7 @@ function AccountMenuButtonComponent({
   size = 32,
   compact,
 }: Props) {
-  const { currentUser, logout, switchActiveRole } = useTournament();
+  const { currentUser, logout, switchActiveRole } = useTournamentCore();
   const theme = useAppTheme();
   const { t, isRTL } = useTranslation();
   const router = useRouter();

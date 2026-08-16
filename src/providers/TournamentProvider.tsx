@@ -905,9 +905,24 @@ export interface TournamentContextType {
   routeForRole: (role: UserRole) => string;
 }
 
-const TournamentContext = createContext<TournamentContextType | undefined>(
-  undefined
-);
+/** Core tournament state + stable actions (excludes high-churn live feeds). */
+export type TournamentCoreContextType = Omit<
+  TournamentContextType,
+  'messages' | 'shareCards' | 'comments' | 'quickComments'
+>;
+
+type TournamentLiveContextType = Pick<
+  TournamentContextType,
+  'messages' | 'shareCards' | 'comments' | 'quickComments'
+>;
+
+const TournamentCoreContext = createContext<
+  TournamentCoreContextType | undefined
+>(undefined);
+
+const TournamentLiveContext = createContext<
+  TournamentLiveContextType | undefined
+>(undefined);
 
 function withLocalizedSeed<T>(data: T): T {
   return i18n.locale === 'en' ? localizeContentTree(data) : data;
@@ -6416,115 +6431,150 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     );
   }, [giftTransactions, currentUser?.id, currentUser?.role]);
 
-  const value = useMemo(
+  /**
+   * P1-02: keep action identities stable so language/toast churn does not
+   * rebuild the whole context value (and re-render the tree).
+   */
+  const actionsRef = useRef<Record<string, unknown>>({});
+  actionsRef.current = {
+    login,
+    logout,
+    signUp,
+    enableSecondaryRole,
+    switchActiveRole,
+    setAppName,
+    setAppLogo,
+    setAutoApproveAnalystRequests,
+    updateAppFeatureFlags,
+    setFabIcons,
+    updateUser,
+    syncCloudUsers,
+    refreshCurrentUserFromCloud,
+    refreshCloudCompetitionRequests,
+    togglePinnedCompetition,
+    deleteUser,
+    purgeUserByEmail,
+    addReferee,
+    registerRefereeForCompetition,
+    updateReferee,
+    deleteReferee,
+    dedupeRefereesByName,
+    markMessageAsRead,
+    deleteQuickComment,
+    addQuickComment,
+    addComment,
+    toggleCommentLike,
+    updateDiscussionStatus,
+    updateSupportLevels,
+    purchaseSupportGift,
+    updateCompetition,
+    updateCompetitionStatus,
+    setCompetitionFixturesSuspended,
+    updatePlayerStatus,
+    generateFixturesForCompetition,
+    applyForCompetition,
+    approveCompetitionRequest,
+    rejectCompetitionRequest,
+    updateMatchResult,
+    assignRefereeToCompetition,
+    removeRefereeFromCompetition,
+    updateOfferStatus,
+    sendOffer,
+    sendMessage,
+    mergeRemoteMessages,
+    refreshCloudMessages,
+    refreshCloudShareCards,
+    refreshCloudForumComments,
+    refreshCloudPublicCatalog,
+    sendShareCard,
+    updateShareCardStatus,
+    markShareCardRead,
+    addTeam,
+    renameCompetition,
+    deleteCompetition,
+    deleteCompetitionRequest,
+    renameTeam,
+    updateTeamLogo,
+    deleteTeam,
+    addPlayerToTeam,
+    updatePlayerAvatar,
+    addStaffToCompetition,
+    updateStaffAvatar,
+    removeStaffFromCompetition,
+    addAnalysis,
+    applyAsAnalyst,
+    approveAnalystApplication,
+    rejectAnalystApplication,
+    warnAnalyst,
+    suspendAnalyst,
+    banAnalyst,
+    reinstateAnalyst,
+    verifyAnalystAccessCode,
+    togglePostLike,
+    toggleAnalysisLike,
+    toggleMediaLike,
+    addMediaComment,
+    changePassword,
+    addUserMedia,
+    removeUserMedia,
+    addCompetitionMedia,
+    removeCompetitionMedia,
+    setUserAvatar,
+    toggleFollowUser,
+    routeForRole,
+  };
+
+  const stableActions = useMemo(() => {
+    const wrap =
+      (key: string) =>
+      (...args: unknown[]) => {
+        const fn = actionsRef.current[key];
+        if (typeof fn === 'function') {
+          return (fn as (...a: unknown[]) => unknown)(...args);
+        }
+        return undefined;
+      };
+    const keys = Object.keys(actionsRef.current);
+    const out: Record<string, unknown> = {};
+    for (const key of keys) {
+      out[key] = wrap(key);
+    }
+    return out;
+  }, []);
+
+  /** High-churn feed slices — isolated so media/chrome can skip these updates */
+  const liveValue = useMemo(
     () => ({
-      loading,
-      appName,
-      appLogo,
-      autoApproveAnalystRequests,
-      featureFlags,
-      fabIcons,
-      personalitySectionBg,
-      highlightsSectionBg,
-      users,
-      competitions: scopedCompetitions,
-      competitionRequests,
+      messages,
+      shareCards,
       comments,
       quickComments,
-      messages,
-      referees,
-      offers: scopedOffers,
-      shareCards,
-      supporters,
-      supportLevels,
-      giftTransactions: scopedGiftTransactions,
-      currentUser,
-      login,
-      logout,
-      signUp,
-      enableSecondaryRole,
-      switchActiveRole,
-      setAppName,
-      setAppLogo,
-      setAutoApproveAnalystRequests,
-      updateAppFeatureFlags,
-      setFabIcons,
-      updateUser,
-      syncCloudUsers,
-      refreshCurrentUserFromCloud,
-      refreshCloudCompetitionRequests,
-      togglePinnedCompetition,
-      deleteUser,
-      purgeUserByEmail,
-      addReferee,
-      registerRefereeForCompetition,
-      updateReferee,
-      deleteReferee,
-      dedupeRefereesByName,
-      markMessageAsRead,
-      deleteQuickComment,
-      addQuickComment,
-      addComment,
-      toggleCommentLike,
-      updateDiscussionStatus,
-      updateSupportLevels,
-      purchaseSupportGift,
-      updateCompetition,
-      updateCompetitionStatus,
-      setCompetitionFixturesSuspended,
-      updatePlayerStatus,
-      generateFixturesForCompetition,
-      applyForCompetition,
-      approveCompetitionRequest,
-      rejectCompetitionRequest,
-      updateMatchResult,
-      assignRefereeToCompetition,
-      removeRefereeFromCompetition,
-      updateOfferStatus,
-      sendOffer,
-      sendMessage,
-      mergeRemoteMessages,
-      refreshCloudMessages,
-      refreshCloudShareCards,
-      refreshCloudForumComments,
-      refreshCloudPublicCatalog,
-      sendShareCard,
-      updateShareCardStatus,
-      markShareCardRead,
-      addTeam,
-      renameCompetition,
-      deleteCompetition,
-      deleteCompetitionRequest,
-      renameTeam,
-      updateTeamLogo,
-      deleteTeam,
-      addPlayerToTeam,
-      updatePlayerAvatar,
-      addStaffToCompetition,
-      updateStaffAvatar,
-      removeStaffFromCompetition,
-      addAnalysis,
-      applyAsAnalyst,
-      approveAnalystApplication,
-      rejectAnalystApplication,
-      warnAnalyst,
-      suspendAnalyst,
-      banAnalyst,
-      reinstateAnalyst,
-      verifyAnalystAccessCode,
-      togglePostLike,
-      toggleAnalysisLike,
-      toggleMediaLike,
-      addMediaComment,
-      changePassword,
-      addUserMedia,
-      removeUserMedia,
-      addCompetitionMedia,
-      removeCompetitionMedia,
-      setUserAvatar,
-      toggleFollowUser,
-      routeForRole,
     }),
+    [messages, shareCards, comments, quickComments]
+  );
+
+  const coreValue = useMemo(
+    () =>
+      ({
+        ...stableActions,
+        loading,
+        appName,
+        appLogo,
+        autoApproveAnalystRequests,
+        featureFlags,
+        fabIcons,
+        personalitySectionBg,
+        highlightsSectionBg,
+        users,
+        competitions: scopedCompetitions,
+        competitionRequests,
+        referees,
+        offers: scopedOffers,
+        supporters,
+        supportLevels,
+        giftTransactions: scopedGiftTransactions,
+        currentUser,
+      }) as TournamentCoreContextType,
     [
       loading,
       appName,
@@ -6537,115 +6587,46 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       users,
       scopedCompetitions,
       competitionRequests,
-      comments,
-      quickComments,
-      messages,
       referees,
       scopedOffers,
-      shareCards,
       supporters,
       supportLevels,
       scopedGiftTransactions,
       currentUser,
-      login,
-      logout,
-      signUp,
-      enableSecondaryRole,
-      switchActiveRole,
-      setAppName,
-      setAppLogo,
-      setAutoApproveAnalystRequests,
-      updateAppFeatureFlags,
-      setFabIcons,
-      updateUser,
-      syncCloudUsers,
-      refreshCurrentUserFromCloud,
-      refreshCloudCompetitionRequests,
-      togglePinnedCompetition,
-      deleteUser,
-      purgeUserByEmail,
-      addReferee,
-      registerRefereeForCompetition,
-      updateReferee,
-      deleteReferee,
-      dedupeRefereesByName,
-      markMessageAsRead,
-      deleteQuickComment,
-      addQuickComment,
-      addComment,
-      toggleCommentLike,
-      updateDiscussionStatus,
-      updateSupportLevels,
-      purchaseSupportGift,
-      updateCompetition,
-      updateCompetitionStatus,
-      setCompetitionFixturesSuspended,
-      updatePlayerStatus,
-      generateFixturesForCompetition,
-      applyForCompetition,
-      approveCompetitionRequest,
-      rejectCompetitionRequest,
-      updateMatchResult,
-      assignRefereeToCompetition,
-      removeRefereeFromCompetition,
-      updateOfferStatus,
-      sendOffer,
-      sendMessage,
-      mergeRemoteMessages,
-      refreshCloudMessages,
-      refreshCloudShareCards,
-      refreshCloudForumComments,
-      refreshCloudPublicCatalog,
-      sendShareCard,
-      updateShareCardStatus,
-      markShareCardRead,
-      addTeam,
-      renameCompetition,
-      deleteCompetition,
-      deleteCompetitionRequest,
-      renameTeam,
-      updateTeamLogo,
-      deleteTeam,
-      addPlayerToTeam,
-      updatePlayerAvatar,
-      addStaffToCompetition,
-      updateStaffAvatar,
-      removeStaffFromCompetition,
-      addAnalysis,
-      applyAsAnalyst,
-      approveAnalystApplication,
-      rejectAnalystApplication,
-      warnAnalyst,
-      suspendAnalyst,
-      banAnalyst,
-      reinstateAnalyst,
-      verifyAnalystAccessCode,
-      togglePostLike,
-      toggleAnalysisLike,
-      toggleMediaLike,
-      addMediaComment,
-      changePassword,
-      addUserMedia,
-      removeUserMedia,
-      addCompetitionMedia,
-      removeCompetitionMedia,
-      setUserAvatar,
-      toggleFollowUser,
-      routeForRole,
+      stableActions,
     ]
   );
 
   return (
-    <TournamentContext.Provider value={value}>
-      {children}
-    </TournamentContext.Provider>
+    <TournamentCoreContext.Provider value={coreValue}>
+      <TournamentLiveContext.Provider value={liveValue}>
+        {children}
+      </TournamentLiveContext.Provider>
+    </TournamentCoreContext.Provider>
   );
 }
 
-export function useTournament() {
-  const ctx = useContext(TournamentContext);
+export function useTournamentCore() {
+  const ctx = useContext(TournamentCoreContext);
   if (!ctx) {
-    throw new Error('useTournament must be used within TournamentProvider');
+    throw new Error('useTournamentCore must be used within TournamentProvider');
   }
   return ctx;
+}
+
+export function useTournamentLive() {
+  const ctx = useContext(TournamentLiveContext);
+  if (!ctx) {
+    throw new Error('useTournamentLive must be used within TournamentProvider');
+  }
+  return ctx;
+}
+
+export function useTournament() {
+  const core = useTournamentCore();
+  const live = useTournamentLive();
+  return useMemo(
+    () => ({ ...core, ...live }) as TournamentContextType,
+    [core, live]
+  );
 }

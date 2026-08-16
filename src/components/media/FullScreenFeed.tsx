@@ -32,7 +32,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
-import { useTournament } from '@/providers/TournamentProvider';
+import { useTournamentCore } from '@/providers/TournamentProvider';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { LikeButton } from '@/components/ui';
 import { useFloatingVisibility } from '@/hooks/useFloatingVisibility';
@@ -176,7 +176,7 @@ const Slide = memo(function Slide({
 }) {
   const theme = useAppTheme();
   const { t, isRTL } = useTranslation();
-  const { currentUser, featureFlags } = useTournament();
+  const { currentUser, featureFlags } = useTournamentCore();
   const insets = useSafeAreaInsets();
   const videoRef = useRef<Video>(null);
   const htmlVideoRef = useRef<HTMLVideoElement | null>(null);

@@ -12,7 +12,7 @@ import { usePathname, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { floatingAboveTabOffset } from '@/theme/navigation';
-import { useTournament } from '@/providers/TournamentProvider';
+import { useTournamentCore } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import {
@@ -83,7 +83,7 @@ function isFollowerHomePath(pathname?: string | null) {
  */
 function FloatingActionMenuComponent() {
   const { currentUser, fabIcons, users, toggleFollowUser, competitions } =
-    useTournament();
+    useTournamentCore();
   const theme = useAppTheme();
   const { t } = useTranslation();
   const router = useRouter();
