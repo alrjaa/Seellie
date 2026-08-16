@@ -186,6 +186,7 @@ export default function SharesScreen() {
     setUserAvatar,
     togglePostLike,
     toggleMediaLike,
+    featureFlags,
   } = useTournament();
   const theme = useAppTheme();
   const router = useRouter();
@@ -332,6 +333,7 @@ export default function SharesScreen() {
 
   const publish = useCallback(() => {
     if (!currentUser || !isPlayer) return;
+    if (!featureFlags.postComposerEnabled) return;
     const value = text.trim();
     if (!value) return;
     updateUser(
@@ -351,7 +353,7 @@ export default function SharesScreen() {
     );
     setText('');
     setComposerOpen(false);
-  }, [currentUser, isPlayer, text, updateUser, t]);
+  }, [currentUser, featureFlags.postComposerEnabled, isPlayer, text, updateUser, t]);
 
   const fullScreenData = useMemo<FullScreenContent[]>(
     () =>
@@ -543,21 +545,23 @@ export default function SharesScreen() {
 
       {isPlayer ? (
         <>
-          <Card style={styles.composer}>
-            <Subtitle>{t('sharesUi.newPost')}</Subtitle>
-            <Input
-              label={t('sharesUi.postLabel')}
-              value={text}
-              onChangeText={setText}
-              placeholder={t('sharesUi.postPlaceholder')}
-              multiline
-            />
-            <Button
-              label={t('sharesUi.publishPost')}
-              onPress={publish}
-              disabled={!text.trim()}
-            />
-          </Card>
+          {featureFlags.postComposerEnabled ? (
+            <Card style={styles.composer}>
+              <Subtitle>{t('sharesUi.newPost')}</Subtitle>
+              <Input
+                label={t('sharesUi.postLabel')}
+                value={text}
+                onChangeText={setText}
+                placeholder={t('sharesUi.postPlaceholder')}
+                multiline
+              />
+              <Button
+                label={t('sharesUi.publishPost')}
+                onPress={publish}
+                disabled={!text.trim()}
+              />
+            </Card>
+          ) : null}
 
           <Card style={styles.composer}>
             <Subtitle>{t('sharesUi.yourMedia')}</Subtitle>
@@ -620,6 +624,7 @@ export default function SharesScreen() {
                   onPress={() => setComposerOpen(true)}
                 />
               ) : null}
+              {/* post composer gated inside modal via featureFlags.postComposerEnabled */}
             </View>
           }
         />
@@ -639,20 +644,22 @@ export default function SharesScreen() {
                 onPress={() => setComposerOpen(false)}
               />
             </View>
-            <Card style={styles.composer}>
-              <Input
-                label={t('sharesUi.postLabel')}
-                value={text}
-                onChangeText={setText}
-                placeholder={t('sharesUi.postPlaceholder')}
-                multiline
-              />
-              <Button
-                label={t('sharesUi.publishPost')}
-                onPress={publish}
-                disabled={!text.trim()}
-              />
-            </Card>
+            {featureFlags.postComposerEnabled ? (
+              <Card style={styles.composer}>
+                <Input
+                  label={t('sharesUi.postLabel')}
+                  value={text}
+                  onChangeText={setText}
+                  placeholder={t('sharesUi.postPlaceholder')}
+                  multiline
+                />
+                <Button
+                  label={t('sharesUi.publishPost')}
+                  onPress={publish}
+                  disabled={!text.trim()}
+                />
+              </Card>
+            ) : null}
             <Card style={styles.composer}>
               <Subtitle>{t('sharesUi.yourMedia')}</Subtitle>
               <PlayerMediaSection

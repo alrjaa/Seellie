@@ -24,7 +24,8 @@ import {
 } from '@/services/private-chat-focus';
 
 export default function FollowerLayout() {
-  const { currentUser, loading, routeForRole, messages } = useTournament();
+  const { currentUser, loading, routeForRole, messages, featureFlags } =
+    useTournament();
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
@@ -118,13 +119,17 @@ export default function FollowerLayout() {
         icon: 'search-outline',
         section: t('menu.forumsTitle'),
       },
-      {
-        key: 'certificates',
-        label: t('home.certificates'),
-        href: '/(follower)/certificates',
-        icon: 'ribbon-outline',
-        section: t('settings.title'),
-      },
+      ...(featureFlags.appreciationEnabled
+        ? [
+            {
+              key: 'certificates',
+              label: t('home.certificates'),
+              href: '/(follower)/certificates',
+              icon: 'ribbon-outline' as const,
+              section: t('settings.title'),
+            },
+          ]
+        : []),
       {
         key: 'settings',
         label: t('settings.title'),
@@ -133,7 +138,7 @@ export default function FollowerLayout() {
         section: t('settings.title'),
       },
     ],
-    [t]
+    [featureFlags.appreciationEnabled, t]
   );
 
   if (loading) return <LoadingState />;

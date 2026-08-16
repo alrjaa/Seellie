@@ -262,13 +262,34 @@ export interface Supporter {
 }
 
 export type SupportLevelName = string;
+/** هدية تقدير اعتيادي أو شهادة تقدير استثنائية */
+export type AppreciationKind = 'gift' | 'certificate';
+
 export interface SupportLevel {
     id: string;
     name: string;
     price: number;
     description: string;
     imageUrl: string;
+    /** gift = تقدير اعتيادي · certificate = شهادة تقدير */
+    kind?: AppreciationKind;
 };
+
+/** حالة عملية التقدير — الدفع الحقيقي لاحقاً يؤكد paid من الخادم فقط */
+export type AppreciationProcessStatus =
+  | 'pending'
+  | 'paid'
+  | 'failed'
+  | 'cancelled'
+  | 'refunded'
+  /** سجلات قديمة من الخادم — تُعرض كـ pending */
+  | 'pending_demo';
+
+/** حالة كيان الشهادة بعد إنشاء النية / بعد الدفع */
+export type AppreciationCertificateStatus =
+  | 'awaiting_payment'
+  | 'issued'
+  | 'void';
 
 
 export interface Comment {
@@ -349,7 +370,10 @@ export interface ShareCard {
 
 export interface GiftTransaction {
   id: string; // Unique transaction ID
-  /** رقم يظهر على شهادة الدعم */
+  /**
+   * رقم مرجعي / رقم شهادة.
+   * FUTURE SERVER-SIDE: يجب أن يصدره الخادم عند الدفع الحقيقي — العميل لا يُعتمد كمصدر حقيقة.
+   */
   certificateNumber: string;
   gifterId: string;
   gifterName: string;
@@ -362,7 +386,15 @@ export interface GiftTransaction {
   certificateType: string;
   amountPaid: number;
   timestamp: Date;
-      status: 'paid' | 'pending_demo';
+  status: AppreciationProcessStatus;
+  /** هدية اعتيادية أو شهادة تقدير */
+  appreciationKind?: AppreciationKind;
+  /** سبب التقدير (اختياري) */
+  reason?: string;
+  /** حالة الشهادة — للهدايا قد تُترك فارغة */
+  certificateStatus?: AppreciationCertificateStatus;
+  /** مستوى الشهادة (1، 2، …) عند كونها شهادة */
+  certificateTier?: number;
   competitionName?: string;
   teamName?: string;
 }
@@ -867,11 +899,18 @@ export const initialQuickComments: Comment[] = [
 export const initialMessages: Message[] = [];
 export const initialSupporters: Supporter[] = [];
 export const initialSupportLevels: SupportLevel[] = [
-    { id: 'level-creativity', name: 'إبداع', price: 5, description: 'للإشادة بالمهارات الاستثنائية والأفكار المبتكرة.', imageUrl: certificateImageUri('إبداع') },
-    { id: 'level-bronze', name: 'برونزي', price: 10, description: 'تقديرًا للجهد المتميز والأداء المتطور.', imageUrl: certificateImageUri('برونزي') },
-    { id: 'level-silver', name: 'فضي', price: 25, description: 'للاحتفاء بالإنجازات البارزة والمساهمات القيمة.', imageUrl: certificateImageUri('فضي') },
-    { id: 'level-gold', name: 'ذهبي', price: 50, description: 'للاعتراف بالتفوق الواضح وتحقيق نتائج مبهرة.', imageUrl: certificateImageUri('ذهبي') },
-    { id: 'level-diamond', name: 'ماسي', price: 100, description: 'أعلى مراتب التكريم، للإنجازات الاستثنائية والتأثير الملهم.', imageUrl: certificateImageUri('ماسي') },
+    { id: 'level-creativity', kind: 'gift', name: 'إبداع', price: 5, description: 'للإشادة بالمهارات الاستثنائية والأفكار المبتكرة.', imageUrl: certificateImageUri('إبداع') },
+    { id: 'level-bronze', kind: 'gift', name: 'برونزي', price: 10, description: 'تقديرًا للجهد المتميز والأداء المتطور.', imageUrl: certificateImageUri('برونزي') },
+    { id: 'level-silver', kind: 'gift', name: 'فضي', price: 25, description: 'للاحتفاء بالإنجازات البارزة والمساهمات القيمة.', imageUrl: certificateImageUri('فضي') },
+    { id: 'level-gold', kind: 'gift', name: 'ذهبي', price: 50, description: 'للاعتراف بالتفوق الواضح وتحقيق نتائج مبهرة.', imageUrl: certificateImageUri('ذهبي') },
+    { id: 'level-diamond', kind: 'gift', name: 'ماسي', price: 100, description: 'أعلى مراتب التكريم، للإنجازات الاستثنائية والتأثير الملهم.', imageUrl: certificateImageUri('ماسي') },
+    // شهادات التقدير — قابلة للتوسع عبر buildCertificateAppreciationLevels دون إعادة بناء الواجهة
+    { id: 'cert-tier-1', kind: 'certificate', name: 'تقدير 200', price: 200, description: 'شهادة تقدير استثنائية — مستوى 1.', imageUrl: certificateImageUri('ماسي') },
+    { id: 'cert-tier-2', kind: 'certificate', name: 'تقدير 400', price: 400, description: 'شهادة تقدير استثنائية — مستوى 2.', imageUrl: certificateImageUri('ذهبي') },
+    { id: 'cert-tier-3', kind: 'certificate', name: 'تقدير 600', price: 600, description: 'شهادة تقدير استثنائية — مستوى 3.', imageUrl: certificateImageUri('ماسي') },
+    { id: 'cert-tier-4', kind: 'certificate', name: 'تقدير 800', price: 800, description: 'شهادة تقدير استثنائية — مستوى 4.', imageUrl: certificateImageUri('ذهبي') },
+    { id: 'cert-tier-5', kind: 'certificate', name: 'تقدير 1000', price: 1000, description: 'شهادة تقدير استثنائية — مستوى 5.', imageUrl: certificateImageUri('ماسي') },
+    { id: 'cert-tier-6', kind: 'certificate', name: 'تقدير 1200', price: 1200, description: 'شهادة تقدير استثنائية — مستوى 6.', imageUrl: certificateImageUri('ذهبي') },
 ];
 export const initialOffers: Offer[] = [
     {

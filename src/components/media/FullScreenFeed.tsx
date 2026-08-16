@@ -176,7 +176,7 @@ const Slide = memo(function Slide({
 }) {
   const theme = useAppTheme();
   const { t, isRTL } = useTranslation();
-  const { currentUser } = useTournament();
+  const { currentUser, featureFlags } = useTournament();
   const insets = useSafeAreaInsets();
   const videoRef = useRef<Video>(null);
   const htmlVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -464,6 +464,7 @@ const Slide = memo(function Slide({
     if (!trimmed) return;
     if (!currentUser) return;
     if (currentUser.permissions?.canComment === false) return;
+    if (!featureFlags.commentComposerEnabled) return;
     const fromParent = onComment?.(item, trimmed);
     const stored = fromParent
       ? toStoreComment(fromParent)
@@ -478,7 +479,7 @@ const Slide = memo(function Slide({
     addContentItemComment(item.id, stored);
     setDraft('');
     // تبقى اللوحة مفتوحة لرؤية التعليق ضمن نفس المحتوى
-  }, [draft, currentUser, onComment, item]);
+  }, [draft, currentUser, featureFlags.commentComposerEnabled, onComment, item]);
 
   const handleContentPress = useCallback(() => {
     if (commentsExpanded) {
@@ -749,6 +750,8 @@ const Slide = memo(function Slide({
             },
           ]}
         >
+          {featureFlags.commentComposerEnabled &&
+          currentUser?.permissions?.canComment !== false ? (
           <View
             style={[
               styles.addCommentRow,
@@ -793,6 +796,7 @@ const Slide = memo(function Slide({
               />
             </Pressable>
           </View>
+          ) : null}
           <ScrollView
             style={styles.commentsList}
             contentContainerStyle={styles.commentsListContent}

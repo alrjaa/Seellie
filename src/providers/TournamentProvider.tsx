@@ -61,14 +61,24 @@ import {
 import {
   appendGiftTransaction,
   fetchAppBlob,
+  fetchAppSettingsBlob,
   setOfferStatusRemote,
   upsertAppBlob,
+  upsertAppSettingsBlob,
   upsertOfferInBlob,
   upsertRefereeInBlob,
   replaceRefereesBlob,
   deleteRefereeFromBlob,
+  resolveAppFeatureFlags,
+  type AppFeatureFlags,
   type AppSettingsBlob,
+  DEFAULT_APP_FEATURE_FLAGS,
 } from '@/services/supabase-app-blobs';
+import {
+  certificateTierFromPrice,
+  createLocalPurchaseIntentStatus,
+  resolveAppreciationKind,
+} from '@/utils/appreciation';
 import {
   DEFAULT_FAB_ICONS,
   FAB_ICONS_STORAGE_KEY,
@@ -405,18 +415,43 @@ function sanitizeUserSecrets(user: User): User {
 }
 
 function normalizeSupportLevels(levels: SupportLevel[]): SupportLevel[] {
-  return levels
+  const mapOne = (level: SupportLevel, index: number): SupportLevel => {
+    const bundled = certificateImageUri(level.name);
+    const price = Number(level.price) || 0;
+    const kind =
+      level.kind === 'gift' || level.kind === 'certificate'
+        ? level.kind
+        : price >= 200
+          ? ('certificate' as const)
+          : ('gift' as const);
+    return {
+      id: level.id || `level-${index + 1}-${level.name}`,
+      name: String(level.name || '').trim() || `مستوى ${index + 1}`,
+      price,
+      description: String(level.description || ''),
+      imageUrl: level.imageUrl || bundled || '',
+      kind,
+    };
+  };
+
+  const normalized = levels
     .filter((l) => (l.name as string) !== 'محلل')
-    .map((level, index) => {
-      const bundled = certificateImageUri(level.name);
-      return {
-        id: level.id || `level-${index + 1}-${level.name}`,
-        name: String(level.name || '').trim() || `مستوى ${index + 1}`,
-        price: Number(level.price) || 0,
-        description: String(level.description || ''),
-        imageUrl: level.imageUrl || bundled || '',
-      };
-    });
+    .map(mapOne);
+
+  // إن كانت السحابة بلا شهادات بعد، ادمج مستويات الشهادات الافتراضية دون حذف الهدايا
+  const hasCertificate = normalized.some((l) => l.kind === 'certificate');
+  if (hasCertificate) return normalized;
+
+  const seedCerts = initialSupportLevels
+    .filter((l) => l.kind === 'certificate' || (l.price ?? 0) >= 200)
+    .map(mapOne)
+    .filter(
+      (s) =>
+        !normalized.some(
+          (n) => n.id === s.id || (n.kind === 'certificate' && n.price === s.price)
+        )
+    );
+  return [...normalized, ...seedCerts];
 }
 
 async function saveSupportLevels(levels: SupportLevel[]) {
@@ -426,16 +461,29 @@ async function saveSupportLevels(levels: SupportLevel[]) {
   }
 }
 
-async function saveGiftCloudAppend(gift: GiftTransaction) {
-  if (!isSupabaseConfigured()) return;
+async function saveGiftCloudAppend(
+  gift: GiftTransaction
+): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
   const payload = {
     ...gift,
+    // F09-P1-04: local id is idempotency key only; server mints authoritative id
+    clientRequestId: gift.id,
     timestamp:
       gift.timestamp instanceof Date
         ? gift.timestamp.toISOString()
         : gift.timestamp,
   };
-  void appendGiftTransaction(payload);
+  const result = await appendGiftTransaction(payload);
+  if (!result.ok) {
+    console.warn('[gifts] append failed', result.error);
+    return null;
+  }
+  const serverId =
+    result.gift && typeof result.gift.id === 'string'
+      ? result.gift.id
+      : null;
+  return serverId;
 }
 
 async function saveBrandingCloud(appName: string, appLogo: string) {
@@ -476,7 +524,8 @@ async function fetchGlobalAppBlobs(): Promise<GlobalAppBlobs> {
     fetchAppBlob<SupportLevel[]>('support_levels'),
     fetchAppBlob<GiftTransaction[]>('gift_transactions'),
     fetchAppBlob<{ appName?: string; appLogo?: string }>('app_branding'),
-    fetchAppBlob<AppSettingsBlob>('app_settings'),
+    // F09-P1-08: canonical `settings` first, legacy `app_settings` fallback
+    fetchAppSettingsBlob(),
   ]);
   return {
     referees: Array.isArray(cloudReferees.data) ? cloudReferees.data : null,
@@ -494,6 +543,8 @@ export interface TournamentContextType {
   appLogo: string;
   /** موافقة تلقائية على طلبات المحللين عند الإرسال (إعداد المشرف) */
   autoApproveAnalystRequests: boolean;
+  /** أعلام الخدمات المركزية (تقدير · composers) — إداري فقط */
+  featureFlags: AppFeatureFlags;
   fabIcons: FabIconConfig[];
   setFabIcons: (icons: FabIconConfig[]) => void;
   personalitySectionBg: string;
@@ -532,6 +583,10 @@ export interface TournamentContextType {
   setAppName: (name: string) => void;
   setAppLogo: (logo: string) => void;
   setAutoApproveAnalystRequests: (enabled: boolean) => Promise<boolean>;
+  /** تحديث أعلام الخدمات — يدمج مع الإعدادات الحالية دون مسح autoApprove */
+  updateAppFeatureFlags: (
+    patch: Partial<AppFeatureFlags>
+  ) => Promise<boolean>;
   updateUser: (user: User, successMessage?: string) => void;
   /** مزامنة كل حسابات profiles من Supabase إلى قائمة إدارة المستخدمين */
   syncCloudUsers: () => Promise<number>;
@@ -586,13 +641,18 @@ export interface TournamentContextType {
     successMessage?: string
   ) => void;
   updateSupportLevels: (levels: SupportLevel[]) => void;
-  /** شراء شهادة دعم وتوجيهها للاعب أو منظم */
+  /**
+   * إنشاء Purchase Intent للتقدير (هدية أو شهادة).
+   * الحالة دائماً pending محلياً — لا يُعتبر الضغط paid.
+   * FUTURE SERVER-SIDE: تأكيد الدفع من الخادم فقط.
+   */
   purchaseSupportGift: (payload: {
     certificateType: string;
     recipientId: string;
     recipientName: string;
     recipientType: GiftTransaction['recipientType'];
     recipientVisibleId?: string;
+    reason?: string;
   }) => GiftTransaction | null;
   updateCompetition: (
     competition: Competition,
@@ -857,6 +917,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [appName, setAppNameState] = useState(APP_DISPLAY_NAME);
   const [appLogo, setAppLogoState] = useState(DEFAULT_LOGO);
+  const [featureFlags, setFeatureFlags] = useState<AppFeatureFlags>(
+    () => DEFAULT_APP_FEATURE_FLAGS
+  );
   const [autoApproveAnalystRequests, setAutoApproveAnalystRequestsState] =
     useState(false);
   const [fabIcons, setFabIconsState] =
@@ -1068,6 +1131,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setAutoApproveAnalystRequestsState(
         !!blobs.settings.autoApproveAnalystRequests
       );
+      setFeatureFlags(resolveAppFeatureFlags(blobs.settings));
+    } else {
+      // Missing both keys → safe default (no unintended auto-approve)
+      setAutoApproveAnalystRequestsState(false);
+      setFeatureFlags(DEFAULT_APP_FEATURE_FLAGS);
     }
   }, []);
 
@@ -1483,9 +1551,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     void saveBrandingCloud(appName, logo);
   }, [appName]);
 
-  const setAutoApproveAnalystRequests = useCallback(
-    async (enabled: boolean) => {
-      setAutoApproveAnalystRequestsState(enabled);
+  const persistAppSettingsBlob = useCallback(
+    async (next: AppSettingsBlob) => {
       if (!isSupabaseConfigured()) return true;
       const cloud = await requireCloudSession(currentUser?.id);
       if (!cloud.session) {
@@ -1496,9 +1563,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
         return false;
       }
-      const res = await upsertAppBlob('app_settings', {
-        autoApproveAnalystRequests: enabled,
-      });
+      const res = await upsertAppSettingsBlob(next);
       if (!res.ok) {
         toast({
           variant: 'destructive',
@@ -1510,6 +1575,38 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       return true;
     },
     [currentUser?.id, t, toast]
+  );
+
+  const setAutoApproveAnalystRequests = useCallback(
+    async (enabled: boolean) => {
+      setAutoApproveAnalystRequestsState(enabled);
+      return persistAppSettingsBlob({
+        autoApproveAnalystRequests: enabled,
+        appreciationEnabled: featureFlags.appreciationEnabled,
+        commentComposerEnabled: featureFlags.commentComposerEnabled,
+        postComposerEnabled: featureFlags.postComposerEnabled,
+        arenaComposerEnabled: featureFlags.arenaComposerEnabled,
+      });
+    },
+    [featureFlags, persistAppSettingsBlob]
+  );
+
+  const updateAppFeatureFlags = useCallback(
+    async (patch: Partial<AppFeatureFlags>) => {
+      const nextFlags: AppFeatureFlags = {
+        ...featureFlags,
+        ...patch,
+      };
+      setFeatureFlags(nextFlags);
+      return persistAppSettingsBlob({
+        autoApproveAnalystRequests,
+        appreciationEnabled: nextFlags.appreciationEnabled,
+        commentComposerEnabled: nextFlags.commentComposerEnabled,
+        postComposerEnabled: nextFlags.postComposerEnabled,
+        arenaComposerEnabled: nextFlags.arenaComposerEnabled,
+      });
+    },
+    [autoApproveAnalystRequests, featureFlags, persistAppSettingsBlob]
   );
 
   const setFabIcons = useCallback((icons: FabIconConfig[]) => {
@@ -2306,7 +2403,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         // حماية سباق: إن وُجد الاسم أثناء التحديث لا نُضِف
         if (findRefereeByName(prev, name)) return prev;
         const next = [...prev, referee];
-        void saveReferees(next);
+        // FIX-09 F09-S02: create with competition ownership context
+        void (async () => {
+          await setJson(REFEREES_STORAGE_KEY, next);
+          const cloud = await upsertRefereeInBlob(referee, { competitionId });
+          if (!cloud.ok) {
+            console.warn(
+              '[referees] upsert with competition failed — run FIX-09-P0-HARDENING.sql',
+              cloud.error
+            );
+          }
+        })();
         return next;
       });
       setCompetitions((prev) => {
@@ -3124,7 +3231,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       recipientName: string;
       recipientType: GiftTransaction['recipientType'];
       recipientVisibleId?: string;
+      reason?: string;
     }): GiftTransaction | null => {
+      if (!featureFlags.appreciationEnabled) {
+        toast({
+          variant: 'destructive',
+          title: t('appreciation.disabledTitle'),
+          description: t('appreciation.disabledDesc'),
+        });
+        return null;
+      }
       if (!currentUser) {
         toast({
           variant: 'destructive',
@@ -3152,9 +3268,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return null;
       }
 
+      const kind = resolveAppreciationKind(level);
+      // Client-local provisional number only — FUTURE SERVER-SIDE must mint authoritative id
       const certificateNumber = `SUP-${Math.floor(100000 + Math.random() * 900000)}`;
+      const localId = createId('gift');
+      const processStatus = createLocalPurchaseIntentStatus();
       const gift: GiftTransaction = {
-        id: createId('gift'),
+        id: localId,
         certificateNumber,
         gifterId: currentUser.id,
         gifterName: currentUser.name,
@@ -3167,25 +3287,40 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         certificateType: level.name,
         amountPaid: level.price,
         timestamp: new Date(),
-        // محلي تجريبي — لا بوابة دفع بعد
-        status: 'pending_demo',
+        // Purchase Intent فقط — ليس paid حتى يؤكد الخادم الدفع لاحقاً
+        status: processStatus,
+        appreciationKind: kind,
+        reason: payload.reason?.trim() || undefined,
+        certificateStatus:
+          kind === 'certificate' ? 'awaiting_payment' : undefined,
+        certificateTier:
+          kind === 'certificate'
+            ? certificateTierFromPrice(level.price)
+            : undefined,
       };
 
       setGiftTransactions((prev) => {
         const next = [gift, ...prev];
-        void saveGiftCloudAppend(gift);
+        void (async () => {
+          const serverId = await saveGiftCloudAppend(gift);
+          if (serverId && serverId !== localId) {
+            setGiftTransactions((cur) =>
+              cur.map((g) => (g.id === localId ? { ...g, id: serverId } : g))
+            );
+          }
+        })();
         return next;
       });
       toast({
-        title: t('toasts.giftDemoPendingTitle'),
-        description: t('toasts.giftDemoPendingDesc', {
+        title: t('toasts.appreciationPendingTitle'),
+        description: t('toasts.appreciationPendingDesc', {
           number: certificateNumber,
           name: payload.recipientName,
         }),
       });
       return gift;
     },
-    [currentUser, supportLevels, toast, t]
+    [currentUser, featureFlags.appreciationEnabled, supportLevels, toast, t]
   );
 
   const updateCompetition = useCallback(
@@ -4534,6 +4669,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           to: updated.email,
           code: accessCode || '',
           name: updated.name,
+          userId: updated.id,
         });
         toast({
           variant: 'success',
@@ -4984,6 +5120,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         to: updated.email,
         code: accessCode,
         name: updated.name,
+        userId: updated.id,
       });
 
       toast({
@@ -6267,11 +6404,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     return offers;
   }, [offers, currentUser?.id, currentUser?.role]);
 
+  /** سجل التقدير: مشرف يرى الكل؛ غير ذلك مرسل أو مستفيد فقط */
   const scopedGiftTransactions = useMemo(() => {
-    if (currentUser?.role === 'organizer' && currentUser.id) {
-      return giftTransactions.filter((g) => g.recipientId === currentUser.id);
+    if (!currentUser?.id) return [];
+    if (currentUser.role === 'superadmin') {
+      return giftTransactions;
     }
-    return giftTransactions;
+    return giftTransactions.filter(
+      (g) =>
+        g.gifterId === currentUser.id || g.recipientId === currentUser.id
+    );
   }, [giftTransactions, currentUser?.id, currentUser?.role]);
 
   const value = useMemo(
@@ -6280,6 +6422,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       appName,
       appLogo,
       autoApproveAnalystRequests,
+      featureFlags,
       fabIcons,
       personalitySectionBg,
       highlightsSectionBg,
@@ -6304,6 +6447,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setAppName,
       setAppLogo,
       setAutoApproveAnalystRequests,
+      updateAppFeatureFlags,
       setFabIcons,
       updateUser,
       syncCloudUsers,
@@ -6386,6 +6530,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       appName,
       appLogo,
       autoApproveAnalystRequests,
+      featureFlags,
       fabIcons,
       personalitySectionBg,
       highlightsSectionBg,
@@ -6410,6 +6555,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setAppName,
       setAppLogo,
       setAutoApproveAnalystRequests,
+      updateAppFeatureFlags,
       setFabIcons,
       updateUser,
       syncCloudUsers,

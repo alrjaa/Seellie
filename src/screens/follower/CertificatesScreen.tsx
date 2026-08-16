@@ -21,13 +21,13 @@ import { HeaderBackButton } from '@/components/layout/HeaderBackButton';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { useResponsive } from '@/hooks/useResponsive';
 import { headerSafeTop } from '@/theme/navigation';
-import {
-  certificateImageSource,
-} from '@/theme/certificates';
+import { certificateImageSource } from '@/theme/certificates';
 import {
   Avatar,
   Button,
   Card,
+  Chip,
+  Input,
   Muted,
   SearchBar,
   Subtitle,
@@ -35,6 +35,16 @@ import {
 } from '@/components/ui';
 import { userHasRole } from '@/utils/roles';
 import { cairoText } from '@/theme/fonts';
+import {
+  filterLevelsByKind,
+  giftsReceivedBy,
+  giftsSentBy,
+  normalizeAppreciationStatus,
+  resolveAppreciationKind,
+  resolveAppreciationKindFromTx,
+} from '@/utils/appreciation';
+
+type CatalogTab = 'gifts' | 'certificates' | 'sent' | 'received';
 
 type SupportRecipient = {
   id: string;
@@ -83,6 +93,14 @@ const RecipientRow = memo(function RecipientRow({
   );
 });
 
+function levelImageSource(level: SupportLevel) {
+  const url = level.imageUrl || '';
+  if (/^(file:|data:|https?:|content:|ph:|assets-library:)/i.test(url)) {
+    return { uri: url };
+  }
+  return certificateImageSource(level.name) ?? { uri: url };
+}
+
 export default function CertificatesScreen() {
   const {
     supportLevels,
@@ -90,22 +108,44 @@ export default function CertificatesScreen() {
     competitions,
     currentUser,
     purchaseSupportGift,
+    giftTransactions,
+    featureFlags,
   } = useTournament();
   const theme = useAppTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { desktop } = useResponsive();
 
-  const levels = useMemo(
-    () => supportLevels.filter((l) => (l.name as string) !== 'محلل'),
-    [supportLevels]
-  );
-
+  const [catalogTab, setCatalogTab] = useState<CatalogTab>('gifts');
   const [selectedLevel, setSelectedLevel] = useState<SupportLevel | null>(null);
   const [query, setQuery] = useState('');
+  const [reason, setReason] = useState('');
   const [recipient, setRecipient] = useState<SupportRecipient | null>(null);
   const [issued, setIssued] = useState<GiftTransaction | null>(null);
   const [buying, setBuying] = useState(false);
+
+  const giftLevels = useMemo(
+    () => filterLevelsByKind(supportLevels, 'gift'),
+    [supportLevels]
+  );
+  const certificateLevels = useMemo(
+    () => filterLevelsByKind(supportLevels, 'certificate'),
+    [supportLevels]
+  );
+
+  const catalogLevels =
+    catalogTab === 'certificates' ? certificateLevels : giftLevels;
+
+  const sentHistory = useMemo(
+    () =>
+      currentUser ? giftsSentBy(giftTransactions, currentUser.id) : [],
+    [giftTransactions, currentUser]
+  );
+  const receivedHistory = useMemo(
+    () =>
+      currentUser ? giftsReceivedBy(giftTransactions, currentUser.id) : [],
+    [giftTransactions, currentUser]
+  );
 
   const recipients = useMemo(() => {
     const list: SupportRecipient[] = [];
@@ -160,12 +200,7 @@ export default function CertificatesScreen() {
     if (!q) return recipients.slice(0, 40);
     return recipients
       .filter((r) => {
-        const hay = [
-          r.name,
-          r.handle,
-          r.visibleId,
-          r.subtitle,
-        ]
+        const hay = [r.name, r.handle, r.visibleId, r.subtitle]
           .filter(Boolean)
           .join(' ')
           .toLowerCase();
@@ -183,9 +218,18 @@ export default function CertificatesScreen() {
     [t]
   );
 
+  const statusLabel = useCallback(
+    (status: string | undefined) => {
+      const n = normalizeAppreciationStatus(status);
+      return t(`appreciation.status.${n}` as 'appreciation.status.pending');
+    },
+    [t]
+  );
+
   const closePurchase = useCallback(() => {
     setSelectedLevel(null);
     setQuery('');
+    setReason('');
     setRecipient(null);
     setIssued(null);
     setBuying(false);
@@ -200,10 +244,90 @@ export default function CertificatesScreen() {
       recipientName: recipient.name,
       recipientType: recipient.type,
       recipientVisibleId: recipient.visibleId || recipient.handle,
+      reason: reason.trim() || undefined,
     });
     setBuying(false);
     if (gift) setIssued(gift);
-  }, [buying, purchaseSupportGift, recipient, selectedLevel]);
+  }, [buying, purchaseSupportGift, reason, recipient, selectedLevel]);
+
+  const renderHistoryItem = useCallback(
+    (item: GiftTransaction, perspective: 'sent' | 'received') => {
+      const kind = resolveAppreciationKindFromTx(item);
+      return (
+        <Card key={item.id} style={styles.historyCard}>
+          <Subtitle>
+            {kind === 'certificate'
+              ? t('appreciation.certificateItem', {
+                  type: item.certificateType,
+                })
+              : t('appreciation.giftItem', { type: item.certificateType })}
+          </Subtitle>
+          <Muted>
+            {perspective === 'sent'
+              ? t('appreciation.toLine', { name: item.recipientName })
+              : t('appreciation.fromLine', { name: item.gifterName })}
+          </Muted>
+          <Muted>
+            {t('certificates.amount', { amount: item.amountPaid })}
+          </Muted>
+          <Muted>
+            {t('appreciation.dateLine', {
+              date: new Date(item.timestamp).toLocaleString(),
+            })}
+          </Muted>
+          <Muted>
+            {t('appreciation.statusLine', {
+              status: statusLabel(item.status),
+            })}
+          </Muted>
+          {kind === 'certificate' ? (
+            <Muted>
+              {t('certificates.certNumber')}: {item.certificateNumber}
+            </Muted>
+          ) : null}
+          {item.reason ? (
+            <Muted>
+              {t('appreciation.reasonLine', { reason: item.reason })}
+            </Muted>
+          ) : null}
+        </Card>
+      );
+    },
+    [statusLabel, t]
+  );
+
+  if (!featureFlags.appreciationEnabled) {
+    return (
+      <Screen
+        edges={['left', 'right']}
+        density={desktop ? 'wide' : 'default'}
+        contentStyle={{
+          ...styles.content,
+          paddingTop: headerSafeTop(insets.top),
+        }}
+      >
+        <View style={styles.topBar}>
+          <HeaderBackButton />
+          <Text
+            style={[
+              styles.pageTitle,
+              cairoText('bold'),
+              { color: theme.colors.text },
+            ]}
+            numberOfLines={1}
+          >
+            {t('appreciation.title')}
+          </Text>
+          <View style={styles.topBarEnd} />
+        </View>
+        <EmptyState
+          title={t('appreciation.disabledTitle')}
+          description={t('appreciation.disabledDesc')}
+          icon="ribbon-outline"
+        />
+      </Screen>
+    );
+  }
 
   return (
     <Screen
@@ -222,60 +346,107 @@ export default function CertificatesScreen() {
           ]}
           numberOfLines={1}
         >
-          {t('certificates.title')}
+          {t('appreciation.title')}
         </Text>
         <View style={styles.topBarEnd} />
       </View>
-      <Muted>{t('certificates.subtitle')}</Muted>
+      <Muted>{t('appreciation.subtitle')}</Muted>
 
-      {levels.length === 0 ? (
+      <View style={styles.tabs}>
+        {(
+          [
+            ['gifts', t('appreciation.tabGifts')],
+            ['certificates', t('appreciation.tabCertificates')],
+            ['sent', t('appreciation.tabSent')],
+            ['received', t('appreciation.tabReceived')],
+          ] as const
+        ).map(([key, label]) => (
+          <Chip
+            key={key}
+            label={label}
+            active={catalogTab === key}
+            onPress={() => setCatalogTab(key)}
+          />
+        ))}
+      </View>
+
+      {catalogTab === 'sent' ? (
+        sentHistory.length === 0 ? (
+          <EmptyState
+            title={t('appreciation.emptySentTitle')}
+            description={t('appreciation.emptySentDesc')}
+            icon="send-outline"
+          />
+        ) : (
+          <View style={styles.historyList}>
+            {sentHistory.map((g) => renderHistoryItem(g, 'sent'))}
+          </View>
+        )
+      ) : catalogTab === 'received' ? (
+        receivedHistory.length === 0 ? (
+          <EmptyState
+            title={t('appreciation.emptyReceivedTitle')}
+            description={t('appreciation.emptyReceivedDesc')}
+            icon="gift-outline"
+          />
+        ) : (
+          <View style={styles.historyList}>
+            {receivedHistory.map((g) => renderHistoryItem(g, 'received'))}
+          </View>
+        )
+      ) : catalogLevels.length === 0 ? (
         <EmptyState
-          title={t('certificates.emptyTitle')}
-          description={t('certificates.emptyDesc')}
+          title={
+            catalogTab === 'certificates'
+              ? t('appreciation.emptyCertificatesTitle')
+              : t('certificates.emptyTitle')
+          }
+          description={
+            catalogTab === 'certificates'
+              ? t('appreciation.emptyCertificatesDesc')
+              : t('certificates.emptyDesc')
+          }
           icon="ribbon-outline"
         />
       ) : (
         <View style={[styles.levelsGrid, desktop && styles.levelsGridDesktop]}>
-          {levels.map((level) => (
-          <Card
-            key={level.name}
-            style={[styles.card, desktop && styles.cardDesktop]}
-          >
-            <Image
-              source={
-                /^(file:|data:|https?:|content:|ph:|assets-library:)/i.test(
-                  level.imageUrl || ''
-                )
-                  ? { uri: level.imageUrl }
-                  : certificateImageSource(level.name) ?? {
-                      uri: level.imageUrl,
-                    }
-              }
-              style={[
-                styles.image,
-                { backgroundColor: theme.colors.surfaceElevated },
-              ]}
-              contentFit="contain"
-              transition={200}
-            />
-            <View style={styles.body}>
-              <Subtitle>{level.name}</Subtitle>
-              <Text style={[styles.price, { color: theme.colors.accent }]}>
-                {t('certificates.price', { amount: level.price })}
-              </Text>
-              <Muted>{level.description}</Muted>
-              <Button
-                label={t('certificates.buy')}
-                onPress={() => {
-                  setSelectedLevel(level);
-                  setRecipient(null);
-                  setIssued(null);
-                  setQuery('');
-                }}
-                disabled={!currentUser}
+          {catalogLevels.map((level) => (
+            <Card
+              key={level.id || level.name}
+              style={[styles.card, desktop && styles.cardDesktop]}
+            >
+              <Image
+                source={levelImageSource(level)}
+                style={[
+                  styles.image,
+                  { backgroundColor: theme.colors.surfaceElevated },
+                ]}
+                contentFit="contain"
+                transition={200}
               />
-            </View>
-          </Card>
+              <View style={styles.body}>
+                <Subtitle>{level.name}</Subtitle>
+                <Text style={[styles.price, { color: theme.colors.accent }]}>
+                  {t('certificates.price', { amount: level.price })}
+                </Text>
+                <Muted>{level.description}</Muted>
+                <Button
+                  label={
+                    resolveAppreciationKind(level) === 'certificate'
+                      ? t('appreciation.issueCertificate')
+                      : t('certificates.buy')
+                  }
+                  onPress={() => {
+                    setSelectedLevel(level);
+                    setRecipient(null);
+                    setIssued(null);
+                    setQuery('');
+                    setReason('');
+                  }}
+                  disabled={!currentUser}
+                />
+              </View>
+            </Card>
           ))}
         </View>
       )}
@@ -298,22 +469,48 @@ export default function CertificatesScreen() {
         >
           {issued ? (
             <View style={styles.modalBody}>
-              <Title>{t('certificates.supportCertificate')}</Title>
+              <Title>
+                {resolveAppreciationKindFromTx(issued) === 'certificate'
+                  ? t('appreciation.certificateIssuedTitle')
+                  : t('appreciation.giftIntentTitle')}
+              </Title>
               <Card style={styles.certificate}>
-                <Muted>{t('certificates.certNumber')}</Muted>
-                <Text
-                  style={[styles.certNumber, { color: theme.colors.accent }]}
-                >
-                  {issued.certificateNumber}
-                </Text>
+                {resolveAppreciationKindFromTx(issued) === 'certificate' ? (
+                  <>
+                    <Muted>{t('certificates.certNumber')}</Muted>
+                    <Text
+                      style={[
+                        styles.certNumber,
+                        { color: theme.colors.accent },
+                      ]}
+                    >
+                      {issued.certificateNumber}
+                    </Text>
+                    {issued.certificateTier ? (
+                      <Muted>
+                        {t('appreciation.tierLine', {
+                          tier: issued.certificateTier,
+                        })}
+                      </Muted>
+                    ) : null}
+                  </>
+                ) : (
+                  <Muted>
+                    {t('appreciation.refNumber')}: {issued.certificateNumber}
+                  </Muted>
+                )}
                 <Subtitle>
                   {t('certificates.certOf', { type: issued.certificateType })}
                 </Subtitle>
                 <Muted>
-                  {t('certificates.amount', {
-                    amount: issued.amountPaid,
+                  {t('certificates.amount', { amount: issued.amountPaid })}
+                </Muted>
+                <Muted>
+                  {t('appreciation.statusLine', {
+                    status: statusLabel(issued.status),
                   })}
                 </Muted>
+                <Muted>{t('appreciation.pendingPaymentHint')}</Muted>
                 <View style={styles.certDivider} />
                 <Muted>{t('certificates.beneficiary')}</Muted>
                 <Text style={[styles.certName, { color: theme.colors.text }]}>
@@ -329,15 +526,25 @@ export default function CertificatesScreen() {
                 <Muted>
                   {t('certificates.from')} {issued.gifterName}
                 </Muted>
+                {issued.reason ? (
+                  <Muted>
+                    {t('appreciation.reasonLine', { reason: issued.reason })}
+                  </Muted>
+                ) : null}
               </Card>
               <Button label={t('certificates.done')} onPress={closePurchase} />
             </View>
           ) : (
             <View style={styles.modalBody}>
               <Title>
-                {t('certificates.directTitle', {
-                  name: selectedLevel?.name ?? '',
-                })}
+                {selectedLevel &&
+                resolveAppreciationKind(selectedLevel) === 'certificate'
+                  ? t('appreciation.directCertificateTitle', {
+                      name: selectedLevel?.name ?? '',
+                    })
+                  : t('certificates.directTitle', {
+                      name: selectedLevel?.name ?? '',
+                    })}
               </Title>
               <Muted>{t('certificates.searchHint')}</Muted>
               {selectedLevel ? (
@@ -352,6 +559,14 @@ export default function CertificatesScreen() {
                 value={query}
                 onChangeText={setQuery}
                 placeholder={t('certificates.searchPlaceholder')}
+              />
+
+              <Input
+                label={t('appreciation.reasonOptional')}
+                value={reason}
+                onChangeText={setReason}
+                placeholder={t('appreciation.reasonPlaceholder')}
+                multiline
               />
 
               {recipient ? (
@@ -395,7 +610,7 @@ export default function CertificatesScreen() {
 
               <View style={styles.modalActions}>
                 <Button
-                  label={t('certificates.confirmPurchase')}
+                  label={t('appreciation.confirmIntent')}
                   onPress={confirmPurchase}
                   disabled={!recipient || buying}
                   loading={buying}
@@ -418,6 +633,7 @@ export default function CertificatesScreen() {
 
 const styles = StyleSheet.create({
   content: { gap: 14, paddingBottom: 40 },
+  tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   levelsGrid: { gap: 14 },
   levelsGridDesktop: {
     flexDirection: 'row',
@@ -484,4 +700,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(127,127,127,0.35)',
     marginVertical: 6,
   },
+  historyList: { gap: 10 },
+  historyCard: { gap: 4 },
 });

@@ -154,6 +154,7 @@ export default function ForumsScreen() {
     addComment,
     toggleCommentLike,
     refreshCloudForumComments,
+    featureFlags,
   } = useTournament();
   const theme = useAppTheme();
   const { t } = useTranslation();
@@ -305,6 +306,7 @@ export default function ForumsScreen() {
 
   const publish = useCallback(async () => {
     if (!currentUser) return;
+    if (!featureFlags.arenaComposerEnabled) return;
     const value = text.trim();
     if (!value && !videoUri) return;
 
@@ -320,6 +322,7 @@ export default function ForumsScreen() {
     addComment,
     clearVideo,
     currentUser,
+    featureFlags.arenaComposerEnabled,
     text,
     videoDurationSec,
     videoUri,
@@ -391,6 +394,7 @@ export default function ForumsScreen() {
           <View style={styles.header}>
             <Muted>{t('forums.subtitle', { sec: FORUM_VIDEO_MAX_SEC })}</Muted>
             <Muted>{t('forums.saveHint')}</Muted>
+            {featureFlags.arenaComposerEnabled ? (
             <Card style={styles.composer}>
               <Subtitle>{t('forums.addComment')}</Subtitle>
               <Input
@@ -522,6 +526,7 @@ export default function ForumsScreen() {
                 disabled={!canPublish}
               />
             </Card>
+            ) : null}
           </View>
         }
         ListEmptyComponent={

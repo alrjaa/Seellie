@@ -409,6 +409,7 @@ export default function FollowerHomeScreen() {
     togglePinnedCompetition,
     shareCards,
     messages,
+    featureFlags,
   } = useTournament();
   const theme = useAppTheme();
   const { t } = useTranslation();
@@ -824,12 +825,14 @@ export default function FollowerHomeScreen() {
               icon="people-outline"
               onPress={() => router.push('/(follower)/players' as any)}
             />
-            <ListRow
-              title={t('home.certificates')}
-              subtitle={t('home.certificatesSub')}
-              icon="ribbon-outline"
-              onPress={() => router.push('/(follower)/certificates' as any)}
-            />
+            {featureFlags.appreciationEnabled ? (
+              <ListRow
+                title={t('home.certificates')}
+                subtitle={t('home.certificatesSub')}
+                icon="ribbon-outline"
+                onPress={() => router.push('/(follower)/certificates' as any)}
+              />
+            ) : null}
             <ListRow
               title={t('home.yourAddress')}
               subtitle={locationLabel || t('home.setCity')}

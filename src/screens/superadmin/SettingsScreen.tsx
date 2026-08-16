@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useToast } from '@/providers/ToastProvider';
-import { useTheme } from '@/providers/ThemeProvider';
+import { useTheme, useAppTheme } from '@/providers/ThemeProvider';
 import { Screen } from '@/components/layout/Screen';
 import { Button, Card, Input, Muted, Subtitle, Title } from '@/components/ui';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
@@ -18,6 +18,7 @@ import {
   updateProfileAdminCloud,
 } from '@/services/supabase-auth';
 import { isSupabaseConfigured } from '@/services/supabase';
+import type { AppFeatureFlags } from '@/services/supabase-app-blobs';
 
 export default function SettingsScreen() {
   const {
@@ -29,9 +30,12 @@ export default function SettingsScreen() {
     users,
     updateUser,
     logout,
+    featureFlags,
+    updateAppFeatureFlags,
   } = useTournament();
   const { toast } = useToast();
   const { preference, setPreference } = useTheme();
+  const theme = useAppTheme();
   const { t } = useTranslation();
   const router = useRouter();
   const [name, setName] = useState(appName);
@@ -40,8 +44,27 @@ export default function SettingsScreen() {
   const [accountEmail, setAccountEmail] = useState(currentUser?.email || '');
   const [accountPassword, setAccountPassword] = useState('');
   const [saving, setSaving] = useState(false);
+  const [savingFlags, setSavingFlags] = useState(false);
 
   const isLocalDemoAdmin = !!currentUser && !isUuid(currentUser.id);
+
+  const onToggleFlag = async (
+    key: keyof AppFeatureFlags,
+    value: boolean
+  ) => {
+    setSavingFlags(true);
+    try {
+      const ok = await updateAppFeatureFlags({ [key]: value });
+      if (!ok) {
+        toast({
+          variant: 'destructive',
+          title: t('forums.cloudSyncFailed'),
+        });
+      }
+    } finally {
+      setSavingFlags(false);
+    }
+  };
 
   const saveAdminAccount = async () => {
     if (!currentUser) return;
@@ -207,6 +230,54 @@ export default function SettingsScreen() {
       </Card>
 
       <Card style={styles.card}>
+        <Subtitle>{t('appreciation.features.title')}</Subtitle>
+        <Muted>{t('appreciation.features.subtitle')}</Muted>
+        {(
+          [
+            {
+              key: 'appreciationEnabled' as const,
+              title: t('appreciation.features.appreciation'),
+              desc: t('appreciation.features.appreciationDesc'),
+            },
+            {
+              key: 'commentComposerEnabled' as const,
+              title: t('appreciation.features.commentComposer'),
+              desc: t('appreciation.features.commentComposerDesc'),
+            },
+            {
+              key: 'postComposerEnabled' as const,
+              title: t('appreciation.features.postComposer'),
+              desc: t('appreciation.features.postComposerDesc'),
+            },
+            {
+              key: 'arenaComposerEnabled' as const,
+              title: t('appreciation.features.arenaComposer'),
+              desc: t('appreciation.features.arenaComposerDesc'),
+            },
+          ] as const
+        ).map((row) => (
+          <View key={row.key} style={styles.flagRow}>
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={[styles.flagTitle, { color: theme.colors.text }]}>
+                {row.title}
+              </Text>
+              <Muted>{row.desc}</Muted>
+              <Muted>
+                {featureFlags[row.key]
+                  ? t('appreciation.features.enabled')
+                  : t('appreciation.features.disabled')}
+              </Muted>
+            </View>
+            <Switch
+              value={featureFlags[row.key]}
+              onValueChange={(v) => void onToggleFlag(row.key, v)}
+              disabled={savingFlags}
+            />
+          </View>
+        ))}
+      </Card>
+
+      <Card style={styles.card}>
         <Subtitle>{t('superadmin.settings.appIdentity')}</Subtitle>
         <Input
           label={t('superadmin.settings.appName')}
@@ -275,4 +346,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   themeRow: { flexDirection: 'row', gap: 8 },
+  flagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 6,
+  },
+  flagTitle: { fontWeight: '700', fontSize: 14, textAlign: 'left' },
 });

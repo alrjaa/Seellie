@@ -133,13 +133,23 @@ export default function SupportScreen() {
 
   const saveLevels = () => {
     const cleaned = levels
-      .map((l) => ({
-        ...l,
-        name: l.name.trim(),
-        description: l.description.trim(),
-        price: Number(l.price) || 0,
-        imageUrl: l.imageUrl || certificateImageUri(l.name) || '',
-      }))
+      .map((l) => {
+        const price = Number(l.price) || 0;
+        const kind =
+          l.kind === 'gift' || l.kind === 'certificate'
+            ? l.kind
+            : price >= 200
+              ? ('certificate' as const)
+              : ('gift' as const);
+        return {
+          ...l,
+          name: l.name.trim(),
+          description: l.description.trim(),
+          price,
+          kind,
+          imageUrl: l.imageUrl || certificateImageUri(l.name) || '',
+        };
+      })
       .filter((l) => l.name.length > 0);
 
     if (cleaned.length === 0) {
@@ -187,6 +197,7 @@ export default function SupportScreen() {
         price: 0,
         description: '',
         imageUrl: '',
+        kind: 'gift',
       },
     ]);
   };
@@ -312,6 +323,30 @@ export default function SupportScreen() {
                     color={theme.colors.danger}
                   />
                 </Pressable>
+              </View>
+              <View style={styles.kindRow}>
+                <Chip
+                  label={t('appreciation.tabGifts')}
+                  active={level.kind !== 'certificate'}
+                  onPress={() =>
+                    setLevels((prev) =>
+                      prev.map((l) =>
+                        l.id === level.id ? { ...l, kind: 'gift' } : l
+                      )
+                    )
+                  }
+                />
+                <Chip
+                  label={t('appreciation.tabCertificates')}
+                  active={level.kind === 'certificate'}
+                  onPress={() =>
+                    setLevels((prev) =>
+                      prev.map((l) =>
+                        l.id === level.id ? { ...l, kind: 'certificate' } : l
+                      )
+                    )
+                  }
+                />
               </View>
 
               <View
@@ -563,6 +598,11 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+  },
+  kindRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   previewWrap: {
