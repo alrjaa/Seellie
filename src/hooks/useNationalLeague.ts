@@ -47,8 +47,9 @@ function needsSessionSync(
 /**
  * جلب حزمة الدوري (سعودي افتراضياً):
  * 1) عرض فوري من الكاش المحلي إن وُجد
- * 2) إعادة تحقق مباشرة من مخزن Edge (بدون upstream للمجهول — F09-P1-01)
- * 3) إن وُجدت جلسة والنافذة قديمة/خلف التقويم → مزامنة مصادق عليها ثم تحديث الواجهة
+ * 2) إن كان الكاش طازجًا (<2د) تُتخطى شبكة Edge — P1-03
+ * 3) وإلا إعادة تحقق من مخزن Edge (بدون upstream للمجهول — F09-P1-01)
+ * 4) إن وُجدت جلسة والنافذة قديمة/خلف التقويم → مزامنة مصادق عليها ثم تحديث الواجهة
  */
 export function useNationalLeague(opts?: {
   leagueId?: number;
@@ -71,48 +72,56 @@ export function useNationalLeague(opts?: {
     });
   }, []);
 
-  const refresh = useCallback(async () => {
-    if (!enabled) {
-      setState({ loading: false, bundle: null, unavailable: false });
-      return;
-    }
-
-    const cacheKey = `bundle:${leagueId}:active`;
-    const cached = await readSportsCache<SportsLeagueBundle>(cacheKey);
-    if (bundleHasRows(cached)) {
-      applyBundle(cached);
-    } else {
-      setState((prev) => ({ ...prev, loading: true }));
-    }
-
-    try {
-      const provider = getSportsDataProvider();
-      const bundle = await provider.getNationalLeagueBundle({
-        leagueId,
-        forceSync: false,
-      });
-      applyBundle(bundle);
-
-      if (!isSupabaseConfigured()) return;
-      const sb = getSupabase();
-      if (!sb) return;
-      const { data: sessionData } = await sb.auth.getSession();
-      if (!sessionData.session?.access_token) return;
-      if (!needsSessionSync(bundle)) return;
-      if (!provider.syncLeague) return;
-
-      const synced = await provider.syncLeague(leagueId);
-      if (bundleHasRows(synced)) {
-        applyBundle(synced);
+  const refresh = useCallback(
+    async (opts?: { force?: boolean }) => {
+      if (!enabled) {
+        setState({ loading: false, bundle: null, unavailable: false });
+        return;
       }
-    } catch {
-      setState((prev) => ({
-        loading: false,
-        bundle: prev.bundle,
-        unavailable: !bundleHasRows(prev.bundle),
-      }));
-    }
-  }, [applyBundle, enabled, leagueId]);
+
+      const force = !!opts?.force;
+      const cacheKey = `bundle:${leagueId}:active`;
+      const cached = await readSportsCache<SportsLeagueBundle>(cacheKey);
+      if (bundleHasRows(cached)) {
+        applyBundle(cached);
+        // P1-03: skip Edge round-trip while local cache is still fresh
+        if (!force && !needsSessionSync(cached)) {
+          return;
+        }
+      } else {
+        setState((prev) => ({ ...prev, loading: true }));
+      }
+
+      try {
+        const provider = getSportsDataProvider();
+        const bundle = await provider.getNationalLeagueBundle({
+          leagueId,
+          forceSync: false,
+        });
+        applyBundle(bundle);
+
+        if (!isSupabaseConfigured()) return;
+        const sb = getSupabase();
+        if (!sb) return;
+        const { data: sessionData } = await sb.auth.getSession();
+        if (!sessionData.session?.access_token) return;
+        if (!needsSessionSync(bundle)) return;
+        if (!provider.syncLeague) return;
+
+        const synced = await provider.syncLeague(leagueId);
+        if (bundleHasRows(synced)) {
+          applyBundle(synced);
+        }
+      } catch {
+        setState((prev) => ({
+          loading: false,
+          bundle: prev.bundle,
+          unavailable: !bundleHasRows(prev.bundle),
+        }));
+      }
+    },
+    [applyBundle, enabled, leagueId]
+  );
 
   useEffect(() => {
     void refresh();

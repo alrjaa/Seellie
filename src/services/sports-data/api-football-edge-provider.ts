@@ -17,6 +17,15 @@ import {
 
 /** كاش محلي قصير للعرض الفوري فقط — المصدر التشغيلي هو مخزن Edge. */
 const BUNDLE_TTL_MS = 90 * 1000;
+/** In-memory hot cache — avoids repeat Edge round-trips within the same session. */
+const MEMORY_TTL_MS = 60 * 1000;
+
+const memoryBundles = new Map<
+  number,
+  { expires: number; bundle: SportsLeagueBundle }
+>();
+const inflightBundles = new Map<string, Promise<SportsLeagueBundle | null>>();
+const inflightInvoke = new Map<string, Promise<{ data: unknown; stale?: boolean }>>();
 
 function bundleHasRows(bundle: SportsLeagueBundle | null | undefined): boolean {
   if (!bundle) return false;
@@ -26,6 +35,23 @@ function bundleHasRows(bundle: SportsLeagueBundle | null | undefined): boolean {
     bundle.nextFixtures?.length ||
     bundle.liveFixtures?.length
   );
+}
+
+function readMemoryBundle(leagueId: number): SportsLeagueBundle | null {
+  const hit = memoryBundles.get(leagueId);
+  if (!hit) return null;
+  if (Date.now() > hit.expires) {
+    memoryBundles.delete(leagueId);
+    return null;
+  }
+  return hit.bundle;
+}
+
+function writeMemoryBundle(leagueId: number, bundle: SportsLeagueBundle) {
+  memoryBundles.set(leagueId, {
+    expires: Date.now() + MEMORY_TTL_MS,
+    bundle,
+  });
 }
 
 type InvokeOk<T> = { ok: true; cached?: boolean; stale?: boolean; data: T };
@@ -121,10 +147,29 @@ async function invokeSports<T>(
   if (SYNC_RESOURCES.has(resource) || forceSync) {
     return invokeSportsAuthed<T>(resource, extra);
   }
-  // الويب: fetch مباشر أولاً للقراءة العامة (أكثر موثوقية)
-  const viaFetch = await invokeSportsFetch<T>(resource, extra);
-  if (viaFetch.data) return viaFetch;
-  return invokeSportsSdk<T>(resource, extra);
+
+  const dedupeKey = `${resource}:${JSON.stringify(extra || {})}`;
+  const existing = inflightInvoke.get(dedupeKey);
+  if (existing) {
+    return existing as Promise<{ data: T | null; stale?: boolean }>;
+  }
+
+  const pending = (async () => {
+    // الويب: fetch مباشر أولاً للقراءة العامة (أكثر موثوقية)
+    const viaFetch = await invokeSportsFetch<T>(resource, extra);
+    if (viaFetch.data) return viaFetch;
+    return invokeSportsSdk<T>(resource, extra);
+  })();
+
+  inflightInvoke.set(
+    dedupeKey,
+    pending as Promise<{ data: unknown; stale?: boolean }>
+  );
+  try {
+    return await pending;
+  } finally {
+    inflightInvoke.delete(dedupeKey);
+  }
 }
 
 function normalizeTopScorers(rows: unknown): SportsLeagueBundle['topScorers'] {
@@ -251,34 +296,61 @@ export const apiFootballViaEdgeProvider: SportsDataProvider = {
     const leagueId = opts?.leagueId ?? SAUDI_PRO_LEAGUE_ID;
     const cacheKey = `bundle:${leagueId}:active`;
     const forceSync = !!opts?.forceSync;
+    const inflightKey = `${leagueId}:${forceSync ? '1' : '0'}`;
 
-    // لا نعيد الكاش المحلي قبل الشبكة: نقرأ المخزن التشغيلي فورًا (F09-P1-01:
-    // بدون forceSync لا يوجد upstream). الكاش يبقى للعرض الفوري في الـ hook فقط.
-    const { data, stale } = await invokeSports<SportsLeagueBundle>('bundle', {
-      leagueId,
-      forceSync,
-    });
-
-    if (!bundleHasRows(data)) {
-      // F09-P1-01: Edge public bundle is read-only. Explicit sync_league uses
-      // session JWT only (invokeSportsAuthed) — anonymous never hits upstream.
-      const synced = await invokeSports<SportsLeagueBundle>('sync_league', {
-        leagueId,
-      });
-      if (!bundleHasRows(synced.data)) {
-        if (data) {
-          const partial = await enrichTopScorers(normalizeBundle(data, stale));
-          await writeSportsCache(cacheKey, partial, BUNDLE_TTL_MS, {
-            leagueId,
-            season: partial.season,
-          });
-          return partial;
-        }
-        // Offline / store empty: last known local paint
-        const cached = await readSportsCache<SportsLeagueBundle>(cacheKey);
-        return cached && bundleHasRows(cached) ? cached : null;
+    if (!forceSync) {
+      const mem = readMemoryBundle(leagueId);
+      if (mem && bundleHasRows(mem)) {
+        return mem;
       }
-      let bundle = await enrichTopScorers(normalizeBundle(synced.data!));
+    }
+
+    const existing = inflightBundles.get(inflightKey);
+    if (existing) return existing;
+
+    const pending = (async (): Promise<SportsLeagueBundle | null> => {
+      // لا نعيد الكاش المحلي قبل الشبكة: نقرأ المخزن التشغيلي فورًا (F09-P1-01:
+      // بدون forceSync لا يوجد upstream). الكاش يبقى للعرض الفوري في الـ hook فقط.
+      const { data, stale } = await invokeSports<SportsLeagueBundle>('bundle', {
+        leagueId,
+        forceSync,
+      });
+
+      if (!bundleHasRows(data)) {
+        // F09-P1-01: Edge public bundle is read-only. Explicit sync_league uses
+        // session JWT only (invokeSportsAuthed) — anonymous never hits upstream.
+        const synced = await invokeSports<SportsLeagueBundle>('sync_league', {
+          leagueId,
+        });
+        if (!bundleHasRows(synced.data)) {
+          if (data) {
+            const partial = await enrichTopScorers(normalizeBundle(data, stale));
+            await writeSportsCache(cacheKey, partial, BUNDLE_TTL_MS, {
+              leagueId,
+              season: partial.season,
+            });
+            writeMemoryBundle(leagueId, partial);
+            return partial;
+          }
+          // Offline / store empty: last known local paint
+          const cached = await readSportsCache<SportsLeagueBundle>(cacheKey);
+          return cached && bundleHasRows(cached) ? cached : null;
+        }
+        let bundle = await enrichTopScorers(normalizeBundle(synced.data!));
+        if (bundle.window) {
+          await purgeSportsCacheOutsideWindow(leagueId, bundle.window);
+        }
+        await writeSportsCache(cacheKey, bundle, BUNDLE_TTL_MS, {
+          leagueId,
+          season: bundle.season,
+        });
+        writeMemoryBundle(leagueId, bundle);
+        return bundle;
+      }
+
+      let bundle = await enrichTopScorers(normalizeBundle(data!, stale));
+      if (!bundleHasRows(bundle)) return null;
+
       if (bundle.window) {
         await purgeSportsCacheOutsideWindow(leagueId, bundle.window);
       }
@@ -286,20 +358,16 @@ export const apiFootballViaEdgeProvider: SportsDataProvider = {
         leagueId,
         season: bundle.season,
       });
+      writeMemoryBundle(leagueId, bundle);
       return bundle;
-    }
+    })();
 
-    let bundle = await enrichTopScorers(normalizeBundle(data!, stale));
-    if (!bundleHasRows(bundle)) return null;
-
-    if (bundle.window) {
-      await purgeSportsCacheOutsideWindow(leagueId, bundle.window);
+    inflightBundles.set(inflightKey, pending);
+    try {
+      return await pending;
+    } finally {
+      inflightBundles.delete(inflightKey);
     }
-    await writeSportsCache(cacheKey, bundle, BUNDLE_TTL_MS, {
-      leagueId,
-      season: bundle.season,
-    });
-    return bundle;
   },
 
   async syncLeague(leagueId: number) {
@@ -315,6 +383,7 @@ export const apiFootballViaEdgeProvider: SportsDataProvider = {
       leagueId,
       season: bundle.season,
     });
+    writeMemoryBundle(leagueId, bundle);
     return bundle;
   },
 };
