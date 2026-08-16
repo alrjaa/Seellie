@@ -1,6 +1,6 @@
 import type { Competition } from '@/data/initial-data';
 import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
-import { mergeCompetitionsById } from '@/services/competition-sync';
+import { mergeCompetitionsById } from '@/services/competition-sync-core';
 import { isSeedCompetitionId } from '@/utils/seed-data';
 import { shouldApplyCloudResult } from '@/services/cloud-result';
 
