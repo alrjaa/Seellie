@@ -5,34 +5,26 @@ export const WEB_INPUT_MIN_FONT_SIZE = 16;
 
 let installed = false;
 
+/** Canonical viewport — must match scripts/patch-web-viewport.js + app/+html.tsx */
+export const WEB_VIEWPORT_CONTENT =
+  'width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover, interactive-widget=resizes-visual';
+
 /**
- * يضمن meta viewport المناسب للوحة المفاتيح دون الاعتماد على تصدير Expo لـ +html.
+ * Safety net: keeps a single viewport meta aligned with the build-time HTML patch.
+ * Does not create a second meta tag. F12-P2-01: initial HTML is patched at export.
  * interactive-widget=resizes-visual: لا يعيد تحجيم layout عند فتح الكيبورد.
  */
 export function ensureWebViewportMeta() {
   if (Platform.OS !== 'web' || typeof document === 'undefined') return;
-  const meta = document.querySelector('meta[name="viewport"]');
-  if (!meta) return;
-  const current = meta.getAttribute('content') || '';
-  const parts = current
-    .split(',')
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .filter((p) => !p.startsWith('interactive-widget='));
-  if (!parts.some((p) => p.startsWith('width='))) {
-    parts.unshift('width=device-width');
+  const metas = document.querySelectorAll('meta[name="viewport"]');
+  if (metas.length === 0) return;
+  const meta = metas[0];
+  // Remove accidental duplicates; keep one canonical tag.
+  for (let i = 1; i < metas.length; i += 1) {
+    metas[i].parentNode?.removeChild(metas[i]);
   }
-  if (!parts.some((p) => p.startsWith('initial-scale='))) {
-    parts.push('initial-scale=1');
-  }
-  if (!parts.some((p) => p === 'shrink-to-fit=no')) {
-    parts.push('shrink-to-fit=no');
-  }
-  if (!parts.some((p) => p.startsWith('viewport-fit='))) {
-    parts.push('viewport-fit=cover');
-  }
-  parts.push('interactive-widget=resizes-visual');
-  meta.setAttribute('content', parts.join(', '));
+  if (meta.getAttribute('content') === WEB_VIEWPORT_CONTENT) return;
+  meta.setAttribute('content', WEB_VIEWPORT_CONTENT);
 }
 
 /**
