@@ -8,7 +8,10 @@ import { EmptyState } from '@/components/feedback/EmptyState';
 import { Card, Muted, Subtitle, Title } from '@/components/ui';
 import { formatArabicDate, formatAppNumber } from '@/utils';
 import { flowDirection } from '@/theme/direction';
-import { normalizeAppreciationStatus } from '@/utils/appreciation';
+import {
+  isAppreciationPaid,
+  normalizeAppreciationStatus,
+} from '@/utils/appreciation';
 
 export default function FinancialsScreen() {
   const {
@@ -40,7 +43,7 @@ export default function FinancialsScreen() {
   const totalReceived = useMemo(
     () =>
       myTransactions
-        .filter((g) => g.status === 'paid')
+        .filter((g) => isAppreciationPaid(g.status))
         .reduce((sum, g) => sum + g.amountPaid, 0),
     [myTransactions]
   );

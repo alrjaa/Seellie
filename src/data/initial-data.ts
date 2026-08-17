@@ -275,22 +275,23 @@ export interface SupportLevel {
     kind?: AppreciationKind;
 };
 
-/** حالة عملية التقدير — الدفع الحقيقي لاحقاً يؤكد paid من الخادم فقط */
+/** حالة عملية التقدير — الدفع الحقيقي لاحقاً يؤكد paid/issued من الخادم فقط */
 export type AppreciationProcessStatus =
   | 'pending'
+  | 'awaiting_payment'
   | 'paid'
+  | 'issued'
   | 'failed'
   | 'cancelled'
   | 'refunded'
-  /** سجلات قديمة من الخادم — تُعرض كـ pending */
+  /** سجلات قديمة من الخادم فقط — لا تُنشأ لمعاملات جديدة */
   | 'pending_demo';
 
-/** حالة كيان الشهادة بعد إنشاء النية / بعد الدفع */
+/** حالة كيان الشهادة (موازية للحالة الرئيسية عند الحاجة) */
 export type AppreciationCertificateStatus =
   | 'awaiting_payment'
   | 'issued'
   | 'void';
-
 
 export interface Comment {
     id: string;

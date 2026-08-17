@@ -1751,6 +1751,12 @@ export const en: TranslationTree = {
       systemTemplate: 'System template',
       paid: 'Paid',
       draft: 'Draft',
+      pending: 'Pending',
+      awaitingPayment: 'Awaiting payment',
+      issued: 'Issued',
+      failed: 'Failed',
+      cancelled: 'Cancelled',
+      refunded: 'Refunded',
       amountCurrency: '%{amount} SAR',
     },
     quickComments: {
@@ -1990,11 +1996,14 @@ export const en: TranslationTree = {
     tierLine: 'Certificate tier: %{tier}',
     status: {
       pending: 'Payment pending',
+      awaiting_payment: 'Awaiting payment',
       paid: 'Paid',
+      issued: 'Issued',
       failed: 'Failed',
       cancelled: 'Cancelled',
       refunded: 'Refunded',
     },
+    certNumberPending: 'Certificate number will be issued after payment confirmation',
     features: {
       title: 'Service controls',
       subtitle:

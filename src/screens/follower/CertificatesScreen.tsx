@@ -39,6 +39,7 @@ import {
   filterLevelsByKind,
   giftsReceivedBy,
   giftsSentBy,
+  hasOfficialCertificateNumber,
   normalizeAppreciationStatus,
   resolveAppreciationKind,
   resolveAppreciationKindFromTx,
@@ -282,7 +283,9 @@ export default function CertificatesScreen() {
           </Muted>
           {kind === 'certificate' ? (
             <Muted>
-              {t('certificates.certNumber')}: {item.certificateNumber}
+              {hasOfficialCertificateNumber(item.certificateNumber)
+                ? `${t('certificates.certNumber')}: ${item.certificateNumber}`
+                : t('appreciation.certNumberPending')}
             </Muted>
           ) : null}
           {item.reason ? (
@@ -477,15 +480,21 @@ export default function CertificatesScreen() {
               <Card style={styles.certificate}>
                 {resolveAppreciationKindFromTx(issued) === 'certificate' ? (
                   <>
-                    <Muted>{t('certificates.certNumber')}</Muted>
-                    <Text
-                      style={[
-                        styles.certNumber,
-                        { color: theme.colors.accent },
-                      ]}
-                    >
-                      {issued.certificateNumber}
-                    </Text>
+                    {hasOfficialCertificateNumber(issued.certificateNumber) ? (
+                      <>
+                        <Muted>{t('certificates.certNumber')}</Muted>
+                        <Text
+                          style={[
+                            styles.certNumber,
+                            { color: theme.colors.accent },
+                          ]}
+                        >
+                          {issued.certificateNumber}
+                        </Text>
+                      </>
+                    ) : (
+                      <Muted>{t('appreciation.certNumberPending')}</Muted>
+                    )}
                     {issued.certificateTier ? (
                       <Muted>
                         {t('appreciation.tierLine', {
@@ -496,7 +505,7 @@ export default function CertificatesScreen() {
                   </>
                 ) : (
                   <Muted>
-                    {t('appreciation.refNumber')}: {issued.certificateNumber}
+                    {t('appreciation.refNumber')}: {issued.id}
                   </Muted>
                 )}
                 <Subtitle>

@@ -463,12 +463,17 @@ async function saveSupportLevels(levels: SupportLevel[]) {
 
 async function saveGiftCloudAppend(
   gift: GiftTransaction
-): Promise<string | null> {
-  if (!isSupabaseConfigured()) return null;
+): Promise<{ serverId: string | null; gift: GiftTransaction | null }> {
+  if (!isSupabaseConfigured()) return { serverId: null, gift: null };
   const payload = {
     ...gift,
     // F09-P1-04: local id is idempotency key only; server mints authoritative id
     clientRequestId: gift.id,
+    // Do not send provisional client cert number / forced terminal states
+    certificateNumber: undefined,
+    status: createLocalPurchaseIntentStatus(),
+    certificateStatus:
+      gift.appreciationKind === 'certificate' ? 'awaiting_payment' : undefined,
     timestamp:
       gift.timestamp instanceof Date
         ? gift.timestamp.toISOString()
@@ -477,13 +482,51 @@ async function saveGiftCloudAppend(
   const result = await appendGiftTransaction(payload);
   if (!result.ok) {
     console.warn('[gifts] append failed', result.error);
-    return null;
+    return { serverId: null, gift: null };
+  }
+  const remote = result.gift;
+  if (!remote || typeof remote !== 'object') {
+    return { serverId: null, gift: null };
   }
   const serverId =
-    result.gift && typeof result.gift.id === 'string'
-      ? result.gift.id
-      : null;
-  return serverId;
+    typeof remote.id === 'string' ? remote.id : null;
+  const merged: GiftTransaction = {
+    ...gift,
+    ...remote,
+    id: serverId || gift.id,
+    amountPaid:
+      typeof remote.amountPaid === 'number'
+        ? remote.amountPaid
+        : gift.amountPaid,
+    status: (typeof remote.status === 'string'
+      ? remote.status
+      : gift.status) as GiftTransaction['status'],
+    certificateNumber:
+      typeof remote.certificateNumber === 'string'
+        ? remote.certificateNumber
+        : '',
+    timestamp: remote.timestamp
+      ? new Date(remote.timestamp as string)
+      : gift.timestamp,
+    appreciationKind:
+      remote.appreciationKind === 'gift' ||
+      remote.appreciationKind === 'certificate'
+        ? remote.appreciationKind
+        : gift.appreciationKind,
+    certificateStatus:
+      remote.certificateStatus === 'awaiting_payment' ||
+      remote.certificateStatus === 'issued' ||
+      remote.certificateStatus === 'void'
+        ? remote.certificateStatus
+        : gift.certificateStatus,
+    certificateTier:
+      typeof remote.certificateTier === 'number'
+        ? remote.certificateTier
+        : gift.certificateTier,
+    reason:
+      typeof remote.reason === 'string' ? remote.reason : gift.reason,
+  };
+  return { serverId, gift: merged };
 }
 
 async function saveBrandingCloud(appName: string, appLogo: string) {
@@ -643,7 +686,7 @@ export interface TournamentContextType {
   updateSupportLevels: (levels: SupportLevel[]) => void;
   /**
    * إنشاء Purchase Intent للتقدير (هدية أو شهادة).
-   * الحالة دائماً pending محلياً — لا يُعتبر الضغط paid.
+   * الحالة دائماً pending محلياً ثم awaiting_payment من الخادم — لا يُعتبر الضغط paid.
    * FUTURE SERVER-SIDE: تأكيد الدفع من الخادم فقط.
    */
   purchaseSupportGift: (payload: {
@@ -3280,13 +3323,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
 
       const kind = resolveAppreciationKind(level);
-      // Client-local provisional number only — FUTURE SERVER-SIDE must mint authoritative id
-      const certificateNumber = `SUP-${Math.floor(100000 + Math.random() * 900000)}`;
+      // Provisional local id only — official certificateNumber is server-minted after paid→issued
       const localId = createId('gift');
       const processStatus = createLocalPurchaseIntentStatus();
       const gift: GiftTransaction = {
         id: localId,
-        certificateNumber,
+        certificateNumber: '',
         gifterId: currentUser.id,
         gifterName: currentUser.name,
         gifterVisibleId: currentUser.visibleId || currentUser.handle,
@@ -3313,10 +3355,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setGiftTransactions((prev) => {
         const next = [gift, ...prev];
         void (async () => {
-          const serverId = await saveGiftCloudAppend(gift);
-          if (serverId && serverId !== localId) {
+          const { gift: serverGift } = await saveGiftCloudAppend(gift);
+          if (serverGift) {
             setGiftTransactions((cur) =>
-              cur.map((g) => (g.id === localId ? { ...g, id: serverId } : g))
+              cur.map((g) => (g.id === localId || g.id === serverGift.id ? serverGift : g))
             );
           }
         })();
@@ -3325,7 +3367,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       toast({
         title: t('toasts.appreciationPendingTitle'),
         description: t('toasts.appreciationPendingDesc', {
-          number: certificateNumber,
+          number: localId,
           name: payload.recipientName,
         }),
       });

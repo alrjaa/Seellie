@@ -1440,16 +1440,19 @@ export const ar = {
     certificateIssuedTitle: 'شهادة تقدير (بانتظار الدفع)',
     directCertificateTitle: 'توجيه شهادة تقدير %{name}',
     pendingPaymentHint:
-      'لم يُؤكد الدفع بعد. الحالة تبقى pending حتى تأكيد الخادم لاحقاً.',
+      'لم يُؤكد الدفع بعد. الحالة تبقى بانتظار الدفع حتى تأكيد الخادم لاحقاً.',
     refNumber: 'الرقم المرجعي',
     tierLine: 'مستوى الشهادة: %{tier}',
     status: {
       pending: 'بانتظار الدفع',
+      awaiting_payment: 'بانتظار الدفع',
       paid: 'مدفوع',
+      issued: 'صادرة',
       failed: 'فشل',
       cancelled: 'ملغى',
       refunded: 'مسترد',
     },
+    certNumberPending: 'رقم الشهادة يصدر بعد تأكيد الدفع من الخادم',
     features: {
       title: 'التحكم في الخدمات',
       subtitle:
@@ -2062,6 +2065,12 @@ export const ar = {
       systemTemplate: 'قالب نظام',
       paid: 'مدفوعة',
       draft: 'مسودة',
+      pending: 'قيد الانتظار',
+      awaitingPayment: 'بانتظار الدفع',
+      issued: 'صادرة',
+      failed: 'فشل',
+      cancelled: 'ملغاة',
+      refunded: 'مستردة',
       amountCurrency: '%{amount} ر.س',
     },
     quickComments: {

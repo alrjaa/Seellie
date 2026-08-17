@@ -28,8 +28,10 @@ function resolveAppreciationKind(level: {
 
 function normalizeAppreciationStatus(
   status: string | undefined | null
-): 'pending' | 'paid' | 'failed' | 'cancelled' | 'refunded' {
+): 'pending' | 'awaiting_payment' | 'paid' | 'issued' | 'failed' | 'cancelled' | 'refunded' {
   if (status === 'paid') return 'paid';
+  if (status === 'issued') return 'issued';
+  if (status === 'awaiting_payment') return 'awaiting_payment';
   if (status === 'failed') return 'failed';
   if (status === 'cancelled') return 'cancelled';
   if (status === 'refunded') return 'refunded';
@@ -45,7 +47,9 @@ function main() {
   assert.match(src, /CERTIFICATE_PRICE_STEP = 200/);
   assert.match(src, /createLocalPurchaseIntentStatus/);
   assert.match(src, /pending_demo/);
-  assert.match(src, /FUTURE SERVER-SIDE/);
+  assert.match(src, /awaiting_payment/);
+  assert.match(src, /SERVER_INTENT_STATUS/);
+  assert.match(src, /FUTURE SERVER-SIDE|after paid|awaiting_payment/);
   assert.doesNotMatch(src, /stripe|moyasar|hyperpay/i);
 
   const tiers = buildCertificateAppreciationLevels(6);
@@ -64,7 +68,9 @@ function main() {
 
   assert.equal(normalizeAppreciationStatus('pending_demo'), 'pending');
   assert.equal(normalizeAppreciationStatus('pending'), 'pending');
+  assert.equal(normalizeAppreciationStatus('awaiting_payment'), 'awaiting_payment');
   assert.equal(normalizeAppreciationStatus('paid'), 'paid');
+  assert.equal(normalizeAppreciationStatus('issued'), 'issued');
 
   const blobs = fs.readFileSync(
     path.join(process.cwd(), 'src/services/supabase-app-blobs.ts'),
