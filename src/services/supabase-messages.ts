@@ -209,30 +209,28 @@ export async function findProfileIdByEmail(
   if (!sessionData.session) return null;
   const normalized = email.trim().toLowerCase();
   if (!normalized.includes('@')) return null;
-  const { data, error } = await sb
-    .from('profiles')
-    .select('id, name, email')
-    .ilike('email', normalized)
-    .maybeSingle();
+  const { data, error } = await sb.rpc('find_profile_by_email', {
+    p_email: normalized,
+  });
   if (error || !data) {
-    // جرّب مطابقة جزئية إن اللصق فيه مسافات
-    const { data: loose } = await sb
+    const { data: own } = await sb
       .from('profiles')
       .select('id, name, email')
-      .ilike('email', `%${normalized}%`)
-      .limit(1)
+      .ilike('email', normalized)
       .maybeSingle();
-    if (!loose) return null;
+    if (!own) return null;
     return {
-      id: loose.id as string,
-      name: loose.name as string,
-      email: loose.email as string,
+      id: own.id as string,
+      name: own.name as string,
+      email: own.email as string,
     };
   }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
   return {
-    id: data.id as string,
-    name: data.name as string,
-    email: data.email as string,
+    id: row.id as string,
+    name: row.name as string,
+    email: row.email as string,
   };
 }
 
@@ -246,8 +244,8 @@ export async function findSuperadminProfile(): Promise<{
   const { data: sessionData } = await sb.auth.getSession();
   if (!sessionData.session) return null;
   const { data, error } = await sb
-    .from('profiles')
-    .select('id, name, email, role, active_role, roles')
+    .from('profiles_catalog')
+    .select('id, name, role, active_role, roles')
     .or('role.eq.superadmin,active_role.eq.superadmin')
     .order('created_at', { ascending: true })
     .limit(5);
@@ -265,7 +263,7 @@ export async function findSuperadminProfile(): Promise<{
   return {
     id: row.id as string,
     name: row.name as string,
-    email: row.email as string,
+    email: '',
   };
 }
 

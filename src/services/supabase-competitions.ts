@@ -54,18 +54,30 @@ export async function fetchCompetitionsCloud(): Promise<{
     return { items: [], ok: false, error: 'no_session' };
   }
   const { data, error } = await sb
-    .from('app_competitions')
-    .select('*')
+    .from('app_competitions_catalog')
+    .select('id, organizer_id, name, payload, updated_at')
     .order('updated_at', { ascending: false })
     .limit(300);
   if (error) {
     console.warn('[supabase] fetchCompetitions', error.message);
     return { items: [], ok: false, error: error.message };
   }
-  const items = ((data || []) as CompetitionCloudRow[])
+  const catalog = ((data || []) as CompetitionCloudRow[])
     .map(rowToCompetition)
     .filter((c): c is Competition => !!c);
-  return { items, ok: true };
+  const { data: privileged } = await sb
+    .from('app_competitions')
+    .select('id, organizer_id, name, payload, updated_at')
+    .limit(300);
+  const full = ((privileged || []) as CompetitionCloudRow[])
+    .map(rowToCompetition)
+    .filter((c): c is Competition => !!c);
+  if (!full.length) {
+    return { items: catalog, ok: true };
+  }
+  const byId = new Map(catalog.map((c) => [c.id, c]));
+  for (const item of full) byId.set(item.id, item);
+  return { items: Array.from(byId.values()), ok: true };
 }
 
 export async function upsertCompetitionCloud(

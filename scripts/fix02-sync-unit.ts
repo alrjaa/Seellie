@@ -99,6 +99,27 @@ async function main() {
     'keep local media when cloud empty'
   );
 
+  const catalogCloud = [
+    baseUser({
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      email: '',
+      name: 'Catalog',
+    }),
+  ];
+  const localNamed = [
+    baseUser({
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      email: 'keep@example.com',
+      mobile: '0500000000',
+      name: 'Local',
+    }),
+  ];
+  const catalogMerged = mergeUsersPreferCloud(localNamed, catalogCloud);
+  assert.equal(catalogMerged.length, 1);
+  assert.equal(catalogMerged[0].email, 'keep@example.com');
+  assert.equal(catalogMerged[0].mobile, '0500000000');
+  assert.equal(catalogMerged[0].name, 'Catalog');
+
   const cards: ShareCard[] = [
     {
       id: 'c1',

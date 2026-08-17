@@ -183,7 +183,7 @@ export default function SearchScreen() {
     });
 
     users.forEach((u) => {
-      const blob = `${u.name} ${u.handle || ''} ${u.email} ${u.bio || ''}`.toLowerCase();
+      const blob = `${u.name} ${u.handle || ''} ${u.email || ''} ${u.bio || ''}`.toLowerCase();
       if (!blob.includes(q)) return;
       results.push({
         id: `user-${u.id}`,

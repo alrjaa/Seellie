@@ -6,13 +6,8 @@ import { stripAnalystAccessCode } from '@/services/analyst-strip';
 
 /**
  * دمج القائمة المحلية مع السحابة:
- * نفس الإيميل → الحساب السحابي (UUID) يفوز ويزيل المكرر المحلي.
- * إن كان محتوى السحابة فارغاً نحتفظ بمحتوى محلي غير فارغ حتى لا يُمسَح بعد المزامنة.
- *
- * FIX-02 contract:
- * - Callers MUST NOT invoke this with cloudUsers=[] after a failed fetch.
- * - Empty successful catalog: callers may no-op (keep local) — empty ≠ delete.
- * - “Local newer” is emptiness-heuristic only (no timestamps); non-empty cloud wins that field.
+ * نفس المعرف → السحابة تفوز للحقول القادمة، مع الإبقاء على email/mobile المحلي إن حذفتها الكتالوج.
+ * نفس الإيميل (بذرة محلية ↔ UUID سحابي) → الحساب السحابي يفوز ويزيل المكرر المحلي.
  */
 export function mergeUsersPreferCloud(
   localUsers: User[],
@@ -21,57 +16,70 @@ export function mergeUsersPreferCloud(
   // Defensive: never treat accidental empty cloud as a wipe of the whole roster.
   if (!cloudUsers.length) return localUsers;
 
+  const byId = new Map<string, User>();
   const byEmail = new Map<string, User>();
-  for (const u of localUsers) {
+
+  const remember = (u: User) => {
+    byId.set(u.id, u);
     const key = (u.email || '').trim().toLowerCase();
-    if (!key) continue;
-    byEmail.set(key, u);
-  }
-  for (const u of cloudUsers) {
-    const key = (u.email || '').trim().toLowerCase();
-    if (!key) continue;
-    const local = byEmail.get(key);
-    if (!local) {
-      byEmail.set(key, u);
-      continue;
-    }
+    if (key) byEmail.set(key, u);
+  };
+
+  for (const u of localUsers) remember(u);
+
+  const mergePair = (local: User | undefined, cloud: User): User => {
+    if (!local) return cloud;
     const cloudHasMedia =
-      (u.media?.photos?.length || 0) + (u.media?.videos?.length || 0) > 0;
-    const cloudHasPosts = (u.posts?.length || 0) > 0;
-    const cloudHasAnalysis = (u.analysisContent?.length || 0) > 0;
-    byEmail.set(key, {
-      ...u,
-      media: cloudHasMedia ? u.media : local.media || u.media,
-      posts: cloudHasPosts ? u.posts : local.posts || u.posts,
+      (cloud.media?.photos?.length || 0) + (cloud.media?.videos?.length || 0) >
+      0;
+    const cloudHasPosts = (cloud.posts?.length || 0) > 0;
+    const cloudHasAnalysis = (cloud.analysisContent?.length || 0) > 0;
+    return {
+      ...cloud,
+      email: cloud.email || local.email,
+      mobile: cloud.mobile || local.mobile,
+      media: cloudHasMedia ? cloud.media : local.media || cloud.media,
+      posts: cloudHasPosts ? cloud.posts : local.posts || cloud.posts,
       analysisContent: cloudHasAnalysis
-        ? u.analysisContent
-        : local.analysisContent || u.analysisContent,
+        ? cloud.analysisContent
+        : local.analysisContent || cloud.analysisContent,
       personalityPhotos:
-        (u.personalityPhotos?.length || 0) > 0
-          ? u.personalityPhotos
-          : local.personalityPhotos || u.personalityPhotos,
-      followers: u.followers?.length ? u.followers : local.followers,
-      following: u.following?.length ? u.following : local.following,
+        (cloud.personalityPhotos?.length || 0) > 0
+          ? cloud.personalityPhotos
+          : local.personalityPhotos || cloud.personalityPhotos,
+      followers: cloud.followers?.length ? cloud.followers : local.followers,
+      following: cloud.following?.length ? cloud.following : local.following,
       analyst: stripAnalystAccessCode(
-        u.analyst?.status && u.analyst.status !== 'none'
-          ? u.analyst
-          : local.analyst || u.analyst
+        cloud.analyst?.status && cloud.analyst.status !== 'none'
+          ? cloud.analyst
+          : local.analyst || cloud.analyst
       ),
       permissions: {
         ...(local.permissions || {}),
-        ...(u.permissions || {}),
+        ...(cloud.permissions || {}),
         canCreateContent:
-          u.permissions?.canCreateContent === true ||
+          cloud.permissions?.canCreateContent === true ||
           local.permissions?.canCreateContent === true ||
-          u.analyst?.status === 'active' ||
-          u.analyst?.status === 'warned' ||
+          cloud.analyst?.status === 'active' ||
+          cloud.analyst?.status === 'warned' ||
           local.analyst?.status === 'active' ||
           local.analyst?.status === 'warned',
       },
-    });
+    };
+  };
+
+  for (const cloud of cloudUsers) {
+    const emailKey = (cloud.email || '').trim().toLowerCase();
+    const local = byId.get(cloud.id) || (emailKey ? byEmail.get(emailKey) : undefined);
+    const merged = mergePair(local, cloud);
+    if (local && local.id !== merged.id) {
+      byId.delete(local.id);
+    }
+    remember(merged);
   }
+
   const hasCloudAdmin = cloudUsers.some((u) => u.role === 'superadmin');
-  const merged = Array.from(byEmail.values()).filter((u) => {
+  const merged = Array.from(byId.values()).filter((u) => {
     if (!hasCloudAdmin) return true;
     if (u.id === 'superadmin-1') return false;
     if (

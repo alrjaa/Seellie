@@ -8,6 +8,7 @@ import {
   applyContentPayload,
   type UserContentPayload,
 } from '@/services/supabase-user-content';
+import { mergeUsersPreferCloud } from '@/services/merge-users';
 import { stripAnalystAccessCode } from '@/services/analyst-strip';
 import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
@@ -18,7 +19,7 @@ export { stripAnalystAccessCode } from '@/services/analyst-strip';
 
 export type ProfileRow = {
   id: string;
-  email: string;
+  email?: string | null;
   name: string;
   handle: string | null;
   visible_id: string | null;
@@ -31,7 +32,7 @@ export type ProfileRow = {
   region: string | null;
   country: string | null;
   status: string | null;
-  mobile: string | null;
+  mobile?: string | null;
   content?: UserContentPayload | null;
 };
 
@@ -57,9 +58,9 @@ export function profileToUser(row: ProfileRow): User {
   ) as UserRole[];
   const draft: User = {
     id: row.id,
-    email: row.email,
+    email: row.email || '',
     name: row.name,
-    handle: row.handle || `@${row.email.split('@')[0] || 'user'}`,
+    handle: row.handle || `@${(row.email || 'user').split('@')[0] || 'user'}`,
     visibleId: row.visible_id || `FLW-${row.id.slice(0, 4).toUpperCase()}`,
     role,
     roles,
@@ -86,20 +87,33 @@ export function profileToUser(row: ProfileRow): User {
   );
 }
 
-/** أعمدة عامة للملفات — بدون اعتماد أعمى على select('*') */
-export const PROFILE_PUBLIC_COLUMNS =
+/** Owner/admin table columns — includes email/mobile. */
+export const PROFILE_OWNER_COLUMNS =
   'id,email,name,handle,visible_id,role,roles,active_role,avatar,bio,city,region,country,status,mobile,content';
+
+/** Catalog view — no email/mobile. */
+export const PROFILE_CATALOG_COLUMNS =
+  'id,name,handle,visible_id,role,roles,active_role,avatar,bio,city,region,country,status,content';
+
+/** @deprecated F13-P2-02 — use PROFILE_CATALOG_COLUMNS / PROFILE_OWNER_COLUMNS */
+export const PROFILE_PUBLIC_COLUMNS = PROFILE_OWNER_COLUMNS;
 
 export async function fetchProfile(userId: string): Promise<User | null> {
   const sb = getSupabase();
   if (!sb) return null;
   const { data, error } = await sb
     .from('profiles')
-    .select(PROFILE_PUBLIC_COLUMNS)
+    .select(PROFILE_OWNER_COLUMNS)
     .eq('id', userId)
     .maybeSingle();
-  if (error || !data) return null;
-  return profileToUser(data as ProfileRow);
+  if (!error && data) return profileToUser(data as ProfileRow);
+  const { data: catalog, error: catalogError } = await sb
+    .from('profiles_catalog')
+    .select(PROFILE_CATALOG_COLUMNS)
+    .eq('id', userId)
+    .maybeSingle();
+  if (catalogError || !catalog) return null;
+  return profileToUser(catalog as ProfileRow);
 }
 
 export type FetchProfilesResult = {
@@ -120,18 +134,29 @@ export async function fetchAllProfilesResult(): Promise<FetchProfilesResult> {
   const sb = getSupabase();
   if (!sb) return { users: [], ok: false, error: 'no_client' };
   const { data, error } = await sb
-    .from('profiles')
-    .select(PROFILE_PUBLIC_COLUMNS)
+    .from('profiles_catalog')
+    .select(PROFILE_CATALOG_COLUMNS)
     .order('created_at', { ascending: false })
     .limit(500);
   if (error) {
     console.warn('[supabase] fetchAllProfilesResult', error.message);
     return { users: [], ok: false, error: error.message };
   }
-  return {
-    users: ((data || []) as ProfileRow[]).map(profileToUser),
-    ok: true,
-  };
+  const catalog = ((data || []) as ProfileRow[]).map(profileToUser);
+  const { data: privileged } = await sb
+    .from('profiles')
+    .select(PROFILE_OWNER_COLUMNS)
+    .limit(500);
+  if (privileged?.length) {
+    return {
+      users: mergeUsersPreferCloud(
+        catalog,
+        (privileged as ProfileRow[]).map(profileToUser)
+      ),
+      ok: true,
+    };
+  }
+  return { users: catalog, ok: true };
 }
 
 /**
@@ -207,7 +232,7 @@ export async function upsertProfile(input: {
   const { data, error } = await sb
     .from('profiles')
     .upsert(payload, { onConflict: 'id' })
-    .select(PROFILE_PUBLIC_COLUMNS)
+    .select(PROFILE_OWNER_COLUMNS)
     .single();
   if (error || !data) {
     console.warn('[supabase] upsertProfile', error?.message);
@@ -382,13 +407,20 @@ export async function findProfileByEmail(
 ): Promise<ProfileRow | null> {
   const sb = getSupabase();
   if (!sb) return null;
-  const { data, error } = await sb
+  const normalized = email.toLowerCase();
+  const { data: own, error } = await sb
     .from('profiles')
-    .select('*')
-    .eq('email', email.toLowerCase())
+    .select(PROFILE_OWNER_COLUMNS)
+    .eq('email', normalized)
     .maybeSingle();
-  if (error || !data) return null;
-  return data as ProfileRow;
+  if (!error && own) return own as ProfileRow;
+  const { data, error: rpcError } = await sb.rpc('find_profile_by_email', {
+    p_email: normalized,
+  });
+  if (rpcError || !data) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
+  return row as ProfileRow;
 }
 
 export async function supabaseSignIn(

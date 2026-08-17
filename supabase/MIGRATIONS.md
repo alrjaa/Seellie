@@ -40,6 +40,7 @@ All listed scripts are written to be **idempotent** where possible (`if not exis
 | 31 | **`FIX-08-HARDENING.sql`** (FIX-08) | 21–23 | No | Offer accept auth · gift integrity · referee organizer/admin gate |
 | 32 | **`F13-P1-PRIVATE-MESSAGES-RLS.sql`** (F13-P1) | 12–15, 21 | No | private_messages INSERT: own inbox only + friendship; peer copy via SECURITY DEFINER RPC only |
 | 33 | F13-P2-01 (source harden; no extra apply) | 32 | No | `#11–#14` / PHASE4 no longer recreate weak `private_messages_insert_thread`; tip remains #32 |
+| 34 | **`F13-P2-02-PROFILES-COMPETITIONS-SELECT.sql`** (F13-P2-02) | 32 | No | Catalog views + owner/admin table SELECT; strip email/mobile/PII from public catalog |
 
 ## Manual / ops (not schema)
 

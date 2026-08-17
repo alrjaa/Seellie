@@ -301,11 +301,25 @@ export async function listRecentProfiles(excludeId: string, limit = 30) {
     .limit(limit);
   if (excludeId) query = query.neq('id', excludeId);
   const { data, error } = await query;
-  if (error || !data) {
-    console.warn('[supabase] listRecentProfiles', error?.message);
+  if (!error && data && data.length > 1) {
+    return mapProfileHits(data as Array<Record<string, unknown>>);
+  }
+  let catalog = sb
+    .from('profiles_catalog')
+    .select('id, name, handle, visible_id, role, created_at')
+    .neq('role', 'superadmin')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (excludeId) catalog = catalog.neq('id', excludeId);
+  const { data: rows, error: catalogError } = await catalog;
+  if (catalogError || !rows) {
+    console.warn(
+      '[supabase] listRecentProfiles',
+      error?.message || catalogError?.message
+    );
     return [];
   }
-  return mapProfileHits(data as Array<Record<string, unknown>>);
+  return mapProfileHits(rows as Array<Record<string, unknown>>);
 }
 
 export async function searchProfiles(query: string, excludeId: string) {
@@ -323,21 +337,17 @@ export async function searchProfiles(query: string, excludeId: string) {
   // البحث بالإيميل يجب أن يكون منفصلاً — رمز @ يكسر فلتر .or في PostgREST
   if (q.includes('@')) {
     const email = q.toLowerCase();
-    const { data, error } = await sb
-      .from('profiles')
-      .select('id, name, handle, visible_id, role, email')
-      .ilike('email', `%${email}%`)
-      .neq('role', 'superadmin')
-      .limit(12);
+    const { data, error } = await sb.rpc('find_profile_by_email', {
+      p_email: email,
+    });
     if (error || !data) {
       console.warn('[supabase] searchProfiles email', error?.message);
       return [];
     }
-    return mapProfileHits(
-      (data as Array<Record<string, unknown>>).filter(
-        (r) => !excludeId || r.id !== excludeId
-      )
+    const rows = (Array.isArray(data) ? data : [data]).filter(
+      (r: { id?: string }) => r?.id && (!excludeId || r.id !== excludeId)
     );
+    return mapProfileHits(rows as Array<Record<string, unknown>>);
   }
 
   if (q.length < 1) return [];
@@ -349,16 +359,34 @@ export async function searchProfiles(query: string, excludeId: string) {
     .from('profiles')
     .select('id, name, handle, visible_id, role, email')
     .or(
-      `name.ilike.%${safe}%,handle.ilike.%${safe}%,email.ilike.%${safe}%,visible_id.ilike.%${safe}%`
+      `name.ilike.%${safe}%,handle.ilike.%${safe}%,visible_id.ilike.%${safe}%`
     )
     .neq('role', 'superadmin')
     .limit(12);
-  if (error || !data) {
-    console.warn('[supabase] searchProfiles', error?.message);
+  if (!error && data && data.length > 1) {
+    return mapProfileHits(
+      (data as Array<Record<string, unknown>>).filter(
+        (r) => !excludeId || r.id !== excludeId
+      )
+    );
+  }
+  const { data: catalog, error: catalogError } = await sb
+    .from('profiles_catalog')
+    .select('id, name, handle, visible_id, role')
+    .or(
+      `name.ilike.%${safe}%,handle.ilike.%${safe}%,visible_id.ilike.%${safe}%`
+    )
+    .neq('role', 'superadmin')
+    .limit(12);
+  if (catalogError || !catalog) {
+    console.warn(
+      '[supabase] searchProfiles',
+      error?.message || catalogError?.message
+    );
     return [];
   }
   return mapProfileHits(
-    (data as Array<Record<string, unknown>>).filter(
+    (catalog as Array<Record<string, unknown>>).filter(
       (r) => !excludeId || r.id !== excludeId
     )
   );
