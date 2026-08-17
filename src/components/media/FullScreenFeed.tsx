@@ -144,12 +144,20 @@ function useContentComments(
 ) {
   const [, setTick] = useState(0);
   useEffect(() => {
-    return subscribeContentItemComments(() => setTick((n) => n + 1));
-  }, []);
+    return subscribeContentItemComments(contentId, () =>
+      setTick((n) => n + 1)
+    );
+  }, [contentId]);
+  const seedKey =
+    seed && seed.length
+      ? seed.map((c) => `${c.id}:${c.text}`).join('|')
+      : '';
   useEffect(() => {
     if (!seed?.length) return;
     seedContentItemComments(contentId, seed.map(toStoreComment));
-  }, [contentId, seed]);
+    // seedKey captures identity; avoid re-seed on new array refs with same data
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seedKey stands in for seed
+  }, [contentId, seedKey]);
   return getContentItemComments(contentId);
 }
 
@@ -180,6 +188,8 @@ const Slide = memo(function Slide({
   const insets = useSafeAreaInsets();
   const videoRef = useRef<Video>(null);
   const htmlVideoRef = useRef<HTMLVideoElement | null>(null);
+  /** F12-P2-05 — ignore stale play()/setState after fast swipe away */
+  const playGenRef = useRef(0);
   const inputRef = useRef<TextInput>(null);
   /** تشغيل تلقائي عند الظهور — بدون زر تشغيل */
   const [paused, setPaused] = useState(!active);
@@ -355,6 +365,7 @@ const Slide = memo(function Slide({
     setLoadError(false);
     setFrameReady(false);
     setPaused(true);
+    playGenRef.current += 1;
     void videoRef.current?.pauseAsync().catch(() => undefined);
     const el = htmlVideoRef.current;
     if (el) {
@@ -365,6 +376,7 @@ const Slide = memo(function Slide({
 
   useEffect(() => {
     if (!active) {
+      playGenRef.current += 1;
       setPaused(true);
       void videoRef.current?.pauseAsync().catch(() => undefined);
       const el = htmlVideoRef.current;
@@ -377,13 +389,33 @@ const Slide = memo(function Slide({
           // ignore
         }
       }
-      // FIX-04 P1: unload on native too (release AVPlayer / ExoPlayer)
+      // FIX-04 P1 / F12-P2-05: unload on native (release AVPlayer / ExoPlayer)
       void videoRef.current?.unloadAsync().catch(() => undefined);
       return;
     }
     // ظاهر على الشاشة → شغّل فوراً
     setPaused(false);
   }, [active]);
+
+  // Unmount: release any remaining player / web element
+  useEffect(() => {
+    return () => {
+      playGenRef.current += 1;
+      void videoRef.current?.pauseAsync().catch(() => undefined);
+      void videoRef.current?.unloadAsync().catch(() => undefined);
+      const el = htmlVideoRef.current;
+      if (el) {
+        try {
+          el.pause();
+          el.removeAttribute('src');
+          el.load();
+        } catch {
+          // ignore
+        }
+      }
+      htmlVideoRef.current = null;
+    };
+  }, []);
 
   // ويب: تشغيل تلقائي صامت (سياسة المتصفح) عند الظهور
   useEffect(() => {
@@ -392,6 +424,7 @@ const Slide = memo(function Slide({
     }
     const el = htmlVideoRef.current;
     if (!el || !item.mediaUrl) return;
+    const gen = playGenRef.current;
     if (el.getAttribute('src') !== item.mediaUrl) {
       el.src = item.mediaUrl;
     }
@@ -403,10 +436,12 @@ const Slide = memo(function Slide({
     if (run && typeof run.then === 'function') {
       void run
         .then(() => {
+          if (playGenRef.current !== gen) return;
           setFrameReady(true);
           setPaused(false);
         })
         .catch(() => {
+          if (playGenRef.current !== gen) return;
           // إن مُنع التشغيل نُبقي بدون زر — الإطار/البوستر يكفي
           setFrameReady(true);
         });
@@ -420,10 +455,19 @@ const Slide = memo(function Slide({
     if (Platform.OS === 'web' || !active || !playableUri || loadError || paused) {
       return;
     }
-    void videoRef.current?.playAsync().catch(() => {
-      setLoadError(true);
-      setPaused(true);
-    });
+    const gen = playGenRef.current;
+    void videoRef.current?.playAsync()
+      .then(() => {
+        if (playGenRef.current !== gen) {
+          void videoRef.current?.pauseAsync().catch(() => undefined);
+          void videoRef.current?.unloadAsync().catch(() => undefined);
+        }
+      })
+      .catch(() => {
+        if (playGenRef.current !== gen) return;
+        setLoadError(true);
+        setPaused(true);
+      });
   }, [active, playableUri, loadError, paused]);
 
   const toggleVideoPlayback = useCallback(async () => {
@@ -538,7 +582,7 @@ const Slide = memo(function Slide({
                   defaultMuted: true,
                   autoPlay: true,
                   playsInline: true,
-                  preload: 'auto',
+                  preload: 'metadata',
                   loop: true,
                   controls: false,
                   poster: item.posterUrl || undefined,
@@ -1054,8 +1098,8 @@ function FullScreenFeedComponent({
           showsVerticalScrollIndicator={false}
           getItemLayout={height > 0 ? getItemLayout : undefined}
           initialNumToRender={2}
-          maxToRenderPerBatch={3}
-          windowSize={5}
+          maxToRenderPerBatch={2}
+          windowSize={3}
           removeClippedSubviews={false}
           onScroll={onScroll}
           onScrollBeginDrag={onScrollBeginDrag}

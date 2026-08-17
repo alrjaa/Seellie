@@ -1,4 +1,11 @@
 import { getJson, setJson } from '@/services/storage';
+import {
+  CONTENT_ITEM_COMMENTS_MAX,
+  mergeContentItemComments,
+  trimContentItemComments,
+} from '@/services/content-item-comments-core';
+
+export { CONTENT_ITEM_COMMENTS_MAX } from '@/services/content-item-comments-core';
 
 const STORAGE_KEY = 'seellie_content_item_comments_v1';
 
@@ -15,10 +22,13 @@ type Store = Record<string, ContentItemComment[]>;
 
 let cache: Store = {};
 let hydrated = false;
-const listeners = new Set<() => void>();
+/** Per-contentId listeners — avoids re-rendering every mounted Slide. */
+const listenersById = new Map<string, Set<() => void>>();
 
-function emit() {
-  listeners.forEach((cb) => {
+function emit(contentId: string) {
+  const set = listenersById.get(contentId);
+  if (!set?.size) return;
+  set.forEach((cb) => {
     try {
       cb();
     } catch {
@@ -31,21 +41,50 @@ function persist() {
   void setJson(STORAGE_KEY, cache);
 }
 
+function boundStore(raw: Store): Store {
+  const next: Store = {};
+  for (const [id, list] of Object.entries(raw)) {
+    if (!Array.isArray(list) || !list.length) continue;
+    next[id] = trimContentItemComments(
+      [...list].sort((a, b) => b.timestamp - a.timestamp)
+    );
+  }
+  return next;
+}
+
 export async function hydrateContentItemComments(): Promise<void> {
   if (hydrated) return;
   hydrated = true;
   const raw = await getJson<Store>(STORAGE_KEY);
   if (raw && typeof raw === 'object') {
-    cache = raw;
-    emit();
+    cache = boundStore(raw);
+    Object.keys(cache).forEach((id) => emit(id));
   }
 }
 
-export function subscribeContentItemComments(cb: () => void): () => void {
-  listeners.add(cb);
+/**
+ * Subscribe to comment updates for a single content item.
+ * Cleanup removes this listener only (no global fan-out).
+ */
+export function subscribeContentItemComments(
+  contentId: string,
+  cb: () => void
+): () => void {
+  if (!contentId) {
+    return () => undefined;
+  }
+  let set = listenersById.get(contentId);
+  if (!set) {
+    set = new Set();
+    listenersById.set(contentId, set);
+  }
+  set.add(cb);
   void hydrateContentItemComments();
   return () => {
-    listeners.delete(cb);
+    const cur = listenersById.get(contentId);
+    if (!cur) return;
+    cur.delete(cb);
+    if (cur.size === 0) listenersById.delete(contentId);
   };
 }
 
@@ -60,20 +99,14 @@ export function seedContentItemComments(
 ): void {
   if (!contentId || !seed.length) return;
   const prev = cache[contentId] || [];
-  const byId = new Map<string, ContentItemComment>();
-  [...seed, ...prev].forEach((c) => {
-    if (c?.id) byId.set(c.id, c);
-  });
-  const next = Array.from(byId.values()).sort(
-    (a, b) => b.timestamp - a.timestamp
-  );
+  const next = mergeContentItemComments(seed, prev);
   const same =
     next.length === prev.length &&
     next.every((c, i) => c.id === prev[i]?.id && c.text === prev[i]?.text);
   if (same) return;
   cache = { ...cache, [contentId]: next };
   persist();
-  emit();
+  emit(contentId);
 }
 
 export function addContentItemComment(
@@ -85,8 +118,15 @@ export function addContentItemComment(
   if (prev.some((c) => c.id === comment.id)) return;
   cache = {
     ...cache,
-    [contentId]: [comment, ...prev],
+    [contentId]: trimContentItemComments([comment, ...prev]),
   };
   persist();
-  emit();
+  emit(contentId);
+}
+
+/** Test helper — listener count for one content id (no network). */
+export function __debugContentItemCommentListenerCount(
+  contentId: string
+): number {
+  return listenersById.get(contentId)?.size ?? 0;
 }
