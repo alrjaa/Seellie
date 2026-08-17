@@ -1248,7 +1248,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     minHeight: 28,
     maxWidth: 140,
-    borderRadius: 999,
+    borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 5,
     alignItems: 'center',

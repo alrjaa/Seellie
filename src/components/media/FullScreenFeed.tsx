@@ -779,10 +779,8 @@ const Slide = memo(function Slide({
                 styles.titleBesideComments,
                 cairoText('semiBold'),
                 {
-                  // مساحة ثابتة يمين العنوان لأزرار الإعجاب/التعليقات (يمين فيزيائي)
-                  left: 14,
+                  left: FAB_COLUMN_WIDTH + 12,
                   right: 14 + 88,
-                  // ارفع العنوان إن وُجدت تسمية موقع على سطر التعليقات
                   bottom: item.locationLabel?.trim() ? 28 : 8,
                   textAlign: isRTL ? 'right' : 'left',
                   writingDirection: isRTL ? 'rtl' : 'ltr',
@@ -855,9 +853,8 @@ const Slide = memo(function Slide({
                 styles.commentsLinkText,
                 cairoText('medium'),
                 {
-                  left: 14,
+                  left: FAB_COLUMN_WIDTH + 12,
                   right: 14 + 88,
-                  // دائماً بجوار عمود التعليقات (يمين فيزيائي) — اتجاه الكتابة فقط يتبع اللغة
                   textAlign: 'right',
                   writingDirection: isRTL ? 'rtl' : 'ltr',
                 },
@@ -1468,7 +1465,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     minHeight: 26,
     maxWidth: 68,
-    borderRadius: 999,
+    borderRadius: 6,
     backgroundColor: 'rgba(37,244,238,0.88)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.28)',
