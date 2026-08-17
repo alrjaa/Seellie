@@ -569,66 +569,9 @@ export async function sendPrivateChatMessage(
         }
       }
 
-      // 3) إدراج صفّين — نص فقط (بدون أعمدة وسائط؛ يعمل دائماً على المخطط القديم)
-      {
-        const { error } = await sb.from('private_messages').insert([
-          {
-            owner_id: userId,
-            friend_id: friendId,
-            sender_id: userId,
-            body: legacyBody,
-          },
-          {
-            owner_id: friendId,
-            friend_id: userId,
-            sender_id: userId,
-            body: legacyBody,
-          },
-        ]);
-        if (!error) {
-          return {
-            state: await loadPrivateSpace(userId),
-            ok: true,
-            warning: mediaUrl ? 'media_schema_missing' : undefined,
-          };
-        }
-        console.warn('[private-space] send text insert', error.message);
-
-        // 4) صف المرسل فقط (نص)
-        const { error: ownErr } = await sb.from('private_messages').insert({
-          owner_id: userId,
-          friend_id: friendId,
-          sender_id: userId,
-          body: legacyBody,
-        });
-        if (!ownErr) {
-          return {
-            state: await loadPrivateSpace(userId),
-            ok: false,
-            error: 'recipient_inbox_failed',
-          };
-        }
-        console.warn('[private-space] send own text', ownErr.message);
-      }
-
-      // 5) محاولة أخيرة مع أعمدة الوسائط إن وُجدت
-      if (mediaUrl && mediaKind) {
-        const row = {
-          sender_id: userId,
-          body: trimmed,
-          media_url: mediaUrl,
-          media_kind: mediaKind,
-        };
-        const { error } = await sb.from('private_messages').insert([
-          { owner_id: userId, friend_id: friendId, ...row },
-          { owner_id: friendId, friend_id: userId, ...row },
-        ]);
-        if (!error) {
-          return { state: await loadPrivateSpace(userId), ok: true };
-        }
-        console.warn('[private-space] send media insert', error.message);
-      }
-
+      // F13-P1: never fall back to direct private_messages.insert for cloud users.
+      // Dual-inbox writes must go through send_private_message (SECURITY DEFINER).
+      // Direct insert previously allowed forging owner_id=<victim> under weak RLS.
       return {
         state: await loadPrivateSpace(userId),
         ok: false,
