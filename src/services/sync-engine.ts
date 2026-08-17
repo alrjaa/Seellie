@@ -6,6 +6,8 @@ import { AppState, type AppStateStatus } from 'react-native';
 export {
   createGenerationGate,
   createInFlightLock,
+  createRecentSuccessGate,
+  BOOTSTRAP_DEDUP_MS,
   SYNC_FALLBACK_MS,
 } from '@/services/sync-engine-core';
 

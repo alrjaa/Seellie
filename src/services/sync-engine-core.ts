@@ -23,6 +23,30 @@ export function createInFlightLock<T = void>() {
   };
 }
 
+/**
+ * F12-P2-04 — Skip a second successful bootstrap fetch for the same domain
+ * within ttlMs (Realtime + effect + hydrate often race on login).
+ * Does not replace in-flight locks; use both together.
+ */
+export function createRecentSuccessGate(ttlMs: number) {
+  let lastOkAt = 0;
+  return {
+    markOk() {
+      lastOkAt = Date.now();
+    },
+    shouldSkip(force = false) {
+      if (force) return false;
+      return lastOkAt > 0 && Date.now() - lastOkAt < ttlMs;
+    },
+    clear() {
+      lastOkAt = 0;
+    },
+  };
+}
+
+/** Post-login domain dedupe window — below all SYNC_FALLBACK_MS intervals. */
+export const BOOTSTRAP_DEDUP_MS = 12_000;
+
 /** Monotonic generation so stale async responses cannot overwrite newer state. */
 export function createGenerationGate() {
   let gen = 0;

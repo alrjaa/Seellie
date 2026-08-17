@@ -55,6 +55,8 @@ import { trySendAnalystCodeEmail } from '@/services/analyst-code-delivery';
 import {
   createGenerationGate,
   createInFlightLock,
+  createRecentSuccessGate,
+  BOOTSTRAP_DEDUP_MS,
   startForegroundInterval,
   SYNC_FALLBACK_MS,
 } from '@/services/sync-engine';
@@ -535,48 +537,36 @@ async function saveBrandingCloud(appName: string, appLogo: string) {
   }
 }
 
-type GlobalAppBlobs = {
+/** F12-P2-04 — non-Home-critical blobs (settings loaded in home-critical path). */
+async function fetchDeferredAppBlobs(): Promise<{
   referees: Referee[] | null;
   offers: Offer[] | null;
   levels: SupportLevel[] | null;
   gifts: GiftTransaction[] | null;
   branding: { appName?: string; appLogo?: string } | null;
-  settings: AppSettingsBlob | null;
-};
-
-async function fetchGlobalAppBlobs(): Promise<GlobalAppBlobs> {
-  const empty: GlobalAppBlobs = {
-    referees: null,
-    offers: null,
-    levels: null,
-    gifts: null,
-    branding: null,
-    settings: null,
+}> {
+  const empty = {
+    referees: null as Referee[] | null,
+    offers: null as Offer[] | null,
+    levels: null as SupportLevel[] | null,
+    gifts: null as GiftTransaction[] | null,
+    branding: null as { appName?: string; appLogo?: string } | null,
   };
   if (!isSupabaseConfigured()) return empty;
-  const [
-    cloudReferees,
-    cloudOffers,
-    cloudLevels,
-    cloudGifts,
-    cloudBrand,
-    cloudSettings,
-  ] = await Promise.all([
-    fetchAppBlob<Referee[]>('referees'),
-    fetchAppBlob<Offer[]>('offers'),
-    fetchAppBlob<SupportLevel[]>('support_levels'),
-    fetchAppBlob<GiftTransaction[]>('gift_transactions'),
-    fetchAppBlob<{ appName?: string; appLogo?: string }>('app_branding'),
-    // F09-P1-08: canonical `settings` first, legacy `app_settings` fallback
-    fetchAppSettingsBlob(),
-  ]);
+  const [cloudReferees, cloudOffers, cloudLevels, cloudGifts, cloudBrand] =
+    await Promise.all([
+      fetchAppBlob<Referee[]>('referees'),
+      fetchAppBlob<Offer[]>('offers'),
+      fetchAppBlob<SupportLevel[]>('support_levels'),
+      fetchAppBlob<GiftTransaction[]>('gift_transactions'),
+      fetchAppBlob<{ appName?: string; appLogo?: string }>('app_branding'),
+    ]);
   return {
     referees: Array.isArray(cloudReferees.data) ? cloudReferees.data : null,
     offers: Array.isArray(cloudOffers.data) ? cloudOffers.data : null,
     levels: Array.isArray(cloudLevels.data) ? cloudLevels.data : null,
     gifts: Array.isArray(cloudGifts.data) ? cloudGifts.data : null,
     branding: cloudBrand.data || null,
-    settings: cloudSettings.data || null,
   };
 }
 
@@ -1037,6 +1027,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const messagesSyncLock = useRef(createInFlightLock<void>());
   const shareCardsSyncLock = useRef(createInFlightLock<void>());
   const catalogSyncLock = useRef(createInFlightLock<void>());
+  const profilesFresh = useRef(createRecentSuccessGate(BOOTSTRAP_DEDUP_MS));
+  const forumsFresh = useRef(createRecentSuccessGate(BOOTSTRAP_DEDUP_MS));
+  const messagesFresh = useRef(createRecentSuccessGate(BOOTSTRAP_DEDUP_MS));
+  const shareCardsFresh = useRef(createRecentSuccessGate(BOOTSTRAP_DEDUP_MS));
   const profilesGen = useRef(createGenerationGate());
   /** Bumps on logout / user switch so stale cloud responses cannot re-apply A after B. */
   const sessionGen = useRef(createGenerationGate());
@@ -1055,6 +1049,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     // User switch without going through logout (rare) — invalidate stale fetches
     if (prev && next && prev !== next) {
       sessionGen.current.next();
+      profilesFresh.current.clear();
+      forumsFresh.current.clear();
+      messagesFresh.current.clear();
+      shareCardsFresh.current.clear();
       setMessages([]);
       setShareCards([]);
     }
@@ -1086,46 +1084,23 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     [t, toast]
   );
 
-  /** تحميل الكتالوج العام من السحابة (مسابقات، ملفات، منتدى، blobs) */
-  const hydrateCloudPublicCatalog = useCallback(async () => {
+  /**
+   * F12-P2-04 — Home-critical cloud only (competitions + settings/flags).
+   * Does not await on Login navigate; runs after setCurrentUser.
+   */
+  const hydrateCloudHomeCritical = useCallback(async () => {
     if (!isSupabaseConfigured()) return;
-    const [
-      profilesResult,
-      cloudRequests,
-      cloudCompetitions,
-      forum,
-      blobs,
-    ] = await Promise.all([
-      fetchAllProfilesResult(),
-      fetchCompetitionRequestsCloud(),
+    const [cloudCompetitions, settingsResult] = await Promise.all([
       fetchCompetitionsCloud(),
-      fetchForumComments(),
-      fetchGlobalAppBlobs(),
+      fetchAppSettingsBlob(),
     ]);
-    // FIX-02: only merge on successful fetch; empty ok catalog ≠ wipe local
-    if (profilesResult.ok && profilesResult.users.length) {
-      setUsers((prev) => mergeUsersPreferCloud(prev, profilesResult.users));
-    }
-    // FIX-04 P0-1: only reconcile on successful fetch (empty success OK; errors keep local)
-    if (shouldApplyCompetitionRequestsCloud(cloudRequests)) {
-      setCompetitionRequests((prev) => {
-        const merged = reconcileCompetitionRequestsWithCloud(
-          prev,
-          cloudRequests.items
-        );
-        void saveCompetitionRequests(merged);
-        return merged;
-      });
-    }
 
-    // FIX-05: only reconcile competitions on successful fetch (ERROR ≠ EMPTY)
     if (shouldApplyCompetitionsCloud(cloudCompetitions)) {
       setCompetitions((prev) => {
         const merged = reconcileCompetitionsWithCloud(
           prev,
           cloudCompetitions.items
         );
-        // أزل البذرة فقط عندما السحابة فيها مسابقات حقيقية
         const next =
           cloudCompetitions.items.length > 0
             ? filterSeedCompetitions(merged)
@@ -1140,76 +1115,30 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       );
     }
 
-    // FIX-05: forums only merge on successful fetch with data
-    if (
-      shouldApplyCloudResult(forum) &&
-      (forum.comments?.length || 0) > 0
-    ) {
-      setComments((prev) =>
-        filterSeedComments(mergeCommentsById(forum.comments, prev))
-      );
-      setQuickComments((prev) => filterSeedComments(prev));
-    } else if (forum.error) {
-      console.warn('[forum] hydrate skipped', forum.error);
-    }
-
-    // نظّف منشورات الحسابات التجريبية دائماً (الهويات المحلية لا تُعرض كمحتوى عام)
-    setUsers((prev) => prev.map(clearSeedUserContent));
-    setOffers((prev) => filterSeedOffers(prev));
-    setGiftTransactions((prev) => filterSeedGifts(prev));
-    if (cloudRequests.ok && cloudRequests.items.length > 0) {
-      setCompetitionRequests((prev) => filterSeedCompetitionRequests(prev));
-    }
-
-    if (blobs.referees?.length) {
-      setReferees((prev) => {
-        const next = applyRefereesFromCloud(prev, blobs.referees!);
-        setCompetitions((cprev) =>
-          sanitizeCompetitionsRefereeIds(cprev, next)
-        );
-        return next;
-      });
-    }
-    // FIX-07 S2 — apply offers/gifts only on non-empty SUCCESS (ERROR→null already skips)
-    if (blobs.offers && blobs.offers.length > 0) setOffers(blobs.offers);
-    if (blobs.levels?.length) {
-      setSupportLevels(normalizeSupportLevels(blobs.levels));
-    }
-    if (blobs.gifts && blobs.gifts.length > 0) {
-      setGiftTransactions(
-        blobs.gifts.map((g) => ({
-          ...g,
-          timestamp: new Date(g.timestamp as Date | string),
-        }))
-      );
-    }
-    if (blobs.branding?.appName) setAppNameState(blobs.branding.appName);
-    if (blobs.branding?.appLogo) setAppLogoState(blobs.branding.appLogo);
-    if (blobs.settings) {
-      setAutoApproveAnalystRequestsState(
-        !!blobs.settings.autoApproveAnalystRequests
-      );
-      setFeatureFlags(resolveAppFeatureFlags(blobs.settings));
+    const settings = settingsResult.data;
+    if (settings) {
+      setAutoApproveAnalystRequestsState(!!settings.autoApproveAnalystRequests);
+      setFeatureFlags(resolveAppFeatureFlags(settings));
     } else {
-      // Missing both keys → safe default (no unintended auto-approve)
       setAutoApproveAnalystRequestsState(false);
       setFeatureFlags(DEFAULT_APP_FEATURE_FLAGS);
     }
   }, []);
 
-  /** Pull-to-refresh / same-user rehydrate — deduped; preserves S2 empty/error/network semantics */
+  /** Filled after domain refresh helpers exist — used by full refresh + deferred bootstrap. */
+  const hydrateCloudDeferredRef = useRef<() => Promise<void>>(async () => {});
+
+  /** Pull-to-refresh / same-user rehydrate — critical then deferred; catalog lock dedupes. */
   const refreshCloudPublicCatalog = useCallback(async () => {
     if (!isSupabaseConfigured()) return;
+    // Explicit refresh must not be suppressed by post-login dedupe windows
+    profilesFresh.current.clear();
+    forumsFresh.current.clear();
     await catalogSyncLock.current.run(async () => {
-      await hydrateCloudPublicCatalog();
+      await hydrateCloudHomeCritical();
+      await hydrateCloudDeferredRef.current();
     });
-  }, [hydrateCloudPublicCatalog]);
-
-  useEffect(() => {
-    if (!currentUser || !isUuid(currentUser.id)) return;
-    // لا تمسح البذرة قبل التحميل — وإلا تبقى الشاشات فارغة إن كانت السحابة بلا محتوى بعد
-    void refreshCloudPublicCatalog();
-  }, [currentUser?.id, refreshCloudPublicCatalog]);
+  }, [hydrateCloudHomeCritical]);
 
   useEffect(() => {
     let active = true;
@@ -1332,30 +1261,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
               return [...prev, normalizedUser];
             });
             void setJson(USER_STORAGE_KEY, normalizedUser);
-            const uid = normalizedUser.id;
-            const token = sessionGen.current.current;
-            void (async () => {
-              const [cardsResult, remoteMessagesResult] = await Promise.all([
-                fetchShareCardsForUser(uid),
-                fetchMessagesForUser(uid),
-              ]);
-              if (!active) return;
-              if (!sessionGen.current.isCurrent(token)) return;
-              if (sessionUserIdRef.current !== uid) return;
-              if (shouldApplyShareCardsCloud(cardsResult)) {
-                setShareCards((prev) =>
-                  reconcileShareCardsWithCloud(prev, cardsResult.cards)
-                );
-              }
-              if (
-                shouldApplyCloudResult(remoteMessagesResult) &&
-                remoteMessagesResult.messages.length
-              ) {
-                setMessages((prev) =>
-                  mergeMessagesById(remoteMessagesResult.messages, prev)
-                );
-              }
-            })();
+            // F12-P2-04: shares/messages load once via domain effects (Realtime + refresh)
           }
         }
       } catch (error) {
@@ -1500,6 +1406,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const syncCloudUsers = useCallback(async () => {
     if (!isSupabaseConfigured()) return 0;
     return profilesSyncLock.current.run(async () => {
+      if (profilesFresh.current.shouldSkip()) return 0;
       const token = profilesGen.current.next();
       const result = await fetchAllProfilesResult();
       if (!profilesGen.current.isCurrent(token)) return 0;
@@ -1507,6 +1414,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         console.warn('[profiles] sync skipped (fetch failed)', result.error);
         return 0;
       }
+      profilesFresh.current.markOk();
       if (!result.users.length) return 0;
       setUsers((prev) => mergeUsersPreferCloud(prev, result.users));
       return result.users.length;
@@ -1755,26 +1663,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             return [...prev, normalizedUser];
           });
           void setJson(USER_STORAGE_KEY, normalizedUser);
-          // الكتالوج يُحمَّل في الخلفية — لا تؤخر الدخول
-          void (async () => {
-            const [cardsResult, remoteMessagesResult] = await Promise.all([
-              fetchShareCardsForUser(normalizedUser.id),
-              fetchMessagesForUser(normalizedUser.id),
-            ]);
-            if (shouldApplyShareCardsCloud(cardsResult)) {
-              setShareCards((prev) =>
-                reconcileShareCardsWithCloud(prev, cardsResult.cards)
-              );
-            }
-            if (
-              shouldApplyCloudResult(remoteMessagesResult) &&
-              remoteMessagesResult.messages.length
-            ) {
-              setMessages((prev) =>
-                mergeMessagesById(remoteMessagesResult.messages, prev)
-              );
-            }
-          })();
+          // F12-P2-04: inbox REST once via messages/share-cards effects (no duplicate here)
           toast({
             variant: 'success',
             title: t('toasts.t002_202a45'),
@@ -2182,6 +2071,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       // Invalidate in-flight merges before clearing state (FIX-02 user-switch safety)
       sessionGen.current.next();
       sessionUserIdRef.current = null;
+      profilesFresh.current.clear();
+      forumsFresh.current.clear();
+      messagesFresh.current.clear();
+      shareCardsFresh.current.clear();
       setCurrentUser(null);
       setMessages([]);
       setShareCards([]);
@@ -2700,6 +2593,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     }
     const token = sessionGen.current.current;
     await messagesSyncLock.current.run(async () => {
+      if (messagesFresh.current.shouldSkip()) return;
       const remote = await fetchMessagesForUser(uid);
       if (!sessionGen.current.isCurrent(token) || sessionUserIdRef.current !== uid) {
         return;
@@ -2711,6 +2605,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         }
         return;
       }
+      messagesFresh.current.markOk();
       let arrived: Message[] = [];
       setMessages((prev) => {
         if (sessionUserIdRef.current !== uid) return prev;
@@ -2759,6 +2654,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     }
     const token = sessionGen.current.current;
     await shareCardsSyncLock.current.run(async () => {
+      if (shareCardsFresh.current.shouldSkip()) return;
       const result = await fetchShareCardsForUser(uid);
       if (!sessionGen.current.isCurrent(token) || sessionUserIdRef.current !== uid) {
         return;
@@ -2770,6 +2666,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         }
         return;
       }
+      shareCardsFresh.current.markOk();
       setShareCards((prev) => {
         if (sessionUserIdRef.current !== uid) return prev;
         return reconcileShareCardsWithCloud(prev, result.cards);
@@ -2810,6 +2707,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       return;
     }
     await forumsSyncLock.current.run(async () => {
+      if (forumsFresh.current.shouldSkip()) return;
       const remote = await fetchForumComments();
       // FIX-05: ERROR ≠ EMPTY
       if (!shouldApplyCloudResult(remote)) {
@@ -2818,6 +2716,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         }
         return;
       }
+      forumsFresh.current.markOk();
       // SUCCESS_EMPTY: keep local comments (additive merge policy)
       if (!remote.comments.length) return;
       setComments((prev) => mergeCommentsById(remote.comments, prev));
@@ -2869,6 +2768,90 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       stopPoll();
     };
   }, [currentUser?.id, syncCloudUsers]);
+
+  /**
+   * F12-P2-04 — deferred public catalog (profiles/forums/requests/blobs).
+   * Shares domain locks + recent-success gates with Realtime bootstrap refreshes.
+   */
+  const hydrateCloudDeferredCatalog = useCallback(async () => {
+    if (!isSupabaseConfigured()) return;
+    const settled = await Promise.all([
+      fetchCompetitionRequestsCloud(),
+      fetchDeferredAppBlobs(),
+      syncCloudUsers(),
+      refreshCloudForumComments(),
+    ]);
+    const cloudRequests = settled[0];
+    const blobs = settled[1];
+
+    if (shouldApplyCompetitionRequestsCloud(cloudRequests)) {
+      setCompetitionRequests((prev) => {
+        const merged = reconcileCompetitionRequestsWithCloud(
+          prev,
+          cloudRequests.items
+        );
+        void saveCompetitionRequests(merged);
+        return merged;
+      });
+    }
+
+    setUsers((prev) => prev.map(clearSeedUserContent));
+    setOffers((prev) => filterSeedOffers(prev));
+    setGiftTransactions((prev) => filterSeedGifts(prev));
+    if (cloudRequests.ok && cloudRequests.items.length > 0) {
+      setCompetitionRequests((prev) => filterSeedCompetitionRequests(prev));
+    }
+
+    if (blobs.referees?.length) {
+      setReferees((prev) => {
+        const next = applyRefereesFromCloud(prev, blobs.referees!);
+        setCompetitions((cprev) =>
+          sanitizeCompetitionsRefereeIds(cprev, next)
+        );
+        return next;
+      });
+    }
+    if (blobs.offers && blobs.offers.length > 0) setOffers(blobs.offers);
+    if (blobs.levels?.length) {
+      setSupportLevels(normalizeSupportLevels(blobs.levels));
+    }
+    if (blobs.gifts && blobs.gifts.length > 0) {
+      setGiftTransactions(
+        blobs.gifts.map((g) => ({
+          ...g,
+          timestamp: new Date(g.timestamp as Date | string),
+        }))
+      );
+    }
+    if (blobs.branding?.appName) setAppNameState(blobs.branding.appName);
+    if (blobs.branding?.appLogo) setAppLogoState(blobs.branding.appLogo);
+  }, [syncCloudUsers, refreshCloudForumComments]);
+
+  useEffect(() => {
+    hydrateCloudDeferredRef.current = hydrateCloudDeferredCatalog;
+  }, [hydrateCloudDeferredCatalog]);
+
+  // F12-P2-04: critical first (non-blocking for Login), deferred after first paint tick
+  useEffect(() => {
+    if (!currentUser || !isUuid(currentUser.id) || !isSupabaseConfigured()) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      await catalogSyncLock.current.run(async () => {
+        await hydrateCloudHomeCritical();
+      });
+      if (cancelled) return;
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      if (cancelled) return;
+      await catalogSyncLock.current.run(async () => {
+        await hydrateCloudDeferredRef.current();
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id, hydrateCloudHomeCritical]);
 
   const sendMessage = useCallback(
     async (payload: {
