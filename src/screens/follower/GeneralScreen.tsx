@@ -217,13 +217,35 @@ const FeedCard = memo(function FeedCard({
 
         {item.sponsored ? (
           item.ctaUrl ? (
-            <Button
-              label={item.ctaLabel?.trim() || t('ui.adCtaDefault')}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                item.ctaLabel?.trim() || t('ui.adCtaDefault')
+              }
               onPress={() => {
                 const url = item.ctaUrl?.trim() || '';
                 if (url.startsWith('https://')) void Linking.openURL(url);
               }}
-            />
+              style={({ pressed }) => [
+                styles.adCtaChip,
+                {
+                  backgroundColor: theme.colors.accent,
+                  opacity: pressed ? 0.8 : 1,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.adCtaChipText,
+                  textDir,
+                  { color: theme.colors.textInverse },
+                ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {item.ctaLabel?.trim() || t('ui.adCtaDefault')}
+              </Text>
+            </Pressable>
           ) : null
         ) : (
           <LikeButton
@@ -1221,5 +1243,19 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  adCtaChip: {
+    alignSelf: 'flex-start',
+    minHeight: 28,
+    maxWidth: 140,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adCtaChipText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

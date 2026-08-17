@@ -802,7 +802,7 @@ const Slide = memo(function Slide({
                     item.ctaLabel?.trim() || t('ui.adCtaDefault')
                   }
                   onPress={openCta}
-                  hitSlop={8}
+                  hitSlop={6}
                   style={({ pressed }) => [
                     styles.adCta,
                     { opacity: pressed ? 0.75 : 1 },
@@ -810,7 +810,8 @@ const Slide = memo(function Slide({
                 >
                   <Text
                     style={[styles.adCtaText, cairoText('semiBold')]}
-                    numberOfLines={2}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
                   >
                     {item.ctaLabel?.trim() || t('ui.adCtaDefault')}
                   </Text>
@@ -1464,19 +1465,23 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
   },
   adCta: {
-    minHeight: 44,
-    minWidth: 72,
-    maxWidth: 88,
-    borderRadius: 12,
-    backgroundColor: 'rgba(37,244,238,0.92)',
+    alignSelf: 'center',
+    minHeight: 26,
+    maxWidth: 68,
+    borderRadius: 999,
+    backgroundColor: 'rgba(37,244,238,0.88)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.28)',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
   },
   adCtaText: {
     color: '#0d1a26',
-    fontSize: 11,
+    fontSize: 10,
+    lineHeight: 13,
+    letterSpacing: 0.1,
     textAlign: 'center',
   },
 });
