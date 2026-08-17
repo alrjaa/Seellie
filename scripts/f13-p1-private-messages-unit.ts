@@ -120,7 +120,10 @@ async function main() {
   assert.ok(sql.includes('private_messages_insert_own_inbox'));
   assert.ok(sql.includes('auth.uid() = owner_id'));
   assert.ok(sql.includes('private_dm_is_friend'));
-  assert.ok(!sql.includes('or friend_id = auth.uid()'));
+  const sqlNoComments = sql
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/--[^\n]*/g, '');
+  assert.ok(!sqlNoComments.includes('or friend_id = auth.uid()'));
 
   const client = readFileSync(
     join(__dirname, '../src/services/private-space.ts'),

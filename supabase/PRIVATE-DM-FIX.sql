@@ -1,6 +1,12 @@
 -- Private DM fix: paste once in SQL Editor
+--
+-- F13-P2-01: weak dual-inbox INSERT removed.
+-- OBSOLETE — DO NOT recreate private_messages_insert_thread with
+--   (owner_id = auth.uid() OR friend_id = auth.uid()).
+-- Own-inbox INSERT RLS tip: F13-P1-PRIVATE-MESSAGES-RLS.sql (also in PHASE4).
+-- Peer inbox copy remains via send_private_message (SECURITY DEFINER) below.
 
--- 1) Message policies: sender can write into recipient inbox
+-- 1) Message policies: select/delete own. INSERT owned by F13-P1 tip.
 drop policy if exists "private_messages_own" on public.private_messages;
 drop policy if exists "private_messages_select_own" on public.private_messages;
 create policy "private_messages_select_own"
@@ -9,16 +15,6 @@ create policy "private_messages_select_own"
   using (auth.uid() = owner_id);
 
 drop policy if exists "private_messages_insert_thread" on public.private_messages;
-create policy "private_messages_insert_thread"
-  on public.private_messages for insert
-  to authenticated
-  with check (
-    auth.uid() = sender_id
-    and (
-      owner_id = auth.uid()
-      or friend_id = auth.uid()
-    )
-  );
 
 drop policy if exists "private_messages_delete_own" on public.private_messages;
 create policy "private_messages_delete_own"

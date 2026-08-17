@@ -1120,18 +1120,44 @@ create policy "app_competitions_update_auth"
     )
   );
 
--- Private message insert: active
+-- Private message insert (F13-P2-01 / F13-P1):
+-- OBSOLETE — DO NOT recreate private_messages_insert_thread with
+--   (owner_id = auth.uid() OR friend_id = auth.uid()) — inbox injection.
+-- Own-inbox client INSERT only; peer inbox via send_private_message (SECURITY DEFINER).
+create or replace function public.private_dm_is_friend(p_friend_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    p_friend_id is not null
+    and auth.uid() is not null
+    and p_friend_id <> auth.uid()
+    and exists (
+      select 1
+      from public.private_friends pf
+      where pf.owner_id = auth.uid()
+        and pf.friend_id = p_friend_id
+    );
+$$;
+
+revoke all on function public.private_dm_is_friend(uuid) from public;
+grant execute on function public.private_dm_is_friend(uuid) to authenticated;
+
 drop policy if exists "private_messages_insert_thread" on public.private_messages;
-create policy "private_messages_insert_thread"
+drop policy if exists "private_messages_insert_own_inbox" on public.private_messages;
+create policy "private_messages_insert_own_inbox"
   on public.private_messages for insert
   to authenticated
   with check (
     public.account_is_active()
     and auth.uid() = sender_id
-    and (
-      owner_id = auth.uid()
-      or friend_id = auth.uid()
-    )
+    and auth.uid() = owner_id
+    and friend_id is not null
+    and friend_id <> auth.uid()
+    and public.private_dm_is_friend(friend_id)
   );
 
 select 'SECURITY-PHASE4-HARDENING applied' as status;

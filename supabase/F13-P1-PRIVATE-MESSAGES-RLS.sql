@@ -1,7 +1,8 @@
--- F13-P1 — Harden private_messages INSERT (inbox injection)
+-- F13-P1 / F13-P2-01 — Harden private_messages INSERT (inbox injection)
 -- Idempotent. Dual-copy delivery remains via SECURITY DEFINER send_private_message only.
 --
--- BEFORE (vulnerable):
+-- HISTORICAL WEAK POLICY (OBSOLETE — DO NOT RUN / DO NOT RECREATE):
+--   private_messages_insert_thread
 --   with check (auth.uid() = sender_id AND (owner_id = auth.uid() OR friend_id = auth.uid()))
 --   → attacker can insert owner_id=<victim>, friend_id=<self>, sender_id=<self>
 --
@@ -32,6 +33,7 @@ revoke all on function public.private_dm_is_friend(uuid) from public;
 grant execute on function public.private_dm_is_friend(uuid) to authenticated;
 
 drop policy if exists "private_messages_insert_thread" on public.private_messages;
+drop policy if exists "private_messages_insert_own_inbox" on public.private_messages;
 
 create policy "private_messages_insert_own_inbox"
   on public.private_messages for insert
