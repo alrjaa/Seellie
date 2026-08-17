@@ -50,6 +50,7 @@ import {
   clearUserScopedLocalData,
   migrateLocalSessionCredentials,
 } from '@/services/logout-isolation';
+import { isAdsHostname } from '@/utils/ads-portal';
 import { deleteAppMediaByUrl } from '@/services/supabase-storage';
 import { trySendAnalystCodeEmail } from '@/services/analyst-code-delivery';
 import {
@@ -598,13 +599,14 @@ export interface TournamentContextType {
   login: (
     email: string,
     password: string,
-    options?: { portal?: 'app' | 'admin' }
+    options?: { portal?: 'app' | 'admin' | 'ads' }
   ) => Promise<boolean>;
   /** to: 'admin' يخرج من المتابع/المنظم ويفتح بوابة المشرف */
-  logout: (options?: { to?: 'login' | 'admin'; silent?: boolean }) => void;
+  logout: (options?: { to?: 'login' | 'admin' | 'ads'; silent?: boolean }) => void;
   signUp: (
     userData: Pick<User, 'name' | 'email'>,
-    password: string
+    password: string,
+    options?: { portal?: 'app' | 'admin' | 'ads' }
   ) => Promise<boolean>;
   /** تفعيل مسار ثانٍ واحد: منظم أو لاعب حر (مع المتابع) */
   enableSecondaryRole: (
@@ -1598,7 +1600,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     async (
       email: string,
       password: string,
-      options?: { portal?: 'app' | 'admin' }
+      options?: { portal?: 'app' | 'admin' | 'ads' }
     ) => {
       const portal = options?.portal ?? 'app';
       const normalized = normalizeEmail(email);
@@ -1673,6 +1675,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
                   name: normalizedUser.name,
                 }),
           });
+          if (portal === 'ads') {
+            router.replace('/ads/home' as any);
+            return true;
+          }
           router.replace(
             routeForRole(
               normalizedUser.activeRole || normalizedUser.role
@@ -1812,7 +1818,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const signUp = useCallback(
-    async (userData: Pick<User, 'name' | 'email'>, password: string) => {
+    async (
+      userData: Pick<User, 'name' | 'email'>,
+      password: string,
+      options?: { portal?: 'app' | 'admin' | 'ads' }
+    ) => {
+      const portal = options?.portal ?? 'app';
       const email = normalizeEmail(userData.email);
       if (!userData.name.trim() || !isValidEmail(email) || password.length < 6) {
         toast({
@@ -1845,6 +1856,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             title: t('toasts.t006_e4142f'),
             description: t('toasts.t078_462ce2'),
           });
+          if (portal === 'ads') {
+            router.replace('/ads/home' as any);
+            return true;
+          }
           router.replace(routeForRole('follower') as any);
           return true;
         }
@@ -2064,10 +2079,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(
-    (options?: { to?: 'login' | 'admin'; silent?: boolean }) => {
+    (options?: { to?: 'login' | 'admin' | 'ads'; silent?: boolean }) => {
       const user = currentUserRef.current;
       const prevId = user?.id;
       const wasAdmin = user?.role === 'superadmin';
+      const onAdsHost = isAdsHostname();
       // Invalidate in-flight merges before clearing state (FIX-02 user-switch safety)
       sessionGen.current.next();
       sessionUserIdRef.current = null;
@@ -2086,6 +2102,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       const dest =
         options?.to === 'admin'
           ? '/admin'
+          : options?.to === 'ads' || onAdsHost
+            ? '/ads/login'
           : options?.to === 'login'
             ? '/(auth)/login'
             : wasAdmin

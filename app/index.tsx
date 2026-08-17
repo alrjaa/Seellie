@@ -38,9 +38,12 @@ export default function Index() {
     return <Redirect href="/(auth)/reset-password" />;
   }
 
-  // مضيف المعلن المستقل (ads.seellie.com) — منفصل عن تطبيق المستخدم
+  // مضيف المعلن المستقل (ads.seellie.com) — بوابة المعلن
   if (adsHost) {
-    return <Redirect href={ADS_PORTAL_HOME as any} />;
+    if (currentUser) {
+      return <Redirect href={ADS_PORTAL_HOME as any} />;
+    }
+    return <Redirect href="/ads/login" as any />;
   }
 
   // مضيف المشرف المستقل (admin.seellie.com) — لا يدخل بوابة التطبيق العامة
