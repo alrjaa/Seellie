@@ -7,9 +7,9 @@ export const APP_DISPLAY_NAME = 'Seellie';
 /** ألوان الهوية البصرية */
 export const BRAND_COLORS = brandPalette;
 
-/** وحدة الشعار المضمّنة */
+/** وحدة الشعار المضمّنة (F12-P2-08: WebP مضغوط للـLCP) */
 export const DEFAULT_LOGO_MODULE =
-  require('../../assets/seellie-logo.png') as ImageSourcePropType;
+  require('../../assets/seellie-logo.webp') as ImageSourcePropType;
 
 /**
  * URI للشعار الافتراضي — متوافق مع native وweb
