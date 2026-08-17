@@ -8,7 +8,8 @@ import {
 } from '@/components/media/FullScreenFeed';
 import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
 import { resolveLocationLabel } from '@/utils/location-label';
-import { useNativeAds } from '@/hooks/useNativeAds';
+import { useEffectiveNativeAds } from '@/hooks/useEffectiveNativeAds';
+import { useAdPreferences } from '@/hooks/useAdPreferences';
 import { injectNativeAds } from '@/services/native-ads';
 
 type MediaItem = {
@@ -39,7 +40,8 @@ export default function HighlightsScreen() {
     useTournament();
   const { t } = useTranslation();
   const saveToPrivate = useSaveToPrivateSpace();
-  const nativeAds = useNativeAds();
+  const nativeAds = useEffectiveNativeAds();
+  const { hideAd, reportAd } = useAdPreferences();
 
   const media = useMemo(() => {
     const items: MediaItem[] = [];
@@ -272,6 +274,15 @@ export default function HighlightsScreen() {
         onLike={onFullLike}
         onComment={onFullComment}
         onDoubleTap={(item) => void saveToPrivate(item)}
+        adPlacement="highlights"
+        sponsoredActions={{
+          onHide: (adId) => {
+            void hideAd(adId, 'highlights');
+          },
+          onReport: (adId, reason) => {
+            void reportAd(adId, reason, 'highlights');
+          },
+        }}
         emptyTitle={t('screens.noHighlights')}
         emptyDescription={t('screens.noHighlightsDesc')}
         emptyIcon="images-outline"

@@ -62,7 +62,10 @@ import { cairoText } from '@/theme/fonts';
 import { FAB_COLUMN_WIDTH } from '@/theme/navigation';
 import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
 import { WEB_INPUT_MIN_FONT_SIZE } from '@/theme/web-keyboard-viewport';
-import { NATIVE_AD_HOOK_MS } from '@/services/native-ads';
+import { NATIVE_AD_HOOK_MS, extractNativeAdId } from '@/services/native-ads';
+import type { NativeAdPlacement } from '@/services/native-ads';
+import { queueAdEvent } from '@/services/ad-events';
+import { ReasonModal } from '@/components/feedback/ReasonModal';
 
 export type FullScreenContentComment = {
   id: string;
@@ -126,6 +129,12 @@ type Props = {
   emptyTitle?: string;
   emptyDescription?: string;
   emptyIcon?: keyof typeof Ionicons.glyphMap;
+  /** Placement tag for batched ad analytics — does not affect feed lifecycle. */
+  adPlacement?: NativeAdPlacement;
+  sponsoredActions?: {
+    onHide?: (adId: string) => void;
+    onReport?: (adId: string, reason: string) => void;
+  };
 };
 
 function toStoreComment(c: FullScreenContentComment): ContentItemComment {
@@ -176,6 +185,8 @@ const Slide = memo(function Slide({
   onComment,
   onDoubleTap,
   onComposerFocusChange,
+  adPlacement,
+  sponsoredActions,
 }: {
   item: FullScreenContent;
   height: number;
@@ -188,6 +199,11 @@ const Slide = memo(function Slide({
   onDoubleTap?: () => void;
   /** يجمّد ارتفاع الـ feed أثناء التركيز — لا يُمرَّر ارتفاع visualViewport إلى الشريحة */
   onComposerFocusChange?: (focused: boolean) => void;
+  adPlacement?: NativeAdPlacement;
+  sponsoredActions?: {
+    onHide?: (adId: string) => void;
+    onReport?: (adId: string, reason: string) => void;
+  };
 }) {
   const theme = useAppTheme();
   const { t, isRTL } = useTranslation();
@@ -218,6 +234,11 @@ const Slide = memo(function Slide({
   const commentsPanelHeight = 210 + Math.max(insets.bottom, 8);
   const sponsored = !!item.sponsored;
   const [showHook, setShowHook] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const nativeAdId = sponsored ? extractNativeAdId(item.id) : null;
+  const trackedImpressionRef = useRef(false);
+  const trackedVideoStartRef = useRef(false);
+  const trackedVideoCompleteRef = useRef(false);
 
   const clearComposerFocus = useCallback(() => {
     if (blurTimerRef.current) {
@@ -259,6 +280,42 @@ const Slide = memo(function Slide({
     const timer = setTimeout(() => setShowHook(false), NATIVE_AD_HOOK_MS);
     return () => clearTimeout(timer);
   }, [active, sponsored, item.hookText, item.id]);
+
+  useEffect(() => {
+    trackedImpressionRef.current = false;
+    trackedVideoStartRef.current = false;
+    trackedVideoCompleteRef.current = false;
+  }, [item.id]);
+
+  useEffect(() => {
+    if (!active || !sponsored || !nativeAdId || trackedImpressionRef.current) return;
+    trackedImpressionRef.current = true;
+    queueAdEvent({
+      adId: nativeAdId,
+      event: 'impression',
+      placement: adPlacement,
+    });
+  }, [active, sponsored, nativeAdId, adPlacement]);
+
+  const trackVideoStart = useCallback(() => {
+    if (!sponsored || !nativeAdId || trackedVideoStartRef.current) return;
+    trackedVideoStartRef.current = true;
+    queueAdEvent({
+      adId: nativeAdId,
+      event: 'video_start',
+      placement: adPlacement,
+    });
+  }, [sponsored, nativeAdId, adPlacement]);
+
+  const trackVideoComplete = useCallback(() => {
+    if (!sponsored || !nativeAdId || trackedVideoCompleteRef.current) return;
+    trackedVideoCompleteRef.current = true;
+    queueAdEvent({
+      adId: nativeAdId,
+      event: 'video_complete',
+      placement: adPlacement,
+    });
+  }, [sponsored, nativeAdId, adPlacement]);
 
   // لا تركيز تلقائي: يبقى Composer ظاهرًا قبل الضغط على الحقل
   // (المستخدم يضغط «إضافة تعليق» لفتح اللوحة)
@@ -458,6 +515,7 @@ const Slide = memo(function Slide({
           if (playGenRef.current !== gen) return;
           setFrameReady(true);
           setPaused(false);
+          trackVideoStart();
         })
         .catch(() => {
           if (playGenRef.current !== gen) return;
@@ -480,6 +538,8 @@ const Slide = memo(function Slide({
         if (playGenRef.current !== gen) {
           void videoRef.current?.pauseAsync().catch(() => undefined);
           void videoRef.current?.unloadAsync().catch(() => undefined);
+        } else {
+          trackVideoStart();
         }
       })
       .catch(() => {
@@ -526,8 +586,29 @@ const Slide = memo(function Slide({
   const openCta = useCallback(() => {
     const url = (item.ctaUrl || '').trim();
     if (!url.startsWith('https://')) return;
+    if (nativeAdId) {
+      queueAdEvent({
+        adId: nativeAdId,
+        event: 'click',
+        placement: adPlacement,
+      });
+    }
     void Linking.openURL(url);
-  }, [item.ctaUrl]);
+  }, [item.ctaUrl, nativeAdId, adPlacement]);
+
+  const hideSponsored = useCallback(() => {
+    if (!nativeAdId) return;
+    sponsoredActions?.onHide?.(nativeAdId);
+  }, [nativeAdId, sponsoredActions]);
+
+  const confirmReport = useCallback(
+    (reason: string) => {
+      if (!nativeAdId) return;
+      sponsoredActions?.onReport?.(nativeAdId, reason);
+      setReportOpen(false);
+    },
+    [nativeAdId, sponsoredActions]
+  );
 
   const submitComment = useCallback(() => {
     const trimmed = draft.trim().slice(0, 120);
@@ -629,7 +710,9 @@ const Slide = memo(function Slide({
                   onPlaying: () => {
                     setFrameReady(true);
                     setPaused(false);
+                    trackVideoStart();
                   },
+                  onEnded: sponsored ? () => trackVideoComplete() : undefined,
                 })
               : null}
 
@@ -649,6 +732,15 @@ const Slide = memo(function Slide({
                   setLoadError(true);
                   setPaused(true);
                 }}
+                onPlaybackStatusUpdate={
+                  sponsored
+                    ? (status) => {
+                        if (status.isLoaded && status.didJustFinish) {
+                          trackVideoComplete();
+                        }
+                      }
+                    : undefined
+                }
               />
             ) : null}
 
@@ -865,8 +957,53 @@ const Slide = memo(function Slide({
               {item.locationLabel.trim()}
             </Text>
           ) : null}
+          {sponsored && nativeAdId && sponsoredActions ? (
+            <View
+              style={[
+                styles.adActionsRow,
+                {
+                  left: FAB_COLUMN_WIDTH + 12,
+                  right: 14 + 88,
+                },
+              ]}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('settings.adsHideAction')}
+                onPress={hideSponsored}
+                hitSlop={6}
+                style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+              >
+                <Text style={[styles.adActionText, cairoText('medium')]}>
+                  {t('settings.adsHideAction')}
+                </Text>
+              </Pressable>
+              <Text style={styles.adActionSep}>·</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('settings.adsReportAction')}
+                onPress={() => setReportOpen(true)}
+                hitSlop={6}
+                style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+              >
+                <Text style={[styles.adActionText, cairoText('medium')]}>
+                  {t('settings.adsReportAction')}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       </View>
+
+      <ReasonModal
+        visible={reportOpen}
+        title={t('settings.adsReportModalTitle')}
+        description={t('settings.adsReportModalDesc')}
+        confirmLabel={t('settings.adsReportAction')}
+        destructive
+        onCancel={() => setReportOpen(false)}
+        onConfirm={confirmReport}
+      />
 
       {/* تظهر فقط بعد النقر على «تعليقات»: Composer ظاهر ثم قائمة التعليقات */}
       {commentsExpanded && !sponsored ? (
@@ -983,6 +1120,8 @@ function FullScreenFeedComponent({
   emptyTitle,
   emptyDescription,
   emptyIcon = 'images-outline',
+  adPlacement,
+  sponsoredActions,
 }: Props) {
   const theme = useAppTheme();
   const { t } = useTranslation();
@@ -1144,6 +1283,8 @@ function FullScreenFeedComponent({
         onComment={onComment}
         onDoubleTap={onDoubleTap ? () => onDoubleTap(item) : undefined}
         onComposerFocusChange={onComposerFocusChange}
+        adPlacement={adPlacement}
+        sponsoredActions={sponsoredActions}
       />
     ),
     [
@@ -1155,6 +1296,8 @@ function FullScreenFeedComponent({
       onComment,
       onDoubleTap,
       onComposerFocusChange,
+      adPlacement,
+      sponsoredActions,
     ]
   );
 
@@ -1480,5 +1623,21 @@ const styles = StyleSheet.create({
     lineHeight: 13,
     letterSpacing: 0.1,
     textAlign: 'center',
+  },
+  adActionsRow: {
+    position: 'absolute',
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  adActionText: {
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  adActionSep: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 11,
   },
 });

@@ -145,6 +145,26 @@ export const ar = {
     account: 'حسابي',
     createPost: 'إنشاء منشور',
     createPostSub: 'اكتب منشوراً قصيراً يظهر في ملفك',
+    adsTitle: 'تفضيلات الإعلانات',
+    adsMenuSub: 'إخفاء أو إبلاغ عن إعلان، التخصيص',
+    adsSubtitle: 'إدارة ظهور المحتوى الإعلاني في خلاصاتك.',
+    adsPersonalization: 'التخصيص',
+    adsPersonalizationDesc:
+      'عند التفعيل، قد تصبح الإعلانات أكثر ملاءمة لاهتماماتك مع الوقت.',
+    adsPersonalizationToggle: 'إعلانات مخصّصة',
+    adsNoGlobalDisable:
+      'لا يوج خيار لإيقاف كل الإعلانات. يمكنك إخفاء إعلانات فردية بدلاً من ذلك.',
+    adsHiddenTitle: 'إعلانات مخفية',
+    adsHiddenDesc: 'اضغط على عنصر لإظهاره مجدداً في خلاصاتك.',
+    adsHiddenEmpty: 'لا توجد إعلانات مخفية.',
+    adsHiddenItem: 'مخفى — اضغط للاستعادة',
+    adsReportTitle: 'الإبلاغ عن إعلان',
+    adsReportDesc:
+      'أثناء مشاهدة إعلان، استخدم «إبلاغ» على الشريحة أو «إخفاء» لإخفائه.',
+    adsHideAction: 'إخفاء',
+    adsReportAction: 'إبلاغ',
+    adsReportModalTitle: 'الإبلاغ عن هذا الإعلان',
+    adsReportModalDesc: 'أخبرنا باختصار لماذا يجب مراجعة هذا الإعلان.',
   },
   paths: {
     title: 'مسارات الحساب — التبديل والتفعيل',
@@ -558,6 +578,15 @@ export const ar = {
     offerTitle: 'عرض جديد',
     offerBody: 'وصل عرض من %{name}',
     backHome: 'العودة للرئيسية',
+  },
+  adsPortal: {
+    title: 'Seellie Ads',
+    subtitle: 'منصة المعلنين — منفصلة عن تطبيق المستخدم',
+    comingSoon: 'قريباً',
+    comingSoonDesc:
+      'ستتمكن من إنشاء الحملات وإدارة الإعلانات من ads.seellie.com. المنصة الكاملة قيد التطوير.',
+    contact: 'تواصل معنا',
+    backToApp: 'العودة لتطبيق Seellie',
   },
   legal: {
     privacyTitle: 'سياسة الخصوصية',

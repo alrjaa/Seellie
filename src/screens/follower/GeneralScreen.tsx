@@ -35,7 +35,8 @@ import { formatArabicDate } from '@/utils';
 import { userHasRole } from '@/utils/roles';
 import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
 import { resolveLocationLabel } from '@/utils/location-label';
-import { useNativeAds } from '@/hooks/useNativeAds';
+import { useEffectiveNativeAds } from '@/hooks/useEffectiveNativeAds';
+import { useAdPreferences } from '@/hooks/useAdPreferences';
 import {
   injectNativeAds,
   type NativeAdFeedItem,
@@ -266,7 +267,8 @@ export default function GeneralFeedScreen() {
   const { tablet } = useResponsive();
   const listChrome = useListChrome({ enabled: tablet });
   const saveToPrivate = useSaveToPrivateSpace();
-  const nativeAds = useNativeAds();
+  const nativeAds = useEffectiveNativeAds();
+  const { hideAd, reportAd } = useAdPreferences();
   const {
     users,
     competitions,
@@ -1091,6 +1093,15 @@ export default function GeneralFeedScreen() {
           onPressAuthor={onPressAuthor}
           onDoubleTap={(item) => void saveToPrivate(item)}
           authorPresentation="handleOnly"
+          adPlacement="general"
+          sponsoredActions={{
+            onHide: (adId) => {
+              void hideAd(adId, 'general');
+            },
+            onReport: (adId, reason) => {
+              void reportAd(adId, reason, 'general');
+            },
+          }}
           emptyTitle={emptyTitle}
           emptyDescription={emptyDescription}
           emptyIcon="newspaper-outline"

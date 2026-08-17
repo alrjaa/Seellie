@@ -322,6 +322,10 @@ export default function FollowerLayout() {
             options={{ href: null, title: t('settings.account') }}
           />
           <Tabs.Screen
+            name="settings/ads"
+            options={{ href: null, title: t('settings.adsTitle') }}
+          />
+          <Tabs.Screen
             name="analysis/create"
             options={{ href: null, title: t('home.createAnalysis') }}
           />

@@ -130,6 +130,12 @@ export default function SettingsScreen() {
         onPress={() => router.push('/notifications' as any)}
       />
       <ListRow
+        title={t('settings.adsTitle')}
+        subtitle={t('settings.adsMenuSub')}
+        icon="megaphone-outline"
+        onPress={() => router.push('/(follower)/settings/ads' as any)}
+      />
+      <ListRow
         title={t('legal.openPrivacy')}
         subtitle={t('legal.privacyTitle')}
         icon="shield-checkmark-outline"

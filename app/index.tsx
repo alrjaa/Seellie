@@ -9,12 +9,14 @@ import {
   peekPendingAuthUrl,
 } from '@/services/pending-auth-url';
 import { ADMIN_HOME, ADMIN_LOGIN, isAdminHostname } from '@/utils/admin-portal';
+import { ADS_PORTAL_HOME, isAdsHostname } from '@/utils/ads-portal';
 
 export default function Index() {
   const { currentUser, loading, routeForRole } = useTournament();
   const [webChecked, setWebChecked] = useState(Platform.OS !== 'web');
   const [recovery, setRecovery] = useState(false);
   const [adminHost, setAdminHost] = useState(false);
+  const [adsHost, setAdsHost] = useState(false);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') {
@@ -26,6 +28,7 @@ export default function Index() {
     const href = window.location.href;
     setRecovery(!!isAuthCallbackUrl(href) || !!peekPendingAuthUrl());
     setAdminHost(isAdminHostname(window.location.hostname));
+    setAdsHost(isAdsHostname(window.location.hostname));
     setWebChecked(true);
   }, []);
 
@@ -33,6 +36,11 @@ export default function Index() {
 
   if (recovery) {
     return <Redirect href="/(auth)/reset-password" />;
+  }
+
+  // مضيف المعلن المستقل (ads.seellie.com) — منفصل عن تطبيق المستخدم
+  if (adsHost) {
+    return <Redirect href={ADS_PORTAL_HOME as any} />;
   }
 
   // مضيف المشرف المستقل (admin.seellie.com) — لا يدخل بوابة التطبيق العامة

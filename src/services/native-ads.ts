@@ -174,6 +174,23 @@ export function liveAdsForPlacement(
   );
 }
 
+/** Feed slide id → canonical ad id (`native-ad-{id}` or `native-ad-{id}--{slot}`). */
+export function extractNativeAdId(feedItemId: string): string | null {
+  const match = /^native-ad-(.+?)(?:--\d+)?$/.exec(String(feedItemId ?? '').trim());
+  return match?.[1]?.slice(0, 80) || null;
+}
+
+export function filterHiddenNativeAds(
+  ads: NativeInFeedAd[],
+  hiddenIds: Iterable<string>
+): NativeInFeedAd[] {
+  const hidden = new Set(
+    [...hiddenIds].map((id) => String(id).trim()).filter(Boolean)
+  );
+  if (!hidden.size) return ads;
+  return ads.filter((ad) => !hidden.has(ad.id));
+}
+
 export function nativeAdToFeedItem(ad: NativeInFeedAd): NativeAdFeedItem {
   const handle = ad.advertiserHandle
     ? ad.advertiserHandle.startsWith('@')

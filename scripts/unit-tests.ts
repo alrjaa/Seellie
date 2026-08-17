@@ -25,8 +25,19 @@ import {
   isNativeAdLive,
   injectNativeAds,
   nativeAdToFeedItem,
+  extractNativeAdId,
+  filterHiddenNativeAds,
   type NativeInFeedAd,
 } from '../src/services/native-ads';
+import {
+  hideAdInPreferences,
+  reportAdInPreferences,
+} from '../src/services/ad-preferences-core';
+import {
+  shouldFlushAdEventQueue,
+  sanitizeAdEvent,
+  AD_EVENT_BATCH_MAX,
+} from '../src/services/ad-events-core';
 
 function test(name: string, fn: () => void) {
   try {
@@ -190,6 +201,43 @@ test('validatePickerAsset native ad min duration', () => {
     fileSize: 2 * 1024 * 1024,
   });
   assert.equal(ok.ok, true);
+});
+
+test('extractNativeAdId parses slot ids', () => {
+  assert.equal(extractNativeAdId('native-ad-ad1--0'), 'ad1');
+  assert.equal(extractNativeAdId('native-ad-ad1'), 'ad1');
+  assert.equal(extractNativeAdId('post-1'), null);
+});
+
+test('filterHiddenNativeAds removes hidden ids', () => {
+  const ads = [sampleAd({ id: 'a' }), sampleAd({ id: 'b' })];
+  const out = filterHiddenNativeAds(ads, ['a']);
+  assert.equal(out.length, 1);
+  assert.equal(out[0]?.id, 'b');
+});
+
+test('ad preferences hide and report', () => {
+  const hidden = hideAdInPreferences(
+    { hiddenAdIds: [], reportedAdIds: [], personalizedAds: true },
+    'x'
+  );
+  assert.deepEqual(hidden.hiddenAdIds, ['x']);
+  const reported = reportAdInPreferences(hidden, 'y');
+  assert.ok(reported.hiddenAdIds.includes('y'));
+  assert.ok(reported.reportedAdIds.includes('y'));
+});
+
+test('ad event batch flush thresholds', () => {
+  assert.equal(shouldFlushAdEventQueue(0, 0, 1000), false);
+  assert.equal(shouldFlushAdEventQueue(AD_EVENT_BATCH_MAX, 0, 1000), true);
+  assert.equal(shouldFlushAdEventQueue(1, 0, 31_000), true);
+  const row = sanitizeAdEvent({
+    adId: 'a',
+    event: 'impression',
+    placement: 'general',
+  });
+  assert.ok(row);
+  assert.equal(sanitizeAdEvent({ adId: '', event: 'click' }), null);
 });
 
 console.log('All tests passed.');

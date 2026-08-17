@@ -46,7 +46,8 @@ import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
 import { resolveLocationLabel } from '@/utils/location-label';
-import { useNativeAds } from '@/hooks/useNativeAds';
+import { useEffectiveNativeAds } from '@/hooks/useEffectiveNativeAds';
+import { useAdPreferences } from '@/hooks/useAdPreferences';
 import { injectNativeAds } from '@/services/native-ads';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatArabicDate } from '@/utils';
@@ -238,7 +239,8 @@ export default function UniqueScreen() {
   const { tablet } = useResponsive();
   const insets = useSafeAreaInsets();
   const saveToPrivate = useSaveToPrivateSpace();
-  const nativeAds = useNativeAds();
+  const nativeAds = useEffectiveNativeAds();
+  const { hideAd, reportAd } = useAdPreferences();
   const topPad = stackTopChromePad(insets.top);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -1010,6 +1012,15 @@ export default function UniqueScreen() {
           onLike={onFullLike}
           authorPresentation="handleOnly"
           onDoubleTap={(item) => void saveToPrivate(item)}
+          adPlacement="unique"
+          sponsoredActions={{
+            onHide: (adId) => {
+              void hideAd(adId, 'unique');
+            },
+            onReport: (adId, reason) => {
+              void reportAd(adId, reason, 'unique');
+            },
+          }}
           emptyTitle={t('unique.emptyTitle')}
           emptyDescription={t('unique.emptyDesc')}
           emptyIcon="analytics-outline"

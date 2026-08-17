@@ -144,6 +144,26 @@ export const en: TranslationTree = {
     account: 'My account',
     createPost: 'Create post',
     createPostSub: 'Write a short post for your profile',
+    adsTitle: 'Ad preferences',
+    adsMenuSub: 'Hide or report ads, personalization',
+    adsSubtitle: 'Manage how sponsored content appears in your feeds.',
+    adsPersonalization: 'Personalization',
+    adsPersonalizationDesc:
+      'When enabled, ads may be more relevant to your interests over time.',
+    adsPersonalizationToggle: 'Personalized ads',
+    adsNoGlobalDisable:
+      'There is no option to turn off all ads. You can hide individual ads instead.',
+    adsHiddenTitle: 'Hidden ads',
+    adsHiddenDesc: 'Tap an item to show it again in your feeds.',
+    adsHiddenEmpty: 'No hidden ads.',
+    adsHiddenItem: 'Hidden — tap to restore',
+    adsReportTitle: 'Report an ad',
+    adsReportDesc:
+      'While viewing a sponsored post, use Report on the slide or hide it with Hide.',
+    adsHideAction: 'Hide',
+    adsReportAction: 'Report',
+    adsReportModalTitle: 'Report this ad',
+    adsReportModalDesc: 'Tell us briefly why this ad should be reviewed.',
   },
   paths: {
     title: 'Account paths — switch & activate',
@@ -557,6 +577,15 @@ export const en: TranslationTree = {
     offerTitle: 'New offer',
     offerBody: 'Offer received from %{name}',
     backHome: 'Back to home',
+  },
+  adsPortal: {
+    title: 'Seellie Ads',
+    subtitle: 'Advertiser platform — separate from the user app',
+    comingSoon: 'Coming soon',
+    comingSoonDesc:
+      'Campaign creation and ad management will live at ads.seellie.com. The full portal is in development.',
+    contact: 'Contact us',
+    backToApp: 'Back to Seellie app',
   },
   legal: {
     privacyTitle: 'Privacy Policy',
