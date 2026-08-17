@@ -170,8 +170,8 @@ test('inject native ads every N items', () => {
   const items = [{ id: '1' }, { id: '2' }, { id: '3' }, { id: '4' }];
   const out = injectNativeAds(items, [sampleAd()], 'general');
   assert.equal(out.length, 6);
-  assert.equal((out[2] as { id: string }).id, 'native-ad-ad1');
-  assert.equal((out[5] as { id: string }).id, 'native-ad-ad1');
+  assert.equal((out[2] as { id: string }).id, 'native-ad-ad1--0');
+  assert.equal((out[5] as { id: string }).id, 'native-ad-ad1--1');
   const slide = nativeAdToFeedItem(sampleAd());
   assert.equal(slide.sponsored, true);
   assert.equal(slide.kind, 'video');

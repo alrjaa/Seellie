@@ -200,6 +200,33 @@ export function nativeAdToFeedItem(ad: NativeInFeedAd): NativeAdFeedItem {
   };
 }
 
+export function nativeAdsEqual(
+  a: NativeInFeedAd[],
+  b: NativeInFeedAd[]
+): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const left = a[i];
+    const right = b[i];
+    if (
+      left.id !== right.id ||
+      left.status !== right.status ||
+      left.updatedAt !== right.updatedAt ||
+      left.videoUrl !== right.videoUrl ||
+      left.hookText !== right.hookText ||
+      left.insertEveryN !== right.insertEveryN
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function slotAd(slide: NativeAdFeedItem, slot: number): NativeAdFeedItem {
+  return { ...slide, id: `${slide.id}--${slot}` };
+}
+
 export function injectNativeAds<T>(
   items: T[],
   ads: NativeInFeedAd[],
@@ -208,14 +235,14 @@ export function injectNativeAds<T>(
   const live = liveAdsForPlacement(ads, placement);
   if (!live.length) return items;
   const slides = live.map(nativeAdToFeedItem);
-  if (!items.length) return slides.slice(0, 2);
+  if (!items.length) return slides.slice(0, 2).map((slide, i) => slotAd(slide, i));
   const everyN = live[0]?.insertEveryN || 4;
   const out: Array<T | NativeAdFeedItem> = [];
   let ai = 0;
   items.forEach((item, index) => {
     out.push(item);
     if ((index + 1) % everyN === 0) {
-      out.push(slides[ai % slides.length]);
+      out.push(slotAd(slides[ai % slides.length], ai));
       ai += 1;
     }
   });

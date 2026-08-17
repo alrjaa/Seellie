@@ -819,7 +819,7 @@ const Slide = memo(function Slide({
             ) : (
               <>
             <LikeButton
-              count={item.likes.length}
+              count={(item.likes || []).length}
               liked={item.liked}
               onPress={handleLikePress}
               tone="light"
@@ -1092,7 +1092,10 @@ function FullScreenFeedComponent({
   }, [overlayOpacity, overlayTranslate, visible]);
 
   useEffect(() => {
-    setActiveId(data[0]?.id ?? null);
+    setActiveId((current) => {
+      if (current && data.some((item) => item.id === current)) return current;
+      return data[0]?.id ?? null;
+    });
   }, [data]);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {

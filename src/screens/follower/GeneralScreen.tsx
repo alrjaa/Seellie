@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -35,7 +36,10 @@ import { userHasRole } from '@/utils/roles';
 import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
 import { resolveLocationLabel } from '@/utils/location-label';
 import { useNativeAds } from '@/hooks/useNativeAds';
-import { injectNativeAds } from '@/services/native-ads';
+import {
+  injectNativeAds,
+  type NativeAdFeedItem,
+} from '@/services/native-ads';
 
 type FeedFilter = 'all' | 'media' | 'discussions' | 'posts';
 
@@ -70,6 +74,10 @@ type FeedItem = {
   subtitle?: string;
   locationCity?: string;
   locationRegion?: string;
+  sponsored?: boolean;
+  hookText?: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
 };
 
 const FILTERS: {
@@ -150,11 +158,18 @@ const FeedCard = memo(function FeedCard({
         ) : null}
 
         <Muted style={textDir}>
-          {t(TYPE_LABEL_KEYS[item.type])}
+          {item.sponsored
+            ? t('ui.sponsoredBadge')
+            : t(TYPE_LABEL_KEYS[item.type])}
           {item.subtitle ? ` · ${item.subtitle}` : ''}
-          {' · '}
-          {formatArabicDate(item.timestamp)}
+          {item.sponsored ? '' : ` · ${formatArabicDate(item.timestamp)}`}
         </Muted>
+
+        {item.sponsored && item.hookText ? (
+          <Text style={[styles.title, textDir, { color: theme.colors.text }]}>
+            {item.hookText}
+          </Text>
+        ) : null}
 
         {item.title ? (
           <Text style={[styles.title, textDir, { color: theme.colors.text }]}>
@@ -200,11 +215,23 @@ const FeedCard = memo(function FeedCard({
           </Pressable>
         ) : null}
 
-        <LikeButton
-          count={item.likes.length}
-          liked={liked}
-          onPress={onLike}
-        />
+        {item.sponsored ? (
+          item.ctaUrl ? (
+            <Button
+              label={item.ctaLabel?.trim() || t('ui.adCtaDefault')}
+              onPress={() => {
+                const url = item.ctaUrl?.trim() || '';
+                if (url.startsWith('https://')) void Linking.openURL(url);
+              }}
+            />
+          ) : null
+        ) : (
+          <LikeButton
+            count={(item.likes || []).length}
+            liked={liked}
+            onPress={onLike}
+          />
+        )}
       </Card>
     </Pressable>
   );
@@ -621,6 +648,7 @@ export default function GeneralFeedScreen() {
   const onLike = useCallback(
     (item: FeedItem) => {
       if (!currentUser) return;
+      if (item.sponsored) return;
       if (item.type === 'discussion') {
         toggleCommentLike(item.id.replace(/^discussion-/, ''));
         return;
@@ -669,16 +697,20 @@ export default function GeneralFeedScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: FeedItem }) => {
-      const liked = currentUser ? item.likes.includes(currentUser.id) : false;
+      const liked = currentUser
+        ? (item.likes || []).includes(currentUser.id)
+        : false;
       return (
         <FeedCard
           item={item}
           liked={liked}
-          onLike={() => onLike(item)}
+          onLike={item.sponsored ? undefined : () => onLike(item)}
           onPressHandle={
-            item.authorHandle
-              ? () => openHandleProfile(item.authorId, item.authorHandle)
-              : undefined
+            item.sponsored
+              ? undefined
+              : item.authorHandle
+                ? () => openHandleProfile(item.authorId, item.authorHandle)
+                : undefined
           }
           onOpenMedia={undefined}
         />
@@ -687,48 +719,91 @@ export default function GeneralFeedScreen() {
     [currentUser, onLike, openHandleProfile]
   );
 
+  const visibleFeed = useMemo<FeedItem[]>(() => {
+    return injectNativeAds(filtered, nativeAds, 'general').map((item) => {
+      if ((item as NativeAdFeedItem).sponsored) {
+        const ad = item as NativeAdFeedItem;
+        return {
+          id: ad.id,
+          type: 'video' as const,
+          authorId: ad.authorId,
+          authorName: ad.authorName,
+          authorHandle: ad.authorHandle,
+          authorAvatar: ad.authorAvatar,
+          title: ad.title,
+          text: ad.text,
+          mediaUrl: ad.mediaUrl,
+          posterUrl: ad.posterUrl,
+          likes: [],
+          timestamp: new Date(0),
+          sponsored: true,
+          hookText: ad.hookText,
+          ctaLabel: ad.ctaLabel,
+          ctaUrl: ad.ctaUrl,
+        };
+      }
+      return item as FeedItem;
+    });
+  }, [filtered, nativeAds]);
+
   const fullScreenData = useMemo<FullScreenContent[]>(
     () =>
-      injectNativeAds(
-        filtered.map((item) => {
-          const kind =
-            item.type === 'photo' || item.type === 'video'
-              ? item.type
-              : item.type === 'analysis' && item.mediaKind
-                ? item.mediaKind
-                : 'text';
+      visibleFeed.map((item) => {
+        if (item.sponsored) {
           return {
             id: item.id,
-            kind,
+            kind: 'video' as const,
             mediaUrl: item.mediaUrl,
             posterUrl: item.posterUrl,
-            title: item.title,
+            title: item.title || item.hookText,
             text: item.text,
             authorId: item.authorId,
-            authorName: item.authorHandle || item.authorName || '',
+            authorName: item.authorName,
             authorHandle: item.authorHandle,
             authorAvatar: item.authorAvatar,
-            subtitle: undefined,
-            likes: item.likes,
-            liked: !!currentUser && item.likes.includes(currentUser.id),
-            locationLabel: resolveLocationLabel({
-              city: item.locationCity,
-              region: item.locationRegion,
-            }),
-            comments: (item.comments || []).map((c) => ({
-              id: c.id,
-              text: c.text,
-              authorId: c.authorId,
-              authorName: c.authorName,
-              authorAvatar: c.authorAvatar,
-              timestamp: c.timestamp,
-            })),
+            likes: [],
+            liked: false,
+            sponsored: true,
+            hookText: item.hookText,
+            ctaLabel: item.ctaLabel,
+            ctaUrl: item.ctaUrl,
           };
-        }),
-        nativeAds,
-        'general'
-      ) as FullScreenContent[],
-    [filtered, currentUser, nativeAds]
+        }
+        const kind =
+          item.type === 'photo' || item.type === 'video'
+            ? item.type
+            : item.type === 'analysis' && item.mediaKind
+              ? item.mediaKind
+              : 'text';
+        return {
+          id: item.id,
+          kind,
+          mediaUrl: item.mediaUrl,
+          posterUrl: item.posterUrl,
+          title: item.title,
+          text: item.text,
+          authorId: item.authorId,
+          authorName: item.authorHandle || item.authorName || '',
+          authorHandle: item.authorHandle,
+          authorAvatar: item.authorAvatar,
+          subtitle: undefined,
+          likes: item.likes || [],
+          liked: !!currentUser && (item.likes || []).includes(currentUser.id),
+          locationLabel: resolveLocationLabel({
+            city: item.locationCity,
+            region: item.locationRegion,
+          }),
+          comments: (item.comments || []).map((c) => ({
+            id: c.id,
+            text: c.text,
+            authorId: c.authorId,
+            authorName: c.authorName,
+            authorAvatar: c.authorAvatar,
+            timestamp: c.timestamp,
+          })),
+        };
+      }),
+    [visibleFeed, currentUser]
   );
 
   const onFullLike = useCallback(
@@ -1013,7 +1088,7 @@ export default function GeneralFeedScreen() {
       {discussionModal}
       <FlatList
         style={styles.listFlex}
-        data={filtered}
+        data={visibleFeed}
         keyExtractor={(item) => item.id}
         {...listChrome}
         contentContainerStyle={[styles.list, listChrome.contentContainerStyle]}
