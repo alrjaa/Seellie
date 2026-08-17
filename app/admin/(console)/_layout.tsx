@@ -148,6 +148,10 @@ export default function AdminConsoleLayout() {
             options={{ title: t('menu.forums') }}
           />
           <Stack.Screen
+            name="ads"
+            options={{ title: t('superadmin.modules.ads.title') }}
+          />
+          <Stack.Screen
             name="support"
             options={{ title: t('home.certificates') }}
           />

@@ -10,6 +10,8 @@ import {
   validatePickerAsset,
   FORUM_VIDEO_MAX_SEC,
   PROFILE_VIDEO_MAX_SEC,
+  NATIVE_AD_VIDEO_MIN_SEC,
+  NATIVE_AD_VIDEO_MAX_SEC,
 } from '../src/utils/media-limits';
 import {
   countReceivedLikes,
@@ -17,6 +19,14 @@ import {
   ensureSocialLists,
 } from '../src/utils/social-stats';
 import type { User } from '../src/data/initial-data';
+import {
+  sanitizeNativeAd,
+  sanitizeNativeAdsPayload,
+  isNativeAdLive,
+  injectNativeAds,
+  nativeAdToFeedItem,
+  type NativeInFeedAd,
+} from '../src/services/native-ads';
 
 function test(name: string, fn: () => void) {
   try {
@@ -95,6 +105,91 @@ test('social counts', () => {
   assert.equal(counts.likes, 3);
   assert.equal(counts.followers, 2);
   assert.equal(counts.following, 1);
+});
+
+function sampleAd(over: Partial<NativeInFeedAd> = {}): NativeInFeedAd {
+  return {
+    id: 'ad1',
+    status: 'active',
+    advertiserName: 'Brand',
+    videoUrl: 'https://cdn.example.com/ad.mp4',
+    durationSec: 10,
+    placements: ['general'],
+    insertEveryN: 2,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    hookText: 'Stop scrolling',
+    ...over,
+  };
+}
+
+test('native ad sanitizer requires https video and name', () => {
+  assert.equal(
+    sanitizeNativeAd({
+      id: 'x',
+      advertiserName: 'A',
+      videoUrl: 'http://insecure.example/a.mp4',
+    }),
+    null
+  );
+  const ok = sanitizeNativeAd(sampleAd({ ctaUrl: 'https://brand.example/x' }));
+  assert.ok(ok);
+  assert.equal(ok?.ctaUrl, 'https://brand.example/x');
+});
+
+test('native ad duration clamped to 6–15s', () => {
+  const short = sanitizeNativeAd(sampleAd({ durationSec: 2 }));
+  const long = sanitizeNativeAd(sampleAd({ durationSec: 90 }));
+  assert.equal(short?.durationSec, NATIVE_AD_VIDEO_MIN_SEC);
+  assert.equal(long?.durationSec, NATIVE_AD_VIDEO_MAX_SEC);
+});
+
+test('native ad payload drops duplicates and junk', () => {
+  const list = sanitizeNativeAdsPayload([
+    sampleAd({ id: 'a' }),
+    sampleAd({ id: 'a' }),
+    { id: 'b' },
+    sampleAd({ id: 'c', status: 'paused' }),
+  ]);
+  assert.equal(list.length, 2);
+  assert.equal(list[0].id, 'a');
+  assert.equal(list[1].id, 'c');
+});
+
+test('native ad live window and status', () => {
+  const now = Date.parse('2026-06-01T12:00:00.000Z');
+  assert.equal(isNativeAdLive(sampleAd({ status: 'draft' }), now), false);
+  assert.equal(
+    isNativeAdLive(sampleAd({ startAt: '2026-07-01T00:00:00.000Z' }), now),
+    false
+  );
+  assert.equal(isNativeAdLive(sampleAd(), now), true);
+});
+
+test('inject native ads every N items', () => {
+  const items = [{ id: '1' }, { id: '2' }, { id: '3' }, { id: '4' }];
+  const out = injectNativeAds(items, [sampleAd()], 'general');
+  assert.equal(out.length, 6);
+  assert.equal((out[2] as { id: string }).id, 'native-ad-ad1');
+  assert.equal((out[5] as { id: string }).id, 'native-ad-ad1');
+  const slide = nativeAdToFeedItem(sampleAd());
+  assert.equal(slide.sponsored, true);
+  assert.equal(slide.kind, 'video');
+});
+
+test('validatePickerAsset native ad min duration', () => {
+  const tooShort = validatePickerAsset('nativeAdVideo', {
+    uri: 'x',
+    duration: 3000,
+    fileSize: 2 * 1024 * 1024,
+  });
+  assert.equal(tooShort.ok, false);
+  const ok = validatePickerAsset('nativeAdVideo', {
+    uri: 'x',
+    duration: 8000,
+    fileSize: 2 * 1024 * 1024,
+  });
+  assert.equal(ok.ok, true);
 });
 
 console.log('All tests passed.');

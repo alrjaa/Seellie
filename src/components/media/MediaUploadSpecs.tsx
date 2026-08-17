@@ -49,6 +49,16 @@ function MediaUploadSpecsComponent({ kind, title, compact }: Props) {
           },
         ]
       : [
+          ...(spec.minDurationSec
+            ? [
+                {
+                  icon: 'flash-outline' as const,
+                  text: t('media.specs.minDuration', {
+                    sec: spec.minDurationSec,
+                  }),
+                },
+              ]
+            : []),
           {
             icon: 'timer-outline',
             text: t('media.specs.maxDuration', {

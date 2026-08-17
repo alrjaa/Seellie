@@ -72,6 +72,12 @@ export const ADMIN_MODULES: AdminModule[] = [
     group: 'content',
   },
   {
+    key: 'ads',
+    href: adminPath('ads'),
+    icon: 'film',
+    group: 'content',
+  },
+  {
     key: 'support',
     href: adminPath('support'),
     icon: 'gift',

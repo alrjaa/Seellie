@@ -46,6 +46,8 @@ import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
 import { resolveLocationLabel } from '@/utils/location-label';
+import { useNativeAds } from '@/hooks/useNativeAds';
+import { injectNativeAds } from '@/services/native-ads';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatArabicDate } from '@/utils';
 import { ANALYST_TERMS, isActiveAnalyst, isAnalystSuspendActive } from '@/utils/analyst';
@@ -236,6 +238,7 @@ export default function UniqueScreen() {
   const { tablet } = useResponsive();
   const insets = useSafeAreaInsets();
   const saveToPrivate = useSaveToPrivateSpace();
+  const nativeAds = useNativeAds();
   const topPad = stackTopChromePad(insets.top);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -320,12 +323,12 @@ export default function UniqueScreen() {
 
   const fullScreenData = useMemo<FullScreenContent[]>(() => {
     if (!currentUser) return [];
-    return filtered.map((item) => {
+    const mapped: FullScreenContent[] = filtered.map((item) => {
       const hasVideo = !!item.videoUrl;
       const hasPhoto = !!item.posterUrl;
       const body = analysisWrittenBody(item);
       // في فلتر النصوص نعرض دائماً شريحة نصية حتى لو وُجدت وسائط
-      const kind =
+      const kind: FullScreenContent['kind'] =
         filter === 'text'
           ? 'text'
           : hasVideo
@@ -368,7 +371,9 @@ export default function UniqueScreen() {
         })(),
       };
     });
-  }, [currentUser, filter, filtered, users]);
+    if (filter === 'text') return mapped;
+    return injectNativeAds(mapped, nativeAds, 'unique') as FullScreenContent[];
+  }, [currentUser, filter, filtered, nativeAds, users]);
 
   const analystStatus = currentUser?.analyst?.status || 'none';
   const canPublish = isActiveAnalyst(currentUser);
@@ -568,6 +573,7 @@ export default function UniqueScreen() {
 
   const onFullLike = useCallback(
     (item: FullScreenContent) => {
+      if (item.sponsored) return;
       const source = filtered.find((a) => a.id === item.id);
       if (!source) return;
       toggleAnalysisLike(source.authorId, source.id);

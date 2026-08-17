@@ -34,6 +34,8 @@ import { formatArabicDate } from '@/utils';
 import { userHasRole } from '@/utils/roles';
 import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
 import { resolveLocationLabel } from '@/utils/location-label';
+import { useNativeAds } from '@/hooks/useNativeAds';
+import { injectNativeAds } from '@/services/native-ads';
 
 type FeedFilter = 'all' | 'media' | 'discussions' | 'posts';
 
@@ -215,6 +217,7 @@ export default function GeneralFeedScreen() {
   const { tablet } = useResponsive();
   const listChrome = useListChrome({ enabled: tablet });
   const saveToPrivate = useSaveToPrivateSpace();
+  const nativeAds = useNativeAds();
   const {
     users,
     competitions,
@@ -686,46 +689,51 @@ export default function GeneralFeedScreen() {
 
   const fullScreenData = useMemo<FullScreenContent[]>(
     () =>
-      filtered.map((item) => {
-        const kind =
-          item.type === 'photo' || item.type === 'video'
-            ? item.type
-            : item.type === 'analysis' && item.mediaKind
-              ? item.mediaKind
-              : 'text';
-        return {
-          id: item.id,
-          kind,
-          mediaUrl: item.mediaUrl,
-          posterUrl: item.posterUrl,
-          title: item.title,
-          text: item.text,
-          authorId: item.authorId,
-          authorName: item.authorHandle || item.authorName || '',
-          authorHandle: item.authorHandle,
-          authorAvatar: item.authorAvatar,
-          subtitle: undefined,
-          likes: item.likes,
-          liked: !!currentUser && item.likes.includes(currentUser.id),
-          locationLabel: resolveLocationLabel({
-            city: item.locationCity,
-            region: item.locationRegion,
-          }),
-          comments: (item.comments || []).map((c) => ({
-            id: c.id,
-            text: c.text,
-            authorId: c.authorId,
-            authorName: c.authorName,
-            authorAvatar: c.authorAvatar,
-            timestamp: c.timestamp,
-          })),
-        };
-      }),
-    [filtered, currentUser]
+      injectNativeAds(
+        filtered.map((item) => {
+          const kind =
+            item.type === 'photo' || item.type === 'video'
+              ? item.type
+              : item.type === 'analysis' && item.mediaKind
+                ? item.mediaKind
+                : 'text';
+          return {
+            id: item.id,
+            kind,
+            mediaUrl: item.mediaUrl,
+            posterUrl: item.posterUrl,
+            title: item.title,
+            text: item.text,
+            authorId: item.authorId,
+            authorName: item.authorHandle || item.authorName || '',
+            authorHandle: item.authorHandle,
+            authorAvatar: item.authorAvatar,
+            subtitle: undefined,
+            likes: item.likes,
+            liked: !!currentUser && item.likes.includes(currentUser.id),
+            locationLabel: resolveLocationLabel({
+              city: item.locationCity,
+              region: item.locationRegion,
+            }),
+            comments: (item.comments || []).map((c) => ({
+              id: c.id,
+              text: c.text,
+              authorId: c.authorId,
+              authorName: c.authorName,
+              authorAvatar: c.authorAvatar,
+              timestamp: c.timestamp,
+            })),
+          };
+        }),
+        nativeAds,
+        'general'
+      ) as FullScreenContent[],
+    [filtered, currentUser, nativeAds]
   );
 
   const onFullLike = useCallback(
     (item: FullScreenContent) => {
+      if (item.sponsored) return;
       const source = filtered.find((f) => f.id === item.id);
       if (source) onLike(source);
     },
@@ -734,6 +742,7 @@ export default function GeneralFeedScreen() {
 
   const onFullComment = useCallback(
     (item: FullScreenContent, text: string) => {
+      if (item.sponsored) return null;
       const source = filtered.find((f) => f.id === item.id);
       if (!source) return null;
       if (source.type === 'photo' || source.type === 'video') {
@@ -764,6 +773,7 @@ export default function GeneralFeedScreen() {
 
   const onPressAuthor = useCallback(
     (item: FullScreenContent) => {
+      if (item.sponsored) return;
       const source = filtered.find((f) => f.id === item.id);
       if (!source?.authorHandle) return;
       openHandleProfile(source.authorId, source.authorHandle);

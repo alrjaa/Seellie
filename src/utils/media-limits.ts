@@ -8,7 +8,8 @@ export type MediaUploadKind =
   | 'certificate'
   | 'video'
   | 'forumVideo'
-  | 'analysisVideo';
+  | 'analysisVideo'
+  | 'nativeAdVideo';
 
 export type ImageMediaSpec = {
   kind: 'image';
@@ -22,6 +23,7 @@ export type ImageMediaSpec = {
 export type VideoMediaSpec = {
   kind: 'video';
   maxDurationSec: number;
+  minDurationSec?: number;
   width: number;
   height: number;
   maxMb: number;
@@ -95,6 +97,15 @@ export const MEDIA_SPECS: Record<MediaUploadKind, MediaSpec> = {
     maxMb: 80,
     formats: 'MP4, MOV',
   },
+  nativeAdVideo: {
+    kind: 'video',
+    minDurationSec: 6,
+    maxDurationSec: 15,
+    width: 1080,
+    height: 1920,
+    maxMb: 25,
+    formats: 'MP4, MOV',
+  },
 };
 
 /** توافق مع حد الساحات السابق */
@@ -105,6 +116,12 @@ export const PROFILE_VIDEO_MAX_SEC = (MEDIA_SPECS.video as VideoMediaSpec)
   .maxDurationSec;
 export const ANALYSIS_VIDEO_MAX_SEC = (
   MEDIA_SPECS.analysisVideo as VideoMediaSpec
+).maxDurationSec;
+export const NATIVE_AD_VIDEO_MIN_SEC = (
+  MEDIA_SPECS.nativeAdVideo as VideoMediaSpec
+).minDurationSec!;
+export const NATIVE_AD_VIDEO_MAX_SEC = (
+  MEDIA_SPECS.nativeAdVideo as VideoMediaSpec
 ).maxDurationSec;
 
 /**
@@ -181,6 +198,13 @@ export function validatePickerAsset(
     const durationSec = videoDurationSecFromPicker(asset.duration);
     if (!isVideoWithinLimit(durationSec, spec.maxDurationSec)) {
       return { ok: false, reason: 'duration', max: spec.maxDurationSec };
+    }
+    if (
+      spec.minDurationSec != null &&
+      durationSec != null &&
+      durationSec + 0.5 < spec.minDurationSec
+    ) {
+      return { ok: false, reason: 'duration', max: spec.minDurationSec };
     }
   }
 

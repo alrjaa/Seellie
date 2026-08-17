@@ -18,6 +18,7 @@ export function useSaveToPrivateSpace() {
   return useCallback(
     async (item: FullScreenContent) => {
       if (!currentUser?.id) return;
+      if (item.sponsored) return;
 
       let authorId = item.authorId?.trim() || undefined;
       let authorName = item.authorName;

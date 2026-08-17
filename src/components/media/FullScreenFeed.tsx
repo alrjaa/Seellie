@@ -20,6 +20,7 @@ import {
   Text,
   TextInput,
   View,
+  Linking,
   type LayoutChangeEvent,
   type ListRenderItem,
   type ViewToken,
@@ -61,6 +62,7 @@ import { cairoText } from '@/theme/fonts';
 import { FAB_COLUMN_WIDTH } from '@/theme/navigation';
 import { HEADER_BELOW_STATUS_GAP } from '@/theme/navigation';
 import { WEB_INPUT_MIN_FONT_SIZE } from '@/theme/web-keyboard-viewport';
+import { NATIVE_AD_HOOK_MS } from '@/services/native-ads';
 
 export type FullScreenContentComment = {
   id: string;
@@ -92,6 +94,11 @@ export type FullScreenContent = {
   liked: boolean;
   /** تعليقات مرتبطة بالمحتوى (وسائط / تحليل …) */
   comments?: FullScreenContentComment[];
+  /** إعلان مدمج داخل الفيد — بدون إعجاب/تعليق/حفظ */
+  sponsored?: boolean;
+  hookText?: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
 };
 
 type Props = {
@@ -209,6 +216,8 @@ const Slide = memo(function Slide({
   const comments = useContentComments(item.id, item.comments);
   const bottomPad = Math.max(insets.bottom, 6) + 4;
   const commentsPanelHeight = 210 + Math.max(insets.bottom, 8);
+  const sponsored = !!item.sponsored;
+  const [showHook, setShowHook] = useState(false);
 
   const clearComposerFocus = useCallback(() => {
     if (blurTimerRef.current) {
@@ -240,6 +249,16 @@ const Slide = memo(function Slide({
       clearComposerFocus();
     }
   }, [active, item.id, clearComposerFocus]);
+
+  useEffect(() => {
+    if (!active || !sponsored || !item.hookText?.trim()) {
+      setShowHook(false);
+      return;
+    }
+    setShowHook(true);
+    const timer = setTimeout(() => setShowHook(false), NATIVE_AD_HOOK_MS);
+    return () => clearTimeout(timer);
+  }, [active, sponsored, item.hookText, item.id]);
 
   // لا تركيز تلقائي: يبقى Composer ظاهرًا قبل الضغط على الحقل
   // (المستخدم يضغط «إضافة تعليق» لفتح اللوحة)
@@ -500,8 +519,15 @@ const Slide = memo(function Slide({
   }, [paused, playableUri, loadError]);
 
   const handleLikePress = useCallback(() => {
+    if (sponsored) return;
     onLike();
-  }, [onLike]);
+  }, [onLike, sponsored]);
+
+  const openCta = useCallback(() => {
+    const url = (item.ctaUrl || '').trim();
+    if (!url.startsWith('https://')) return;
+    void Linking.openURL(url);
+  }, [item.ctaUrl]);
 
   const submitComment = useCallback(() => {
     const trimmed = draft.trim().slice(0, 120);
@@ -531,7 +557,7 @@ const Slide = memo(function Slide({
       return;
     }
     const now = Date.now();
-    if (onDoubleTap && now - lastTapRef.current < 300) {
+    if (!sponsored && onDoubleTap && now - lastTapRef.current < 300) {
       lastTapRef.current = 0;
       onDoubleTap();
       return;
@@ -545,6 +571,7 @@ const Slide = memo(function Slide({
     dismissCommentsPanel,
     item.kind,
     onDoubleTap,
+    sponsored,
     toggleVideoPlayback,
   ]);
 
@@ -698,6 +725,44 @@ const Slide = memo(function Slide({
           />
         ) : null}
 
+        {sponsored ? (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.adBadge,
+              { top: Math.max(insets.top, 10) + 8 },
+            ]}
+          >
+            <Text style={[styles.adBadgeText, cairoText('semiBold')]}>
+              {t('ui.sponsoredBadge')}
+            </Text>
+          </View>
+        ) : null}
+
+        {sponsored && showHook && item.hookText?.trim() ? (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.hookBanner,
+              { top: Math.max(insets.top, 10) + 40 },
+            ]}
+          >
+            <Text
+              style={[
+                styles.hookText,
+                cairoText('extraBold'),
+                {
+                  textAlign: isRTL ? 'right' : 'left',
+                  writingDirection: isRTL ? 'rtl' : 'ltr',
+                },
+              ]}
+              numberOfLines={2}
+            >
+              {item.hookText.trim()}
+            </Text>
+          </View>
+        ) : null}
+
         <View
           pointerEvents="box-none"
           style={[
@@ -729,6 +794,30 @@ const Slide = memo(function Slide({
             </Text>
           ) : null}
           <View style={styles.actionsColumn}>
+            {sponsored ? (
+              item.ctaUrl ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    item.ctaLabel?.trim() || t('ui.adCtaDefault')
+                  }
+                  onPress={openCta}
+                  hitSlop={8}
+                  style={({ pressed }) => [
+                    styles.adCta,
+                    { opacity: pressed ? 0.75 : 1 },
+                  ]}
+                >
+                  <Text
+                    style={[styles.adCtaText, cairoText('semiBold')]}
+                    numberOfLines={2}
+                  >
+                    {item.ctaLabel?.trim() || t('ui.adCtaDefault')}
+                  </Text>
+                </Pressable>
+              ) : null
+            ) : (
+              <>
             <LikeButton
               count={item.likes.length}
               liked={item.liked}
@@ -754,6 +843,8 @@ const Slide = memo(function Slide({
                 {comments.length > 0 ? ` ${comments.length}` : ''}
               </Text>
             </Pressable>
+              </>
+            )}
           </View>
           {/* موقع المدينة/المنطقة — نفس سطر وحجم خط زر التعليقات (مرجع اللقطات) */}
           {item.locationLabel?.trim() ? (
@@ -780,7 +871,7 @@ const Slide = memo(function Slide({
       </View>
 
       {/* تظهر فقط بعد النقر على «تعليقات»: Composer ظاهر ثم قائمة التعليقات */}
-      {commentsExpanded ? (
+      {commentsExpanded && !sponsored ? (
         <View
           style={[
             styles.commentsExpandPanel,
@@ -936,7 +1027,7 @@ function FullScreenFeedComponent({
     if (!focused) return;
     const active =
       data.find((item) => item.id === activeId) || data[0] || null;
-    if (!active?.authorId) return;
+    if (!active?.authorId || active.sponsored) return;
     setContentAuthorFocus({
       id: String(active.authorId),
       name: active.authorName || active.authorHandle || String(active.authorId),
@@ -1336,5 +1427,53 @@ const styles = StyleSheet.create({
   empty: {
     justifyContent: 'center',
     paddingHorizontal: 24,
+  },
+  adBadge: {
+    position: 'absolute',
+    left: 14,
+    zIndex: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  adBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    letterSpacing: 0.3,
+  },
+  hookBanner: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    zIndex: 8,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  hookText: {
+    color: '#fff',
+    fontSize: 20,
+    lineHeight: 26,
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  adCta: {
+    minHeight: 44,
+    minWidth: 72,
+    maxWidth: 88,
+    borderRadius: 12,
+    backgroundColor: 'rgba(37,244,238,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
+  adCtaText: {
+    color: '#0d1a26',
+    fontSize: 11,
+    textAlign: 'center',
   },
 });

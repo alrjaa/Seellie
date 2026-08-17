@@ -7,6 +7,7 @@ export type AppBlobKey =
   | 'support_levels'
   | 'gift_transactions'
   | 'app_branding'
+  | 'native_ads'
   /** F09-P1-08: canonical key (matches set_profile_analyst SQL) */
   | 'settings'
   /** Legacy client key — read fallback only; do not write */

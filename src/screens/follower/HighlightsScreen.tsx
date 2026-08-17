@@ -8,6 +8,8 @@ import {
 } from '@/components/media/FullScreenFeed';
 import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
 import { resolveLocationLabel } from '@/utils/location-label';
+import { useNativeAds } from '@/hooks/useNativeAds';
+import { injectNativeAds } from '@/services/native-ads';
 
 type MediaItem = {
   id: string;
@@ -37,6 +39,7 @@ export default function HighlightsScreen() {
     useTournament();
   const { t } = useTranslation();
   const saveToPrivate = useSaveToPrivateSpace();
+  const nativeAds = useNativeAds();
 
   const media = useMemo(() => {
     const items: MediaItem[] = [];
@@ -180,47 +183,52 @@ export default function HighlightsScreen() {
 
   const fullScreenData = useMemo<FullScreenContent[]>(
     () =>
-      media.map((item) => ({
-        id: `${item.source}-${item.type}-${item.id}`,
-        kind: item.type,
-        mediaUrl: item.url,
-        authorId: item.organizerId,
-        authorName: item.organizerName || item.matchLabel,
-        authorHandle: item.organizerHandle,
-        authorAvatar: item.organizerAvatar,
-        title: item.matchLabel,
-        locationLabel: resolveLocationLabel({
-          city: item.locationCity,
-          region: item.locationRegion,
-        }),
-        subtitle:
-          item.source === 'competition'
-            ? item.type === 'photo'
-              ? t('screens.competitionClipPhoto')
-              : t('screens.competitionClipVideo')
-            : item.source === 'player'
+      injectNativeAds(
+        media.map((item) => ({
+          id: `${item.source}-${item.type}-${item.id}`,
+          kind: item.type,
+          mediaUrl: item.url,
+          authorId: item.organizerId,
+          authorName: item.organizerName || item.matchLabel,
+          authorHandle: item.organizerHandle,
+          authorAvatar: item.organizerAvatar,
+          title: item.matchLabel,
+          locationLabel: resolveLocationLabel({
+            city: item.locationCity,
+            region: item.locationRegion,
+          }),
+          subtitle:
+            item.source === 'competition'
               ? item.type === 'photo'
-                ? t('screens.playerClipPhoto')
-                : t('screens.playerClipVideo')
-              : item.type === 'photo'
-                ? t('screens.matchClipPhoto')
-                : t('screens.matchClipVideo'),
-        likes: item.likes,
-        liked: !!currentUser && item.likes.includes(currentUser.id),
-        comments: (item.comments || []).map((c) => ({
-          id: c.id,
-          text: c.text,
-          authorId: c.authorId,
-          authorName: c.authorName,
-          authorAvatar: c.authorAvatar,
-          timestamp: c.timestamp,
+                ? t('screens.competitionClipPhoto')
+                : t('screens.competitionClipVideo')
+              : item.source === 'player'
+                ? item.type === 'photo'
+                  ? t('screens.playerClipPhoto')
+                  : t('screens.playerClipVideo')
+                : item.type === 'photo'
+                  ? t('screens.matchClipPhoto')
+                  : t('screens.matchClipVideo'),
+          likes: item.likes,
+          liked: !!currentUser && item.likes.includes(currentUser.id),
+          comments: (item.comments || []).map((c) => ({
+            id: c.id,
+            text: c.text,
+            authorId: c.authorId,
+            authorName: c.authorName,
+            authorAvatar: c.authorAvatar,
+            timestamp: c.timestamp,
+          })),
         })),
-      })),
-    [media, currentUser, t]
+        nativeAds,
+        'highlights'
+      ) as FullScreenContent[],
+    [media, currentUser, nativeAds, t]
   );
 
   const onFullLike = useCallback(
     (item: FullScreenContent) => {
+      if (item.sponsored) return;
       const source = media.find(
         (m) => `${m.source}-${m.type}-${m.id}` === item.id
       );
@@ -232,6 +240,7 @@ export default function HighlightsScreen() {
 
   const onFullComment = useCallback(
     (item: FullScreenContent, text: string) => {
+      if (item.sponsored) return null;
       const source = media.find(
         (m) => `${m.source}-${m.type}-${m.id}` === item.id
       );
