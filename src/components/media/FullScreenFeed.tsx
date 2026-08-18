@@ -68,7 +68,6 @@ import type { NativeAdPlacement } from '@/services/native-ads';
 import { queueAdEvent } from '@/services/ad-events';
 import {
   attachSoundToPlayingVideo,
-  isWebMediaSoundUnlocked,
   registerActiveWebVideo,
   startVisibleWebVideo,
   subscribeWebMediaSound,
@@ -221,7 +220,6 @@ const Slide = memo(function Slide({
   const videoRef = useRef<Video>(null);
   const htmlVideoRef = useRef<HTMLVideoElement | null>(null);
   const userPausedRef = useRef(false);
-  const startedNodeRef = useRef<HTMLVideoElement | null>(null);
   /** F12-P2-05 — ignore stale play()/setState after fast swipe away */
   const playGenRef = useRef(0);
   const inputRef = useRef<TextInput>(null);
@@ -297,7 +295,6 @@ const Slide = memo(function Slide({
     trackedVideoStartRef.current = false;
     trackedVideoCompleteRef.current = false;
     userPausedRef.current = false;
-    startedNodeRef.current = null;
   }, [item.id]);
 
   useEffect(() => {
@@ -453,122 +450,80 @@ const Slide = memo(function Slide({
   useEffect(() => {
     setLoadError(false);
     setFrameReady(false);
-    startedNodeRef.current = null;
-    if (!active) {
-      playGenRef.current += 1;
-      setPaused(true);
-      void videoRef.current?.pauseAsync().catch(() => undefined);
-      const el = htmlVideoRef.current;
-      if (el) {
-        el.pause();
-        el.currentTime = 0;
-      }
+    setPaused(true);
+    void videoRef.current?.pauseAsync().catch(() => undefined);
+    const el = htmlVideoRef.current;
+    if (el) {
+      el.pause();
     }
-  }, [item.id, item.mediaUrl, active]);
+  }, [item.id, item.mediaUrl]);
 
   useEffect(() => {
     if (!active) {
       playGenRef.current += 1;
       setPaused(true);
+      userPausedRef.current = false;
       void videoRef.current?.pauseAsync().catch(() => undefined);
       const el = htmlVideoRef.current;
-      if (el) {
-        el.pause();
-        try {
-          el.removeAttribute('src');
-          el.load();
-        } catch {
-          // ignore
-        }
-      }
-      // FIX-04 P1 / F12-P2-05: unload on native (release AVPlayer / ExoPlayer)
+      if (el) el.pause();
       void videoRef.current?.unloadAsync().catch(() => undefined);
       return;
     }
-    // ظاهر على الشاشة → شغّل فوراً
     setPaused(false);
   }, [active]);
 
-  // Unmount: release any remaining player / web element
   useEffect(() => {
     return () => {
       playGenRef.current += 1;
       void videoRef.current?.pauseAsync().catch(() => undefined);
       void videoRef.current?.unloadAsync().catch(() => undefined);
-      const el = htmlVideoRef.current;
-      if (el) {
-        try {
-          el.pause();
-          el.removeAttribute('src');
-          el.load();
-        } catch {
-          // ignore
-        }
-      }
+      htmlVideoRef.current?.pause();
       htmlVideoRef.current = null;
     };
   }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    const attach = () => {
+    return subscribeWebMediaSound(() => {
       const el = htmlVideoRef.current;
-      if (!el || userPausedRef.current) return;
+      if (!el || userPausedRef.current || el.paused) return;
       attachSoundToPlayingVideo(el);
-    };
-    if (isWebMediaSoundUnlocked()) attach();
-    return subscribeWebMediaSound(attach);
+    });
   }, []);
 
+  // ويب: تشغيل صامت فور الظهور — نفس مسار d8b6ce6. الصوت يُلحق بعد أن يعمل.
   useEffect(() => {
-    if (Platform.OS !== 'web' || !active) {
-      unregisterActiveWebVideo(htmlVideoRef.current);
-      return;
-    }
-    registerActiveWebVideo(htmlVideoRef.current, () => userPausedRef.current);
-    return () => unregisterActiveWebVideo(htmlVideoRef.current);
-  }, [active, item.id]);
-
-  const startWebVideoOnAppear = useCallback(
-    (el: HTMLVideoElement | null) => {
-      if (!el || !item.mediaUrl || loadError || userPausedRef.current) return;
-      const gen = playGenRef.current;
-      if (el.getAttribute('src') !== item.mediaUrl) {
-        el.src = item.mediaUrl;
-      }
-      el.playsInline = true;
-      el.setAttribute('playsinline', 'true');
-      el.setAttribute('webkit-playsinline', 'true');
-      el.loop = true;
-      el.muted = true;
-      el.defaultMuted = true;
-      registerActiveWebVideo(el, () => userPausedRef.current);
-      void startVisibleWebVideo(el)
-        .then(() => {
-          if (playGenRef.current !== gen) return;
-          if (isWebMediaSoundUnlocked()) {
-            attachSoundToPlayingVideo(el);
-          }
-          setFrameReady(true);
-          setPaused(false);
-          trackVideoStart();
-        })
-        .catch(() => {
-          if (playGenRef.current !== gen) return;
-          setFrameReady(true);
-        });
-    },
-    [item.mediaUrl, loadError, trackVideoStart]
-  );
-
-  // ويب: تشغيل فور الظهور — بدون انتظار نقرة
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !active || !playableUri || loadError) {
+    if (Platform.OS !== 'web' || !active || !playableUri || loadError || paused) {
       return;
     }
     if (userPausedRef.current) return;
-    startWebVideoOnAppear(htmlVideoRef.current);
-  }, [active, playableUri, loadError, item.mediaUrl, startWebVideoOnAppear]);
+    const el = htmlVideoRef.current;
+    if (!el || !item.mediaUrl) return;
+    if (el.getAttribute('src') !== item.mediaUrl) {
+      el.src = item.mediaUrl;
+    }
+    el.muted = true;
+    el.defaultMuted = true;
+    el.playsInline = true;
+    el.loop = true;
+    registerActiveWebVideo(el, () => userPausedRef.current);
+    const run = el.play();
+    if (run && typeof run.then === 'function') {
+      void run
+        .then(() => {
+          setFrameReady(true);
+          setPaused(false);
+          attachSoundToPlayingVideo(el);
+          trackVideoStart();
+        })
+        .catch(() => {
+          setFrameReady(true);
+        });
+    } else {
+      setFrameReady(true);
+    }
+    return () => unregisterActiveWebVideo(el);
+  }, [active, playableUri, loadError, paused, item.mediaUrl, trackVideoStart]);
 
   // أصلي: تشغيل تلقائي عند الظهور
   useEffect(() => {
@@ -601,7 +556,7 @@ const Slide = memo(function Slide({
         if (paused || el.paused) {
           userPausedRef.current = false;
           await startVisibleWebVideo(el);
-          if (isWebMediaSoundUnlocked()) attachSoundToPlayingVideo(el);
+          attachSoundToPlayingVideo(el);
           setPaused(false);
         } else {
           userPausedRef.current = true;
@@ -729,14 +684,10 @@ const Slide = memo(function Slide({
               ? createElement('video', {
                   ref: (node: HTMLVideoElement | null) => {
                     htmlVideoRef.current = node;
-                    if (!node) {
-                      startedNodeRef.current = null;
+                    if (node) {
+                      registerActiveWebVideo(node, () => userPausedRef.current);
+                    } else {
                       unregisterActiveWebVideo(node);
-                      return;
-                    }
-                    if (active && startedNodeRef.current !== node) {
-                      startedNodeRef.current = node;
-                      startWebVideoOnAppear(node);
                     }
                   },
                   src: item.mediaUrl,
@@ -744,7 +695,7 @@ const Slide = memo(function Slide({
                   defaultMuted: true,
                   autoPlay: true,
                   playsInline: true,
-                  preload: 'metadata',
+                  preload: 'auto',
                   loop: true,
                   controls: false,
                   poster: item.posterUrl || undefined,
@@ -1457,23 +1408,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  soundHint: {
-    position: 'absolute',
-    bottom: 96,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  soundHintText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
   },
   playWrap: {
     ...StyleSheet.absoluteFillObject,

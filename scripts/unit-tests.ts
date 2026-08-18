@@ -52,7 +52,6 @@ import { createKeyedChannelHub } from '../src/services/app-blob-realtime-hub';
 import {
   attachSoundToPlayingVideo,
   nextWebSoundSession,
-  shouldResumeVideoOnGesture,
   startVisibleWebVideo,
 } from '../src/services/web-media-sound';
 
@@ -391,8 +390,6 @@ test('web media sound stays unlocked across feed items', () => {
   assert.equal(nextWebSoundSession(false, 'item_change'), false);
   assert.equal(nextWebSoundSession(true, 'item_change'), true);
   assert.equal(nextWebSoundSession(false, 'unlock'), true);
-  assert.equal(shouldResumeVideoOnGesture({ userPaused: false }), true);
-  assert.equal(shouldResumeVideoOnGesture({ userPaused: true }), false);
 });
 
 test('visible video always starts muted so autoplay is not blocked', async () => {

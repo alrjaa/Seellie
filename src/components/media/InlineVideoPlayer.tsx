@@ -128,7 +128,7 @@ function InlineVideoPlayerComponent({
       node.defaultMuted = true;
       registerActiveWebVideo(node);
       void startVisibleWebVideo(node).then(() => {
-        if (isWebMediaSoundUnlocked()) attachSoundToPlayingVideo(node);
+        attachSoundToPlayingVideo(node);
       });
 
       if (!autoPlayMuted || typeof IntersectionObserver === 'undefined') {
@@ -147,7 +147,7 @@ function InlineVideoPlayerComponent({
           if (visible && focused && !fullscreen) {
             registerActiveWebVideo(el);
             void startVisibleWebVideo(el).then(() => {
-              if (isWebMediaSoundUnlocked()) attachSoundToPlayingVideo(el);
+              attachSoundToPlayingVideo(el);
             });
           } else {
             el.pause();
@@ -210,7 +210,7 @@ function InlineVideoPlayerComponent({
       el.muted = true;
       if (shouldAutoPlay) {
         void startVisibleWebVideo(el).then(() => {
-          if (isWebMediaSoundUnlocked()) attachSoundToPlayingVideo(el);
+          attachSoundToPlayingVideo(el);
         });
       } else el.pause();
       return;

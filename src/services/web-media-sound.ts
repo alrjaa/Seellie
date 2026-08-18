@@ -1,11 +1,7 @@
 /**
- * تشغيل فيديو الويب عند الظهور، ثم إلحاق الصوت دون إيقاف الصورة.
- *
- * عقد ثابت:
- * 1) الظهور = play صامت دائماً (autoplay مسموح).
- * 2) React لا يضع muted=false على عنصر <video> — ذلك يلغي autoplay في الجوال.
- * 3) الصوت يُضاف على نفس العنصر بعد أن يكون يعمل. إن أوقف إلغاء الكتم التشغيل، نعيد الكتم فوراً.
- * 4) أول تفاعل مع الصفحة يفتح الصوت للجلسة دون إعادة إنشاء المشغّل.
+ * فيديو الويب في الفيد:
+ * الظهور = تشغيل صامت (autoplay).
+ * الصوت = إلغاء كتم عنصر يعمل أصلاً — بدون play() غير صامت وبدون إعادة إنشاء العنصر.
  */
 
 export type WebSoundSessionEvent = 'unlock' | 'item_change' | 'lock';
@@ -19,12 +15,6 @@ export function nextWebSoundSession(
   return unlocked;
 }
 
-export function shouldResumeVideoOnGesture(opts: {
-  userPaused: boolean;
-}): boolean {
-  return !opts.userPaused;
-}
-
 export type PlayableVideo = {
   muted: boolean;
   defaultMuted: boolean;
@@ -33,7 +23,6 @@ export type PlayableVideo = {
   play: () => Promise<void> | void;
 };
 
-/** التشغيل عند الظهور: صامت فقط. لا تُمرَّر preferSound هنا. */
 export async function startVisibleWebVideo(
   el: PlayableVideo
 ): Promise<'playing'> {
@@ -44,10 +33,6 @@ export async function startVisibleWebVideo(
   return 'playing';
 }
 
-/**
- * إلغاء الكتم لعنصر يعمل الآن. إن توقف الفيديو نرجع للكتم ونشغّل صامتاً.
- * لا تستدعِ play() غير صامت كخطوة أولى.
- */
 export function attachSoundToPlayingVideo(
   el: PlayableVideo
 ): 'unmuted' | 'muted' {
@@ -107,26 +92,13 @@ function notifyUnlocked() {
   for (const listener of listeners) listener();
 }
 
+/** إيماءة الصفحة: صوت فقط إن كان الفيديو يعمل. لا تبدأ التشغيل من هنا. */
 function applyUnlockFromUserGesture() {
   notifyUnlocked();
   const current = active;
   if (!current || current.userPaused()) return;
-  const { el } = current;
-  el.volume = 1;
-  if (!el.paused) {
-    attachSoundToPlayingVideo(el);
-    return;
-  }
-  el.muted = false;
-  el.defaultMuted = false;
-  const run = el.play();
-  if (run && typeof run.catch === 'function') {
-    void run.catch(() => {
-      el.muted = true;
-      el.defaultMuted = true;
-      void el.play();
-    });
-  }
+  if (current.el.paused) return;
+  attachSoundToPlayingVideo(current.el);
 }
 
 export function markWebMediaSoundUnlocked(): void {
