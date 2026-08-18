@@ -85,7 +85,7 @@ export default function AdsHomeScreen() {
     if (!contactName.trim() || !businessName.trim()) return;
     setSavingProfile(true);
     try {
-      const saved = await ensureAdvertiserAccount({
+      const { data: saved, error } = await ensureAdvertiserAccount({
         contactName: contactName.trim(),
         businessName: businessName.trim(),
         country: country.trim(),
@@ -96,7 +96,7 @@ export default function AdsHomeScreen() {
         toast({
           variant: 'destructive',
           title: t('adsPortal.registerFailed'),
-          description: t('adsPortal.registerFailedDesc'),
+          description: t(`adsPortal.saveError.${error || 'unknown'}`),
         });
         return;
       }
@@ -174,7 +174,7 @@ export default function AdsHomeScreen() {
       </Muted>
       <Muted>{t('adsPortal.studioIntro')}</Muted>
       {Platform.OS === 'web' ? (
-        <Muted>{t('adsPortal.buildStamp', { version: '1.0.93' })}</Muted>
+        <Muted>{t('adsPortal.buildStamp', { version: '1.0.94' })}</Muted>
       ) : null}
 
       <View style={styles.hero}>

@@ -107,6 +107,7 @@ export type RpcResult<T> = { data: T | null; error?: string };
 
 function mapAdvertiserError(message: string): string {
   const m = message.toLowerCase();
+  if (m.includes('business and contact')) return 'advertiser_name';
   if (m.includes('could not find the function') || m.includes('does not exist')) {
     return 'schema_missing';
   }
@@ -139,8 +140,8 @@ async function rpc<T>(
 
 export async function ensureAdvertiserAccount(
   profile: AdvertiserProfileInput
-): Promise<AdvertiserAccount | null> {
-  const { data } = await rpc<AdvertiserAccount>('ensure_advertiser_account', {
+): Promise<RpcResult<AdvertiserAccount>> {
+  return rpc<AdvertiserAccount>('ensure_advertiser_account', {
     p_profile: {
       businessName: profile.businessName,
       contactName: profile.contactName,
@@ -149,7 +150,6 @@ export async function ensureAdvertiserAccount(
       city: profile.city || '',
     },
   });
-  return data;
 }
 
 export async function fetchMyAdvertiserAccount(): Promise<AdvertiserAccount | null> {

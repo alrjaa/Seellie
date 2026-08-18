@@ -7,6 +7,7 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { useResponsive } from '@/hooks/useResponsive';
 import { Screen } from '@/components/layout/Screen';
+import { LoadingState } from '@/components/feedback/LoadingState';
 import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
 import { AdPhonePreview } from '@/components/ads/AdPhonePreview';
 import { Button, Card, Chip, Input, Muted, Subtitle, Title } from '@/components/ui';
@@ -15,7 +16,9 @@ import { isSupabaseConfigured } from '@/services/supabase';
 import { isUuid } from '@/services/supabase-messages';
 import {
   listCampaignAds,
+  listMyCampaigns,
   saveAdvertisement,
+  saveCampaign,
   type DbAdvertisement,
 } from '@/services/advertiser-platform';
 import { loadAdStudioDraft, saveAdStudioDraft } from '@/services/ad-drafts';
@@ -160,7 +163,47 @@ export default function AdsAdEditorScreen() {
     medium: 'in_feed',
   });
   const [draftHint, setDraftHint] = useState(false);
+  const [bootstrapping, setBootstrapping] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (campaignId || !isNew) return;
+    let cancelled = false;
+    void (async () => {
+      setBootstrapping(true);
+      try {
+        const camps = await listMyCampaigns();
+        let next = camps[0];
+        if (!next) {
+          const created = await saveCampaign({
+            name: t('adsPortal.defaultCampaignName'),
+            status: 'draft',
+          });
+          if (!created.data) {
+            if (!cancelled) {
+              toast({
+                variant: 'destructive',
+                title: t('adsPortal.saveFailed'),
+                description: t(
+                  `adsPortal.saveError.${created.error || 'unknown'}`
+                ),
+              });
+            }
+            return;
+          }
+          next = created.data;
+        }
+        if (!cancelled) {
+          router.replace(`/ads/ad/new?campaignId=${next.id}` as any);
+        }
+      } finally {
+        if (!cancelled) setBootstrapping(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId, isNew, router, t, toast]);
 
   useEffect(() => {
     if (!currentUser?.name) return;
@@ -657,6 +700,11 @@ export default function AdsAdEditorScreen() {
         loading={pickingVideo}
         disabled={pickingVideo}
       />
+      {/^https:\/\//i.test(videoUrl) ? (
+        <Muted>{t('adsPortal.videoAttached')}</Muted>
+      ) : previewUri ? (
+        <Muted>{t('adsPortal.saveError.https_video')}</Muted>
+      ) : null}
 
       {previewUri ? (
         <>
@@ -854,11 +902,19 @@ export default function AdsAdEditorScreen() {
       <Button
         label={t('common.save')}
         onPress={() => void save()}
-        disabled={saving || processing}
+        disabled={saving || processing || bootstrapping}
         loading={saving}
       />
     </View>
   );
+
+  if (bootstrapping && !campaignId) {
+    return (
+      <Screen>
+        <LoadingState label={t('common.loading')} />
+      </Screen>
+    );
+  }
 
   return (
     <Screen scroll keyboard density="wide" contentStyle={styles.content}>

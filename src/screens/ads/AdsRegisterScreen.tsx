@@ -34,7 +34,7 @@ export default function AdsRegisterScreen() {
         { portal: 'ads' }
       );
       if (!ok) return;
-      const account = await ensureAdvertiserAccount({
+      const { data: account, error } = await ensureAdvertiserAccount({
         contactName: contactName.trim(),
         businessName: businessName.trim(),
         country: country.trim(),
@@ -45,7 +45,7 @@ export default function AdsRegisterScreen() {
         toast({
           variant: 'destructive',
           title: t('adsPortal.registerFailed'),
-          description: t('adsPortal.registerFailedDesc'),
+          description: t(`adsPortal.saveError.${error || 'unknown'}`),
         });
         return;
       }
