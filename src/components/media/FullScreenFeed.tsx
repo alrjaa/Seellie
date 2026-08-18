@@ -1133,7 +1133,7 @@ function FullScreenFeedComponent({
   const [height, setHeight] = useState(0);
   const heightRef = useRef(0);
   const freezeFeedHeightRef = useRef(false);
-  const [activeId, setActiveId] = useState<string | null>(data[0]?.id ?? null);
+  const [activeIndex, setActiveIndex] = useState(0);
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   const overlayOpacity = useRef(new Animated.Value(1)).current;
   const overlayTranslate = useRef(new Animated.Value(0)).current;
@@ -1162,8 +1162,7 @@ function FullScreenFeedComponent({
 
   useEffect(() => {
     if (!focused) return;
-    const active =
-      data.find((item) => item.id === activeId) || data[0] || null;
+    const active = data[activeIndex] || data[0] || null;
     if (!active?.authorId || active.sponsored) return;
     setContentAuthorFocus({
       id: String(active.authorId),
@@ -1171,7 +1170,7 @@ function FullScreenFeedComponent({
       handle: active.authorHandle,
       avatar: active.authorAvatar,
     });
-  }, [focused, activeId, data]);
+  }, [focused, activeIndex, data]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -1229,9 +1228,10 @@ function FullScreenFeedComponent({
   }, [overlayOpacity, overlayTranslate, visible]);
 
   useEffect(() => {
-    setActiveId((current) => {
-      if (current && data.some((item) => item.id === current)) return current;
-      return data[0]?.id ?? null;
+    setActiveIndex((current) => {
+      if (data.length === 0) return 0;
+      if (current >= 0 && current < data.length) return current;
+      return 0;
     });
   }, [data]);
 
@@ -1257,9 +1257,11 @@ function FullScreenFeedComponent({
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       const first = viewableItems.find((v) => v.isViewable && v.item);
+      if (first?.index != null && first.index >= 0) {
+        setActiveIndex(first.index);
+      }
       if (first?.item && typeof first.item === 'object' && 'id' in first.item) {
         const item = first.item as FullScreenContent;
-        setActiveId(item.id);
         // فوراً: صاحب المحتوى الظاهر في الأزرار العائمة
         if (item.authorId) {
           setContentAuthorFocus({
@@ -1274,11 +1276,11 @@ function FullScreenFeedComponent({
   ).current;
 
   const renderItem = useCallback<ListRenderItem<FullScreenContent>>(
-    ({ item }) => (
+    ({ item, index }) => (
       <Slide
         item={item}
         height={height}
-        active={focused && appActive && item.id === activeId}
+        active={focused && appActive && index === activeIndex}
         onLike={() => onLike(item)}
         onComment={onComment}
         onDoubleTap={onDoubleTap ? () => onDoubleTap(item) : undefined}
@@ -1288,7 +1290,7 @@ function FullScreenFeedComponent({
       />
     ),
     [
-      activeId,
+      activeIndex,
       appActive,
       focused,
       height,
@@ -1327,7 +1329,7 @@ function FullScreenFeedComponent({
           data={data}
           keyExtractor={(item, index) => `${item.id}__${index}`}
           renderItem={renderItem}
-          extraData={`${activeId}:${appActive}:${focused}`}
+          extraData={`${activeIndex}:${appActive}:${focused}:${data.length}`}
           pagingEnabled
           disableIntervalMomentum
           decelerationRate="fast"
@@ -1566,7 +1568,6 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
     zIndex: 4,
   },
   empty: {

@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   Linking,
@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
@@ -281,19 +281,12 @@ export default function GeneralFeedScreen() {
     toggleMediaLike,
     addMediaComment,
     addComment,
-    syncCloudUsers,
   } = useTournament();
 
   const [filter, setFilter] = useState<FeedFilter>('all');
   const [discussionText, setDiscussionText] = useState('');
   /** حقل «شارك رأيك» لا يُركَّب في الشاشة إلا داخل النافذة بعد زر نقاشات سريعة */
   const [discussionModalOpen, setDiscussionModalOpen] = useState(false);
-
-  useFocusEffect(
-    useCallback(() => {
-      void syncCloudUsers();
-    }, [syncCloudUsers])
-  );
 
   const closeDiscussionModal = useCallback(() => {
     setDiscussionModalOpen(false);
@@ -1087,6 +1080,7 @@ export default function GeneralFeedScreen() {
     return (
       <Screen bleed edges={['left', 'right']}>
         <FullScreenFeed
+          key={filter}
           data={fullScreenData}
           onLike={onFullLike}
           onComment={onFullComment}
