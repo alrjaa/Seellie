@@ -1,8 +1,7 @@
-import React, { memo, useEffect, useRef } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '@/providers/ThemeProvider';
 import { cairoText } from '@/theme/fonts';
 
 type Props = {
@@ -17,6 +16,7 @@ type Props = {
   trimEnd?: number;
   showSafeZone?: boolean;
   isRTL?: boolean;
+  tapToUnmuteLabel?: string;
 };
 
 function AdPhonePreviewComponent({
@@ -26,15 +26,47 @@ function AdPhonePreviewComponent({
   hookText,
   title,
   ctaLabel,
-  muted = true,
+  muted = false,
   trimStart = 0,
   trimEnd,
   showSafeZone = true,
   isRTL = true,
+  tapToUnmuteLabel = 'اضغط لتشغيل الصوت',
 }: Props) {
-  const theme = useAppTheme();
   const videoRef = useRef<Video>(null);
   const htmlRef = useRef<HTMLVideoElement | null>(null);
+  const [blocked, setBlocked] = useState(false);
+
+  const playWithSound = useCallback(async () => {
+    const el = htmlRef.current;
+    if (Platform.OS === 'web' && el) {
+      el.muted = !!muted;
+      el.volume = 1;
+      el.defaultMuted = !!muted;
+      try {
+        await el.play();
+        setBlocked(false);
+      } catch {
+        if (!muted) setBlocked(true);
+      }
+      return;
+    }
+    const native = videoRef.current;
+    if (!native) return;
+    try {
+      await native.setIsMutedAsync(!!muted);
+      await native.setVolumeAsync(1);
+      await native.playAsync();
+      setBlocked(false);
+    } catch {
+      if (!muted) setBlocked(true);
+    }
+  }, [muted]);
+
+  useEffect(() => {
+    if (!videoUri) return;
+    void playWithSound();
+  }, [playWithSound, videoUri]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !htmlRef.current) return;
@@ -52,12 +84,22 @@ function AdPhonePreviewComponent({
     return () => el.removeEventListener('timeupdate', onTime);
   }, [trimEnd, trimStart, videoUri]);
 
+  const onPreviewPress = () => {
+    const el = htmlRef.current;
+    if (el) {
+      el.muted = false;
+      el.volume = 1;
+    }
+    setBlocked(false);
+    void playWithSound();
+  };
+
   return (
     <View
       style={[
         styles.device,
         {
-          borderColor: theme.colors.border,
+          borderColor: 'rgba(255,255,255,0.18)',
           backgroundColor: '#000',
         },
       ]}
@@ -71,10 +113,12 @@ function AdPhonePreviewComponent({
               ref: htmlRef,
               src: videoUri,
               poster: posterUri || undefined,
-              muted,
+              muted: !!muted,
               autoPlay: true,
               loop: true,
               playsInline: true,
+              controls: false,
+              volume: 1,
               style: {
                 width: '100%',
                 height: '100%',
@@ -91,7 +135,8 @@ function AdPhonePreviewComponent({
               resizeMode={ResizeMode.COVER}
               shouldPlay
               isLooping
-              isMuted={muted}
+              isMuted={!!muted}
+              volume={1}
             />
           )
         ) : (
@@ -100,18 +145,45 @@ function AdPhonePreviewComponent({
           </View>
         )}
 
+        {videoUri ? (
+          <Pressable
+            onPress={onPreviewPress}
+            style={styles.hit}
+            accessibilityRole="button"
+            accessibilityLabel={tapToUnmuteLabel}
+          >
+            {blocked && !muted ? (
+              <View style={styles.soundPrompt}>
+                <Ionicons name="volume-high" size={22} color="#0d1a26" />
+                <Text style={[styles.soundPromptText, cairoText('semiBold')]}>
+                  {tapToUnmuteLabel}
+                </Text>
+              </View>
+            ) : null}
+          </Pressable>
+        ) : null}
+
         {showSafeZone ? (
           <>
-            <View style={[styles.safeTop, { alignItems: isRTL ? 'flex-start' : 'flex-end' }]}>
+            <View
+              pointerEvents="none"
+              style={[styles.safeTop, { alignItems: isRTL ? 'flex-start' : 'flex-end' }]}
+            >
               <View style={styles.closeBtn}>
                 <Text style={styles.closeX}>×</Text>
               </View>
             </View>
-            <View style={[styles.sponsored, { left: isRTL ? undefined : 10, right: isRTL ? 10 : undefined }]}>
+            <View
+              pointerEvents="none"
+              style={[
+                styles.sponsored,
+                { left: isRTL ? undefined : 10, right: isRTL ? 10 : undefined },
+              ]}
+            >
               <Text style={[styles.sponsoredText, cairoText('semiBold')]}>إعلان</Text>
             </View>
             {hookText?.trim() ? (
-              <View style={[styles.hook, { left: 10, right: 72 }]}>
+              <View pointerEvents="none" style={[styles.hook, { left: 10, right: 72 }]}>
                 <Text
                   style={[
                     styles.hookText,
@@ -124,7 +196,7 @@ function AdPhonePreviewComponent({
                 </Text>
               </View>
             ) : null}
-            <View style={styles.rightRail}>
+            <View pointerEvents="none" style={styles.rightRail}>
               <View style={styles.railDot} />
               <View style={styles.railDot} />
               <View style={styles.ctaChip}>
@@ -133,7 +205,7 @@ function AdPhonePreviewComponent({
                 </Text>
               </View>
             </View>
-            <View style={styles.bottomCopy}>
+            <View pointerEvents="none" style={styles.bottomCopy}>
               <Text style={[styles.name, cairoText('semiBold')]} numberOfLines={1}>
                 {advertiserName || 'اسم المعلن'}
               </Text>
@@ -143,7 +215,7 @@ function AdPhonePreviewComponent({
                 </Text>
               ) : null}
             </View>
-            <View style={styles.tabBar}>
+            <View pointerEvents="none" style={styles.tabBar}>
               <View style={styles.tabPill} />
               <View style={styles.tabPill} />
               <View style={styles.tabPill} />
@@ -174,7 +246,7 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 10,
     backgroundColor: '#111',
-    zIndex: 4,
+    zIndex: 5,
   },
   screen: {
     flex: 1,
@@ -185,6 +257,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  hit: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  soundPrompt: {
+    backgroundColor: '#25F4EE',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  soundPromptText: { color: '#0d1a26', fontSize: 13 },
   safeTop: {
     position: 'absolute',
     top: 28,

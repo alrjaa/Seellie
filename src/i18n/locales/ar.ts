@@ -675,6 +675,7 @@ export const ar = {
     trimEnd: 'نهاية القص (ث)',
     audioMuted: 'الصوت مكتوم',
     audioOn: 'الصوت يعمل',
+    tapToHear: 'اضغط لتشغيل الصوت',
     pickCover: 'رفع صورة غلاف',
     captureCover: 'التقاط إطار غلاف',
     coverReady: 'تم حفظ الغلاف',

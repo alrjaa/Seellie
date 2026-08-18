@@ -140,7 +140,7 @@ export default function AdsAdEditorScreen() {
   const [pickingCover, setPickingCover] = useState(false);
   const [saving, setSaving] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [muted, setMuted] = useState(true);
+  const [muted, setMuted] = useState(false);
   const [showSafeZone, setShowSafeZone] = useState(true);
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(NATIVE_AD_VIDEO_MAX_SEC);
@@ -211,7 +211,7 @@ export default function AdsAdEditorScreen() {
         setPlacements(local.placements);
         setTrimStart(local.trimStart);
         setTrimEnd(local.trimEnd);
-        setMuted(local.muted);
+        setMuted(false);
         setUtm(local.utm || {});
       }
       if (isNew || !id) return;
@@ -644,7 +644,7 @@ export default function AdsAdEditorScreen() {
           <View style={styles.chips}>
             <Chip
               label={muted ? t('adsPortal.audioMuted') : t('adsPortal.audioOn')}
-              active={muted}
+              active={!muted}
               onPress={() => setMuted((v) => !v)}
             />
             <Chip
@@ -839,8 +839,7 @@ export default function AdsAdEditorScreen() {
             trimStart={trimStart}
             trimEnd={trimEnd}
             showSafeZone={showSafeZone}
-            isRTL={isRTL}
-          />
+            tapToUnmuteLabel={t('adsPortal.tapToHear')}
         </View>
       </View>
     </Screen>

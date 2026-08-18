@@ -173,7 +173,7 @@ export default function AdsHomeScreen() {
       </Muted>
       <Muted>{t('adsPortal.studioIntro')}</Muted>
       {Platform.OS === 'web' ? (
-        <Muted>{t('adsPortal.buildStamp', { version: '1.0.91' })}</Muted>
+        <Muted>{t('adsPortal.buildStamp', { version: '1.0.92' })}</Muted>
       ) : null}
 
       <View style={styles.hero}>

@@ -675,6 +675,7 @@ export const en: TranslationTree = {
     trimEnd: 'Trim end (s)',
     audioMuted: 'Muted',
     audioOn: 'Sound on',
+    tapToHear: 'Tap to play sound',
     pickCover: 'Upload cover image',
     captureCover: 'Capture cover frame',
     coverReady: 'Cover saved',
