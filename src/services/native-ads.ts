@@ -13,7 +13,7 @@ export const NATIVE_AD_HOOK_MS = 3000;
 
 export type NativeAdPlacement = 'general' | 'unique' | 'highlights';
 
-export type NativeAdStatus = 'draft' | 'pending_review' | 'active' | 'paused';
+export type NativeAdStatus = 'draft' | 'active' | 'paused';
 
 export type NativeInFeedAd = {
   id: string;
@@ -102,10 +102,7 @@ export function sanitizeNativeAd(raw: unknown): NativeInFeedAd | null {
   if (!id || !videoUrl || !advertiserName) return null;
   const statusRaw = clip(row.status, 16);
   const status: NativeAdStatus =
-    statusRaw === 'active' ||
-    statusRaw === 'paused' ||
-    statusRaw === 'draft' ||
-    statusRaw === 'pending_review'
+    statusRaw === 'active' || statusRaw === 'paused' || statusRaw === 'draft'
       ? statusRaw
       : 'draft';
   const placements: NativeAdPlacement[] = Array.isArray(row.placements)
@@ -172,8 +169,13 @@ export function liveAdsForPlacement(
   placement: NativeAdPlacement,
   nowMs: number = Date.now()
 ): NativeInFeedAd[] {
+  if (!Array.isArray(ads) || !ads.length) return [];
   return ads.filter(
-    (ad) => isNativeAdLive(ad, nowMs) && ad.placements.includes(placement)
+    (ad) =>
+      !!ad &&
+      isNativeAdLive(ad, nowMs) &&
+      Array.isArray(ad.placements) &&
+      ad.placements.includes(placement)
   );
 }
 
@@ -185,13 +187,14 @@ export function extractNativeAdId(feedItemId: string): string | null {
 
 export function filterHiddenNativeAds(
   ads: NativeInFeedAd[],
-  hiddenIds: Iterable<string>
+  hiddenIds: Iterable<string> | null | undefined
 ): NativeInFeedAd[] {
+  if (!Array.isArray(ads)) return [];
   const hidden = new Set(
-    [...hiddenIds].map((id) => String(id).trim()).filter(Boolean)
+    [...(hiddenIds ?? [])].map((id) => String(id).trim()).filter(Boolean)
   );
   if (!hidden.size) return ads;
-  return ads.filter((ad) => !hidden.has(ad.id));
+  return ads.filter((ad) => ad && !hidden.has(ad.id));
 }
 
 export function nativeAdToFeedItem(ad: NativeInFeedAd): NativeAdFeedItem {
@@ -252,19 +255,25 @@ export function injectNativeAds<T>(
   ads: NativeInFeedAd[],
   placement: NativeAdPlacement
 ): Array<T | NativeAdFeedItem> {
-  const live = liveAdsForPlacement(ads, placement);
-  if (!live.length) return items;
-  const slides = live.map(nativeAdToFeedItem);
-  if (!items.length) return slides.slice(0, 2).map((slide, i) => slotAd(slide, i));
-  const everyN = live[0]?.insertEveryN || 4;
-  const out: Array<T | NativeAdFeedItem> = [];
-  let ai = 0;
-  items.forEach((item, index) => {
-    out.push(item);
-    if ((index + 1) % everyN === 0) {
-      out.push(slotAd(slides[ai % slides.length], ai));
-      ai += 1;
-    }
-  });
-  return out;
+  if (!Array.isArray(items)) return [];
+  try {
+    const live = liveAdsForPlacement(ads, placement);
+    if (!live.length) return items;
+    const slides = live.map(nativeAdToFeedItem);
+    if (!items.length) return slides.slice(0, 2).map((slide, i) => slotAd(slide, i));
+    const everyN = live[0]?.insertEveryN || 4;
+    const out: Array<T | NativeAdFeedItem> = [];
+    let ai = 0;
+    items.forEach((item, index) => {
+      out.push(item);
+      if ((index + 1) % everyN === 0) {
+        out.push(slotAd(slides[ai % slides.length], ai));
+        ai += 1;
+      }
+    });
+    return out;
+  } catch (error) {
+    console.warn('[native-ads] inject failed; keeping organic items', error);
+    return items;
+  }
 }

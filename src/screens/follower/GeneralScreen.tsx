@@ -741,14 +741,21 @@ export default function GeneralFeedScreen() {
   );
 
   const visibleFeed = useMemo<FeedItem[]>(() => {
-    return injectNativeAds(filtered, nativeAds, 'general').map((item) => {
+    let mixed: Array<FeedItem | NativeAdFeedItem> = filtered;
+    try {
+      mixed = injectNativeAds(filtered, nativeAds, 'general');
+    } catch (error) {
+      console.warn('[GeneralScreen] native ads inject failed', error);
+      mixed = filtered;
+    }
+    return mixed.map((item) => {
       if ((item as NativeAdFeedItem).sponsored) {
         const ad = item as NativeAdFeedItem;
         return {
           id: ad.id,
           type: 'video' as const,
           authorId: ad.authorId,
-          authorName: ad.authorName,
+          authorName: ad.authorName || '',
           authorHandle: ad.authorHandle,
           authorAvatar: ad.authorAvatar,
           title: ad.title,

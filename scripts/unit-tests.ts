@@ -198,6 +198,31 @@ test('inject native ads every N items', () => {
   assert.equal(slide.kind, 'video');
 });
 
+test('inject native ads never drops organic items on junk catalog', () => {
+  const items = [{ id: 'post-1' }, { id: 'post-2' }];
+  const junk = injectNativeAds(items, null as unknown as NativeInFeedAd[], 'general');
+  assert.equal(junk.length, 2);
+  assert.equal((junk[0] as { id: string }).id, 'post-1');
+  const broken = injectNativeAds(
+    items,
+    [{ id: 'bad' } as unknown as NativeInFeedAd],
+    'general'
+  );
+  assert.equal(broken.length, 2);
+  const noPlacement = injectNativeAds(
+    items,
+    [sampleAd({ placements: undefined as unknown as NativeInFeedAd['placements'] })],
+    'general'
+  );
+  assert.equal(noPlacement.length, 2);
+});
+
+test('filterHiddenNativeAds tolerates missing hidden ids', () => {
+  const ads = [sampleAd({ id: 'a' })];
+  assert.equal(filterHiddenNativeAds(ads, null).length, 1);
+  assert.equal(filterHiddenNativeAds(ads, undefined).length, 1);
+});
+
 test('validatePickerAsset native ad min duration', () => {
   const tooShort = validatePickerAsset('nativeAdVideo', {
     uri: 'x',
