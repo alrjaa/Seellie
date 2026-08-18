@@ -193,6 +193,8 @@ declare
   nm text;
   st text;
   bud integer;
+  start_ts timestamptz;
+  end_ts timestamptz;
 begin
   if uid is null then raise exception 'not authenticated'; end if;
   aid := public.advertiser_id_for_user(uid);
@@ -204,10 +206,39 @@ begin
   st := left(trim(coalesce(p_campaign->>'status', 'draft')), 16);
   if st not in ('draft', 'active', 'paused', 'ended') then st := 'draft'; end if;
 
-  bud := nullif(trim(coalesce(p_campaign->>'budgetCents', '')), '')::integer;
+  bud := null;
+  begin
+    if jsonb_typeof(p_campaign->'budgetCents') = 'number' then
+      bud := round((p_campaign->'budgetCents')::text::numeric)::integer;
+    else
+      bud := round(
+        nullif(trim(coalesce(p_campaign->>'budgetCents', '')), '')::numeric
+      )::integer;
+    end if;
+  exception when others then
+    bud := null;
+  end;
   if bud is not null and bud < 0 then bud := 0; end if;
 
-  cid := nullif(trim(coalesce(p_campaign->>'id', '')), '')::uuid;
+  start_ts := null;
+  begin
+    start_ts := nullif(trim(coalesce(p_campaign->>'startAt', '')), '')::timestamptz;
+  exception when others then
+    start_ts := null;
+  end;
+  end_ts := null;
+  begin
+    end_ts := nullif(trim(coalesce(p_campaign->>'endAt', '')), '')::timestamptz;
+  exception when others then
+    end_ts := null;
+  end;
+
+  cid := null;
+  begin
+    cid := nullif(trim(coalesce(p_campaign->>'id', '')), '')::uuid;
+  exception when others then
+    cid := null;
+  end;
 
   if cid is not null and exists (
     select 1 from public.ad_campaigns c
@@ -217,17 +248,15 @@ begin
       name = nm,
       status = st,
       budget_cents = bud,
-      start_at = nullif(trim(coalesce(p_campaign->>'startAt', '')), '')::timestamptz,
-      end_at = nullif(trim(coalesce(p_campaign->>'endAt', '')), '')::timestamptz,
+      start_at = start_ts,
+      end_at = end_ts,
       updated_at = now()
     where id = cid and advertiser_id = aid;
   else
     insert into public.ad_campaigns (
       advertiser_id, name, status, budget_cents, start_at, end_at
     ) values (
-      aid, nm, st, bud,
-      nullif(trim(coalesce(p_campaign->>'startAt', '')), '')::timestamptz,
-      nullif(trim(coalesce(p_campaign->>'endAt', '')), '')::timestamptz
+      aid, nm, st, bud, start_ts, end_ts
     )
     returning id into cid;
   end if;
@@ -277,13 +306,23 @@ declare
   st text;
   pl text[];
   dur integer;
+  ins integer;
   vurl text;
+  poster text;
+  cta text;
+  start_ts timestamptz;
+  end_ts timestamptz;
 begin
   if uid is null then raise exception 'not authenticated'; end if;
   aid := public.advertiser_id_for_user(uid);
   if aid is null then raise exception 'advertiser account required'; end if;
 
-  camp := nullif(trim(coalesce(p_ad->>'campaignId', '')), '')::uuid;
+  camp := null;
+  begin
+    camp := nullif(trim(coalesce(p_ad->>'campaignId', '')), '')::uuid;
+  exception when others then
+    camp := null;
+  end;
   if camp is null or not exists (
     select 1 from public.ad_campaigns where id = camp and advertiser_id = aid
   ) then
@@ -293,7 +332,19 @@ begin
   vurl := left(trim(coalesce(p_ad->>'videoUrl', '')), 2000);
   if vurl !~ '^https://' then raise exception 'https video required'; end if;
 
-  dur := coalesce(nullif(trim(coalesce(p_ad->>'durationSec', '')), '')::integer, 10);
+  dur := 10;
+  begin
+    if jsonb_typeof(p_ad->'durationSec') = 'number' then
+      dur := round((p_ad->'durationSec')::text::numeric)::integer;
+    else
+      dur := coalesce(
+        round(nullif(trim(coalesce(p_ad->>'durationSec', '')), '')::numeric),
+        10
+      )::integer;
+    end if;
+  exception when others then
+    dur := 10;
+  end;
   dur := greatest(6, least(15, dur));
 
   st := left(trim(coalesce(p_ad->>'status', 'draft')), 16);
@@ -316,7 +367,45 @@ begin
     raise exception 'advertiser name required';
   end if;
 
-  ad_id := nullif(trim(coalesce(p_ad->>'id', '')), '')::uuid;
+  ins := 4;
+  begin
+    if jsonb_typeof(p_ad->'insertEveryN') = 'number' then
+      ins := round((p_ad->'insertEveryN')::text::numeric)::integer;
+    else
+      ins := coalesce(
+        round(nullif(trim(coalesce(p_ad->>'insertEveryN', '')), '')::numeric),
+        4
+      )::integer;
+    end if;
+  exception when others then
+    ins := 4;
+  end;
+  ins := greatest(2, least(12, ins));
+
+  poster := nullif(left(trim(coalesce(p_ad->>'posterUrl', '')), 2000), '');
+  if poster is not null and poster !~ '^https://' then poster := null; end if;
+  cta := nullif(left(trim(coalesce(p_ad->>'ctaUrl', '')), 2000), '');
+  if cta is not null and cta !~ '^https://' then cta := null; end if;
+
+  start_ts := null;
+  begin
+    start_ts := nullif(trim(coalesce(p_ad->>'startAt', '')), '')::timestamptz;
+  exception when others then
+    start_ts := null;
+  end;
+  end_ts := null;
+  begin
+    end_ts := nullif(trim(coalesce(p_ad->>'endAt', '')), '')::timestamptz;
+  exception when others then
+    end_ts := null;
+  end;
+
+  ad_id := null;
+  begin
+    ad_id := nullif(trim(coalesce(p_ad->>'id', '')), '')::uuid;
+  exception when others then
+    ad_id := null;
+  end;
 
   if ad_id is not null and exists (
     select 1 from public.advertisements a
@@ -331,15 +420,14 @@ begin
       body_text = nullif(left(trim(coalesce(p_ad->>'text', '')), 240), ''),
       hook_text = nullif(left(trim(coalesce(p_ad->>'hookText', '')), 80), ''),
       video_url = vurl,
-      poster_url = nullif(left(trim(coalesce(p_ad->>'posterUrl', '')), 2000), ''),
+      poster_url = poster,
       cta_label = nullif(left(trim(coalesce(p_ad->>'ctaLabel', '')), 32), ''),
-      cta_url = nullif(left(trim(coalesce(p_ad->>'ctaUrl', '')), 2000), ''),
+      cta_url = cta,
       duration_sec = dur,
       placements = pl,
-      insert_every_n = greatest(2, least(12,
-        coalesce(nullif(trim(coalesce(p_ad->>'insertEveryN', '')), '')::integer, 4))),
-      start_at = nullif(trim(coalesce(p_ad->>'startAt', '')), '')::timestamptz,
-      end_at = nullif(trim(coalesce(p_ad->>'endAt', '')), '')::timestamptz,
+      insert_every_n = ins,
+      start_at = start_ts,
+      end_at = end_ts,
       target_country = nullif(left(trim(coalesce(p_ad->>'targetCountry', '')), 80), ''),
       target_region = nullif(left(trim(coalesce(p_ad->>'targetRegion', '')), 80), ''),
       target_city = nullif(left(trim(coalesce(p_ad->>'targetCity', '')), 80), ''),
@@ -359,15 +447,11 @@ begin
       nullif(left(trim(coalesce(p_ad->>'title', '')), 80), ''),
       nullif(left(trim(coalesce(p_ad->>'text', '')), 240), ''),
       nullif(left(trim(coalesce(p_ad->>'hookText', '')), 80), ''),
-      vurl,
-      nullif(left(trim(coalesce(p_ad->>'posterUrl', '')), 2000), ''),
+      vurl, poster,
       nullif(left(trim(coalesce(p_ad->>'ctaLabel', '')), 32), ''),
-      nullif(left(trim(coalesce(p_ad->>'ctaUrl', '')), 2000), ''),
-      dur, pl,
-      greatest(2, least(12,
-        coalesce(nullif(trim(coalesce(p_ad->>'insertEveryN', '')), '')::integer, 4))),
-      nullif(trim(coalesce(p_ad->>'startAt', '')), '')::timestamptz,
-      nullif(trim(coalesce(p_ad->>'endAt', '')), '')::timestamptz,
+      cta,
+      dur, pl, ins,
+      start_ts, end_ts,
       nullif(left(trim(coalesce(p_ad->>'targetCountry', '')), 80), ''),
       nullif(left(trim(coalesce(p_ad->>'targetRegion', '')), 80), ''),
       nullif(left(trim(coalesce(p_ad->>'targetCity', '')), 80), '')

@@ -91,22 +91,56 @@ export type AdvertisementInput = {
   targetCity?: string;
 };
 
-async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T | null> {
-  if (!isSupabaseConfigured()) return null;
+async function unwrapRpcData<T>(data: unknown): Promise<T | null> {
+  if (data == null) return null;
+  if (typeof data === 'string') {
+    try {
+      return JSON.parse(data) as T;
+    } catch {
+      return null;
+    }
+  }
+  return data as T;
+}
+
+export type RpcResult<T> = { data: T | null; error?: string };
+
+function mapAdvertiserError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('could not find the function') || m.includes('does not exist')) {
+    return 'schema_missing';
+  }
+  if (m.includes('not authenticated')) return 'not_authenticated';
+  if (m.includes('advertiser account required')) return 'advertiser_required';
+  if (m.includes('https video')) return 'https_video';
+  if (m.includes('invalid campaign')) return 'invalid_campaign';
+  if (m.includes('advertiser name')) return 'advertiser_name';
+  if (m.includes('campaign name')) return 'campaign_name';
+  if (m.includes('check') || m.includes('violates')) return 'constraint';
+  return 'unknown';
+}
+
+async function rpc<T>(
+  fn: string,
+  args: Record<string, unknown> = {}
+): Promise<RpcResult<T>> {
+  if (!isSupabaseConfigured()) {
+    return { data: null, error: 'not_configured' };
+  }
   const sb = getSupabase();
-  if (!sb) return null;
+  if (!sb) return { data: null, error: 'not_configured' };
   const { data, error } = await sb.rpc(fn, args);
   if (error) {
     console.warn(`[advertiser-platform] ${fn}`, error.message);
-    return null;
+    return { data: null, error: mapAdvertiserError(error.message) };
   }
-  return data as T;
+  return { data: await unwrapRpcData<T>(data) };
 }
 
 export async function ensureAdvertiserAccount(
   profile: AdvertiserProfileInput
 ): Promise<AdvertiserAccount | null> {
-  return rpc<AdvertiserAccount>('ensure_advertiser_account', {
+  const { data } = await rpc<AdvertiserAccount>('ensure_advertiser_account', {
     p_profile: {
       businessName: profile.businessName,
       contactName: profile.contactName,
@@ -115,6 +149,7 @@ export async function ensureAdvertiserAccount(
       city: profile.city || '',
     },
   });
+  return data;
 }
 
 export async function fetchMyAdvertiserAccount(): Promise<AdvertiserAccount | null> {
@@ -149,38 +184,80 @@ async function parseRpcArray<T>(raw: unknown): Promise<T[]> {
 }
 
 export async function listMyCampaigns(): Promise<AdCampaign[]> {
-  const raw = await rpc<unknown>('list_my_ad_campaigns');
-  return parseRpcArray<AdCampaign>(raw);
+  const { data } = await rpc<unknown>('list_my_ad_campaigns');
+  return parseRpcArray<AdCampaign>(data);
 }
 
-export async function saveCampaign(input: CampaignInput): Promise<AdCampaign | null> {
+export async function saveCampaign(
+  input: CampaignInput
+): Promise<RpcResult<AdCampaign>> {
   return rpc<AdCampaign>('save_ad_campaign', {
     p_campaign: {
-      id: input.id || null,
+      id: input.id || '',
       name: input.name,
       status: input.status || 'draft',
-      budgetCents: input.budgetCents ?? null,
-      startAt: input.startAt || null,
-      endAt: input.endAt || null,
+      budgetCents:
+        input.budgetCents == null ? '' : String(Math.round(input.budgetCents)),
+      startAt: input.startAt || '',
+      endAt: input.endAt || '',
     },
   });
 }
 
 export async function listCampaignAds(campaignId: string): Promise<DbAdvertisement[]> {
-  const raw = await rpc<unknown>('list_campaign_advertisements', {
+  const { data } = await rpc<unknown>('list_campaign_advertisements', {
     p_campaign_id: campaignId,
   });
-  return parseRpcArray<DbAdvertisement>(raw);
+  return parseRpcArray<DbAdvertisement>(data);
+}
+
+function httpsOnly(url?: string): string {
+  const v = (url || '').trim();
+  return /^https:\/\//i.test(v) ? v : '';
 }
 
 export async function saveAdvertisement(
   input: AdvertisementInput
-): Promise<DbAdvertisement | null> {
-  return rpc<DbAdvertisement>('save_advertisement', { p_ad: input });
+): Promise<RpcResult<DbAdvertisement>> {
+  const videoUrl = httpsOnly(input.videoUrl);
+  if (!input.campaignId.trim()) {
+    return { data: null, error: 'invalid_campaign' };
+  }
+  if (!videoUrl) {
+    return { data: null, error: 'https_video' };
+  }
+  if (!input.advertiserName.trim()) {
+    return { data: null, error: 'advertiser_name' };
+  }
+  return rpc<DbAdvertisement>('save_advertisement', {
+    p_ad: {
+      id: input.id || '',
+      campaignId: input.campaignId,
+      status: input.status || 'draft',
+      advertiserName: input.advertiserName,
+      advertiserHandle: input.advertiserHandle || '',
+      title: input.title || '',
+      text: input.text || '',
+      hookText: input.hookText || '',
+      videoUrl,
+      posterUrl: httpsOnly(input.posterUrl),
+      ctaLabel: input.ctaLabel || '',
+      ctaUrl: httpsOnly(input.ctaUrl),
+      durationSec: String(Math.round(input.durationSec) || 10),
+      placements: input.placements,
+      insertEveryN: String(Math.round(input.insertEveryN || 4)),
+      startAt: input.startAt || '',
+      endAt: input.endAt || '',
+      targetCountry: input.targetCountry || '',
+      targetRegion: input.targetRegion || '',
+      targetCity: input.targetCity || '',
+    },
+  });
 }
 
 export async function fetchPublicNativeAdsFromDb(): Promise<unknown> {
-  return rpc<unknown>('get_public_native_ads');
+  const { data } = await rpc<unknown>('get_public_native_ads');
+  return data;
 }
 
 export function dbAdToNativeShape(row: DbAdvertisement): Record<string, unknown> {

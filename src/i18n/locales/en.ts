@@ -649,6 +649,18 @@ export const en: TranslationTree = {
     uploadFailed: 'Upload failed',
     saveFailed: 'Save failed',
     saved: 'Saved',
+    saveError: {
+      unknown: 'Cloud save failed. Sign in again and retry.',
+      not_configured: 'Cloud is not configured on this site.',
+      not_authenticated: 'Session expired — sign in then save.',
+      advertiser_required: 'Complete the advertiser profile on the home page first.',
+      https_video: 'Upload the video until an HTTPS link is ready, then save.',
+      invalid_campaign: 'Create a campaign first, then open the ad studio.',
+      advertiser_name: 'Enter the advertiser name shown in the feed.',
+      campaign_name: 'Enter a campaign name.',
+      constraint: 'A field does not match specs (https link, 6–15s, name).',
+      schema_missing: 'Advertiser database functions are not enabled.',
+    },
     studioIntro:
       'Upload a vertical 9:16 video (1080×1920), 6–15 seconds, then preview it in a phone frame before publishing.',
     livePreview: 'Phone preview',

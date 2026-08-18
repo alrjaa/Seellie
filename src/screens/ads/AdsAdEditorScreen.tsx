@@ -33,6 +33,7 @@ import {
   clampAdTrimRange,
   ctaLabelForPreset,
   detectAdAspectRatio,
+  ensureHttpsUrl,
   inspectAdVideoAsset,
   reviewAdVideo,
   reviewStatusFromChecks,
@@ -107,7 +108,11 @@ function captureHtmlFrame(uri: string, atSec: number): Promise<string | null> {
 }
 
 export default function AdsAdEditorScreen() {
-  const { id, campaignId } = useLocalSearchParams<{ id: string; campaignId: string }>();
+  const params = useLocalSearchParams<{ id: string; campaignId: string }>();
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const campaignId = Array.isArray(params.campaignId)
+    ? params.campaignId[0]
+    : params.campaignId;
   const isNew = id === 'new';
   const adKey = isNew ? 'new' : String(id || 'new');
   const { currentUser } = useTournament();
@@ -157,6 +162,11 @@ export default function AdsAdEditorScreen() {
   const [draftHint, setDraftHint] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    if (!currentUser?.name) return;
+    setAdvertiserName((prev) => prev || currentUser.name);
+  }, [currentUser?.name]);
+
   const fillFromDb = useCallback((ad: DbAdvertisement) => {
     setAdvertiserName(ad.advertiser_name);
     setAdvertiserHandle(ad.advertiser_handle || '');
@@ -194,9 +204,13 @@ export default function AdsAdEditorScreen() {
         setTitle(local.title);
         setText(local.text);
         setHookText(local.hookText);
-        setVideoUrl(local.videoUrl);
+        if (/^https:\/\//i.test(local.videoUrl)) {
+          setVideoUrl(local.videoUrl);
+        }
         setLocalPreviewUri(local.videoUrl);
-        setPosterUrl(local.posterUrl);
+        setPosterUrl(
+          /^https:\/\//i.test(local.posterUrl) ? local.posterUrl : ''
+        );
         setCtaPreset(local.ctaPreset);
         setCtaLabel(local.ctaLabel);
         setCtaUrl(local.ctaUrl);
@@ -486,18 +500,26 @@ export default function AdsAdEditorScreen() {
   }, [currentUser, previewUri, t, toast, trimStart]);
 
   const save = useCallback(async () => {
-    if (!campaignId || !advertiserName.trim() || !videoUrl) {
+    const name = advertiserName.trim() || currentUser?.name?.trim() || '';
+    if (!campaignId || !name || !/^https:\/\//i.test(videoUrl)) {
       toast({
         variant: 'destructive',
         title: t('adsPortal.saveFailed'),
-        description: t('adsPortal.reviewReason.missing_video'),
+        description: t(
+          !campaignId
+            ? 'adsPortal.saveError.invalid_campaign'
+            : !name
+              ? 'adsPortal.saveError.advertiser_name'
+              : 'adsPortal.saveError.https_video'
+        ),
       });
       return;
     }
+    const normalizedCta = ensureHttpsUrl(ctaUrl);
     const publishChecks = reviewAdVideo({
       probe,
       uri: videoUrl,
-      ctaUrl,
+      ctaUrl: normalizedCta,
       requireCta: status === 'active',
     });
     const blocked = publishChecks.find((c) => c.level === 'block');
@@ -511,34 +533,50 @@ export default function AdsAdEditorScreen() {
     }
     setSaving(true);
     try {
-      const saved = await saveAdvertisement({
+      const { data: saved, error } = await saveAdvertisement({
         id: isNew ? undefined : String(id),
         campaignId: String(campaignId),
         status,
-        advertiserName: advertiserName.trim(),
+        advertiserName: name,
         advertiserHandle: advertiserHandle.trim() || undefined,
         title: title.trim() || undefined,
         text: text.trim() || undefined,
         hookText: hookText.trim() || undefined,
         videoUrl,
-        posterUrl: posterUrl.trim() || undefined,
+        posterUrl: /^https:\/\//i.test(posterUrl.trim())
+          ? posterUrl.trim()
+          : undefined,
         ctaLabel: resolvedCtaLabel,
-        ctaUrl: appendUtmParams(ctaUrl.trim(), utm) || undefined,
-        durationSec: Number(durationSec) || NATIVE_AD_VIDEO_MAX_SEC,
+        ctaUrl: appendUtmParams(normalizedCta, utm) || undefined,
+        durationSec: Math.round(Number(durationSec) || NATIVE_AD_VIDEO_MAX_SEC),
         placements: placements.length ? placements : ['general'],
-        insertEveryN: Number(insertEveryN) || 4,
-        startAt: startAt ? `${startAt}T00:00:00.000Z` : undefined,
-        endAt: endAt ? `${endAt}T23:59:59.000Z` : undefined,
+        insertEveryN: Math.round(Number(insertEveryN) || 4),
+        startAt: /^\d{4}-\d{2}-\d{2}$/.test(startAt)
+          ? `${startAt}T00:00:00.000Z`
+          : undefined,
+        endAt: /^\d{4}-\d{2}-\d{2}$/.test(endAt)
+          ? `${endAt}T23:59:59.000Z`
+          : undefined,
         targetCountry: targetCountry.trim() || undefined,
         targetRegion: targetRegion.trim() || undefined,
         targetCity: targetCity.trim() || undefined,
       });
       if (!saved) {
-        toast({ variant: 'destructive', title: t('adsPortal.saveFailed') });
+        toast({
+          variant: 'destructive',
+          title: t('adsPortal.saveFailed'),
+          description: t(`adsPortal.saveError.${error || 'unknown'}`),
+        });
         return;
       }
       toast({ variant: 'success', title: t('adsPortal.saved') });
       router.replace(`/ads/campaign/${campaignId}` as any);
+    } catch {
+      toast({
+        variant: 'destructive',
+        title: t('adsPortal.saveFailed'),
+        description: t('adsPortal.saveError.unknown'),
+      });
     } finally {
       setSaving(false);
     }
@@ -546,6 +584,7 @@ export default function AdsAdEditorScreen() {
     advertiserHandle,
     advertiserName,
     campaignId,
+    currentUser,
     ctaUrl,
     durationSec,
     endAt,

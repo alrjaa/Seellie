@@ -64,15 +64,16 @@ export default function AdsHomeScreen() {
           name: t('adsPortal.defaultCampaignName'),
           status: 'draft',
         });
-        if (!created) {
+        if (!created.data) {
           toast({
             variant: 'destructive',
             title: t('adsPortal.saveFailed'),
+            description: t(`adsPortal.saveError.${created.error || 'unknown'}`),
           });
           return;
         }
-        campaign = created;
-        setCampaigns([created]);
+        campaign = created.data;
+        setCampaigns([created.data]);
       }
       router.push(`/ads/ad/new?campaignId=${campaign.id}` as any);
     } finally {
@@ -173,7 +174,7 @@ export default function AdsHomeScreen() {
       </Muted>
       <Muted>{t('adsPortal.studioIntro')}</Muted>
       {Platform.OS === 'web' ? (
-        <Muted>{t('adsPortal.buildStamp', { version: '1.0.92' })}</Muted>
+        <Muted>{t('adsPortal.buildStamp', { version: '1.0.93' })}</Muted>
       ) : null}
 
       <View style={styles.hero}>

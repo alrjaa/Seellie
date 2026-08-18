@@ -42,6 +42,7 @@ import {
   appendUtmParams,
   clampAdTrimRange,
   detectAdAspectRatio,
+  ensureHttpsUrl,
   isSupportedAdVideoFormat,
   isValidAdCtaUrl,
   reviewAdVideo,
@@ -254,6 +255,13 @@ test('ad studio aspect and format', () => {
   assert.equal(detectAdAspectRatio(1920, 1080), '16:9');
   assert.equal(isSupportedAdVideoFormat('https://cdn.example/a.mp4'), true);
   assert.equal(isSupportedAdVideoFormat('https://cdn.example/a.avi'), false);
+});
+
+test('ensureHttpsUrl upgrades http and bare domains', () => {
+  assert.equal(ensureHttpsUrl('https://seellie.com/x'), 'https://seellie.com/x');
+  assert.equal(ensureHttpsUrl('http://seellie.com/x'), 'https://seellie.com/x');
+  assert.equal(ensureHttpsUrl('seellie.com/offer'), 'https://seellie.com/offer');
+  assert.equal(ensureHttpsUrl('blob:https://seellie.com/1'), 'blob:https://seellie.com/1');
 });
 
 test('ad studio review blocks bad duration and link', () => {

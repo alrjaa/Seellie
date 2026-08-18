@@ -50,7 +50,7 @@ export default function AdsCampaignScreen() {
       const budgetCents = budget.trim()
         ? Math.round(Number(budget) * 100)
         : null;
-      const saved = await saveCampaign({
+      const { data: saved, error } = await saveCampaign({
         id: campaignId || undefined,
         name: name.trim(),
         status,
@@ -62,6 +62,7 @@ export default function AdsCampaignScreen() {
         toast({
           variant: 'destructive',
           title: t('adsPortal.saveFailed'),
+          description: t(`adsPortal.saveError.${error || 'unknown'}`),
         });
         return;
       }

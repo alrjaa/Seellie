@@ -152,18 +152,32 @@ export function reviewAdVideo(input: {
 
 export function isValidAdCtaUrl(raw: string): boolean {
   try {
-    const u = new URL(raw.trim());
+    const u = new URL(ensureHttpsUrl(raw));
     return u.protocol === 'https:';
   } catch {
     return false;
   }
 }
 
+/** يحوّل seellie.com أو http://… إلى https:// حتى لا يرفض الخادم الحفظ */
+export function ensureHttpsUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (/^https:\/\//i.test(trimmed)) return trimmed;
+  if (/^http:\/\//i.test(trimmed)) return `https://${trimmed.slice(7)}`;
+  if (/^\/\//.test(trimmed)) return `https:${trimmed}`;
+  if (/^[\w.-]+\.[a-z]{2,}([/:?#].*)?$/i.test(trimmed)) {
+    return `https://${trimmed}`;
+  }
+  return trimmed;
+}
+
 export function appendUtmParams(rawUrl: string, utm: AdUtmParams): string {
   const trimmed = rawUrl.trim();
-  if (!trimmed || !isValidAdCtaUrl(trimmed)) return trimmed;
+  const httpsUrl = ensureHttpsUrl(trimmed);
+  if (!httpsUrl || !isValidAdCtaUrl(httpsUrl)) return httpsUrl || trimmed;
   try {
-    const u = new URL(trimmed);
+    const u = new URL(httpsUrl);
     if (utm.source?.trim()) u.searchParams.set('utm_source', utm.source.trim());
     if (utm.medium?.trim()) u.searchParams.set('utm_medium', utm.medium.trim());
     if (utm.campaign?.trim()) {
@@ -172,7 +186,7 @@ export function appendUtmParams(rawUrl: string, utm: AdUtmParams): string {
     if (utm.content?.trim()) u.searchParams.set('utm_content', utm.content.trim());
     return u.toString();
   } catch {
-    return trimmed;
+    return httpsUrl;
   }
 }
 
