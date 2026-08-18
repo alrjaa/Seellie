@@ -839,7 +839,9 @@ export default function AdsAdEditorScreen() {
             trimStart={trimStart}
             trimEnd={trimEnd}
             showSafeZone={showSafeZone}
+            isRTL={isRTL}
             tapToUnmuteLabel={t('adsPortal.tapToHear')}
+          />
         </View>
       </View>
     </Screen>
