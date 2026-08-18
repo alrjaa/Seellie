@@ -133,7 +133,7 @@ export default function DiscussionsScreen() {
 
   const feed = useMemo<FeedItem[]>(() => {
     const analyses = users.flatMap((u) =>
-      u.analysisContent.map((a) => ({
+      (u.analysisContent || []).map((a) => ({
         key: `a-${a.id}`,
         type: 'analysis' as const,
         id: a.id,

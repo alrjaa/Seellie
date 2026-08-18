@@ -2813,7 +2813,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
     }
 
-    setUsers((prev) => prev.map(clearSeedUserContent));
+    const syncedUsers = settled[2];
+    // F14: never wipe seed UGC unless a non-empty cloud roster actually merged.
+    if (typeof syncedUsers === 'number' && syncedUsers > 0) {
+      setUsers((prev) => prev.map(clearSeedUserContent));
+    }
     setOffers((prev) => filterSeedOffers(prev));
     setGiftTransactions((prev) => filterSeedGifts(prev));
     if (cloudRequests.ok && cloudRequests.items.length > 0) {

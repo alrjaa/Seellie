@@ -277,7 +277,7 @@ export default function UniqueScreen() {
   const analyses = useMemo(() => {
     const items: AnalysisItem[] = [];
     users.forEach((u) => {
-      u.analysisContent
+      (u.analysisContent || [])
         .filter((a) => a.status !== 'blocked' && a.status !== 'suspended')
         .forEach((a) => {
           items.push({
@@ -287,7 +287,7 @@ export default function UniqueScreen() {
             videoUrl: a.videoUrl,
             posterUrl: a.posterUrl,
             timestamp: new Date(a.timestamp),
-            likes: a.likes,
+            likes: a.likes || [],
             authorId: u.id,
             authorName: u.name,
             authorAvatar: u.avatar,
@@ -362,8 +362,8 @@ export default function UniqueScreen() {
         authorAvatar: item.authorAvatar,
         authorHandle: item.authorHandle,
         subtitle: undefined,
-        likes: item.likes,
-        liked: item.likes.includes(currentUser.id),
+        likes: item.likes || [],
+        liked: (item.likes || []).includes(currentUser.id),
         locationLabel: (() => {
           const author = users.find((u) => u.id === item.authorId);
           return resolveLocationLabel({
@@ -374,7 +374,12 @@ export default function UniqueScreen() {
       };
     });
     if (filter === 'text') return mapped;
-    return injectNativeAds(mapped, nativeAds, 'unique') as FullScreenContent[];
+    try {
+      return injectNativeAds(mapped, nativeAds, 'unique') as FullScreenContent[];
+    } catch (error) {
+      console.warn('[UniqueScreen] native ads inject failed', error);
+      return mapped;
+    }
   }, [currentUser, filter, filtered, nativeAds, users]);
 
   const analystStatus = currentUser?.analyst?.status || 'none';

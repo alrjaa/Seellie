@@ -212,7 +212,7 @@ export default function SharesScreen() {
     users
       .filter((u) => userHasRole(u, 'freelancer'))
       .forEach((u) => {
-        u.posts.forEach((p) => {
+        (u.posts || []).forEach((p) => {
           items.push({
             id: `post-${p.id}`,
             mediaId: p.id,
@@ -268,8 +268,8 @@ export default function SharesScreen() {
     competitions.forEach((comp) => {
       const locationCity = comp.venue?.city;
       const locationRegion = comp.venue?.region;
-      comp.teams.forEach((team) => {
-        team.players.forEach((player) => {
+      (comp.teams || []).forEach((team) => {
+        (team.players || []).forEach((player) => {
           (player.media?.photos || []).forEach((photo) => {
             items.push({
               id: `photo-player-${player.id}-${photo.id}`,

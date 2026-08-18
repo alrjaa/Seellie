@@ -502,8 +502,8 @@ export default function FollowerHomeScreen() {
       );
 
     homeCompetitions.forEach((comp) => {
-      comp.teams.forEach((team) => {
-        team.players.forEach((player) => {
+      (comp.teams || []).forEach((team) => {
+        (team.players || []).forEach((player) => {
           players.push({
             ...player,
             totalLikes: calculateLikes(player),

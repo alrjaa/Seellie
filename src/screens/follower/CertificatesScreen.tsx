@@ -178,8 +178,8 @@ export default function CertificatesScreen() {
     });
 
     competitions.forEach((comp) => {
-      comp.teams.forEach((team) => {
-        team.players.forEach((player) => {
+      (comp.teams || []).forEach((team) => {
+        (team.players || []).forEach((player) => {
           if (list.some((r) => r.id === player.id)) return;
           list.push({
             id: player.id,

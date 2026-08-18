@@ -112,8 +112,8 @@ export default function PlayersScreen() {
     const rows: PlayerRow[] = [];
 
     competitions.forEach((comp) => {
-      comp.teams.forEach((team) => {
-        team.players.forEach((player: Player) => {
+      (comp.teams || []).forEach((team) => {
+        (team.players || []).forEach((player: Player) => {
           rows.push({
             id: player.id,
             name: player.name,

@@ -114,7 +114,7 @@ export default function MatchesScreen() {
   const matches = useMemo(() => {
     const rows: MatchRow[] = [];
     competitions.forEach((comp) => {
-      comp.matches.forEach((match) => {
+      (comp.matches || []).forEach((match) => {
         const team1 = comp.teams.find((t) => t.id === match.team1Id);
         const team2 = comp.teams.find((t) => t.id === match.team2Id);
         if (!team1 || !team2) return;

@@ -845,8 +845,8 @@ export default function PrivateScreen() {
           label: comp.name,
         });
       });
-      comp.teams.forEach((team) => {
-        team.players.forEach((player) => {
+      (comp.teams || []).forEach((team) => {
+        (team.players || []).forEach((player) => {
           (player.media?.photos || []).forEach((p) => {
             if (!isHttpUrl(p.url)) return;
             items.push({
@@ -867,7 +867,7 @@ export default function PrivateScreen() {
           });
         });
       });
-      comp.matches.forEach((match) => {
+      (comp.matches || []).forEach((match) => {
         const team1 = comp.teams.find((x) => x.id === match.team1Id)?.name;
         const team2 = comp.teams.find((x) => x.id === match.team2Id)?.name;
         const label = `${team1 || '?'} vs ${team2 || '?'}`;

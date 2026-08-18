@@ -111,9 +111,9 @@ export default function MediaScreen() {
         })
       );
 
-      c.matches.forEach((match) => {
-        const t1 = c.teams.find((x) => x.id === match.team1Id)?.name || '?';
-        const t2 = c.teams.find((x) => x.id === match.team2Id)?.name || '?';
+      (c.matches || []).forEach((match) => {
+        const t1 = (c.teams || []).find((x) => x.id === match.team1Id)?.name || '?';
+        const t2 = (c.teams || []).find((x) => x.id === match.team2Id)?.name || '?';
         const matchLabel = `${t1} × ${t2}`;
         (match.media?.photos || []).forEach((p) =>
           media.push({
@@ -141,8 +141,8 @@ export default function MediaScreen() {
         );
       });
 
-      c.teams.forEach((team) => {
-        team.players.forEach((pl) => {
+      (c.teams || []).forEach((team) => {
+        (team.players || []).forEach((pl) => {
           (pl.media?.photos || []).forEach((p) =>
             media.push({
               id: `player-photo-${pl.id}-${p.id}`,

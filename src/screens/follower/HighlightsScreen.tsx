@@ -48,7 +48,8 @@ export default function HighlightsScreen() {
 
   const media = useMemo(() => {
     const items: MediaItem[] = [];
-    competitions.forEach((comp) => {
+    try {
+    (competitions || []).forEach((comp) => {
       const organizer = users.find((u) => u.id === comp.organizerId);
       const organizerName = organizer?.name || comp.name;
       const organizerHandle = organizer?.handle;
@@ -95,8 +96,8 @@ export default function HighlightsScreen() {
         });
       });
 
-      comp.teams.forEach((team) => {
-        team.players.forEach((player) => {
+      (comp.teams || []).forEach((team) => {
+        (team.players || []).forEach((player) => {
           (player.media?.photos || []).forEach((p) => {
             if (!isHttpUrl(p.url)) return;
             items.push({
@@ -139,9 +140,9 @@ export default function HighlightsScreen() {
         });
       });
 
-      comp.matches.forEach((match) => {
-        const team1 = comp.teams.find((t) => t.id === match.team1Id)?.name;
-        const team2 = comp.teams.find((t) => t.id === match.team2Id)?.name;
+      (comp.matches || []).forEach((match) => {
+        const team1 = (comp.teams || []).find((t) => t.id === match.team1Id)?.name;
+        const team2 = (comp.teams || []).find((t) => t.id === match.team2Id)?.name;
         const label = `${team1 || '?'} ${t('screens.vs')} ${team2 || '?'}`;
         match.media?.photos?.forEach((p) => {
           if (!isHttpUrl(p.url)) return;
@@ -184,6 +185,10 @@ export default function HighlightsScreen() {
       });
     });
     return items;
+    } catch (error) {
+      console.warn('[HighlightsScreen] media build failed', error);
+      return [];
+    }
   }, [competitions, users, t]);
 
   const fullScreenData = useMemo<FullScreenContent[]>(() => {
@@ -223,12 +228,17 @@ export default function HighlightsScreen() {
         timestamp: c.timestamp,
       })),
     }));
-    return injectNativeAds(mapped, nativeAds, 'highlights').map((item) => {
-      if ((item as NativeAdFeedItem).sponsored) {
+    try {
+      return injectNativeAds(mapped, nativeAds, 'highlights').map((item) => {
+        if ((item as NativeAdFeedItem).sponsored) {
+          return item as FullScreenContent;
+        }
         return item as FullScreenContent;
-      }
-      return item as FullScreenContent;
-    });
+      });
+    } catch (error) {
+      console.warn('[HighlightsScreen] native ads inject failed', error);
+      return mapped;
+    }
   }, [media, currentUser, nativeAds, t]);
 
   const onFullLike = useCallback(

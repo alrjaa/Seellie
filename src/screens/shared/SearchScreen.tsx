@@ -112,14 +112,14 @@ export default function SearchScreen() {
           id: `comp-${c.id}`,
           title: c.name,
           subtitle: `${t('screens.competitions')} · ${t('screens.teamsMatches', {
-            teams: c.teams.length,
-            matches: c.matches.length,
+            teams: (c.teams || []).length,
+            matches: (c.matches || []).length,
           })}`,
           href: competitionHref(c.id),
           kind: t('screens.competitions'),
         });
       }
-      c.teams.forEach((team) => {
+      (c.teams || []).forEach((team) => {
         if (team.name.toLowerCase().includes(q)) {
           results.push({
             id: `team-${team.id}`,
@@ -129,7 +129,7 @@ export default function SearchScreen() {
             kind: t('searchUi.kindTeam'),
           });
         }
-        team.players.forEach((p) => {
+        (team.players || []).forEach((p) => {
           if (
             p.name.toLowerCase().includes(q) ||
             String(p.jerseyNumber).includes(q)
@@ -166,9 +166,9 @@ export default function SearchScreen() {
           }
         });
       });
-      c.matches.forEach((m) => {
-        const t1 = c.teams.find((x) => x.id === m.team1Id)?.name || '?';
-        const t2 = c.teams.find((x) => x.id === m.team2Id)?.name || '?';
+      (c.matches || []).forEach((m) => {
+        const t1 = (c.teams || []).find((x) => x.id === m.team1Id)?.name || '?';
+        const t2 = (c.teams || []).find((x) => x.id === m.team2Id)?.name || '?';
         const label = `${t1} ${t('screens.vs')} ${t2}`;
         if (label.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)) {
           results.push({
@@ -203,7 +203,7 @@ export default function SearchScreen() {
               }
             : undefined,
       });
-      u.analysisContent.forEach((a) => {
+      (u.analysisContent || []).forEach((a) => {
         if (
           a.title.toLowerCase().includes(q) ||
           a.content.toLowerCase().includes(q)
@@ -217,7 +217,7 @@ export default function SearchScreen() {
           });
         }
       });
-      u.posts.forEach((p) => {
+      (u.posts || []).forEach((p) => {
         if (p.text.toLowerCase().includes(q)) {
           results.push({
             id: `post-${p.id}`,

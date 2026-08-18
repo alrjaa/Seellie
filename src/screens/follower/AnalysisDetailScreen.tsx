@@ -27,7 +27,7 @@ export default function AnalysisDetailScreen() {
 
   const found = useMemo(() => {
     for (const user of users) {
-      const analysis = user.analysisContent.find((a) => a.id === id);
+      const analysis = (user.analysisContent || []).find((a) => a.id === id);
       if (analysis) return { user, analysis };
     }
     return null;

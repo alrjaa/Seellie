@@ -17,6 +17,7 @@ type CompetitionCloudRow = {
 function reviveCompetition(raw: Competition): Competition {
   return {
     ...raw,
+    teams: raw.teams ?? [],
     matches: (raw.matches ?? []).map((match) => ({
       ...match,
       date:

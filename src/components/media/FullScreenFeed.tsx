@@ -1210,26 +1210,27 @@ function FullScreenFeedComponent({
   const overlayPadTop = topOverlaySafeArea
     ? insets.top + HEADER_BELOW_STATUS_GAP
     : 8;
+  const chromeVisible = visible || data.length === 0;
 
   useEffect(() => {
     const useNative = Platform.OS !== 'web';
-    if (visible) {
+    if (chromeVisible) {
       overlayOpacity.setValue(1);
       overlayTranslate.setValue(0);
     }
     Animated.parallel([
       Animated.timing(overlayOpacity, {
-        toValue: visible ? 1 : 0,
-        duration: visible ? 180 : 120,
+        toValue: chromeVisible ? 1 : 0,
+        duration: chromeVisible ? 180 : 120,
         useNativeDriver: useNative,
       }),
       Animated.timing(overlayTranslate, {
-        toValue: visible ? 0 : -12,
-        duration: visible ? 180 : 120,
+        toValue: chromeVisible ? 0 : -12,
+        duration: chromeVisible ? 180 : 120,
         useNativeDriver: useNative,
       }),
     ]).start();
-  }, [overlayOpacity, overlayTranslate, visible]);
+  }, [overlayOpacity, overlayTranslate, chromeVisible]);
 
   useEffect(() => {
     setActiveIndex((current) => {
@@ -1371,7 +1372,7 @@ function FullScreenFeedComponent({
               transform: [{ translateY: overlayTranslate }],
             },
           ]}
-          pointerEvents={visible ? 'box-none' : 'none'}
+          pointerEvents={chromeVisible ? 'box-none' : 'none'}
         >
           {topOverlay}
         </Animated.View>

@@ -120,6 +120,29 @@ async function main() {
   assert.equal(catalogMerged[0].mobile, '0500000000');
   assert.equal(catalogMerged[0].name, 'Catalog');
 
+  const catalogNoEmail = [
+    baseUser({
+      id: '22222222-2222-4222-8222-222222222222',
+      email: '',
+      analysisContent: [{ id: 'a1' } as never],
+    }),
+  ];
+  const fromCatalog = mergeUsersPreferCloud(local, catalogNoEmail);
+  assert.ok(
+    fromCatalog.some((u) => u.id === catalogNoEmail[0].id),
+    'catalog user without email must be kept'
+  );
+  assert.ok(
+    fromCatalog.some((u) => u.id === 'local-1'),
+    'unrelated local user still kept when ids and emails differ'
+  );
+
+  const emptyEmailCloud = mergeUsersPreferCloud(
+    [],
+    [baseUser({ id: '33333333-3333-4333-8333-333333333333', email: '' })]
+  );
+  assert.equal(emptyEmailCloud.length, 1, 'empty email is not a drop condition');
+
   const cards: ShareCard[] = [
     {
       id: 'c1',
