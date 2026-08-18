@@ -58,6 +58,16 @@ async function main() {
   assert.ok(feedSrc.includes('unloadAsync'));
   assert.ok(feedSrc.includes('extraData={`${activeIndex}:${appActive}:${focused}:${data.length}`}'));
   assert.ok(!feedSrc.includes('bottom: 0,\n    zIndex: 4'));
+  assert.ok(!feedSrc.includes('{height > 0 ? ('));
+  assert.ok(feedSrc.includes('useWindowDimensions'));
+
+  const generalSrc = readFileSync(
+    join(__dirname, '../src/screens/follower/GeneralScreen.tsx'),
+    'utf8'
+  );
+  assert.ok(generalSrc.includes('(user.analysisContent || []).forEach'));
+  assert.ok(generalSrc.includes('(user.posts || []).forEach'));
+  assert.ok(generalSrc.includes('[GeneralScreen] feed build failed'));
 
   console.log('F12-P2-05 comments unit: PASS');
 }

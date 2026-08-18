@@ -21,6 +21,7 @@ import {
   TextInput,
   View,
   Linking,
+  useWindowDimensions,
   type LayoutChangeEvent,
   type ListRenderItem,
   type ViewToken,
@@ -1126,12 +1127,15 @@ function FullScreenFeedComponent({
   const theme = useAppTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const focused = useIsFocused();
   const { visible } = useFloatingVisibility(true);
   const reactId = useId();
   const sourceId = `feed:${reactId}`;
-  const [height, setHeight] = useState(0);
+  const [layoutHeight, setLayoutHeight] = useState(0);
   const heightRef = useRef(0);
+  const fallbackHeight = Math.max(1, Math.round(windowHeight) || 1);
+  const height = layoutHeight > 0 ? layoutHeight : fallbackHeight;
   const freezeFeedHeightRef = useRef(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
@@ -1247,7 +1251,7 @@ function FullScreenFeedComponent({
       return;
     }
     heightRef.current = next;
-    setHeight(next);
+    setLayoutHeight(next);
   }, []);
 
   const onComposerFocusChange = useCallback((focused: boolean) => {
@@ -1324,40 +1328,38 @@ function FullScreenFeedComponent({
       ]}
       onLayout={onLayout}
     >
-      {height > 0 ? (
-        <FlatList
-          data={data}
-          keyExtractor={(item, index) => `${item.id}__${index}`}
-          renderItem={renderItem}
-          extraData={`${activeIndex}:${appActive}:${focused}:${data.length}`}
-          pagingEnabled
-          disableIntervalMomentum
-          decelerationRate="fast"
-          showsVerticalScrollIndicator={false}
-          getItemLayout={height > 0 ? getItemLayout : undefined}
-          initialNumToRender={2}
-          maxToRenderPerBatch={2}
-          windowSize={3}
-          removeClippedSubviews={false}
-          onScroll={onScroll}
-          onScrollBeginDrag={onScrollBeginDrag}
-          onMomentumScrollBegin={onMomentumScrollBegin}
-          onScrollEndDrag={onScrollEndDrag}
-          onMomentumScrollEnd={onMomentumScrollEnd}
-          scrollEventThrottle={16}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={viewabilityConfig}
-          ListEmptyComponent={
-            <View style={[styles.empty, { height }]}>
-              <EmptyState
-                title={resolvedEmptyTitle}
-                description={resolvedEmptyDescription}
-                icon={emptyIcon}
-              />
-            </View>
-          }
-        />
-      ) : null}
+      <FlatList
+        data={data}
+        keyExtractor={(item, index) => `${item.id}__${index}`}
+        renderItem={renderItem}
+        extraData={`${activeIndex}:${appActive}:${focused}:${data.length}`}
+        pagingEnabled
+        disableIntervalMomentum
+        decelerationRate="fast"
+        showsVerticalScrollIndicator={false}
+        getItemLayout={getItemLayout}
+        initialNumToRender={2}
+        maxToRenderPerBatch={2}
+        windowSize={3}
+        removeClippedSubviews={false}
+        onScroll={onScroll}
+        onScrollBeginDrag={onScrollBeginDrag}
+        onMomentumScrollBegin={onMomentumScrollBegin}
+        onScrollEndDrag={onScrollEndDrag}
+        onMomentumScrollEnd={onMomentumScrollEnd}
+        scrollEventThrottle={16}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        ListEmptyComponent={
+          <View style={[styles.empty, { height }]}>
+            <EmptyState
+              title={resolvedEmptyTitle}
+              description={resolvedEmptyDescription}
+              icon={emptyIcon}
+            />
+          </View>
+        }
+      />
 
       {topOverlay ? (
         <Animated.View

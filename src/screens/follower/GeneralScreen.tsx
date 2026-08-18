@@ -309,10 +309,10 @@ export default function GeneralFeedScreen() {
 
   const feed = useMemo(() => {
     const items: FeedItem[] = [];
-
-    users.forEach((user) => {
+    try {
+    (users || []).forEach((user) => {
       if (userHasRole(user, 'freelancer')) {
-        user.posts.forEach((p) => {
+        (user.posts || []).forEach((p) => {
           items.push({
             id: `post-${p.id}`,
             type: 'post',
@@ -321,7 +321,7 @@ export default function GeneralFeedScreen() {
             authorHandle: user.handle,
             authorAvatar: user.avatar,
             text: p.text,
-            likes: p.likes,
+            likes: p.likes || [],
             timestamp: new Date(p.timestamp),
             locationCity: user.city,
             locationRegion: user.region,
@@ -373,7 +373,7 @@ export default function GeneralFeedScreen() {
         });
       }
 
-      user.analysisContent.forEach((a) => {
+      (user.analysisContent || []).forEach((a) => {
         if (a.status === 'blocked' || a.status === 'suspended') return;
         const videoUrl =
           a.videoUrl && isHttpUrl(a.videoUrl) ? a.videoUrl.trim() : undefined;
@@ -399,7 +399,7 @@ export default function GeneralFeedScreen() {
           mediaUrl: videoUrl || posterUrl,
           posterUrl,
           mediaKind,
-          likes: a.likes,
+          likes: a.likes || [],
           comments: a.comments || [],
           timestamp: new Date(a.timestamp),
           subtitle: t('screens.typeAnalysis'),
@@ -409,7 +409,7 @@ export default function GeneralFeedScreen() {
       });
     });
 
-    competitions.forEach((comp) => {
+    (competitions || []).forEach((comp) => {
       const organizer = users.find((u) => u.id === comp.organizerId);
       const uploaderId = comp.organizerId;
       const uploaderName = organizer?.name || comp.name;
@@ -461,8 +461,8 @@ export default function GeneralFeedScreen() {
         });
       });
 
-      comp.teams.forEach((team) => {
-        team.players.forEach((player) => {
+      (comp.teams || []).forEach((team) => {
+        (team.players || []).forEach((player) => {
           (player.media?.photos || []).forEach((photo) => {
             if (!isHttpUrl(photo.url)) return;
             items.push({
@@ -508,9 +508,9 @@ export default function GeneralFeedScreen() {
         });
       });
 
-      comp.matches.forEach((match) => {
-        const t1 = comp.teams.find((x) => x.id === match.team1Id)?.name || '?';
-        const t2 = comp.teams.find((x) => x.id === match.team2Id)?.name || '?';
+      (comp.matches || []).forEach((match) => {
+        const t1 = (comp.teams || []).find((x) => x.id === match.team1Id)?.name || '?';
+        const t2 = (comp.teams || []).find((x) => x.id === match.team2Id)?.name || '?';
         const label = `${t1} ${t('screens.vs')} ${t2}`;
         (match.media?.photos || []).forEach((photo) => {
           if (!isHttpUrl(photo.url)) return;
@@ -557,7 +557,7 @@ export default function GeneralFeedScreen() {
       });
     });
 
-    comments.forEach((c) => {
+    (comments || []).forEach((c) => {
       if (c.status === 'blocked' || c.status === 'suspended') return;
       const author = users.find((u) => u.id === c.authorId);
       const forumVideo =
@@ -598,7 +598,7 @@ export default function GeneralFeedScreen() {
     });
 
     // نقاشات سريعة (أرشيف الدردشة السابق) تظهر مع الساحة
-    quickComments.forEach((c) => {
+    (quickComments || []).forEach((c) => {
       if (c.status === 'blocked' || c.status === 'suspended') return;
       const author = users.find((u) => u.id === c.authorId);
       items.push({
@@ -621,6 +621,10 @@ export default function GeneralFeedScreen() {
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
+    } catch (error) {
+      console.warn('[GeneralScreen] feed build failed', error);
+      return [];
+    }
   }, [users, competitions, comments, quickComments, t, isHttpUrl]);
 
   const filtered = useMemo(() => {
