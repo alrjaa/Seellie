@@ -226,12 +226,13 @@ export function ctaLabelForPreset(
 
 export function reviewStatusFromChecks(
   checks: AdStudioCheck[],
-  persistedStatus: 'draft' | 'active' | 'paused',
+  persistedStatus: 'draft' | 'active' | 'paused' | 'pending_review',
   processing: boolean
-): 'processing' | 'review' | 'approved' | 'rejected' | 'draft' | 'paused' {
+): 'processing' | 'review' | 'approved' | 'rejected' | 'draft' | 'paused' | 'pending_review' {
   if (processing) return 'processing';
   const blocked = checks.some((c) => c.level === 'block');
   if (blocked) return 'rejected';
+  if (persistedStatus === 'pending_review') return 'pending_review';
   if (persistedStatus === 'active') return 'approved';
   if (persistedStatus === 'paused') return 'paused';
   if (checks.length > 0) return 'review';

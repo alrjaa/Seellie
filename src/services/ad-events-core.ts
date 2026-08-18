@@ -72,6 +72,13 @@ export function shouldFlushAdEventQueue(
   return nowMs - lastFlushMs >= AD_EVENT_FLUSH_MS;
 }
 
-export function impressionDedupeKey(adId: string, sessionId: string): string {
-  return `${sessionId}:${adId}:impression`;
+export function impressionDedupeKey(
+  adId: string,
+  sessionId: string,
+  placement?: string
+): string {
+  const pl = String(placement ?? 'unknown')
+    .trim()
+    .slice(0, 32);
+  return `${sessionId}:${adId}:${pl}:impression`;
 }

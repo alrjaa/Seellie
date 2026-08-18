@@ -39,7 +39,7 @@ create table if not exists public.advertisements (
   advertiser_id uuid not null references public.advertiser_accounts (id) on delete cascade,
   campaign_id uuid not null references public.ad_campaigns (id) on delete cascade,
   status text not null default 'draft'
-    check (status in ('draft', 'active', 'paused')),
+    check (status in ('draft', 'pending_review', 'active', 'paused')),
   advertiser_name text not null check (char_length(advertiser_name) between 1 and 80),
   advertiser_handle text check (
     advertiser_handle is null or char_length(advertiser_handle) <= 40
@@ -70,6 +70,11 @@ create index if not exists advertisements_live_idx
 
 create index if not exists advertisements_campaign_idx
   on public.advertisements (campaign_id, updated_at desc);
+
+-- Expand status enum on existing deployments (idempotent).
+alter table public.advertisements drop constraint if exists advertisements_status_check;
+alter table public.advertisements add constraint advertisements_status_check
+  check (status in ('draft', 'pending_review', 'active', 'paused'));
 
 -- ─── RLS ──────────────────────────────────────────────────────────────────
 
@@ -348,7 +353,10 @@ begin
   dur := greatest(6, least(15, dur));
 
   st := left(trim(coalesce(p_ad->>'status', 'draft')), 16);
-  if st not in ('draft', 'active', 'paused') then st := 'draft'; end if;
+  if st not in ('draft', 'active', 'paused', 'pending_review') then st := 'draft'; end if;
+  if st = 'active' and not public.is_app_superadmin() then
+    st := 'pending_review';
+  end if;
 
   pl := coalesce(
     (
@@ -459,6 +467,15 @@ begin
     returning id into ad_id;
   end if;
 
+  if st = 'active' then
+    update public.ad_campaigns set
+      status = 'active',
+      updated_at = now()
+    where id = camp
+      and advertiser_id = aid
+      and status in ('draft', 'paused');
+  end if;
+
   return (select to_jsonb(a.*) from public.advertisements a where a.id = ad_id);
 end;
 $$;
@@ -493,6 +510,79 @@ $$;
 
 revoke all on function public.list_campaign_advertisements(uuid) from public;
 grant execute on function public.list_campaign_advertisements(uuid) to authenticated;
+
+-- ─── Superadmin review (advertiser cannot self-activate) ───────────────────
+
+create or replace function public.list_pending_advertisements()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_app_superadmin() then
+    return '[]'::jsonb;
+  end if;
+  return coalesce((
+    select jsonb_agg(to_jsonb(a.*) order by a.updated_at desc)
+    from public.advertisements a
+    where a.status = 'pending_review'
+    limit 50
+  ), '[]'::jsonb);
+end;
+$$;
+
+revoke all on function public.list_pending_advertisements() from public;
+grant execute on function public.list_pending_advertisements() to authenticated;
+
+create or replace function public.admin_set_advertisement_status(
+  p_ad_id uuid,
+  p_status text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  st text;
+  camp uuid;
+begin
+  if not public.is_app_superadmin() then
+    raise exception 'forbidden';
+  end if;
+  if p_ad_id is null then
+    raise exception 'ad id required';
+  end if;
+
+  st := left(trim(coalesce(p_status, '')), 16);
+  if st not in ('draft', 'pending_review', 'active', 'paused') then
+    raise exception 'invalid status';
+  end if;
+
+  update public.advertisements set
+    status = st,
+    updated_at = now()
+  where id = p_ad_id
+  returning campaign_id into camp;
+
+  if not found then
+    raise exception 'ad not found';
+  end if;
+
+  if st = 'active' and camp is not null then
+    update public.ad_campaigns set
+      status = 'active',
+      updated_at = now()
+    where id = camp and status in ('draft', 'paused');
+  end if;
+
+  return (select to_jsonb(a.*) from public.advertisements a where a.id = p_ad_id);
+end;
+$$;
+
+revoke all on function public.admin_set_advertisement_status(uuid, text) from public;
+grant execute on function public.admin_set_advertisement_status(uuid, text) to authenticated;
 
 -- ─── Public feed delivery (authenticated read — same as app_blobs) ─────────
 

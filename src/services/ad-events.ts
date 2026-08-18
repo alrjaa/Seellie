@@ -27,7 +27,7 @@ export function queueAdEvent(payload: AdEventPayload): void {
   const row = sanitizeAdEvent(payload);
   if (!row) return;
   if (row.event === 'impression') {
-    const key = impressionDedupeKey(row.adId, sessionId);
+    const key = impressionDedupeKey(row.adId, sessionId, row.placement);
     if (seenImpressions.has(key)) return;
     seenImpressions.add(key);
   }

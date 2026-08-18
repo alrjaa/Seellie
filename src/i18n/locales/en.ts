@@ -650,10 +650,12 @@ export const en: TranslationTree = {
     saveFailed: 'Save failed',
     saved: 'Saved',
     savedAndLive:
-      'Saved — appears in the mobile app (General/Unique/Highlights) within a minute for signed-in users.',
+      'Saved — appears in the mobile app after superadmin approval (General/Unique/Highlights).',
+    savedPendingReview:
+      'Submitted for review — a superadmin must approve before the ad goes live.',
     feedVisibilityHint:
-      'To show in the mobile app feed: choose Active, then save. Draft and paused ads stay hidden.',
-    feedVisibilityDraft: 'Draft — hidden from the mobile app until you activate the ad.',
+      'Active submits the ad for review. It will not appear in the app until a superadmin approves it.',
+    feedVisibilityDraft: 'Draft — not submitted for review and hidden from the app.',
     feedVisibilityPaused: 'Paused — hidden from the feed until you turn it back on.',
     saveError: {
       unknown: 'Cloud save failed. Sign in again and retry.',
@@ -681,6 +683,7 @@ export const en: TranslationTree = {
       approved: 'Approved / scheduled',
       rejected: 'Rejected — fix the reasons below',
       draft: 'Draft',
+      pending_review: 'Pending review',
       paused: 'Paused',
     },
     rejected: 'Video rejected',
@@ -718,6 +721,7 @@ export const en: TranslationTree = {
     },
     status: {
       draft: 'Draft',
+      pending_review: 'Pending review',
       active: 'Active',
       paused: 'Paused',
       ended: 'Ended',
@@ -1813,6 +1817,12 @@ export const en: TranslationTree = {
       removed: 'Ad removed.',
       empty: 'No in-feed ads',
       emptyDesc: 'Add a short vertical clip to appear inside the feed.',
+      pendingDbTitle: 'Advertiser submissions — pending review',
+      pendingDbEmpty: 'No pending ads from ads.seellie.com',
+      pendingDbApprove: 'Approve & publish',
+      pendingDbReject: 'Reject (draft)',
+      pendingDbApproved: 'Ad approved',
+      pendingDbRejected: 'Ad returned to draft',
       status: {
         draft: 'Draft',
         active: 'Active',

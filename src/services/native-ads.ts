@@ -13,7 +13,7 @@ export const NATIVE_AD_HOOK_MS = 3000;
 
 export type NativeAdPlacement = 'general' | 'unique' | 'highlights';
 
-export type NativeAdStatus = 'draft' | 'active' | 'paused';
+export type NativeAdStatus = 'draft' | 'pending_review' | 'active' | 'paused';
 
 export type NativeInFeedAd = {
   id: string;
@@ -102,7 +102,10 @@ export function sanitizeNativeAd(raw: unknown): NativeInFeedAd | null {
   if (!id || !videoUrl || !advertiserName) return null;
   const statusRaw = clip(row.status, 16);
   const status: NativeAdStatus =
-    statusRaw === 'active' || statusRaw === 'paused' || statusRaw === 'draft'
+    statusRaw === 'active' ||
+    statusRaw === 'paused' ||
+    statusRaw === 'draft' ||
+    statusRaw === 'pending_review'
       ? statusRaw
       : 'draft';
   const placements: NativeAdPlacement[] = Array.isArray(row.placements)

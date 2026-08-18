@@ -22,7 +22,7 @@ export type AdStudioDraft = {
   targetCountry: string;
   targetRegion: string;
   targetCity: string;
-  status: 'draft' | 'active' | 'paused';
+  status: 'draft' | 'pending_review' | 'active' | 'paused';
   placements: NativeAdPlacement[];
   trimStart: number;
   trimEnd: number;

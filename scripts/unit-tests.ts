@@ -36,6 +36,7 @@ import {
 import {
   shouldFlushAdEventQueue,
   sanitizeAdEvent,
+  impressionDedupeKey,
   AD_EVENT_BATCH_MAX,
 } from '../src/services/ad-events-core';
 import {
@@ -234,6 +235,14 @@ test('ad preferences hide and report', () => {
   const reported = reportAdInPreferences(hidden, 'y');
   assert.ok(reported.hiddenAdIds.includes('y'));
   assert.ok(reported.reportedAdIds.includes('y'));
+});
+
+test('impression dedupe is per ad placement and session', () => {
+  const a = impressionDedupeKey('ad1', 'sess', 'general');
+  const b = impressionDedupeKey('ad1', 'sess', 'unique');
+  const c = impressionDedupeKey('ad1', 'sess', 'general');
+  assert.notEqual(a, b);
+  assert.equal(a, c);
 });
 
 test('ad event batch flush thresholds', () => {

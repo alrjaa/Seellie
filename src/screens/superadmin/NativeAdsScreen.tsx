@@ -29,6 +29,11 @@ import { resolvePublicMediaUrl, cloudWriteErrorMessage } from '@/services/cloud-
 import { isSupabaseConfigured } from '@/services/supabase';
 import { isUuid } from '@/services/supabase-messages';
 import {
+  adminSetAdvertisementStatus,
+  listPendingAdvertisements,
+  type DbAdvertisement,
+} from '@/services/advertiser-platform';
+import {
   fetchAppBlob,
   upsertAppBlob,
 } from '@/services/supabase-app-blobs';
@@ -124,10 +129,16 @@ export default function NativeAdsScreen() {
   const [pickingPoster, setPickingPoster] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [pendingDb, setPendingDb] = useState<DbAdvertisement[]>([]);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetchAppBlob<unknown>(NATIVE_ADS_BLOB_KEY);
+    const [res, pending] = await Promise.all([
+      fetchAppBlob<unknown>(NATIVE_ADS_BLOB_KEY),
+      listPendingAdvertisements(),
+    ]);
     setAds(sanitizeNativeAdsPayload(res.data));
+    setPendingDb(pending);
     setLoading(false);
   }, []);
 
@@ -412,12 +423,68 @@ export default function NativeAdsScreen() {
     });
   };
 
+  const reviewDbAd = useCallback(
+    async (adId: string, next: 'active' | 'draft') => {
+      setReviewingId(adId);
+      try {
+        const { data, error } = await adminSetAdvertisementStatus(adId, next);
+        if (!data) {
+          toast({
+            variant: 'destructive',
+            title: t('superadmin.ads.saveFailed'),
+            description: error,
+          });
+          return;
+        }
+        toast({
+          variant: 'success',
+          title:
+            next === 'active'
+              ? t('superadmin.ads.pendingDbApproved')
+              : t('superadmin.ads.pendingDbRejected'),
+        });
+        await load();
+      } finally {
+        setReviewingId(null);
+      }
+    },
+    [load, t, toast]
+  );
+
   const header = useMemo(
     () => (
       <View style={{ gap: 10, marginBottom: 8 }}>
         <Title>{t('superadmin.modules.ads.title')}</Title>
         <Muted>{t('superadmin.ads.subtitle')}</Muted>
         <Muted>{t('superadmin.ads.specHint')}</Muted>
+        <Subtitle>{t('superadmin.ads.pendingDbTitle')}</Subtitle>
+        {pendingDb.length === 0 ? (
+          <Muted>{t('superadmin.ads.pendingDbEmpty')}</Muted>
+        ) : (
+          pendingDb.map((row) => (
+            <Card key={row.id} style={{ gap: 8 }}>
+              <Subtitle>{row.advertiser_name}</Subtitle>
+              <Muted numberOfLines={2}>{row.title || row.video_url}</Muted>
+              <View style={styles.formActions}>
+                <Button
+                  label={t('superadmin.ads.pendingDbApprove')}
+                  onPress={() => void reviewDbAd(row.id, 'active')}
+                  loading={reviewingId === row.id}
+                  disabled={!!reviewingId}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  label={t('superadmin.ads.pendingDbReject')}
+                  variant="outline"
+                  onPress={() => void reviewDbAd(row.id, 'draft')}
+                  loading={reviewingId === row.id}
+                  disabled={!!reviewingId}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </Card>
+          ))
+        )}
         <Button label={t('superadmin.ads.add')} onPress={openAdd} />
         {formOpen ? (
           <Card style={{ gap: 10 }}>
@@ -577,10 +644,13 @@ export default function NativeAdsScreen() {
     [
       draft,
       formOpen,
+      pendingDb,
       pickPoster,
       pickVideo,
       pickingPoster,
       pickingVideo,
+      reviewDbAd,
+      reviewingId,
       save,
       saving,
       t,

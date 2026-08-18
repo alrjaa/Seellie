@@ -142,7 +142,9 @@ export default function AdsAdEditorScreen() {
   const [targetCountry, setTargetCountry] = useState('');
   const [targetRegion, setTargetRegion] = useState('');
   const [targetCity, setTargetCity] = useState('');
-  const [status, setStatus] = useState<'draft' | 'active' | 'paused'>('draft');
+  const [status, setStatus] = useState<
+    'draft' | 'active' | 'paused' | 'pending_review'
+  >('draft');
   const [placements, setPlacements] = useState<NativeAdPlacement[]>(['general']);
   const [pickingVideo, setPickingVideo] = useState(false);
   const [pickingCover, setPickingCover] = useState(false);
@@ -616,7 +618,11 @@ export default function AdsAdEditorScreen() {
         variant: 'success',
         title: t('adsPortal.saved'),
         description:
-          status === 'active' ? t('adsPortal.savedAndLive') : undefined,
+          status === 'active'
+            ? t('adsPortal.savedPendingReview')
+            : status === 'pending_review'
+              ? t('adsPortal.savedPendingReview')
+              : undefined,
       });
       router.replace(`/ads/campaign/${campaignId}` as any);
     } catch {

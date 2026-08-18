@@ -29,7 +29,7 @@ export type DbAdvertisement = {
   id: string;
   advertiser_id: string;
   campaign_id: string;
-  status: 'draft' | 'active' | 'paused';
+  status: 'draft' | 'pending_review' | 'active' | 'paused';
   advertiser_name: string;
   advertiser_handle?: string | null;
   title?: string | null;
@@ -258,6 +258,21 @@ export async function saveAdvertisement(
 export async function fetchPublicNativeAdsFromDb(): Promise<unknown> {
   const { data } = await rpc<unknown>('get_public_native_ads');
   return data;
+}
+
+export async function listPendingAdvertisements(): Promise<DbAdvertisement[]> {
+  const { data } = await rpc<unknown>('list_pending_advertisements');
+  return parseRpcArray<DbAdvertisement>(data);
+}
+
+export async function adminSetAdvertisementStatus(
+  adId: string,
+  status: DbAdvertisement['status']
+): Promise<RpcResult<DbAdvertisement>> {
+  return rpc<DbAdvertisement>('admin_set_advertisement_status', {
+    p_ad_id: adId,
+    p_status: status,
+  });
 }
 
 export function dbAdToNativeShape(row: DbAdvertisement): Record<string, unknown> {
