@@ -51,7 +51,7 @@ export async function flushAdEvents(): Promise<void> {
   flushing = true;
   const batch = queue.splice(0, 20);
   try {
-    await sb.rpc('append_ad_events', {
+    const { error } = await sb.rpc('append_ad_events', {
       p_events: batch.map((row) => ({
         adId: row.adId,
         event: row.event,
@@ -60,6 +60,10 @@ export async function flushAdEvents(): Promise<void> {
         at: row.at ?? Date.now(),
       })),
     });
+    if (error) {
+      queue.unshift(...batch);
+      return;
+    }
     lastFlushMs = Date.now();
   } catch {
     queue.unshift(...batch);

@@ -8,5 +8,5 @@ export default function AdsIndexScreen() {
   const { currentUser, loading } = useTournament();
   if (loading) return <LoadingState />;
   if (currentUser) return <Redirect href={ADS_PORTAL_HOME as any} />;
-  return <Redirect href="/ads/login" />;
+  return <Redirect href={"/ads/login" as any} />;
 }

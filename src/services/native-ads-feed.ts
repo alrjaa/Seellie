@@ -24,7 +24,11 @@ function parseDbAdsRaw(raw: unknown): unknown[] {
   return raw ? [raw] : [];
 }
 
+let inflightFetch: Promise<NativeInFeedAd[]> | null = null;
+
 export async function fetchLiveNativeAds(): Promise<NativeInFeedAd[]> {
+  if (inflightFetch) return inflightFetch;
+  inflightFetch = (async () => {
   const [blobRes, dbRaw] = await Promise.all([
     fetchAppBlob<unknown>(NATIVE_ADS_BLOB_KEY),
     fetchPublicNativeAdsFromDb(),
@@ -40,6 +44,12 @@ export async function fetchLiveNativeAds(): Promise<NativeInFeedAd[]> {
     if (merged.length >= 40) break;
   }
   return merged;
+  })();
+  try {
+    return await inflightFetch;
+  } finally {
+    inflightFetch = null;
+  }
 }
 
 export function subscribeLiveNativeAds(onChange: () => void): () => void {

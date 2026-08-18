@@ -43,7 +43,7 @@ export default function Index() {
     if (currentUser) {
       return <Redirect href={ADS_PORTAL_HOME as any} />;
     }
-    return <Redirect href="/ads/login" as any />;
+    return <Redirect href={"/ads/login" as any} />;
   }
 
   // مضيف المشرف المستقل (admin.seellie.com) — لا يدخل بوابة التطبيق العامة
