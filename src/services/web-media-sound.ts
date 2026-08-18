@@ -30,20 +30,45 @@ type PlayableVideo = {
   muted: boolean;
   defaultMuted: boolean;
   volume: number;
+  paused?: boolean;
   play: () => Promise<void> | void;
 };
 
-export async function playWebVideoWithSoundPolicy(
+export function shouldPreferSoundOnAppear(opts: {
+  sessionUnlocked: boolean;
+  hasBeenActive: boolean;
+}): boolean {
+  return opts.sessionUnlocked || opts.hasBeenActive;
+}
+
+export function hasWebMediaGesture(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = (
+    navigator as Navigator & {
+      userActivation?: { isActive?: boolean; hasBeenActive?: boolean };
+    }
+  ).userActivation;
+  return !!(ua?.isActive || ua?.hasBeenActive);
+}
+
+/**
+ * التشغيل عند الظهور: الصورة أولاً (صامت)، ثم الصوت إن سُمح.
+ * لا نبدأ غير صامت — ذلك يمنع autoplay على الجوال فيتوقف الفيديو حتى النقر.
+ */
+export async function startVisibleWebVideo(
   el: PlayableVideo,
-  unlocked: boolean
+  preferSound: boolean
 ): Promise<'unmuted' | 'muted'> {
   el.volume = 1;
-  if (unlocked) {
-    el.muted = false;
-    el.defaultMuted = false;
+  el.muted = true;
+  el.defaultMuted = true;
+  await el.play();
+  if (!preferSound) return 'muted';
+  el.muted = false;
+  el.defaultMuted = false;
+  if (el.paused === true) {
     try {
       await el.play();
-      return 'unmuted';
     } catch {
       el.muted = true;
       el.defaultMuted = true;
@@ -51,10 +76,14 @@ export async function playWebVideoWithSoundPolicy(
       return 'muted';
     }
   }
-  el.muted = true;
-  el.defaultMuted = true;
-  await el.play();
-  return 'muted';
+  return el.muted ? 'muted' : 'unmuted';
+}
+
+export async function playWebVideoWithSoundPolicy(
+  el: PlayableVideo,
+  unlocked: boolean
+): Promise<'unmuted' | 'muted'> {
+  return startVisibleWebVideo(el, unlocked);
 }
 
 type ActiveWebVideo = {
@@ -87,11 +116,6 @@ export function registerActiveWebVideo(
     return;
   }
   active = { el, userPaused };
-  if (unlocked) {
-    el.muted = false;
-    el.defaultMuted = false;
-    el.volume = 1;
-  }
 }
 
 export function unregisterActiveWebVideo(el?: HTMLVideoElement | null): void {

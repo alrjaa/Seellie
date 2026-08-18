@@ -53,7 +53,9 @@ import {
   nextWebSoundSession,
   playWebVideoWithSoundPolicy,
   shouldAutoplayMuted,
+  shouldPreferSoundOnAppear,
   shouldResumeVideoOnGesture,
+  startVisibleWebVideo,
 } from '../src/services/web-media-sound';
 
 function test(name: string, fn: () => void) {
@@ -413,7 +415,25 @@ test('web media sound policy unmutes after session unlock', async () => {
   assert.equal(await playWebVideoWithSoundPolicy(el, true), 'unmuted');
   assert.equal(el.muted, false);
   assert.equal(el.volume, 1);
-  assert.deepEqual(plays, [false, true]);
+  assert.deepEqual(plays, [false, false]);
+});
+
+test('visible video always starts muted then tries sound', async () => {
+  const plays: boolean[] = [];
+  const el = {
+    muted: true,
+    defaultMuted: true,
+    volume: 0,
+    paused: false,
+    play: async () => {
+      plays.push(!el.muted);
+    },
+  };
+  assert.equal(await startVisibleWebVideo(el, true), 'unmuted');
+  assert.equal(el.muted, false);
+  assert.deepEqual(plays, [false]);
+  assert.equal(shouldPreferSoundOnAppear({ sessionUnlocked: false, hasBeenActive: true }), true);
+  assert.equal(shouldPreferSoundOnAppear({ sessionUnlocked: false, hasBeenActive: false }), false);
 });
 
 console.log('All tests passed.');

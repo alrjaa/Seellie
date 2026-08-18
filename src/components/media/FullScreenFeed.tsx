@@ -69,8 +69,8 @@ import { queueAdEvent } from '@/services/ad-events';
 import {
   isWebMediaSoundUnlocked,
   markWebMediaSoundUnlocked,
-  playWebVideoWithSoundPolicy,
   registerActiveWebVideo,
+  startVisibleWebVideo,
   subscribeWebMediaSound,
   unregisterActiveWebVideo,
 } from '@/services/web-media-sound';
@@ -224,7 +224,8 @@ const Slide = memo(function Slide({
   const soundUnlockedRef = useRef(isWebMediaSoundUnlocked());
   const skipNextToggleRef = useRef(false);
   const userPausedRef = useRef(false);
-  const [soundOn, setSoundOn] = useState(() => isWebMediaSoundUnlocked());
+  const startedNodeRef = useRef<HTMLVideoElement | null>(null);
+  const [soundOn, setSoundOn] = useState(false);
   /** F12-P2-05 — ignore stale play()/setState after fast swipe away */
   const playGenRef = useRef(0);
   const inputRef = useRef<TextInput>(null);
@@ -301,6 +302,7 @@ const Slide = memo(function Slide({
     trackedVideoCompleteRef.current = false;
     skipNextToggleRef.current = false;
     userPausedRef.current = false;
+    startedNodeRef.current = null;
   }, [item.id]);
 
   useEffect(() => {
@@ -456,15 +458,18 @@ const Slide = memo(function Slide({
   useEffect(() => {
     setLoadError(false);
     setFrameReady(false);
-    setPaused(true);
-    playGenRef.current += 1;
-    void videoRef.current?.pauseAsync().catch(() => undefined);
-    const el = htmlVideoRef.current;
-    if (el) {
-      el.pause();
-      el.currentTime = 0;
+    startedNodeRef.current = null;
+    if (!active) {
+      playGenRef.current += 1;
+      setPaused(true);
+      void videoRef.current?.pauseAsync().catch(() => undefined);
+      const el = htmlVideoRef.current;
+      if (el) {
+        el.pause();
+        el.currentTime = 0;
+      }
     }
-  }, [item.id, item.mediaUrl]);
+  }, [item.id, item.mediaUrl, active]);
 
   useEffect(() => {
     if (!active) {
@@ -528,38 +533,46 @@ const Slide = memo(function Slide({
     return () => unregisterActiveWebVideo(htmlVideoRef.current);
   }, [active, item.id]);
 
-  // ويب: تشغيل تلقائي — بالصوت إن فُتحت الجلسة، وإلا صامت حتى أول تفاعل
+  const startWebVideoOnAppear = useCallback(
+    (el: HTMLVideoElement | null) => {
+      if (!el || !item.mediaUrl || loadError || userPausedRef.current) return;
+      const gen = playGenRef.current;
+      if (el.getAttribute('src') !== item.mediaUrl) {
+        el.src = item.mediaUrl;
+      }
+      el.playsInline = true;
+      el.setAttribute('playsinline', 'true');
+      el.setAttribute('webkit-playsinline', 'true');
+      el.loop = true;
+      registerActiveWebVideo(el, () => userPausedRef.current);
+      void startVisibleWebVideo(el, true)
+        .then((mode) => {
+          if (playGenRef.current !== gen) return;
+          if (mode === 'unmuted') {
+            soundUnlockedRef.current = true;
+            markWebMediaSoundUnlocked();
+            setSoundOn(true);
+          }
+          setFrameReady(true);
+          setPaused(false);
+          trackVideoStart();
+        })
+        .catch(() => {
+          if (playGenRef.current !== gen) return;
+          setFrameReady(true);
+        });
+    },
+    [item.mediaUrl, loadError, trackVideoStart]
+  );
+
+  // ويب: تشغيل فور الظهور — بدون انتظار نقرة
   useEffect(() => {
-    if (Platform.OS !== 'web' || !active || !playableUri || loadError || paused) {
+    if (Platform.OS !== 'web' || !active || !playableUri || loadError) {
       return;
     }
-    const el = htmlVideoRef.current;
-    if (!el || !item.mediaUrl) return;
-    const gen = playGenRef.current;
-    if (el.getAttribute('src') !== item.mediaUrl) {
-      el.src = item.mediaUrl;
-    }
-    el.playsInline = true;
-    el.loop = true;
-    registerActiveWebVideo(el, () => userPausedRef.current);
-    const unlocked = isWebMediaSoundUnlocked() || soundUnlockedRef.current;
-    void playWebVideoWithSoundPolicy(el, unlocked)
-      .then((mode) => {
-        if (playGenRef.current !== gen) return;
-        if (mode === 'unmuted') {
-          soundUnlockedRef.current = true;
-          markWebMediaSoundUnlocked();
-          setSoundOn(true);
-        }
-        setFrameReady(true);
-        setPaused(false);
-        trackVideoStart();
-      })
-      .catch(() => {
-        if (playGenRef.current !== gen) return;
-        setFrameReady(true);
-      });
-  }, [active, playableUri, loadError, paused, item.mediaUrl]);
+    if (userPausedRef.current) return;
+    startWebVideoOnAppear(htmlVideoRef.current);
+  }, [active, playableUri, loadError, item.mediaUrl, startWebVideoOnAppear]);
 
   // أصلي: تشغيل تلقائي عند الظهور
   useEffect(() => {
@@ -738,11 +751,7 @@ const Slide = memo(function Slide({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={
-              !soundOn
-                ? t('adsPortal.tapToHear')
-                : paused
-                  ? t('media.playVideo')
-                  : t('media.pauseVideo')
+              paused ? t('media.playVideo') : t('media.pauseVideo')
             }
             onPressIn={() => {
               if (item.kind === 'video' && !soundOn) {
@@ -756,10 +765,14 @@ const Slide = memo(function Slide({
               ? createElement('video', {
                   ref: (node: HTMLVideoElement | null) => {
                     htmlVideoRef.current = node;
-                    if (node && active) {
-                      registerActiveWebVideo(node, () => userPausedRef.current);
-                    } else {
+                    if (!node) {
+                      startedNodeRef.current = null;
                       unregisterActiveWebVideo(node);
+                      return;
+                    }
+                    if (active && startedNodeRef.current !== node) {
+                      startedNodeRef.current = node;
+                      startWebVideoOnAppear(node);
                     }
                   },
                   src: item.mediaUrl,
@@ -819,17 +832,6 @@ const Slide = memo(function Slide({
                     : undefined
                 }
               />
-            ) : null}
-
-            {Platform.OS === 'web' &&
-            item.kind === 'video' &&
-            playableUri &&
-            !loadError &&
-            !soundOn ? (
-              <View style={styles.soundHint} pointerEvents="none">
-                <Ionicons name="volume-mute" size={22} color="#fff" />
-                <Text style={styles.soundHintText}>{t('adsPortal.tapToHear')}</Text>
-              </View>
             ) : null}
 
             {item.posterUrl &&

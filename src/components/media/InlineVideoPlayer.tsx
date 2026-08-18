@@ -30,7 +30,7 @@ import { clamp } from '@/theme/tokens';
 import {
   isWebMediaSoundUnlocked,
   registerActiveWebVideo,
-  shouldAutoplayMuted,
+  startVisibleWebVideo,
   subscribeWebMediaSound,
   unregisterActiveWebVideo,
 } from '@/services/web-media-sound';
@@ -122,15 +122,15 @@ function InlineVideoPlayerComponent({
       if (!node) return;
 
       node.onerror = () => markPlaybackFailed();
-      node.muted = shouldAutoplayMuted(soundOn || isWebMediaSoundUnlocked());
-      node.defaultMuted = node.muted;
       node.playsInline = true;
       node.loop = true;
       registerActiveWebVideo(node);
+      void startVisibleWebVideo(node, true).then((mode) => {
+        if (mode === 'unmuted') setSoundOn(true);
+      });
 
       if (!autoPlayMuted || typeof IntersectionObserver === 'undefined') {
         setInView(true);
-        void node.play().catch(() => undefined);
         return;
       }
 
@@ -142,10 +142,11 @@ function InlineVideoPlayerComponent({
           setInView(visible);
           const el = htmlRef.current;
           if (!el) return;
-          el.muted = shouldAutoplayMuted(isWebMediaSoundUnlocked());
           if (visible && focused && !fullscreen) {
             registerActiveWebVideo(el);
-            void el.play().catch(() => undefined);
+            void startVisibleWebVideo(el, true).then((mode) => {
+              if (mode === 'unmuted') setSoundOn(true);
+            });
           } else {
             el.pause();
             unregisterActiveWebVideo(el);
@@ -155,9 +156,8 @@ function InlineVideoPlayerComponent({
       );
       io.observe(node);
       observerRef.current = io;
-      void node.play().catch(() => undefined);
     },
-    [autoPlayMuted, focused, fullscreen, markPlaybackFailed, soundOn]
+    [autoPlayMuted, focused, fullscreen, markPlaybackFailed]
   );
 
   useEffect(() => {
@@ -201,9 +201,12 @@ function InlineVideoPlayerComponent({
     if (Platform.OS === 'web') {
       const el = htmlRef.current;
       if (!el) return;
-      el.muted = shouldAutoplayMuted(soundOn || isWebMediaSoundUnlocked());
-      if (shouldAutoPlay) void el.play().catch(() => undefined);
-      else el.pause();
+      el.muted = !soundOn;
+      if (shouldAutoPlay) {
+        void startVisibleWebVideo(el, true).then((mode) => {
+          if (mode === 'unmuted') setSoundOn(true);
+        });
+      } else el.pause();
       return;
     }
     if (!autoPlayMuted) return;
