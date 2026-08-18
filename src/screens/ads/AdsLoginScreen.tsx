@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
@@ -50,9 +50,11 @@ export default function AdsLoginScreen() {
         disabled={busy}
       />
       <View style={styles.links}>
-        <Link href="/ads/register" asChild>
-          <Button label={t('adsPortal.registerCta')} variant="outline" />
-        </Link>
+        <Button
+          label={t('adsPortal.registerCta')}
+          variant="outline"
+          onPress={() => router.push('/ads/register' as any)}
+        />
       </View>
     </Screen>
   );

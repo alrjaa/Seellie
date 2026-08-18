@@ -38,6 +38,14 @@ import {
   sanitizeAdEvent,
   AD_EVENT_BATCH_MAX,
 } from '../src/services/ad-events-core';
+import {
+  appendUtmParams,
+  clampAdTrimRange,
+  detectAdAspectRatio,
+  isSupportedAdVideoFormat,
+  isValidAdCtaUrl,
+  reviewAdVideo,
+} from '../src/utils/ad-video-studio';
 
 function test(name: string, fn: () => void) {
   try {
@@ -238,6 +246,38 @@ test('ad event batch flush thresholds', () => {
   });
   assert.ok(row);
   assert.equal(sanitizeAdEvent({ adId: '', event: 'click' }), null);
+});
+
+test('ad studio aspect and format', () => {
+  assert.equal(detectAdAspectRatio(1080, 1920), '9:16');
+  assert.equal(detectAdAspectRatio(1080, 1080), '1:1');
+  assert.equal(detectAdAspectRatio(1920, 1080), '16:9');
+  assert.equal(isSupportedAdVideoFormat('https://cdn.example/a.mp4'), true);
+  assert.equal(isSupportedAdVideoFormat('https://cdn.example/a.avi'), false);
+});
+
+test('ad studio review blocks bad duration and link', () => {
+  const short = reviewAdVideo({
+    probe: { durationSec: 3, width: 1080, height: 1920, sizeMb: 4 },
+    uri: 'https://cdn.example/a.mp4',
+  });
+  assert.ok(short.some((c) => c.code === 'duration_short'));
+  assert.equal(isValidAdCtaUrl('https://play.google.com/store/apps'), true);
+  assert.equal(isValidAdCtaUrl('javascript:alert(1)'), false);
+  const utm = appendUtmParams('https://seellie.com/offer', {
+    source: 'seellie',
+    medium: 'in_feed',
+    campaign: 'spring',
+  });
+  assert.match(utm, /utm_source=seellie/);
+  assert.match(utm, /utm_campaign=spring/);
+});
+
+test('ad studio trim clamps to 6–15s', () => {
+  const t1 = clampAdTrimRange(0, 40, 40);
+  assert.equal(t1.end - t1.start, 15);
+  const t2 = clampAdTrimRange(0, 2, 20);
+  assert.ok(t2.end - t2.start >= 6);
 });
 
 console.log('All tests passed.');

@@ -103,8 +103,8 @@ export const MEDIA_SPECS: Record<MediaUploadKind, MediaSpec> = {
     maxDurationSec: 15,
     width: 1080,
     height: 1920,
-    maxMb: 25,
-    formats: 'MP4, MOV',
+    maxMb: 40,
+    formats: 'MP4, MOV (H.264)',
   },
 };
 
