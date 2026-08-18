@@ -428,6 +428,7 @@ export const en: TranslationTree = {
     analysisVideoTapPlay: 'Analysis video — tap to play',
     tapToPlayVideo: 'Tap to play',
     videoPlayFailed: 'Could not play this video',
+    mediaUnavailable: 'This video is unavailable.',
     secondsAbbr: 's',
     videoTooLong: 'Video is longer than allowed',
     videoTooLongDesc: 'Maximum %{sec} seconds. Choose a shorter video.',

@@ -429,6 +429,7 @@ export const ar = {
     analysisVideoTapPlay: 'فيديو تحليلي — اضغط للتشغيل',
     tapToPlayVideo: 'اضغط للتشغيل',
     videoPlayFailed: 'تعذّر تشغيل هذا الفيديو',
+    mediaUnavailable: 'هذا المقطع غير متاح.',
     secondsAbbr: 'ث',
     videoTooLong: 'الفيديو أطول من المسموح',
     videoTooLongDesc: 'الحد الأقصى %{sec} ثانية. اختر فيديو أقصر.',

@@ -48,6 +48,7 @@ import {
   isValidAdCtaUrl,
   reviewAdVideo,
 } from '../src/utils/ad-video-studio';
+import { createKeyedChannelHub } from '../src/services/app-blob-realtime-hub';
 
 function test(name: string, fn: () => void) {
   try {
@@ -320,6 +321,64 @@ test('ad studio trim clamps to 6–15s', () => {
   assert.equal(t1.end - t1.start, 15);
   const t2 = clampAdTrimRange(0, 2, 20);
   assert.ok(t2.end - t2.start >= 6);
+});
+
+test('app blob realtime hub shares one channel across consumers', () => {
+  let startCount = 0;
+  let stopCount = 0;
+  const startedKeys: string[] = [];
+  const hub = createKeyedChannelHub({
+    start: (key) => {
+      startCount += 1;
+      startedKeys.push(key);
+      return { key };
+    },
+    stop: () => {
+      stopCount += 1;
+    },
+  });
+  const a = hub.subscribe('native_ads', () => undefined);
+  const b = hub.subscribe('native_ads', () => undefined);
+  const c = hub.subscribe('settings', () => undefined);
+  assert.equal(startCount, 2);
+  assert.deepEqual(startedKeys, ['native_ads', 'settings']);
+  assert.equal(hub.listenerCount('native_ads'), 2);
+  assert.equal(hub.listenerCount('settings'), 1);
+  assert.equal(hub.activeKeyCount(), 2);
+  a();
+  assert.equal(stopCount, 0);
+  assert.equal(hub.listenerCount('native_ads'), 1);
+  b();
+  assert.equal(stopCount, 1);
+  assert.equal(hub.listenerCount('native_ads'), 0);
+  c();
+  assert.equal(stopCount, 2);
+  assert.equal(hub.activeKeyCount(), 0);
+});
+
+test('app blob realtime hub fans out without re-starting the channel', () => {
+  let dispatch: () => void = () => undefined;
+  let startCount = 0;
+  const hub = createKeyedChannelHub({
+    start: (_key, next) => {
+      startCount += 1;
+      dispatch = next;
+      return {};
+    },
+    stop: () => undefined,
+  });
+  let a = 0;
+  let b = 0;
+  hub.subscribe('native_ads', () => {
+    a += 1;
+  });
+  hub.subscribe('native_ads', () => {
+    b += 1;
+  });
+  dispatch();
+  assert.equal(startCount, 1);
+  assert.equal(a, 1);
+  assert.equal(b, 1);
 });
 
 console.log('All tests passed.');

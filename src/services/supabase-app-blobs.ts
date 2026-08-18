@@ -1,5 +1,7 @@
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
 import { requireCloudSession } from '@/services/cloud-write';
+import { createKeyedChannelHub } from '@/services/app-blob-realtime-hub';
 
 export type AppBlobKey =
   | 'referees'
@@ -353,16 +355,19 @@ export async function appendGiftTransaction(
   return { ok: true };
 }
 
-export function subscribeAppBlob(
-  key: AppBlobKey,
-  onChange: () => void
-): (() => void) | null {
-  if (!isSupabaseConfigured()) return null;
-  const sb = getSupabase();
-  if (!sb) return null;
-  const channel = sb
-    .channel(`app-blob-${key}`)
-    .on(
+/**
+ * Shared Realtime channel per blob key.
+ * postgres_changes is attached once, before subscribe(); extra consumers
+ * only add local callbacks. Last unsubscriber removes the channel.
+ */
+const appBlobChannelHub = createKeyedChannelHub<RealtimeChannel>({
+  start(key, dispatch) {
+    const sb = getSupabase();
+    if (!sb) {
+      throw new Error('subscribeAppBlob: no supabase client');
+    }
+    const channel = sb.channel(`app-blob-${key}`);
+    channel.on(
       'postgres_changes',
       {
         event: '*',
@@ -370,10 +375,23 @@ export function subscribeAppBlob(
         table: 'app_blobs',
         filter: `key=eq.${key}`,
       },
-      () => onChange()
-    )
-    .subscribe();
-  return () => {
-    void sb.removeChannel(channel);
-  };
+      () => dispatch()
+    );
+    channel.subscribe();
+    return channel;
+  },
+  stop(_key, channel) {
+    const sb = getSupabase();
+    if (sb) void sb.removeChannel(channel);
+  },
+});
+
+export function subscribeAppBlob(
+  key: AppBlobKey,
+  onChange: () => void
+): (() => void) | null {
+  if (!isSupabaseConfigured()) return null;
+  const sb = getSupabase();
+  if (!sb) return null;
+  return appBlobChannelHub.subscribe(key, onChange);
 }

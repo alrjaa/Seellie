@@ -14,6 +14,7 @@ import {
   Pressable,
   StatusBar,
   StyleSheet,
+  Text,
   View,
   type ViewStyle,
 } from 'react-native';
@@ -56,6 +57,7 @@ function InlineVideoPlayerComponent({
   const { width, height: winH, tablet } = useResponsive();
   const [fullscreen, setFullscreen] = useState(false);
   const [inView, setInView] = useState(Platform.OS !== 'web');
+  const [playbackFailed, setPlaybackFailed] = useState(false);
   const videoRef = useRef<VideoType | null>(null);
   const fullRef = useRef<VideoType | null>(null);
   const htmlRef = useRef<HTMLVideoElement | null>(null);
@@ -96,6 +98,14 @@ function InlineVideoPlayerComponent({
     setFullscreen(false);
   }, [stopInline]);
 
+  const markPlaybackFailed = useCallback(() => {
+    setPlaybackFailed(true);
+    htmlRef.current?.pause();
+    void videoRef.current?.pauseAsync().catch(() => undefined);
+    void fullRef.current?.pauseAsync().catch(() => undefined);
+    setFullscreen(false);
+  }, []);
+
   const bindWebVideo = useCallback(
     (node: HTMLVideoElement | null) => {
       observerRef.current?.disconnect();
@@ -103,6 +113,7 @@ function InlineVideoPlayerComponent({
       htmlRef.current = node;
       if (!node) return;
 
+      node.onerror = () => markPlaybackFailed();
       node.muted = true;
       node.defaultMuted = true;
       node.playsInline = true;
@@ -135,8 +146,12 @@ function InlineVideoPlayerComponent({
       observerRef.current = io;
       void node.play().catch(() => undefined);
     },
-    [autoPlayMuted, focused, fullscreen]
+    [autoPlayMuted, focused, fullscreen, markPlaybackFailed]
   );
+
+  useEffect(() => {
+    setPlaybackFailed(false);
+  }, [uri]);
 
   useEffect(() => {
     return () => {
@@ -162,9 +177,10 @@ function InlineVideoPlayerComponent({
   }, [stopAll]);
 
   const shouldAutoPlay =
-    autoPlayMuted && focused && inView && !fullscreen;
+    autoPlayMuted && focused && inView && !fullscreen && !playbackFailed;
 
   useEffect(() => {
+    if (playbackFailed) return;
     if (Platform.OS === 'web') {
       const el = htmlRef.current;
       if (!el) return;
@@ -179,9 +195,48 @@ function InlineVideoPlayerComponent({
     } else {
       stopInline();
     }
-  }, [shouldAutoPlay, autoPlayMuted, stopInline, uri]);
+  }, [shouldAutoPlay, autoPlayMuted, stopInline, uri, playbackFailed]);
 
   if (!uri) return null;
+
+  if (playbackFailed) {
+    return (
+      <View
+        accessibilityRole="alert"
+        style={[
+          styles.wrap,
+          styles.failedWrap,
+          {
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.border,
+          },
+          style,
+        ]}
+      >
+        <Ionicons
+          name="alert-circle-outline"
+          size={28}
+          color={theme.colors.textMuted}
+        />
+        <Text
+          style={[
+            styles.failedTitle,
+            { color: theme.colors.text },
+          ]}
+        >
+          {t('media.videoPlayFailed')}
+        </Text>
+        <Text
+          style={[
+            styles.failedHint,
+            { color: theme.colors.textMuted },
+          ]}
+        >
+          {t('media.mediaUnavailable')}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <>
@@ -209,6 +264,7 @@ function InlineVideoPlayerComponent({
             playsInline: true,
             preload: 'auto',
             controls: !autoPlayMuted,
+            onError: markPlaybackFailed,
             style: {
               width: '100%',
               height: '100%',
@@ -227,9 +283,15 @@ function InlineVideoPlayerComponent({
             isLooping={autoPlayMuted}
             shouldPlay={shouldAutoPlay}
             isMuted={autoPlayMuted}
+            onError={markPlaybackFailed}
           />
         ) : (
-          <View style={[styles.video, { backgroundColor: '#000' }]} />
+          <View
+            style={[
+              styles.video,
+              { backgroundColor: theme.colors.surfaceElevated },
+            ]}
+          />
         )}
 
         {(Platform.OS === 'web' || tablet) && focused ? (
@@ -248,7 +310,7 @@ function InlineVideoPlayerComponent({
       </View>
 
       <Modal
-        visible={fullscreen && focused}
+        visible={fullscreen && focused && !playbackFailed}
         animationType="fade"
         supportedOrientations={['portrait', 'landscape']}
         onRequestClose={() => setFullscreen(false)}
@@ -267,6 +329,7 @@ function InlineVideoPlayerComponent({
             shouldPlay
             isMuted={false}
             isLooping={false}
+            onError={markPlaybackFailed}
             {...(Platform.OS === 'web'
               ? ({ playsInline: true } as object)
               : null)}
@@ -296,6 +359,23 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  failedWrap: {
+    minHeight: 96,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  failedTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  failedHint: {
+    fontSize: 13,
+    textAlign: 'center',
   },
   video: {
     width: '100%',
