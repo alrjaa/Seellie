@@ -1857,7 +1857,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             description: t('toasts.t078_462ce2'),
           });
           if (portal === 'ads') {
-            router.replace('/ads/home' as any);
+            // AdsRegisterScreen ينشئ حساب المعلن ثم يوجّه — لا تنتقل مبكراً
             return true;
           }
           router.replace(routeForRole('follower') as any);

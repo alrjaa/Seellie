@@ -135,9 +135,22 @@ export async function fetchMyAdvertiserAccount(): Promise<AdvertiserAccount | nu
   return data as AdvertiserAccount | null;
 }
 
+async function parseRpcArray<T>(raw: unknown): Promise<T[]> {
+  if (Array.isArray(raw)) return raw as T[];
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return Array.isArray(parsed) ? (parsed as T[]) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export async function listMyCampaigns(): Promise<AdCampaign[]> {
-  const raw = await rpc<AdCampaign[]>('list_my_ad_campaigns');
-  return Array.isArray(raw) ? raw : [];
+  const raw = await rpc<unknown>('list_my_ad_campaigns');
+  return parseRpcArray<AdCampaign>(raw);
 }
 
 export async function saveCampaign(input: CampaignInput): Promise<AdCampaign | null> {
@@ -154,10 +167,10 @@ export async function saveCampaign(input: CampaignInput): Promise<AdCampaign | n
 }
 
 export async function listCampaignAds(campaignId: string): Promise<DbAdvertisement[]> {
-  const raw = await rpc<DbAdvertisement[]>('list_campaign_advertisements', {
+  const raw = await rpc<unknown>('list_campaign_advertisements', {
     p_campaign_id: campaignId,
   });
-  return Array.isArray(raw) ? raw : [];
+  return parseRpcArray<DbAdvertisement>(raw);
 }
 
 export async function saveAdvertisement(

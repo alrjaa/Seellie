@@ -55,7 +55,7 @@ function RootNavigator() {
     >
       <OfflineBanner />
       <StatusBar style={theme.isDark ? 'light' : 'dark'} translucent />
-      <View style={layoutDirectionStyle(isRTL)}>
+      <View style={[layoutDirectionStyle(isRTL), { flex: 1 }]}>
         <Stack
           screenOptions={{
             headerShown: false,
@@ -67,6 +67,7 @@ function RootNavigator() {
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="admin" options={{ headerShown: false }} />
+          <Stack.Screen name="ads" options={{ headerShown: false }} />
           <Stack.Screen name="(follower)" />
           <Stack.Screen name="(organizer)" />
           <Stack.Screen name="(freelancer)" />
