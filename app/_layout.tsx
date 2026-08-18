@@ -25,6 +25,7 @@ import {
 import { transparentHeaderOptions } from '@/theme/navigation';
 import { layoutDirectionStyle } from '@/theme/direction';
 import { injectDesktopWebStyles } from '@/theme/desktop-web';
+import { installWebMediaSoundUnlock } from '@/services/web-media-sound';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -35,6 +36,11 @@ function RootNavigator() {
 
   useEffect(() => {
     injectDesktopWebStyles();
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    return installWebMediaSoundUnlock();
   }, []);
 
   useEffect(() => {

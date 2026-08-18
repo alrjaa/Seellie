@@ -66,6 +66,14 @@ import { WEB_INPUT_MIN_FONT_SIZE } from '@/theme/web-keyboard-viewport';
 import { NATIVE_AD_HOOK_MS, extractNativeAdId } from '@/services/native-ads';
 import type { NativeAdPlacement } from '@/services/native-ads';
 import { queueAdEvent } from '@/services/ad-events';
+import {
+  isWebMediaSoundUnlocked,
+  markWebMediaSoundUnlocked,
+  playWebVideoWithSoundPolicy,
+  registerActiveWebVideo,
+  subscribeWebMediaSound,
+  unregisterActiveWebVideo,
+} from '@/services/web-media-sound';
 import { ReasonModal } from '@/components/feedback/ReasonModal';
 
 export type FullScreenContentComment = {
@@ -212,10 +220,11 @@ const Slide = memo(function Slide({
   const insets = useSafeAreaInsets();
   const videoRef = useRef<Video>(null);
   const htmlVideoRef = useRef<HTMLVideoElement | null>(null);
-  /** ضغطة المستخدم تفتح الصوت — لا تُعاد للكتم عبر خاصية muted في React */
-  const soundUnlockedRef = useRef(false);
+  /** صوت الجلسة — لا يُكتم من جديد عند تمرير الفيديو التالي */
+  const soundUnlockedRef = useRef(isWebMediaSoundUnlocked());
   const skipNextToggleRef = useRef(false);
-  const [soundOn, setSoundOn] = useState(false);
+  const userPausedRef = useRef(false);
+  const [soundOn, setSoundOn] = useState(() => isWebMediaSoundUnlocked());
   /** F12-P2-05 — ignore stale play()/setState after fast swipe away */
   const playGenRef = useRef(0);
   const inputRef = useRef<TextInput>(null);
@@ -290,9 +299,8 @@ const Slide = memo(function Slide({
     trackedImpressionRef.current = false;
     trackedVideoStartRef.current = false;
     trackedVideoCompleteRef.current = false;
-    soundUnlockedRef.current = false;
     skipNextToggleRef.current = false;
-    setSoundOn(false);
+    userPausedRef.current = false;
   }, [item.id]);
 
   useEffect(() => {
@@ -501,7 +509,26 @@ const Slide = memo(function Slide({
     };
   }, []);
 
-  // ويب: تشغيل تلقائي صامت (سياسة المتصفح) عند الظهور
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    soundUnlockedRef.current = isWebMediaSoundUnlocked();
+    if (soundUnlockedRef.current) setSoundOn(true);
+    return subscribeWebMediaSound(() => {
+      soundUnlockedRef.current = true;
+      setSoundOn(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !active) {
+      unregisterActiveWebVideo(htmlVideoRef.current);
+      return;
+    }
+    registerActiveWebVideo(htmlVideoRef.current, () => userPausedRef.current);
+    return () => unregisterActiveWebVideo(htmlVideoRef.current);
+  }, [active, item.id]);
+
+  // ويب: تشغيل تلقائي — بالصوت إن فُتحت الجلسة، وإلا صامت حتى أول تفاعل
   useEffect(() => {
     if (Platform.OS !== 'web' || !active || !playableUri || loadError || paused) {
       return;
@@ -512,27 +539,26 @@ const Slide = memo(function Slide({
     if (el.getAttribute('src') !== item.mediaUrl) {
       el.src = item.mediaUrl;
     }
-    el.muted = !soundUnlockedRef.current;
-    el.defaultMuted = !soundUnlockedRef.current;
     el.playsInline = true;
     el.loop = true;
-    const run = el.play();
-    if (run && typeof run.then === 'function') {
-      void run
-        .then(() => {
-          if (playGenRef.current !== gen) return;
-          setFrameReady(true);
-          setPaused(false);
-          trackVideoStart();
-        })
-        .catch(() => {
-          if (playGenRef.current !== gen) return;
-          // إن مُنع التشغيل نُبقي بدون زر — الإطار/البوستر يكفي
-          setFrameReady(true);
-        });
-    } else {
-      setFrameReady(true);
-    }
+    registerActiveWebVideo(el, () => userPausedRef.current);
+    const unlocked = isWebMediaSoundUnlocked() || soundUnlockedRef.current;
+    void playWebVideoWithSoundPolicy(el, unlocked)
+      .then((mode) => {
+        if (playGenRef.current !== gen) return;
+        if (mode === 'unmuted') {
+          soundUnlockedRef.current = true;
+          markWebMediaSoundUnlocked();
+          setSoundOn(true);
+        }
+        setFrameReady(true);
+        setPaused(false);
+        trackVideoStart();
+      })
+      .catch(() => {
+        if (playGenRef.current !== gen) return;
+        setFrameReady(true);
+      });
   }, [active, playableUri, loadError, paused, item.mediaUrl]);
 
   // أصلي: تشغيل تلقائي عند الظهور
@@ -563,6 +589,8 @@ const Slide = memo(function Slide({
     if (!el) return false;
     soundUnlockedRef.current = true;
     skipNextToggleRef.current = true;
+    userPausedRef.current = false;
+    markWebMediaSoundUnlocked();
     el.muted = false;
     el.defaultMuted = false;
     el.volume = 1;
@@ -583,12 +611,14 @@ const Slide = memo(function Slide({
           return;
         }
         if (paused) {
+          userPausedRef.current = false;
           el.muted = false;
           el.defaultMuted = false;
           el.volume = 1;
           await el.play();
           setPaused(false);
         } else {
+          userPausedRef.current = true;
           el.pause();
           setPaused(true);
         }
@@ -726,6 +756,11 @@ const Slide = memo(function Slide({
               ? createElement('video', {
                   ref: (node: HTMLVideoElement | null) => {
                     htmlVideoRef.current = node;
+                    if (node && active) {
+                      registerActiveWebVideo(node, () => userPausedRef.current);
+                    } else {
+                      unregisterActiveWebVideo(node);
+                    }
                   },
                   src: item.mediaUrl,
                   muted: !soundOn,

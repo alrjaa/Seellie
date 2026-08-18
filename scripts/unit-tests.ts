@@ -49,6 +49,12 @@ import {
   reviewAdVideo,
 } from '../src/utils/ad-video-studio';
 import { createKeyedChannelHub } from '../src/services/app-blob-realtime-hub';
+import {
+  nextWebSoundSession,
+  playWebVideoWithSoundPolicy,
+  shouldAutoplayMuted,
+  shouldResumeVideoOnGesture,
+} from '../src/services/web-media-sound';
 
 function test(name: string, fn: () => void) {
   try {
@@ -379,6 +385,35 @@ test('app blob realtime hub fans out without re-starting the channel', () => {
   assert.equal(startCount, 1);
   assert.equal(a, 1);
   assert.equal(b, 1);
+});
+
+test('web media sound stays unlocked across feed items', () => {
+  assert.equal(nextWebSoundSession(false, 'item_change'), false);
+  assert.equal(nextWebSoundSession(true, 'item_change'), true);
+  assert.equal(nextWebSoundSession(false, 'unlock'), true);
+  assert.equal(shouldAutoplayMuted(false), true);
+  assert.equal(shouldAutoplayMuted(true), false);
+  assert.equal(shouldResumeVideoOnGesture({ userPaused: false }), true);
+  assert.equal(shouldResumeVideoOnGesture({ userPaused: true }), false);
+});
+
+test('web media sound policy unmutes after session unlock', async () => {
+  const plays: boolean[] = [];
+  const el = {
+    muted: true,
+    defaultMuted: true,
+    volume: 0,
+    play: async () => {
+      plays.push(!el.muted);
+    },
+  };
+  assert.equal(await playWebVideoWithSoundPolicy(el, false), 'muted');
+  assert.equal(el.muted, true);
+  assert.deepEqual(plays, [false]);
+  assert.equal(await playWebVideoWithSoundPolicy(el, true), 'unmuted');
+  assert.equal(el.muted, false);
+  assert.equal(el.volume, 1);
+  assert.deepEqual(plays, [false, true]);
 });
 
 console.log('All tests passed.');
