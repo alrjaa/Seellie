@@ -212,6 +212,10 @@ const Slide = memo(function Slide({
   const insets = useSafeAreaInsets();
   const videoRef = useRef<Video>(null);
   const htmlVideoRef = useRef<HTMLVideoElement | null>(null);
+  /** ضغطة المستخدم تفتح الصوت — لا تُعاد للكتم عبر خاصية muted في React */
+  const soundUnlockedRef = useRef(false);
+  const skipNextToggleRef = useRef(false);
+  const [soundOn, setSoundOn] = useState(false);
   /** F12-P2-05 — ignore stale play()/setState after fast swipe away */
   const playGenRef = useRef(0);
   const inputRef = useRef<TextInput>(null);
@@ -286,6 +290,9 @@ const Slide = memo(function Slide({
     trackedImpressionRef.current = false;
     trackedVideoStartRef.current = false;
     trackedVideoCompleteRef.current = false;
+    soundUnlockedRef.current = false;
+    skipNextToggleRef.current = false;
+    setSoundOn(false);
   }, [item.id]);
 
   useEffect(() => {
@@ -505,8 +512,8 @@ const Slide = memo(function Slide({
     if (el.getAttribute('src') !== item.mediaUrl) {
       el.src = item.mediaUrl;
     }
-    el.muted = true;
-    el.defaultMuted = true;
+    el.muted = !soundUnlockedRef.current;
+    el.defaultMuted = !soundUnlockedRef.current;
     el.playsInline = true;
     el.loop = true;
     const run = el.play();
@@ -550,14 +557,35 @@ const Slide = memo(function Slide({
       });
   }, [active, playableUri, loadError, paused]);
 
+  const unlockWebSound = useCallback(() => {
+    if (Platform.OS !== 'web') return false;
+    const el = htmlVideoRef.current;
+    if (!el) return false;
+    soundUnlockedRef.current = true;
+    skipNextToggleRef.current = true;
+    el.muted = false;
+    el.defaultMuted = false;
+    el.volume = 1;
+    void el.play();
+    setSoundOn(true);
+    setPaused(false);
+    return true;
+  }, []);
+
   const toggleVideoPlayback = useCallback(async () => {
     if (!playableUri || loadError) return;
     try {
       if (Platform.OS === 'web') {
         const el = htmlVideoRef.current;
         if (!el) return;
+        if (!soundOn || el.muted) {
+          unlockWebSound();
+          return;
+        }
         if (paused) {
-          el.muted = true;
+          el.muted = false;
+          el.defaultMuted = false;
+          el.volume = 1;
           await el.play();
           setPaused(false);
         } else {
@@ -577,7 +605,7 @@ const Slide = memo(function Slide({
       setLoadError(true);
       setPaused(true);
     }
-  }, [paused, playableUri, loadError]);
+  }, [paused, playableUri, loadError, soundOn, unlockWebSound]);
 
   const handleLikePress = useCallback(() => {
     if (sponsored) return;
@@ -645,6 +673,10 @@ const Slide = memo(function Slide({
       return;
     }
     lastTapRef.current = now;
+    if (skipNextToggleRef.current) {
+      skipNextToggleRef.current = false;
+      return;
+    }
     if (item.kind === 'video') {
       void toggleVideoPlayback();
     }
@@ -676,8 +708,17 @@ const Slide = memo(function Slide({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={
-              paused ? t('media.playVideo') : t('media.pauseVideo')
+              !soundOn
+                ? t('adsPortal.tapToHear')
+                : paused
+                  ? t('media.playVideo')
+                  : t('media.pauseVideo')
             }
+            onPressIn={() => {
+              if (item.kind === 'video' && !soundOn) {
+                unlockWebSound();
+              }
+            }}
             onPress={handleContentPress}
             style={styles.videoFill}
           >
@@ -687,8 +728,8 @@ const Slide = memo(function Slide({
                     htmlVideoRef.current = node;
                   },
                   src: item.mediaUrl,
-                  muted: true,
-                  defaultMuted: true,
+                  muted: !soundOn,
+                  defaultMuted: !soundOn,
                   autoPlay: true,
                   playsInline: true,
                   preload: 'metadata',
@@ -743,6 +784,17 @@ const Slide = memo(function Slide({
                     : undefined
                 }
               />
+            ) : null}
+
+            {Platform.OS === 'web' &&
+            item.kind === 'video' &&
+            playableUri &&
+            !loadError &&
+            !soundOn ? (
+              <View style={styles.soundHint} pointerEvents="none">
+                <Ionicons name="volume-mute" size={22} color="#fff" />
+                <Text style={styles.soundHintText}>{t('adsPortal.tapToHear')}</Text>
+              </View>
             ) : null}
 
             {item.posterUrl &&
@@ -1404,6 +1456,23 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  soundHint: {
+    position: 'absolute',
+    bottom: 96,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  soundHintText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
   },
   playWrap: {
     ...StyleSheet.absoluteFillObject,
