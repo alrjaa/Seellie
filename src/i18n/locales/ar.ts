@@ -1080,6 +1080,10 @@ export const ar = {
     emailFreedDesc: '%{email} جاهز للتسجيل من جديد.',
     signupRateLimited:
       'تم تجاوز حد إيميلات Supabase. انتظر بضع دقائق ثم أنشئ حساباً جديداً.',
+    signupConfirmEmailFailed:
+      'تعذّر تأكيد البريد من Supabase. عطّل Confirm email أو استخدم بريداً آخر.',
+    signupCloudFailed:
+      'تعذّر إنشاء الحساب في السحابة. تحقق من الاتصال ثم أعد المحاولة.',
     certificateLine: 'رقم الشهادة %{number} · للمستفيد %{name}',
     needMinTeams: 'يلزم وجود %{count} فرق على الأقل.',
     fixturesCreated: 'تم إنشاء %{count} مباراة بنظام الدوري.',

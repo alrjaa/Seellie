@@ -25,7 +25,21 @@ export default function AdsRegisterScreen() {
   const [busy, setBusy] = useState(false);
 
   const onSubmit = useCallback(async () => {
-    if (!contactName.trim() || !businessName.trim() || !isValidEmail(email)) return;
+    if (!contactName.trim() || !businessName.trim()) {
+      toast({
+        variant: 'destructive',
+        title: t('toasts.t004_8fdbe1'),
+        description: t('toasts.t076_91bef0'),
+      });
+      return;
+    }
+    if (!isValidEmail(email)) {
+      toast({
+        variant: 'destructive',
+        title: t('auth.invalidEmail'),
+      });
+      return;
+    }
     setBusy(true);
     try {
       const ok = await signUp(

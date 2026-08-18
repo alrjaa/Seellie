@@ -1806,7 +1806,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         description:
           supabaseAuthError &&
           /sending confirmation email|email/i.test(supabaseAuthError)
-            ? 'تعذّر تأكيد البريد من Supabase. عطّل Confirm email أو استخدم حساباً تجريبياً محلياً.'
+            ? t('toasts.signupConfirmEmailFailed')
             : supabaseAuthError &&
                 !/invalid login credentials/i.test(supabaseAuthError)
               ? supabaseAuthError
@@ -1873,9 +1873,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           description: rateLimited
             ? t('toasts.signupRateLimited')
             : alreadyExists
-              ? 'البريد مسجّل مسبقاً. سجّل الدخول، أو اطلب من المشرف «تحرير بريد عالق» في إدارة المستخدمين.'
-              : remote.error ||
-                'تعذّر إنشاء الحساب في السحابة. تأكد أن Confirm email معطّل ثم أعد المحاولة.',
+              ? t('toasts.t077_bf5031')
+              : remote.error || t('toasts.signupCloudFailed'),
         });
         return false;
       }

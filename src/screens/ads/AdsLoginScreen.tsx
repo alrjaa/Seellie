@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
+import { useToast } from '@/providers/ToastProvider';
 import { Screen } from '@/components/layout/Screen';
 import { Button, Input, Muted, Title } from '@/components/ui';
 import { isValidEmail } from '@/utils';
@@ -11,13 +12,20 @@ import { ADS_PORTAL_HOME } from '@/utils/ads-portal';
 export default function AdsLoginScreen() {
   const { login } = useTournament();
   const { t } = useTranslation();
+  const { toast } = useToast();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
   const onSubmit = useCallback(async () => {
-    if (!isValidEmail(email)) return;
+    if (!isValidEmail(email)) {
+      toast({
+        variant: 'destructive',
+        title: t('auth.invalidEmail'),
+      });
+      return;
+    }
     setBusy(true);
     try {
       const ok = await login(email, password, { portal: 'ads' });
@@ -25,7 +33,7 @@ export default function AdsLoginScreen() {
     } finally {
       setBusy(false);
     }
-  }, [email, password, login, router]);
+  }, [email, password, login, router, t, toast]);
 
   return (
     <Screen scroll keyboard density="form" contentStyle={styles.content}>

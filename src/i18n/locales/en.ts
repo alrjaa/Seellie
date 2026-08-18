@@ -1083,6 +1083,10 @@ export const en: TranslationTree = {
     emailFreedDesc: '%{email} is ready for a new signup.',
     signupRateLimited:
       'Supabase email signup limit reached. Wait a few minutes, then create a new account.',
+    signupConfirmEmailFailed:
+      'Supabase could not confirm this email. Disable Confirm email or use another address.',
+    signupCloudFailed:
+      'Could not create the cloud account. Check the connection and try again.',
     certificateLine: 'Certificate %{number} · for %{name}',
     needMinTeams: 'At least %{count} teams are required.',
     fixturesCreated: 'Created %{count} round-robin matches.',
