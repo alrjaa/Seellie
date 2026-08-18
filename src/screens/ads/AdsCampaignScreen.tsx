@@ -67,7 +67,10 @@ export default function AdsCampaignScreen() {
       }
       setCampaignId(saved.id);
       toast({ variant: 'success', title: t('adsPortal.saved') });
-      if (isNew) router.replace(`/ads/campaign/${saved.id}` as any);
+      if (isNew) {
+        router.replace(`/ads/ad/new?campaignId=${saved.id}` as any);
+        return;
+      }
     } finally {
       setSaving(false);
     }

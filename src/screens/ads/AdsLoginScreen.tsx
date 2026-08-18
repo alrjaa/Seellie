@@ -31,6 +31,7 @@ export default function AdsLoginScreen() {
     <Screen scroll keyboard density="form" contentStyle={styles.content}>
       <Title>{t('adsPortal.loginTitle')}</Title>
       <Muted>{t('adsPortal.loginSubtitle')}</Muted>
+      <Muted>{t('adsPortal.studioIntro')}</Muted>
       <Input
         label={t('auth.email')}
         value={email}
