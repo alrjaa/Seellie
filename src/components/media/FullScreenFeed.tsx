@@ -67,8 +67,8 @@ import { NATIVE_AD_HOOK_MS, extractNativeAdId } from '@/services/native-ads';
 import type { NativeAdPlacement } from '@/services/native-ads';
 import { queueAdEvent } from '@/services/ad-events';
 import {
+  attachSoundToPlayingVideo,
   isWebMediaSoundUnlocked,
-  markWebMediaSoundUnlocked,
   registerActiveWebVideo,
   startVisibleWebVideo,
   subscribeWebMediaSound,
@@ -220,12 +220,8 @@ const Slide = memo(function Slide({
   const insets = useSafeAreaInsets();
   const videoRef = useRef<Video>(null);
   const htmlVideoRef = useRef<HTMLVideoElement | null>(null);
-  /** صوت الجلسة — لا يُكتم من جديد عند تمرير الفيديو التالي */
-  const soundUnlockedRef = useRef(isWebMediaSoundUnlocked());
-  const skipNextToggleRef = useRef(false);
   const userPausedRef = useRef(false);
   const startedNodeRef = useRef<HTMLVideoElement | null>(null);
-  const [soundOn, setSoundOn] = useState(false);
   /** F12-P2-05 — ignore stale play()/setState after fast swipe away */
   const playGenRef = useRef(0);
   const inputRef = useRef<TextInput>(null);
@@ -300,7 +296,6 @@ const Slide = memo(function Slide({
     trackedImpressionRef.current = false;
     trackedVideoStartRef.current = false;
     trackedVideoCompleteRef.current = false;
-    skipNextToggleRef.current = false;
     userPausedRef.current = false;
     startedNodeRef.current = null;
   }, [item.id]);
@@ -516,12 +511,13 @@ const Slide = memo(function Slide({
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    soundUnlockedRef.current = isWebMediaSoundUnlocked();
-    if (soundUnlockedRef.current) setSoundOn(true);
-    return subscribeWebMediaSound(() => {
-      soundUnlockedRef.current = true;
-      setSoundOn(true);
-    });
+    const attach = () => {
+      const el = htmlVideoRef.current;
+      if (!el || userPausedRef.current) return;
+      attachSoundToPlayingVideo(el);
+    };
+    if (isWebMediaSoundUnlocked()) attach();
+    return subscribeWebMediaSound(attach);
   }, []);
 
   useEffect(() => {
@@ -544,14 +540,14 @@ const Slide = memo(function Slide({
       el.setAttribute('playsinline', 'true');
       el.setAttribute('webkit-playsinline', 'true');
       el.loop = true;
+      el.muted = true;
+      el.defaultMuted = true;
       registerActiveWebVideo(el, () => userPausedRef.current);
-      void startVisibleWebVideo(el, true)
-        .then((mode) => {
+      void startVisibleWebVideo(el)
+        .then(() => {
           if (playGenRef.current !== gen) return;
-          if (mode === 'unmuted') {
-            soundUnlockedRef.current = true;
-            markWebMediaSoundUnlocked();
-            setSoundOn(true);
+          if (isWebMediaSoundUnlocked()) {
+            attachSoundToPlayingVideo(el);
           }
           setFrameReady(true);
           setPaused(false);
@@ -596,39 +592,16 @@ const Slide = memo(function Slide({
       });
   }, [active, playableUri, loadError, paused]);
 
-  const unlockWebSound = useCallback(() => {
-    if (Platform.OS !== 'web') return false;
-    const el = htmlVideoRef.current;
-    if (!el) return false;
-    soundUnlockedRef.current = true;
-    skipNextToggleRef.current = true;
-    userPausedRef.current = false;
-    markWebMediaSoundUnlocked();
-    el.muted = false;
-    el.defaultMuted = false;
-    el.volume = 1;
-    void el.play();
-    setSoundOn(true);
-    setPaused(false);
-    return true;
-  }, []);
-
   const toggleVideoPlayback = useCallback(async () => {
     if (!playableUri || loadError) return;
     try {
       if (Platform.OS === 'web') {
         const el = htmlVideoRef.current;
         if (!el) return;
-        if (!soundOn || el.muted) {
-          unlockWebSound();
-          return;
-        }
-        if (paused) {
+        if (paused || el.paused) {
           userPausedRef.current = false;
-          el.muted = false;
-          el.defaultMuted = false;
-          el.volume = 1;
-          await el.play();
+          await startVisibleWebVideo(el);
+          if (isWebMediaSoundUnlocked()) attachSoundToPlayingVideo(el);
           setPaused(false);
         } else {
           userPausedRef.current = true;
@@ -648,7 +621,7 @@ const Slide = memo(function Slide({
       setLoadError(true);
       setPaused(true);
     }
-  }, [paused, playableUri, loadError, soundOn, unlockWebSound]);
+  }, [paused, playableUri, loadError]);
 
   const handleLikePress = useCallback(() => {
     if (sponsored) return;
@@ -716,10 +689,6 @@ const Slide = memo(function Slide({
       return;
     }
     lastTapRef.current = now;
-    if (skipNextToggleRef.current) {
-      skipNextToggleRef.current = false;
-      return;
-    }
     if (item.kind === 'video') {
       void toggleVideoPlayback();
     }
@@ -753,11 +722,6 @@ const Slide = memo(function Slide({
             accessibilityLabel={
               paused ? t('media.playVideo') : t('media.pauseVideo')
             }
-            onPressIn={() => {
-              if (item.kind === 'video' && !soundOn) {
-                unlockWebSound();
-              }
-            }}
             onPress={handleContentPress}
             style={styles.videoFill}
           >
@@ -776,8 +740,8 @@ const Slide = memo(function Slide({
                     }
                   },
                   src: item.mediaUrl,
-                  muted: !soundOn,
-                  defaultMuted: !soundOn,
+                  muted: true,
+                  defaultMuted: true,
                   autoPlay: true,
                   playsInline: true,
                   preload: 'metadata',

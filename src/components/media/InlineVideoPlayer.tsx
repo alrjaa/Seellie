@@ -28,6 +28,7 @@ import { useResponsive } from '@/hooks/useResponsive';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { clamp } from '@/theme/tokens';
 import {
+  attachSoundToPlayingVideo,
   isWebMediaSoundUnlocked,
   registerActiveWebVideo,
   startVisibleWebVideo,
@@ -69,7 +70,6 @@ function InlineVideoPlayerComponent({
   const fullRef = useRef<VideoType | null>(null);
   const htmlRef = useRef<HTMLVideoElement | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
-  const [soundOn, setSoundOn] = useState(() => isWebMediaSoundUnlocked());
 
   const playerHeight = useMemo(() => {
     if (typeof heightProp === 'number') return heightProp;
@@ -124,9 +124,11 @@ function InlineVideoPlayerComponent({
       node.onerror = () => markPlaybackFailed();
       node.playsInline = true;
       node.loop = true;
+      node.muted = true;
+      node.defaultMuted = true;
       registerActiveWebVideo(node);
-      void startVisibleWebVideo(node, true).then((mode) => {
-        if (mode === 'unmuted') setSoundOn(true);
+      void startVisibleWebVideo(node).then(() => {
+        if (isWebMediaSoundUnlocked()) attachSoundToPlayingVideo(node);
       });
 
       if (!autoPlayMuted || typeof IntersectionObserver === 'undefined') {
@@ -144,8 +146,8 @@ function InlineVideoPlayerComponent({
           if (!el) return;
           if (visible && focused && !fullscreen) {
             registerActiveWebVideo(el);
-            void startVisibleWebVideo(el, true).then((mode) => {
-              if (mode === 'unmuted') setSoundOn(true);
+            void startVisibleWebVideo(el).then(() => {
+              if (isWebMediaSoundUnlocked()) attachSoundToPlayingVideo(el);
             });
           } else {
             el.pause();
@@ -162,8 +164,12 @@ function InlineVideoPlayerComponent({
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    if (isWebMediaSoundUnlocked()) setSoundOn(true);
-    return subscribeWebMediaSound(() => setSoundOn(true));
+    const attach = () => {
+      const el = htmlRef.current;
+      if (el) attachSoundToPlayingVideo(el);
+    };
+    if (isWebMediaSoundUnlocked()) attach();
+    return subscribeWebMediaSound(attach);
   }, []);
 
   useEffect(() => {
@@ -201,10 +207,10 @@ function InlineVideoPlayerComponent({
     if (Platform.OS === 'web') {
       const el = htmlRef.current;
       if (!el) return;
-      el.muted = !soundOn;
+      el.muted = true;
       if (shouldAutoPlay) {
-        void startVisibleWebVideo(el, true).then((mode) => {
-          if (mode === 'unmuted') setSoundOn(true);
+        void startVisibleWebVideo(el).then(() => {
+          if (isWebMediaSoundUnlocked()) attachSoundToPlayingVideo(el);
         });
       } else el.pause();
       return;
@@ -215,7 +221,7 @@ function InlineVideoPlayerComponent({
     } else {
       stopInline();
     }
-  }, [shouldAutoPlay, autoPlayMuted, stopInline, uri, playbackFailed, soundOn]);
+  }, [shouldAutoPlay, autoPlayMuted, stopInline, uri, playbackFailed]);
 
   if (!uri) return null;
 
@@ -277,8 +283,8 @@ function InlineVideoPlayerComponent({
             key: uri,
             ref: bindWebVideo,
             src: uri,
-            muted: !soundOn,
-            defaultMuted: !soundOn,
+            muted: true,
+            defaultMuted: true,
             autoPlay: true,
             loop: true,
             playsInline: true,

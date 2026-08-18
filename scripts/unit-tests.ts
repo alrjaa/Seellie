@@ -50,10 +50,8 @@ import {
 } from '../src/utils/ad-video-studio';
 import { createKeyedChannelHub } from '../src/services/app-blob-realtime-hub';
 import {
+  attachSoundToPlayingVideo,
   nextWebSoundSession,
-  playWebVideoWithSoundPolicy,
-  shouldAutoplayMuted,
-  shouldPreferSoundOnAppear,
   shouldResumeVideoOnGesture,
   startVisibleWebVideo,
 } from '../src/services/web-media-sound';
@@ -393,47 +391,66 @@ test('web media sound stays unlocked across feed items', () => {
   assert.equal(nextWebSoundSession(false, 'item_change'), false);
   assert.equal(nextWebSoundSession(true, 'item_change'), true);
   assert.equal(nextWebSoundSession(false, 'unlock'), true);
-  assert.equal(shouldAutoplayMuted(false), true);
-  assert.equal(shouldAutoplayMuted(true), false);
   assert.equal(shouldResumeVideoOnGesture({ userPaused: false }), true);
   assert.equal(shouldResumeVideoOnGesture({ userPaused: true }), false);
 });
 
-test('web media sound policy unmutes after session unlock', async () => {
+test('visible video always starts muted so autoplay is not blocked', async () => {
   const plays: boolean[] = [];
   const el = {
-    muted: true,
-    defaultMuted: true,
+    muted: false,
+    defaultMuted: false,
     volume: 0,
+    paused: true,
     play: async () => {
-      plays.push(!el.muted);
+      plays.push(el.muted);
+      el.paused = false;
     },
   };
-  assert.equal(await playWebVideoWithSoundPolicy(el, false), 'muted');
+  assert.equal(await startVisibleWebVideo(el), 'playing');
   assert.equal(el.muted, true);
-  assert.deepEqual(plays, [false]);
-  assert.equal(await playWebVideoWithSoundPolicy(el, true), 'unmuted');
-  assert.equal(el.muted, false);
-  assert.equal(el.volume, 1);
-  assert.deepEqual(plays, [false, false]);
+  assert.equal(el.paused, false);
+  assert.deepEqual(plays, [true]);
 });
 
-test('visible video always starts muted then tries sound', async () => {
-  const plays: boolean[] = [];
+test('attach sound never leaves a playing video paused', () => {
+  let muted = true;
+  let paused = false;
+  const el = {
+    volume: 1,
+    defaultMuted: true,
+    get muted() {
+      return muted;
+    },
+    set muted(value: boolean) {
+      muted = value;
+      if (value === false) paused = true;
+    },
+    get paused() {
+      return paused;
+    },
+    play() {
+      paused = false;
+    },
+  };
+  assert.equal(attachSoundToPlayingVideo(el), 'muted');
+  assert.equal(el.muted, true);
+  assert.equal(el.paused, false);
+});
+
+test('attach sound keeps playback when unmute is allowed', () => {
   const el = {
     muted: true,
     defaultMuted: true,
-    volume: 0,
+    volume: 1,
     paused: false,
-    play: async () => {
-      plays.push(!el.muted);
+    play() {
+      return undefined;
     },
   };
-  assert.equal(await startVisibleWebVideo(el, true), 'unmuted');
+  assert.equal(attachSoundToPlayingVideo(el), 'unmuted');
   assert.equal(el.muted, false);
-  assert.deepEqual(plays, [false]);
-  assert.equal(shouldPreferSoundOnAppear({ sessionUnlocked: false, hasBeenActive: true }), true);
-  assert.equal(shouldPreferSoundOnAppear({ sessionUnlocked: false, hasBeenActive: false }), false);
+  assert.equal(el.paused, false);
 });
 
 console.log('All tests passed.');

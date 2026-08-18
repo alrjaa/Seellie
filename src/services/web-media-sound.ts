@@ -1,8 +1,11 @@
 /**
- * صوت فيديوهات الويب — جلسة واحدة، لا كتم إجباري بعد أول تفاعل.
+ * تشغيل فيديو الويب عند الظهور، ثم إلحاق الصوت دون إيقاف الصورة.
  *
- * الخلل السابق: التشغيل التلقائي كان يكتم دائماً، ثم يعيد الكتم عند كل فيديو.
- * بعد أول pointerdown/تمريرة نلغي الكتم للفيديو الحالي ونبقي الصوت للفيديوهات التالية.
+ * عقد ثابت:
+ * 1) الظهور = play صامت دائماً (autoplay مسموح).
+ * 2) React لا يضع muted=false على عنصر <video> — ذلك يلغي autoplay في الجوال.
+ * 3) الصوت يُضاف على نفس العنصر بعد أن يكون يعمل. إن أوقف إلغاء الكتم التشغيل، نعيد الكتم فوراً.
+ * 4) أول تفاعل مع الصفحة يفتح الصوت للجلسة دون إعادة إنشاء المشغّل.
  */
 
 export type WebSoundSessionEvent = 'unlock' | 'item_change' | 'lock';
@@ -16,17 +19,13 @@ export function nextWebSoundSession(
   return unlocked;
 }
 
-export function shouldAutoplayMuted(unlocked: boolean): boolean {
-  return !unlocked;
-}
-
 export function shouldResumeVideoOnGesture(opts: {
   userPaused: boolean;
 }): boolean {
   return !opts.userPaused;
 }
 
-type PlayableVideo = {
+export type PlayableVideo = {
   muted: boolean;
   defaultMuted: boolean;
   volume: number;
@@ -34,56 +33,35 @@ type PlayableVideo = {
   play: () => Promise<void> | void;
 };
 
-export function shouldPreferSoundOnAppear(opts: {
-  sessionUnlocked: boolean;
-  hasBeenActive: boolean;
-}): boolean {
-  return opts.sessionUnlocked || opts.hasBeenActive;
-}
-
-export function hasWebMediaGesture(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const ua = (
-    navigator as Navigator & {
-      userActivation?: { isActive?: boolean; hasBeenActive?: boolean };
-    }
-  ).userActivation;
-  return !!(ua?.isActive || ua?.hasBeenActive);
-}
-
-/**
- * التشغيل عند الظهور: الصورة أولاً (صامت)، ثم الصوت إن سُمح.
- * لا نبدأ غير صامت — ذلك يمنع autoplay على الجوال فيتوقف الفيديو حتى النقر.
- */
+/** التشغيل عند الظهور: صامت فقط. لا تُمرَّر preferSound هنا. */
 export async function startVisibleWebVideo(
-  el: PlayableVideo,
-  preferSound: boolean
-): Promise<'unmuted' | 'muted'> {
+  el: PlayableVideo
+): Promise<'playing'> {
   el.volume = 1;
   el.muted = true;
   el.defaultMuted = true;
   await el.play();
-  if (!preferSound) return 'muted';
-  el.muted = false;
-  el.defaultMuted = false;
-  if (el.paused === true) {
-    try {
-      await el.play();
-    } catch {
-      el.muted = true;
-      el.defaultMuted = true;
-      await el.play();
-      return 'muted';
-    }
-  }
-  return el.muted ? 'muted' : 'unmuted';
+  return 'playing';
 }
 
-export async function playWebVideoWithSoundPolicy(
-  el: PlayableVideo,
-  unlocked: boolean
-): Promise<'unmuted' | 'muted'> {
-  return startVisibleWebVideo(el, unlocked);
+/**
+ * إلغاء الكتم لعنصر يعمل الآن. إن توقف الفيديو نرجع للكتم ونشغّل صامتاً.
+ * لا تستدعِ play() غير صامت كخطوة أولى.
+ */
+export function attachSoundToPlayingVideo(
+  el: PlayableVideo
+): 'unmuted' | 'muted' {
+  if (el.paused) return 'muted';
+  el.volume = 1;
+  el.muted = false;
+  el.defaultMuted = false;
+  if (el.paused) {
+    el.muted = true;
+    el.defaultMuted = true;
+    void el.play();
+    return 'muted';
+  }
+  return 'unmuted';
 }
 
 type ActiveWebVideo = {
@@ -132,13 +110,22 @@ function notifyUnlocked() {
 function applyUnlockFromUserGesture() {
   notifyUnlocked();
   const current = active;
-  if (!current) return;
-  const { el, userPaused } = current;
+  if (!current || current.userPaused()) return;
+  const { el } = current;
+  el.volume = 1;
+  if (!el.paused) {
+    attachSoundToPlayingVideo(el);
+    return;
+  }
   el.muted = false;
   el.defaultMuted = false;
-  el.volume = 1;
-  if (shouldResumeVideoOnGesture({ userPaused: userPaused() })) {
-    void el.play();
+  const run = el.play();
+  if (run && typeof run.catch === 'function') {
+    void run.catch(() => {
+      el.muted = true;
+      el.defaultMuted = true;
+      void el.play();
+    });
   }
 }
 
@@ -161,7 +148,10 @@ export function installWebMediaSoundUnlock(): () => void {
     applyUnlockFromUserGesture();
   };
   window.addEventListener('pointerdown', onGesture, true);
-  window.addEventListener('touchstart', onGesture, { capture: true, passive: true });
+  window.addEventListener('touchstart', onGesture, {
+    capture: true,
+    passive: true,
+  });
   window.addEventListener('keydown', onGesture, true);
   return () => {
     window.removeEventListener('pointerdown', onGesture, true);
