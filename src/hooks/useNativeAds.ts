@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 import {
   fetchLiveNativeAds,
   nativeAdsEqual,
   subscribeLiveNativeAds,
 } from '@/services/native-ads-feed';
+import { startForegroundInterval } from '@/services/sync-engine';
 import type { NativeInFeedAd } from '@/services/native-ads';
+
+const NATIVE_ADS_POLL_MS = 45_000;
 
 export function useNativeAds(): NativeInFeedAd[] {
   const [ads, setAds] = useState<NativeInFeedAd[]>([]);
@@ -17,12 +21,20 @@ export function useNativeAds(): NativeInFeedAd[] {
       setAds((prev) => (nativeAdsEqual(prev, next) ? prev : next));
     };
     void load();
-    const stop = subscribeLiveNativeAds(() => {
+    const stopBlob = subscribeLiveNativeAds(() => {
       void load();
+    });
+    const stopPoll = startForegroundInterval(NATIVE_ADS_POLL_MS, () => {
+      void load();
+    });
+    const appSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void load();
     });
     return () => {
       cancelled = true;
-      stop?.();
+      stopBlob?.();
+      stopPoll();
+      appSub.remove();
     };
   }, []);
 

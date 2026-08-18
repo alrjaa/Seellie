@@ -649,6 +649,12 @@ export const en: TranslationTree = {
     uploadFailed: 'Upload failed',
     saveFailed: 'Save failed',
     saved: 'Saved',
+    savedAndLive:
+      'Saved — appears in the mobile app (General/Unique/Highlights) within a minute for signed-in users.',
+    feedVisibilityHint:
+      'To show in the mobile app feed: choose Active, then save. Draft and paused ads stay hidden.',
+    feedVisibilityDraft: 'Draft — hidden from the mobile app until you activate the ad.',
+    feedVisibilityPaused: 'Paused — hidden from the feed until you turn it back on.',
     saveError: {
       unknown: 'Cloud save failed. Sign in again and retry.',
       not_configured: 'Cloud is not configured on this site.',

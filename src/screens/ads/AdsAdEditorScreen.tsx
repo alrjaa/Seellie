@@ -612,7 +612,12 @@ export default function AdsAdEditorScreen() {
         });
         return;
       }
-      toast({ variant: 'success', title: t('adsPortal.saved') });
+      toast({
+        variant: 'success',
+        title: t('adsPortal.saved'),
+        description:
+          status === 'active' ? t('adsPortal.savedAndLive') : undefined,
+      });
       router.replace(`/ads/campaign/${campaignId}` as any);
     } catch {
       toast({
@@ -898,6 +903,13 @@ export default function AdsAdEditorScreen() {
           />
         ))}
       </View>
+      <Muted>
+        {status === 'draft'
+          ? t('adsPortal.feedVisibilityDraft')
+          : status === 'paused'
+            ? t('adsPortal.feedVisibilityPaused')
+            : t('adsPortal.feedVisibilityHint')}
+      </Muted>
 
       <Button
         label={t('common.save')}

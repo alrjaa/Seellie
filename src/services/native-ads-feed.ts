@@ -11,15 +11,26 @@ import {
 } from '@/services/native-ads';
 
 /** Blob (superadmin legacy) + DB (advertiser platform). */
+function parseDbAdsRaw(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return raw ? [raw] : [];
+}
+
 export async function fetchLiveNativeAds(): Promise<NativeInFeedAd[]> {
   const [blobRes, dbRaw] = await Promise.all([
     fetchAppBlob<unknown>(NATIVE_ADS_BLOB_KEY),
     fetchPublicNativeAdsFromDb(),
   ]);
   const blobAds = sanitizeNativeAdsPayload(blobRes.data);
-  const dbAds = sanitizeNativeAdsPayload(
-    Array.isArray(dbRaw) ? dbRaw : dbRaw ? [dbRaw] : []
-  );
+  const dbAds = sanitizeNativeAdsPayload(parseDbAdsRaw(dbRaw));
   const seen = new Set<string>();
   const merged: NativeInFeedAd[] = [];
   for (const ad of [...dbAds, ...blobAds]) {

@@ -459,6 +459,15 @@ begin
     returning id into ad_id;
   end if;
 
+  if st = 'active' then
+    update public.ad_campaigns set
+      status = 'active',
+      updated_at = now()
+    where id = camp
+      and advertiser_id = aid
+      and status in ('draft', 'paused');
+  end if;
+
   return (select to_jsonb(a.*) from public.advertisements a where a.id = ad_id);
 end;
 $$;
