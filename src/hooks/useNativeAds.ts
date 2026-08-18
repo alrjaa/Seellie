@@ -16,9 +16,13 @@ export function useNativeAds(): NativeInFeedAd[] {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const next = await fetchLiveNativeAds();
-      if (cancelled) return;
-      setAds((prev) => (nativeAdsEqual(prev, next) ? prev : next));
+      try {
+        const next = await fetchLiveNativeAds();
+        if (cancelled) return;
+        setAds((prev) => (nativeAdsEqual(prev, next) ? prev : next));
+      } catch (error) {
+        console.warn('[useNativeAds] fetch failed', error);
+      }
     };
     void load();
     const stopBlob = subscribeLiveNativeAds(() => {

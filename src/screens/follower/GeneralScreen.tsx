@@ -833,16 +833,16 @@ export default function GeneralFeedScreen() {
   const onFullLike = useCallback(
     (item: FullScreenContent) => {
       if (item.sponsored) return;
-      const source = filtered.find((f) => f.id === item.id);
+      const source = visibleFeed.find((f) => f.id === item.id && !f.sponsored);
       if (source) onLike(source);
     },
-    [filtered, onLike]
+    [visibleFeed, onLike]
   );
 
   const onFullComment = useCallback(
     (item: FullScreenContent, text: string) => {
       if (item.sponsored) return null;
-      const source = filtered.find((f) => f.id === item.id);
+      const source = visibleFeed.find((f) => f.id === item.id && !f.sponsored);
       if (!source) return null;
       if (source.type === 'photo' || source.type === 'video') {
         if (source.id.startsWith('forum-video-')) return null;
@@ -867,17 +867,17 @@ export default function GeneralFeedScreen() {
       // منشورات/تحليلات/نقاشات: التخزين المحلي عبر FullScreenFeed يكفي للعرض
       return null;
     },
-    [filtered, addMediaComment]
+    [visibleFeed, addMediaComment]
   );
 
   const onPressAuthor = useCallback(
     (item: FullScreenContent) => {
       if (item.sponsored) return;
-      const source = filtered.find((f) => f.id === item.id);
+      const source = visibleFeed.find((f) => f.id === item.id && !f.sponsored);
       if (!source?.authorHandle) return;
       openHandleProfile(source.authorId, source.authorHandle);
     },
-    [filtered, openHandleProfile]
+    [visibleFeed, openHandleProfile]
   );
 
   const mobileTopBar = (

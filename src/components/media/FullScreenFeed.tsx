@@ -1327,6 +1327,7 @@ function FullScreenFeedComponent({
           data={data}
           keyExtractor={(item, index) => `${item.id}__${index}`}
           renderItem={renderItem}
+          extraData={`${activeId}:${appActive}:${focused}`}
           pagingEnabled
           disableIntervalMomentum
           decelerationRate="fast"

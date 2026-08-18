@@ -56,6 +56,7 @@ async function main() {
   assert.ok(feedSrc.includes('windowSize={3}'));
   assert.ok(feedSrc.includes('removeClippedSubviews={false}'));
   assert.ok(feedSrc.includes('unloadAsync'));
+  assert.ok(feedSrc.includes('extraData={`${activeId}:${appActive}:${focused}`}'));
 
   console.log('F12-P2-05 comments unit: PASS');
 }

@@ -10,7 +10,10 @@ import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
 import { resolveLocationLabel } from '@/utils/location-label';
 import { useEffectiveNativeAds } from '@/hooks/useEffectiveNativeAds';
 import { useAdPreferences } from '@/hooks/useAdPreferences';
-import { injectNativeAds } from '@/services/native-ads';
+import {
+  injectNativeAds,
+  type NativeAdFeedItem,
+} from '@/services/native-ads';
 
 type MediaItem = {
   id: string;
@@ -183,50 +186,50 @@ export default function HighlightsScreen() {
     return items;
   }, [competitions, users, t]);
 
-  const fullScreenData = useMemo<FullScreenContent[]>(
-    () =>
-      injectNativeAds(
-        media.map((item) => ({
-          id: `${item.source}-${item.type}-${item.id}`,
-          kind: item.type,
-          mediaUrl: item.url,
-          authorId: item.organizerId,
-          authorName: item.organizerName || item.matchLabel,
-          authorHandle: item.organizerHandle,
-          authorAvatar: item.organizerAvatar,
-          title: item.matchLabel,
-          locationLabel: resolveLocationLabel({
-            city: item.locationCity,
-            region: item.locationRegion,
-          }),
-          subtitle:
-            item.source === 'competition'
-              ? item.type === 'photo'
-                ? t('screens.competitionClipPhoto')
-                : t('screens.competitionClipVideo')
-              : item.source === 'player'
-                ? item.type === 'photo'
-                  ? t('screens.playerClipPhoto')
-                  : t('screens.playerClipVideo')
-                : item.type === 'photo'
-                  ? t('screens.matchClipPhoto')
-                  : t('screens.matchClipVideo'),
-          likes: item.likes,
-          liked: !!currentUser && item.likes.includes(currentUser.id),
-          comments: (item.comments || []).map((c) => ({
-            id: c.id,
-            text: c.text,
-            authorId: c.authorId,
-            authorName: c.authorName,
-            authorAvatar: c.authorAvatar,
-            timestamp: c.timestamp,
-          })),
-        })),
-        nativeAds,
-        'highlights'
-      ) as FullScreenContent[],
-    [media, currentUser, nativeAds, t]
-  );
+  const fullScreenData = useMemo<FullScreenContent[]>(() => {
+    const mapped = media.map((item) => ({
+      id: `${item.source}-${item.type}-${item.id}`,
+      kind: item.type,
+      mediaUrl: item.url,
+      authorId: item.organizerId,
+      authorName: item.organizerName || item.matchLabel,
+      authorHandle: item.organizerHandle,
+      authorAvatar: item.organizerAvatar,
+      title: item.matchLabel,
+      locationLabel: resolveLocationLabel({
+        city: item.locationCity,
+        region: item.locationRegion,
+      }),
+      subtitle:
+        item.source === 'competition'
+          ? item.type === 'photo'
+            ? t('screens.competitionClipPhoto')
+            : t('screens.competitionClipVideo')
+          : item.source === 'player'
+            ? item.type === 'photo'
+              ? t('screens.playerClipPhoto')
+              : t('screens.playerClipVideo')
+            : item.type === 'photo'
+              ? t('screens.matchClipPhoto')
+              : t('screens.matchClipVideo'),
+      likes: item.likes || [],
+      liked: !!currentUser && (item.likes || []).includes(currentUser.id),
+      comments: (item.comments || []).map((c) => ({
+        id: c.id,
+        text: c.text,
+        authorId: c.authorId,
+        authorName: c.authorName,
+        authorAvatar: c.authorAvatar,
+        timestamp: c.timestamp,
+      })),
+    }));
+    return injectNativeAds(mapped, nativeAds, 'highlights').map((item) => {
+      if ((item as NativeAdFeedItem).sponsored) {
+        return item as FullScreenContent;
+      }
+      return item as FullScreenContent;
+    });
+  }, [media, currentUser, nativeAds, t]);
 
   const onFullLike = useCallback(
     (item: FullScreenContent) => {
