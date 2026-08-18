@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
@@ -68,21 +68,19 @@ export default function AdsRegisterScreen() {
   ]);
 
   return (
-    <Screen scroll keyboard>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Title>{t('adsPortal.registerTitle')}</Title>
-        <Muted>{t('adsPortal.registerSubtitle')}</Muted>
-        <Input label={t('adsPortal.contactName')} value={contactName} onChangeText={setContactName} maxLength={80} />
-        <Input label={t('adsPortal.businessName')} value={businessName} onChangeText={setBusinessName} maxLength={80} />
-        <Input label={t('adsPortal.country')} value={country} onChangeText={setCountry} maxLength={80} />
-        <Input label={t('adsPortal.region')} value={region} onChangeText={setRegion} maxLength={80} />
-        <Input label={t('adsPortal.city')} value={city} onChangeText={setCity} maxLength={80} />
-        <Input label={t('auth.email')} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-        <Input label={t('auth.password')} value={password} onChangeText={setPassword} secureTextEntry />
-        <Muted>{t('adsPortal.registerRegionHint')}</Muted>
-        <Button label={t('adsPortal.createAccount')} onPress={() => void onSubmit()} disabled={busy} />
-        <Button label={t('auth.login')} variant="outline" onPress={() => router.replace('/ads/login' as any)} />
-      </ScrollView>
+    <Screen scroll keyboard density="form" contentStyle={styles.content}>
+      <Title>{t('adsPortal.registerTitle')}</Title>
+      <Muted>{t('adsPortal.registerSubtitle')}</Muted>
+      <Input label={t('adsPortal.contactName')} value={contactName} onChangeText={setContactName} maxLength={80} />
+      <Input label={t('adsPortal.businessName')} value={businessName} onChangeText={setBusinessName} maxLength={80} />
+      <Input label={t('adsPortal.country')} value={country} onChangeText={setCountry} maxLength={80} />
+      <Input label={t('adsPortal.region')} value={region} onChangeText={setRegion} maxLength={80} />
+      <Input label={t('adsPortal.city')} value={city} onChangeText={setCity} maxLength={80} />
+      <Input label={t('auth.email')} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+      <Input label={t('auth.password')} value={password} onChangeText={setPassword} secureTextEntry />
+      <Muted>{t('adsPortal.registerRegionHint')}</Muted>
+      <Button label={t('adsPortal.createAccount')} onPress={() => void onSubmit()} disabled={busy} />
+      <Button label={t('auth.login')} variant="outline" onPress={() => router.replace('/ads/login' as any)} />
     </Screen>
   );
 }

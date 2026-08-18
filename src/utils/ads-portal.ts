@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 
 /** Future advertiser portal — separate from user app routes. */
 export const ADS_PORTAL_BASE = '/ads';
-export const ADS_PORTAL_HOME = '/ads';
+export const ADS_PORTAL_HOME = '/ads/home';
 
 export function adsPath(segment = ''): string {
   const clean = segment.replace(/^\/+/, '');

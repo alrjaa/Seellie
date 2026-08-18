@@ -50,7 +50,7 @@ function RootNavigator() {
     <View
       style={[
         layoutDirectionStyle(isRTL),
-        { backgroundColor: theme.colors.background },
+        { backgroundColor: theme.colors.background, flex: 1 },
       ]}
     >
       <OfflineBanner />

@@ -8,18 +8,9 @@ export default function AdsPortalLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: theme.colors.background },
+        contentStyle: { backgroundColor: theme.colors.background, flex: 1 },
         animation: 'fade',
       }}
-    >
-      <Stack.Screen name="index" />
-      <Stack.Screen name="login" />
-      <Stack.Screen name="register" />
-      <Stack.Screen name="home" />
-      <Stack.Screen name="campaign/new" />
-      <Stack.Screen name="campaign/[id]" />
-      <Stack.Screen name="ad/new" />
-      <Stack.Screen name="ad/[id]" />
-    </Stack>
+    />
   );
 }
