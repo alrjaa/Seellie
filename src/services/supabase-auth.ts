@@ -87,6 +87,16 @@ export function profileToUser(row: ProfileRow): User {
   );
 }
 
+function parseProfileRow(row: ProfileRow): User | null {
+  try {
+    if (!row?.id) return null;
+    return profileToUser(row);
+  } catch (error) {
+    console.warn('[supabase] skip corrupt profile', row?.id, error);
+    return null;
+  }
+}
+
 /** Owner/admin table columns — includes email/mobile. */
 export const PROFILE_OWNER_COLUMNS =
   'id,email,name,handle,visible_id,role,roles,active_role,avatar,bio,city,region,country,status,mobile,content';
@@ -142,7 +152,9 @@ export async function fetchAllProfilesResult(): Promise<FetchProfilesResult> {
     console.warn('[supabase] fetchAllProfilesResult', error.message);
     return { users: [], ok: false, error: error.message };
   }
-  const catalog = ((data || []) as ProfileRow[]).map(profileToUser);
+  const catalog = ((data || []) as ProfileRow[])
+    .map(parseProfileRow)
+    .filter((u): u is User => !!u);
   const { data: privileged } = await sb
     .from('profiles')
     .select(PROFILE_OWNER_COLUMNS)
@@ -151,7 +163,9 @@ export async function fetchAllProfilesResult(): Promise<FetchProfilesResult> {
     return {
       users: mergeUsersPreferCloud(
         catalog,
-        (privileged as ProfileRow[]).map(profileToUser)
+        (privileged as ProfileRow[])
+          .map(parseProfileRow)
+          .filter((u): u is User => !!u)
       ),
       ok: true,
     };
@@ -180,7 +194,10 @@ export function subscribeProfiles(
       },
       (payload) => {
         const row = payload.new as ProfileRow;
-        if (row?.id) onChange(profileToUser(row));
+        if (row?.id) {
+          const user = parseProfileRow(row);
+          if (user) onChange(user);
+        }
       }
     )
     .on(
@@ -192,7 +209,10 @@ export function subscribeProfiles(
       },
       (payload) => {
         const row = payload.new as ProfileRow;
-        if (row?.id) onChange(profileToUser(row));
+        if (row?.id) {
+          const user = parseProfileRow(row);
+          if (user) onChange(user);
+        }
       }
     )
     .subscribe();

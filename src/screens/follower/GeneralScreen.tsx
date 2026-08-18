@@ -821,7 +821,12 @@ export default function GeneralFeedScreen() {
             city: item.locationCity,
             region: item.locationRegion,
           }),
-          comments: (item.comments || []).map((c) => ({
+          comments: (item.comments || [])
+            .filter(
+              (c): c is NonNullable<typeof c> =>
+                !!c && typeof c === 'object' && typeof c.id === 'string'
+            )
+            .map((c) => ({
             id: c.id,
             text: c.text,
             authorId: c.authorId,

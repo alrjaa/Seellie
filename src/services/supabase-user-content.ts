@@ -41,80 +41,108 @@ function reviveMediaItem<T extends { timestamp?: Date | string }>(
   };
 }
 
+function objectRows<T extends object>(raw: unknown): T[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (row): row is T => !!row && typeof row === 'object' && !Array.isArray(row)
+  );
+}
+
 export function applyContentPayload(
   user: User,
   content: UserContentPayload | null | undefined
 ): User {
   if (!content || typeof content !== 'object') return user;
-  const media = content.media || user.media || { photos: [], videos: [] };
-  return {
-    ...user,
-    posts: Array.isArray(content.posts)
-      ? content.posts.map((p) => ({
-          ...p,
-          timestamp: new Date(p.timestamp as Date | string),
-        }))
-      : user.posts || [],
-    media: {
-      photos: (media.photos || []).map((p) => reviveMediaItem(p)),
-      videos: (media.videos || []).map((v) => reviveMediaItem(v)),
-    },
-    analysisContent: Array.isArray(content.analysisContent)
-      ? content.analysisContent.map((a) => ({
-          ...a,
-          timestamp: new Date(a.timestamp as Date | string),
-          comments: (a.comments || []) as Comment[],
-        }))
-      : user.analysisContent || [],
-    personalityPhotos: Array.isArray(content.personalityPhotos)
-      ? content.personalityPhotos
-      : user.personalityPhotos || [],
-    pinnedCompetitionIds: Array.isArray(content.pinnedCompetitionIds)
-      ? content.pinnedCompetitionIds
-      : user.pinnedCompetitionIds || [],
-    following: Array.isArray(content.following)
-      ? content.following
-      : user.following || [],
-    followers: Array.isArray(content.followers)
-      ? content.followers
-      : user.followers || [],
-    analyst: content.analyst
-      ? stripAnalystAccessCode({
-          ...content.analyst,
-          termsAcceptedAt: content.analyst.termsAcceptedAt
-            ? new Date(content.analyst.termsAcceptedAt as Date | string)
-            : undefined,
-          requestedAt: content.analyst.requestedAt
-            ? new Date(content.analyst.requestedAt as Date | string)
-            : undefined,
-          reviewedAt: content.analyst.reviewedAt
-            ? new Date(content.analyst.reviewedAt as Date | string)
-            : undefined,
-          accessCodeSentAt: content.analyst.accessCodeSentAt
-            ? new Date(content.analyst.accessCodeSentAt as Date | string)
-            : undefined,
-          warnedAt: content.analyst.warnedAt
-            ? new Date(content.analyst.warnedAt as Date | string)
-            : undefined,
-          bannedAt: content.analyst.bannedAt
-            ? new Date(content.analyst.bannedAt as Date | string)
-            : undefined,
-          suspendFrom: content.analyst.suspendFrom
-            ? new Date(content.analyst.suspendFrom as Date | string)
-            : undefined,
-          suspendTo: content.analyst.suspendTo
-            ? new Date(content.analyst.suspendTo as Date | string)
-            : undefined,
-        })
-      : user.analyst,
-    permissions: content.permissions
-      ? { ...user.permissions, ...content.permissions }
-      : user.permissions,
-    city: content.city ?? user.city,
-    region: content.region ?? user.region,
-    country: content.country ?? user.country,
-    mobile: content.mobile ?? user.mobile,
-  };
+  try {
+    const media = content.media || user.media || { photos: [], videos: [] };
+    return {
+      ...user,
+      posts: Array.isArray(content.posts)
+        ? objectRows<User['posts'][number]>(content.posts).map((p) => ({
+            ...p,
+            likes: Array.isArray(p.likes) ? p.likes : [],
+            timestamp: new Date(p.timestamp as Date | string),
+          }))
+        : user.posts || [],
+      media: {
+        photos: objectRows<NonNullable<User['media']>['photos'][number]>(
+          media.photos
+        ).map((p) => reviveMediaItem({ ...p, likes: Array.isArray(p.likes) ? p.likes : [] })),
+        videos: objectRows<NonNullable<User['media']>['videos'][number]>(
+          media.videos
+        ).map((v) => reviveMediaItem({ ...v, likes: Array.isArray(v.likes) ? v.likes : [] })),
+      },
+      analysisContent: Array.isArray(content.analysisContent)
+        ? objectRows<User['analysisContent'][number]>(content.analysisContent).map(
+            (a) => ({
+              ...a,
+              likes: Array.isArray(a.likes) ? a.likes : [],
+              timestamp: new Date(a.timestamp as Date | string),
+              comments: objectRows<Comment>(a.comments),
+            })
+          )
+        : user.analysisContent || [],
+      personalityPhotos: Array.isArray(content.personalityPhotos)
+        ? content.personalityPhotos.filter(
+            (url): url is string => typeof url === 'string' && !!url.trim()
+          )
+        : user.personalityPhotos || [],
+      pinnedCompetitionIds: Array.isArray(content.pinnedCompetitionIds)
+        ? content.pinnedCompetitionIds.filter(
+            (id): id is string => typeof id === 'string' && !!id.trim()
+          )
+        : user.pinnedCompetitionIds || [],
+      following: Array.isArray(content.following)
+        ? content.following.filter(
+            (id): id is string => typeof id === 'string' && !!id.trim()
+          )
+        : user.following || [],
+      followers: Array.isArray(content.followers)
+        ? content.followers.filter(
+            (id): id is string => typeof id === 'string' && !!id.trim()
+          )
+        : user.followers || [],
+      analyst: content.analyst
+        ? stripAnalystAccessCode({
+            ...content.analyst,
+            termsAcceptedAt: content.analyst.termsAcceptedAt
+              ? new Date(content.analyst.termsAcceptedAt as Date | string)
+              : undefined,
+            requestedAt: content.analyst.requestedAt
+              ? new Date(content.analyst.requestedAt as Date | string)
+              : undefined,
+            reviewedAt: content.analyst.reviewedAt
+              ? new Date(content.analyst.reviewedAt as Date | string)
+              : undefined,
+            accessCodeSentAt: content.analyst.accessCodeSentAt
+              ? new Date(content.analyst.accessCodeSentAt as Date | string)
+              : undefined,
+            warnedAt: content.analyst.warnedAt
+              ? new Date(content.analyst.warnedAt as Date | string)
+              : undefined,
+            bannedAt: content.analyst.bannedAt
+              ? new Date(content.analyst.bannedAt as Date | string)
+              : undefined,
+            suspendFrom: content.analyst.suspendFrom
+              ? new Date(content.analyst.suspendFrom as Date | string)
+              : undefined,
+            suspendTo: content.analyst.suspendTo
+              ? new Date(content.analyst.suspendTo as Date | string)
+              : undefined,
+          })
+        : user.analyst,
+      permissions: content.permissions
+        ? { ...user.permissions, ...content.permissions }
+        : user.permissions,
+      city: content.city ?? user.city,
+      region: content.region ?? user.region,
+      country: content.country ?? user.country,
+      mobile: content.mobile ?? user.mobile,
+    };
+  } catch (error) {
+    console.warn('[content] applyContentPayload failed; keeping local user', error);
+    return user;
+  }
 }
 
 export function userToContentPayload(user: User): UserContentPayload {
