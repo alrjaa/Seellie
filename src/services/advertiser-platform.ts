@@ -260,9 +260,12 @@ export async function fetchPublicNativeAdsFromDb(): Promise<unknown> {
   return data;
 }
 
-export async function listPendingAdvertisements(): Promise<DbAdvertisement[]> {
-  const { data } = await rpc<unknown>('list_pending_advertisements');
-  return parseRpcArray<DbAdvertisement>(data);
+export async function listPendingAdvertisements(): Promise<
+  RpcResult<DbAdvertisement[]>
+> {
+  const { data, error } = await rpc<unknown>('list_pending_advertisements');
+  if (error) return { data: [], error };
+  return { data: await parseRpcArray<DbAdvertisement>(data) };
 }
 
 export async function adminSetAdvertisementStatus(

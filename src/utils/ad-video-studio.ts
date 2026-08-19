@@ -35,7 +35,8 @@ export type AdReviewReasonCode =
   | 'bad_aspect'
   | 'missing_cta'
   | 'missing_video'
-  | 'invalid_link';
+  | 'invalid_link'
+  | 'website_not_video';
 
 export type AdStudioCheck = {
   code: AdReviewReasonCode;
@@ -85,6 +86,32 @@ export function isSupportedAdVideoFormat(
   return false;
 }
 
+/**
+ * Page/site URL (e.g. https://www.seellie.com). Valid as a CTA button link,
+ * never as the in-feed video file.
+ */
+export function looksLikeWebsiteNotVideo(uri: string): boolean {
+  const raw = (uri || '').trim();
+  if (!raw) return false;
+  if (
+    raw.startsWith('blob:') ||
+    raw.startsWith('data:') ||
+    raw.startsWith('file:')
+  ) {
+    return false;
+  }
+  if (isSupportedAdVideoFormat(raw)) return false;
+  if (/\.(avi|mkv|webm|wmv|flv|mpeg|mpg|3gp)(?:\?|#|$)/i.test(raw)) {
+    return false;
+  }
+  try {
+    const u = new URL(ensureHttpsUrl(raw));
+    return u.protocol === 'https:' || u.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 export function inspectAdVideoAsset(
   asset: PickerAssetLike & { mimeType?: string | null; fileName?: string | null }
 ): AdVideoProbe {
@@ -113,7 +140,9 @@ export function reviewAdVideo(input: {
     return checks;
   }
 
-  if (!isSupportedAdVideoFormat(uri, probe.mime, probe.fileName)) {
+  if (looksLikeWebsiteNotVideo(uri)) {
+    checks.push({ code: 'website_not_video', level: 'block' });
+  } else if (!isSupportedAdVideoFormat(uri, probe.mime, probe.fileName)) {
     checks.push({ code: 'bad_format', level: 'block' });
   }
 

@@ -46,6 +46,7 @@ import {
   ensureHttpsUrl,
   isSupportedAdVideoFormat,
   isValidAdCtaUrl,
+  looksLikeWebsiteNotVideo,
   reviewAdVideo,
 } from '../src/utils/ad-video-studio';
 import { createKeyedChannelHub } from '../src/services/app-blob-realtime-hub';
@@ -295,6 +296,17 @@ test('ad studio aspect and format', () => {
   assert.equal(detectAdAspectRatio(1920, 1080), '16:9');
   assert.equal(isSupportedAdVideoFormat('https://cdn.example/a.mp4'), true);
   assert.equal(isSupportedAdVideoFormat('https://cdn.example/a.avi'), false);
+  assert.equal(looksLikeWebsiteNotVideo('https://www.seellie.com'), true);
+  assert.equal(looksLikeWebsiteNotVideo('https://seellie.com/'), true);
+  assert.equal(looksLikeWebsiteNotVideo('seellie.com'), true);
+  assert.equal(looksLikeWebsiteNotVideo('https://cdn.example/a.mp4'), false);
+  const siteAsVideo = reviewAdVideo({
+    probe: { durationSec: null, width: null, height: null, sizeMb: null },
+    uri: 'https://www.seellie.com',
+    ctaUrl: '',
+    requireCta: true,
+  });
+  assert.ok(siteAsVideo.some((c) => c.code === 'website_not_video'));
 });
 
 test('ensureHttpsUrl upgrades http and bare domains', () => {

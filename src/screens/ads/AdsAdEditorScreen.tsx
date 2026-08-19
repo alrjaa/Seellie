@@ -38,6 +38,7 @@ import {
   detectAdAspectRatio,
   ensureHttpsUrl,
   inspectAdVideoAsset,
+  looksLikeWebsiteNotVideo,
   reviewAdVideo,
   reviewStatusFromChecks,
   type AdCtaPresetId,
@@ -355,7 +356,7 @@ export default function AdsAdEditorScreen() {
         probe,
         uri: previewUri || videoUrl,
         ctaUrl,
-        requireCta: status === 'active',
+        requireCta: status === 'active' || status === 'pending_review',
       }),
     [ctaUrl, previewUri, probe, status, videoUrl]
   );
@@ -544,8 +545,24 @@ export default function AdsAdEditorScreen() {
     toast({ variant: 'success', title: t('adsPortal.coverReady') });
   }, [currentUser, previewUri, t, toast, trimStart]);
 
-  const save = useCallback(async () => {
+  const save = useCallback(async (mode: 'draft' | 'pending_review') => {
+    const persistStatus: typeof status =
+      mode === 'pending_review'
+        ? 'pending_review'
+        : status === 'paused'
+          ? 'paused'
+          : 'draft';
     const name = advertiserName.trim() || currentUser?.name?.trim() || '';
+    if (looksLikeWebsiteNotVideo(videoUrl)) {
+      const site = ensureHttpsUrl(videoUrl);
+      if (site && !ctaUrl.trim()) setCtaUrl(site);
+      toast({
+        variant: 'destructive',
+        title: t('adsPortal.rejected'),
+        description: t('adsPortal.reviewReason.website_not_video'),
+      });
+      return;
+    }
     if (!campaignId || !name || !/^https:\/\//i.test(videoUrl)) {
       toast({
         variant: 'destructive',
@@ -565,7 +582,7 @@ export default function AdsAdEditorScreen() {
       probe,
       uri: videoUrl,
       ctaUrl: normalizedCta,
-      requireCta: status === 'active',
+      requireCta: persistStatus === 'pending_review',
     });
     const blocked = publishChecks.find((c) => c.level === 'block');
     if (blocked) {
@@ -581,7 +598,7 @@ export default function AdsAdEditorScreen() {
       const { data: saved, error } = await saveAdvertisement({
         id: isNew ? undefined : String(id),
         campaignId: String(campaignId),
-        status,
+        status: persistStatus,
         advertiserName: name,
         advertiserHandle: advertiserHandle.trim() || undefined,
         title: title.trim() || undefined,
@@ -614,15 +631,16 @@ export default function AdsAdEditorScreen() {
         });
         return;
       }
+      setStatus(persistStatus);
       toast({
         variant: 'success',
         title: t('adsPortal.saved'),
         description:
-          status === 'active'
+          persistStatus === 'pending_review'
             ? t('adsPortal.savedPendingReview')
-            : status === 'pending_review'
-              ? t('adsPortal.savedPendingReview')
-              : undefined,
+            : persistStatus === 'paused'
+              ? t('adsPortal.feedVisibilityPaused')
+              : t('adsPortal.feedVisibilityDraft'),
       });
       router.replace(`/ads/campaign/${campaignId}` as any);
     } catch {
@@ -711,7 +729,10 @@ export default function AdsAdEditorScreen() {
         loading={pickingVideo}
         disabled={pickingVideo}
       />
-      {/^https:\/\//i.test(videoUrl) ? (
+      <Muted>{t('adsPortal.videoVsSiteHint')}</Muted>
+      {looksLikeWebsiteNotVideo(videoUrl) ? (
+        <Muted>{t('adsPortal.reviewReason.website_not_video')}</Muted>
+      ) : /^https:\/\//i.test(videoUrl) ? (
         <Muted>{t('adsPortal.videoAttached')}</Muted>
       ) : previewUri ? (
         <Muted>{t('adsPortal.saveError.https_video')}</Muted>
@@ -910,18 +931,24 @@ export default function AdsAdEditorScreen() {
         ))}
       </View>
       <Muted>
-        {status === 'draft'
-          ? t('adsPortal.feedVisibilityDraft')
-          : status === 'paused'
-            ? t('adsPortal.feedVisibilityPaused')
+        {status === 'paused'
+          ? t('adsPortal.feedVisibilityPaused')
+          : status === 'pending_review'
+            ? t('adsPortal.savedPendingReview')
             : t('adsPortal.feedVisibilityHint')}
       </Muted>
 
       <Button
-        label={t('common.save')}
-        onPress={() => void save()}
+        label={t('adsPortal.sendForReview')}
+        onPress={() => void save('pending_review')}
         disabled={saving || processing || bootstrapping}
         loading={saving}
+      />
+      <Button
+        label={t('adsPortal.saveDraft')}
+        variant="outline"
+        onPress={() => void save('draft')}
+        disabled={saving || processing || bootstrapping}
       />
     </View>
   );

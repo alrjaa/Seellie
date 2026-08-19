@@ -628,7 +628,7 @@ export const en: TranslationTree = {
     hookText: 'Hook (first 3 seconds)',
     bodyText: 'Body text',
     ctaLabel: 'Link button label',
-    ctaUrl: 'HTTPS link',
+    ctaUrl: 'Button link — e.g. https://www.seellie.com (not the video)',
     appearanceRegion: 'Ad appearance region (targeting)',
     targetCountry: 'Target country',
     targetRegion: 'Target region',
@@ -647,15 +647,19 @@ export const en: TranslationTree = {
     uploading: 'Uploading…',
     videoReady: 'Video uploaded',
     videoAttached: '✓ Video attached',
+    videoVsSiteHint:
+      'Video = an MP4/MOV file from your device. A website URL (like seellie.com) goes in the CTA button only — it cannot play as the ad.',
     uploadFailed: 'Upload failed',
     saveFailed: 'Save failed',
     saved: 'Saved',
+    saveDraft: 'Save draft only',
+    sendForReview: 'Send for review',
     savedAndLive:
       'Saved — appears in the mobile app after superadmin approval (General/Unique/Highlights).',
     savedPendingReview:
-      'Submitted for review — a superadmin must approve before the ad goes live.',
+      'Sent for review — it will appear in the superadmin queue before going live.',
     feedVisibilityHint:
-      'Active submits the ad for review. It will not appear in the app until a superadmin approves it.',
+      'Tap “Send for review” so the superadmin can approve it. seellie.com belongs in the CTA; the video must be an uploaded file.',
     feedVisibilityDraft: 'Draft — not submitted for review and hidden from the app.',
     feedVisibilityPaused: 'Paused — hidden from the feed until you turn it back on.',
     saveError: {
@@ -663,7 +667,8 @@ export const en: TranslationTree = {
       not_configured: 'Cloud is not configured on this site.',
       not_authenticated: 'Session expired — sign in then save.',
       advertiser_required: 'Complete the advertiser profile on the home page first.',
-      https_video: 'Upload the video until an HTTPS link is ready, then save.',
+      https_video:
+        'Upload an MP4/MOV file (not a website URL). After upload an HTTPS link appears, then send for review.',
       invalid_campaign: 'Create a campaign first, then open the ad studio.',
       advertiser_name: 'Enter the advertiser name shown in the feed.',
       campaign_name: 'Enter a campaign name.',
@@ -671,13 +676,13 @@ export const en: TranslationTree = {
       schema_missing: 'Advertiser database functions are not enabled.',
     },
     studioIntro:
-      'Upload a vertical 9:16 video (1080×1920), 6–15 seconds, then preview it in a phone frame before publishing.',
+      'Upload a vertical 9:16 video (1080×1920), 6–15 seconds. The app URL (seellie.com) belongs in the CTA button, not as the video.',
     livePreview: 'Phone preview',
     safeZoneHint:
       'The overlay shows the close button, sponsored badge, action rail, tab bar, and account name.',
     safeZoneToggle: 'Safe zone',
     pipelineTitle: 'Production status',
-    autoSaved: 'Draft auto-saved on this device',
+    autoSaved: 'Local draft on this device only — not yet sent to the superadmin',
     pipeline: {
       processing: 'Processing',
       review: 'Under review — fix warnings before going live',
@@ -704,7 +709,7 @@ export const en: TranslationTree = {
     coverCaptureFailed: 'Could not capture a cover frame',
     ctaTitle: 'Call to action & link',
     deepLinkHint:
-      'Use an HTTPS URL (universal link / app store). Add UTM parameters to track conversions.',
+      'Put the website or store HTTPS link here — e.g. https://www.seellie.com. This button opens after the ad video plays.',
     utmSource: 'UTM source',
     utmMedium: 'UTM medium',
     utmCampaign: 'UTM campaign',
@@ -716,9 +721,11 @@ export const en: TranslationTree = {
       bad_format: 'Unsupported format — use MP4 or MOV (H.264)',
       low_resolution: 'Resolution is low — 1080×1920 is recommended',
       bad_aspect: 'Aspect is not 9:16 (1:1 or 16:9 allowed with a warning)',
-      missing_cta: 'Add a CTA link before going live',
+      missing_cta: 'Add a CTA link before sending for review',
       missing_video: 'Upload the ad video first',
       invalid_link: 'The link must start with https://',
+      website_not_video:
+        'https://www.seellie.com is a website, not a video. Upload an MP4 file and put the site URL in the CTA button.',
     },
     status: {
       draft: 'Draft',
@@ -1823,7 +1830,9 @@ export const en: TranslationTree = {
       empty: 'No in-feed ads',
       emptyDesc: 'Add a short vertical clip to appear inside the feed.',
       pendingDbTitle: 'Advertiser submissions — pending review',
-      pendingDbEmpty: 'No pending ads from ads.seellie.com',
+      pendingDbEmpty:
+        'No ads waiting for approval. Drafts or ads without an uploaded MP4 do not appear here — the advertiser must tap “Send for review”.',
+      pendingDbLoadFailed: 'Could not load the review queue',
       pendingDbApprove: 'Approve & publish',
       pendingDbReject: 'Reject (draft)',
       pendingDbApproved: 'Ad approved',

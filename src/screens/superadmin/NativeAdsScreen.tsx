@@ -130,6 +130,7 @@ export default function NativeAdsScreen() {
   const [formOpen, setFormOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [pendingDb, setPendingDb] = useState<DbAdvertisement[]>([]);
+  const [pendingDbError, setPendingDbError] = useState<string | null>(null);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -138,7 +139,8 @@ export default function NativeAdsScreen() {
       listPendingAdvertisements(),
     ]);
     setAds(sanitizeNativeAdsPayload(res.data));
-    setPendingDb(pending);
+    setPendingDb(pending.data ?? []);
+    setPendingDbError(pending.error ?? null);
     setLoading(false);
   }, []);
 
@@ -458,7 +460,9 @@ export default function NativeAdsScreen() {
         <Muted>{t('superadmin.ads.subtitle')}</Muted>
         <Muted>{t('superadmin.ads.specHint')}</Muted>
         <Subtitle>{t('superadmin.ads.pendingDbTitle')}</Subtitle>
-        {pendingDb.length === 0 ? (
+        {pendingDbError ? (
+          <Muted>{t('superadmin.ads.pendingDbLoadFailed')}</Muted>
+        ) : pendingDb.length === 0 ? (
           <Muted>{t('superadmin.ads.pendingDbEmpty')}</Muted>
         ) : (
           pendingDb.map((row) => (
@@ -645,6 +649,7 @@ export default function NativeAdsScreen() {
       draft,
       formOpen,
       pendingDb,
+      pendingDbError,
       pickPoster,
       pickVideo,
       pickingPoster,
