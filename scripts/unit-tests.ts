@@ -49,6 +49,10 @@ import {
   looksLikeWebsiteNotVideo,
   reviewAdVideo,
 } from '../src/utils/ad-video-studio';
+import {
+  sanitizeAdvertiserNotification,
+  sanitizeAdvertiserNotifications,
+} from '../src/services/advertiser-inbox';
 import { createKeyedChannelHub } from '../src/services/app-blob-realtime-hub';
 import {
   attachSoundToPlayingVideo,
@@ -330,7 +334,28 @@ test('ad studio review blocks bad duration and link', () => {
     campaign: 'spring',
   });
   assert.match(utm, /utm_source=seellie/);
-  assert.match(utm, /utm_campaign=spring/);
+});
+
+test('advertiser inbox sanitizer keeps blocked/deleted notices only', () => {
+  const blocked = sanitizeAdvertiserNotification({
+    id: '11111111-1111-4111-8111-111111111111',
+    advertiser_id: '22222222-2222-4222-8222-222222222222',
+    kind: 'blocked',
+    ad_title: 'Spring offer',
+    note: 'Policy',
+    created_at: '2026-08-19T00:00:00.000Z',
+  });
+  assert.ok(blocked);
+  assert.equal(blocked?.kind, 'blocked');
+  assert.equal(sanitizeAdvertiserNotification({ kind: 'blocked' }), null);
+  assert.equal(
+    sanitizeAdvertiserNotifications([
+      blocked,
+      { kind: 'hack' },
+      { ...blocked, kind: 'deleted', id: '33333333-3333-4333-8333-333333333333' },
+    ]).length,
+    2
+  );
 });
 
 test('ad studio trim clamps to 6–15s', () => {

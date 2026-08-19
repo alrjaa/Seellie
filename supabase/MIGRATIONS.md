@@ -73,3 +73,7 @@ where proname in (
 
 This repo cannot confirm the live project schema without dashboard/CLI credentials.
 After running migrations, compare policies/tables with this checklist.
+
+## F16 — Advertiser ad moderation (manual apply)
+
+Run **`supabase/F16-ADVERTISER-MODERATION.sql`** in the Supabase SQL Editor after F15. Adds blocked/deleted statuses, advertiser inbox, and superadmin moderation RPCs.

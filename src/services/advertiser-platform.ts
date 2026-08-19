@@ -1,4 +1,16 @@
 import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
+import { isUuid } from '@/services/supabase-messages';
+import {
+  sanitizeAdvertiserNotification,
+  sanitizeAdvertiserNotifications,
+  type AdvertiserNotification,
+} from '@/services/advertiser-inbox';
+
+export type { AdvertiserNoticeKind, AdvertiserNotification } from '@/services/advertiser-inbox';
+export {
+  sanitizeAdvertiserNotification,
+  sanitizeAdvertiserNotifications,
+} from '@/services/advertiser-inbox';
 
 export type AdvertiserAccount = {
   id: string;
@@ -29,7 +41,7 @@ export type DbAdvertisement = {
   id: string;
   advertiser_id: string;
   campaign_id: string;
-  status: 'draft' | 'pending_review' | 'active' | 'paused';
+  status: 'draft' | 'pending_review' | 'active' | 'paused' | 'blocked' | 'deleted';
   advertiser_name: string;
   advertiser_handle?: string | null;
   title?: string | null;
@@ -103,6 +115,8 @@ async function unwrapRpcData<T>(data: unknown): Promise<T | null> {
   return data as T;
 }
 
+export type AdminModerateAction = 'block' | 'delete';
+
 export type RpcResult<T> = { data: T | null; error?: string };
 
 function mapAdvertiserError(message: string): string {
@@ -116,7 +130,10 @@ function mapAdvertiserError(message: string): string {
   if (m.includes('https video')) return 'https_video';
   if (m.includes('invalid campaign')) return 'invalid_campaign';
   if (m.includes('advertiser name')) return 'advertiser_name';
-  if (m.includes('campaign name')) return 'campaign_name';
+  if (m.includes('ad moderated')) return 'moderated';
+  if (m.includes('forbidden')) return 'forbidden';
+  if (m.includes('invalid action')) return 'invalid_action';
+  if (m.includes('ad not found')) return 'not_found';
   if (m.includes('check') || m.includes('violates')) return 'constraint';
   return 'unknown';
 }
@@ -266,6 +283,53 @@ export async function listPendingAdvertisements(): Promise<
   const { data, error } = await rpc<unknown>('list_pending_advertisements');
   if (error) return { data: [], error };
   return { data: await parseRpcArray<DbAdvertisement>(data) };
+}
+
+export async function listAdminAdvertisements(): Promise<
+  RpcResult<DbAdvertisement[]>
+> {
+  const { data, error } = await rpc<unknown>('list_admin_advertisements');
+  if (error) return { data: [], error };
+  return { data: await parseRpcArray<DbAdvertisement>(data) };
+}
+
+export async function adminModerateAdvertisement(
+  adId: string,
+  action: AdminModerateAction,
+  note?: string
+): Promise<RpcResult<DbAdvertisement>> {
+  if (!isUuid(adId)) return { data: null, error: 'not_found' };
+  if (action !== 'block' && action !== 'delete') {
+    return { data: null, error: 'invalid_action' };
+  }
+  return rpc<DbAdvertisement>('admin_moderate_advertisement', {
+    p_ad_id: adId,
+    p_action: action,
+    p_note: (note || '').trim().slice(0, 240),
+  });
+}
+
+export async function listMyAdvertiserNotifications(): Promise<
+  RpcResult<AdvertiserNotification[]>
+> {
+  const { data, error } = await rpc<unknown>('list_my_advertiser_notifications');
+  if (error) return { data: [], error };
+  return {
+    data: sanitizeAdvertiserNotifications(await parseRpcArray(data)),
+    error,
+  };
+}
+
+export async function markAdvertiserNotificationRead(
+  id: string
+): Promise<RpcResult<AdvertiserNotification>> {
+  if (!isUuid(id)) return { data: null, error: 'not_found' };
+  const res = await rpc<unknown>('mark_advertiser_notification_read', {
+    p_id: id,
+  });
+  if (res.error) return { data: null, error: res.error };
+  const notice = sanitizeAdvertiserNotification(res.data);
+  return notice ? { data: notice } : { data: null, error: 'unknown' };
 }
 
 export async function adminSetAdvertisementStatus(

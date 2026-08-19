@@ -7,15 +7,18 @@ import { useToast } from '@/providers/ToastProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { LoadingState } from '@/components/feedback/LoadingState';
-import { Button, Input, ListRow, Muted, Subtitle, Title } from '@/components/ui';
+import { Button, Card, Input, ListRow, Muted, Subtitle, Title } from '@/components/ui';
 import { AdPhonePreview } from '@/components/ads/AdPhonePreview';
 import {
   ensureAdvertiserAccount,
   fetchMyAdvertiserAccount,
+  listMyAdvertiserNotifications,
   listMyCampaigns,
+  markAdvertiserNotificationRead,
   saveCampaign,
   type AdCampaign,
   type AdvertiserAccount,
+  type AdvertiserNotification,
 } from '@/services/advertiser-platform';
 
 export default function AdsHomeScreen() {
@@ -25,6 +28,7 @@ export default function AdsHomeScreen() {
   const router = useRouter();
   const [account, setAccount] = useState<AdvertiserAccount | null>(null);
   const [campaigns, setCampaigns] = useState<AdCampaign[]>([]);
+  const [notices, setNotices] = useState<AdvertiserNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [openingStudio, setOpeningStudio] = useState(false);
   const [contactName, setContactName] = useState('');
@@ -36,12 +40,14 @@ export default function AdsHomeScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [acc, camps] = await Promise.all([
+    const [acc, camps, inbox] = await Promise.all([
       fetchMyAdvertiserAccount(),
       listMyCampaigns(),
+      listMyAdvertiserNotifications(),
     ]);
     setAccount(acc);
     setCampaigns(camps);
+    setNotices(inbox.data ?? []);
     setLoading(false);
   }, []);
 
@@ -173,6 +179,34 @@ export default function AdsHomeScreen() {
         {t('adsPortal.dashboardWelcome', { name: account.business_name })}
       </Muted>
       <Muted>{t('adsPortal.studioIntro')}</Muted>
+      {notices.length ? (
+        <>
+          <Subtitle>{t('adsPortal.inboxTitle')}</Subtitle>
+          {notices.map((notice) => (
+            <Card key={notice.id} style={{ gap: 8 }}>
+              <Subtitle>
+                {t(`adsPortal.inboxKind.${notice.kind}`, {
+                  title: notice.ad_title || t('adsPortal.newAd'),
+                })}
+              </Subtitle>
+              {notice.note ? <Muted>{notice.note}</Muted> : null}
+              {!notice.read_at ? (
+                <Button
+                  label={t('adsPortal.inboxMarkRead')}
+                  variant="outline"
+                  onPress={() => {
+                    void markAdvertiserNotificationRead(notice.id).then(() =>
+                      load()
+                    );
+                  }}
+                />
+              ) : (
+                <Muted>{t('adsPortal.inboxRead')}</Muted>
+              )}
+            </Card>
+          ))}
+        </>
+      ) : null}
       {Platform.OS === 'web' ? (
         <Muted>{t('adsPortal.buildStamp', { version: '1.0.97' })}</Muted>
       ) : null}

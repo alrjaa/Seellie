@@ -144,7 +144,7 @@ export default function AdsAdEditorScreen() {
   const [targetRegion, setTargetRegion] = useState('');
   const [targetCity, setTargetCity] = useState('');
   const [status, setStatus] = useState<
-    'draft' | 'active' | 'paused' | 'pending_review'
+    'draft' | 'active' | 'paused' | 'pending_review' | 'blocked' | 'deleted'
   >('draft');
   const [placements, setPlacements] = useState<NativeAdPlacement[]>(['general']);
   const [pickingVideo, setPickingVideo] = useState(false);
@@ -931,24 +931,38 @@ export default function AdsAdEditorScreen() {
         ))}
       </View>
       <Muted>
-        {status === 'paused'
-          ? t('adsPortal.feedVisibilityPaused')
-          : status === 'pending_review'
-            ? t('adsPortal.savedPendingReview')
-            : t('adsPortal.feedVisibilityHint')}
+        {status === 'blocked' || status === 'deleted'
+          ? t('adsPortal.moderatedHint')
+          : status === 'paused'
+            ? t('adsPortal.feedVisibilityPaused')
+            : status === 'pending_review'
+              ? t('adsPortal.savedPendingReview')
+              : t('adsPortal.feedVisibilityHint')}
       </Muted>
 
       <Button
         label={t('adsPortal.sendForReview')}
         onPress={() => void save('pending_review')}
-        disabled={saving || processing || bootstrapping}
+        disabled={
+          saving ||
+          processing ||
+          bootstrapping ||
+          status === 'blocked' ||
+          status === 'deleted'
+        }
         loading={saving}
       />
       <Button
         label={t('adsPortal.saveDraft')}
         variant="outline"
         onPress={() => void save('draft')}
-        disabled={saving || processing || bootstrapping}
+        disabled={
+          saving ||
+          processing ||
+          bootstrapping ||
+          status === 'blocked' ||
+          status === 'deleted'
+        }
       />
     </View>
   );

@@ -110,7 +110,7 @@ export default function AdsCampaignScreen() {
             <ListRow
               key={ad.id}
               title={ad.title || ad.advertiser_name}
-              subtitle={ad.status}
+              subtitle={t(`adsPortal.status.${ad.status}`)}
               onPress={() =>
                 router.push(`/ads/ad/${ad.id}?campaignId=${campaignId}` as any)
               }

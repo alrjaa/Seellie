@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
+  Platform,
   StyleSheet,
   Text,
   View,
@@ -29,8 +30,11 @@ import { resolvePublicMediaUrl, cloudWriteErrorMessage } from '@/services/cloud-
 import { isSupabaseConfigured } from '@/services/supabase';
 import { isUuid } from '@/services/supabase-messages';
 import {
+  adminModerateAdvertisement,
   adminSetAdvertisementStatus,
+  listAdminAdvertisements,
   listPendingAdvertisements,
+  type AdminModerateAction,
   type DbAdvertisement,
 } from '@/services/advertiser-platform';
 import {
@@ -130,17 +134,29 @@ export default function NativeAdsScreen() {
   const [formOpen, setFormOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [pendingDb, setPendingDb] = useState<DbAdvertisement[]>([]);
+  const [adminDb, setAdminDb] = useState<DbAdvertisement[]>([]);
   const [pendingDbError, setPendingDbError] = useState<string | null>(null);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [res, pending] = await Promise.all([
+    const [res, pending, admin] = await Promise.all([
       fetchAppBlob<unknown>(NATIVE_ADS_BLOB_KEY),
       listPendingAdvertisements(),
+      listAdminAdvertisements(),
     ]);
     setAds(sanitizeNativeAdsPayload(res.data));
-    setPendingDb(pending.data ?? []);
-    setPendingDbError(pending.error ?? null);
+    const adminRows = admin.data ?? [];
+    if (admin.error && admin.error !== 'schema_missing') {
+      setPendingDbError(admin.error);
+    } else {
+      setPendingDbError(pending.error ?? null);
+    }
+    setPendingDb(
+      adminRows.length
+        ? adminRows.filter((row) => row.status === 'pending_review')
+        : pending.data ?? []
+    );
+    setAdminDb(adminRows.filter((row) => row.status !== 'pending_review'));
     setLoading(false);
   }, []);
 
@@ -453,6 +469,97 @@ export default function NativeAdsScreen() {
     [load, t, toast]
   );
 
+  const moderateDbAd = useCallback(
+    async (row: DbAdvertisement, action: AdminModerateAction) => {
+      const ok = await confirmDestructive({
+        title:
+          action === 'block'
+            ? t('superadmin.ads.blockTitle')
+            : t('superadmin.ads.deleteDbTitle'),
+        message:
+          action === 'block'
+            ? t('superadmin.ads.blockConfirm', {
+                name: row.advertiser_name,
+              })
+            : t('superadmin.ads.deleteDbConfirm', {
+                name: row.advertiser_name,
+              }),
+        confirmLabel:
+          action === 'block'
+            ? t('superadmin.ads.block')
+            : t('common.delete'),
+      });
+      if (!ok) return;
+      let note = '';
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        note = String(
+          window.prompt(t('superadmin.ads.moderationNoteHint')) || ''
+        )
+          .trim()
+          .slice(0, 240);
+      }
+      setReviewingId(row.id);
+      try {
+        const { data, error } = await adminModerateAdvertisement(
+          row.id,
+          action,
+          note
+        );
+        if (!data) {
+          toast({
+            variant: 'destructive',
+            title: t('superadmin.ads.saveFailed'),
+            description: t(`adsPortal.saveError.${error || 'unknown'}`),
+          });
+          return;
+        }
+        toast({
+          variant: 'success',
+          title:
+            action === 'block'
+              ? t('superadmin.ads.blockedAndNotified')
+              : t('superadmin.ads.deletedAndNotified'),
+        });
+        await load();
+      } finally {
+        setReviewingId(null);
+      }
+    },
+    [load, t, toast]
+  );
+
+  const setBlobStatus = useCallback(
+    async (id: string, status: NativeAdStatus) => {
+      const target = ads.find((a) => a.id === id);
+      if (!target) return;
+      if (status === 'paused') {
+        const ok = await confirmDestructive({
+          title: t('superadmin.ads.blockTitle'),
+          message: t('superadmin.ads.blockBlobConfirm', {
+            name: target.advertiserName,
+          }),
+          confirmLabel: t('superadmin.ads.block'),
+        });
+        if (!ok) return;
+      }
+      const next = ads.map((a) =>
+        a.id === id
+          ? { ...a, status, updatedAt: new Date().toISOString() }
+          : a
+      );
+      const persisted = await persist(next);
+      if (persisted) {
+        toast({
+          title:
+            status === 'paused'
+              ? t('superadmin.ads.blockedBlob')
+              : t('superadmin.ads.unblockedBlob'),
+        });
+      }
+    },
+    [ads, persist, t, toast]
+  );
+
   const header = useMemo(
     () => (
       <View style={{ gap: 10, marginBottom: 8 }}>
@@ -469,13 +576,13 @@ export default function NativeAdsScreen() {
             <Card key={row.id} style={{ gap: 8 }}>
               <Subtitle>{row.advertiser_name}</Subtitle>
               <Muted numberOfLines={2}>{row.title || row.video_url}</Muted>
-              <View style={styles.formActions}>
+              <View style={styles.formActionsWrap}>
                 <Button
                   label={t('superadmin.ads.pendingDbApprove')}
                   onPress={() => void reviewDbAd(row.id, 'active')}
                   loading={reviewingId === row.id}
                   disabled={!!reviewingId}
-                  style={{ flex: 1 }}
+                  style={{ flexGrow: 1 }}
                 />
                 <Button
                   label={t('superadmin.ads.pendingDbReject')}
@@ -483,7 +590,59 @@ export default function NativeAdsScreen() {
                   onPress={() => void reviewDbAd(row.id, 'draft')}
                   loading={reviewingId === row.id}
                   disabled={!!reviewingId}
-                  style={{ flex: 1 }}
+                  style={{ flexGrow: 1 }}
+                />
+                <Button
+                  label={t('superadmin.ads.block')}
+                  variant="outline"
+                  onPress={() => void moderateDbAd(row, 'block')}
+                  loading={reviewingId === row.id}
+                  disabled={!!reviewingId}
+                  style={{ flexGrow: 1 }}
+                />
+                <Button
+                  label={t('superadmin.ads.deleteDb')}
+                  variant="danger"
+                  onPress={() => void moderateDbAd(row, 'delete')}
+                  loading={reviewingId === row.id}
+                  disabled={!!reviewingId}
+                  style={{ flexGrow: 1 }}
+                />
+              </View>
+            </Card>
+          ))
+        )}
+        <Subtitle>{t('superadmin.ads.liveDbTitle')}</Subtitle>
+        {adminDb.length === 0 ? (
+          <Muted>{t('superadmin.ads.liveDbEmpty')}</Muted>
+        ) : (
+          adminDb.map((row) => (
+            <Card key={row.id} style={{ gap: 8 }}>
+              <Subtitle>{row.advertiser_name}</Subtitle>
+              <Muted>
+                {t(`adsPortal.status.${row.status}`)} ·{' '}
+                {row.title || row.video_url}
+              </Muted>
+              <View style={styles.formActionsWrap}>
+                {row.status === 'blocked' ? (
+                  <Muted>{t('superadmin.ads.alreadyBlocked')}</Muted>
+                ) : (
+                  <Button
+                    label={t('superadmin.ads.block')}
+                    variant="outline"
+                    onPress={() => void moderateDbAd(row, 'block')}
+                    loading={reviewingId === row.id}
+                    disabled={!!reviewingId}
+                    style={{ flexGrow: 1 }}
+                  />
+                )}
+                <Button
+                  label={t('superadmin.ads.deleteDb')}
+                  variant="danger"
+                  onPress={() => void moderateDbAd(row, 'delete')}
+                  loading={reviewingId === row.id}
+                  disabled={!!reviewingId}
+                  style={{ flexGrow: 1 }}
                 />
               </View>
             </Card>
@@ -646,6 +805,7 @@ export default function NativeAdsScreen() {
       </View>
     ),
     [
+      adminDb,
       draft,
       formOpen,
       pendingDb,
@@ -654,6 +814,7 @@ export default function NativeAdsScreen() {
       pickVideo,
       pickingPoster,
       pickingVideo,
+      moderateDbAd,
       reviewDbAd,
       reviewingId,
       save,
@@ -715,6 +876,19 @@ export default function NativeAdsScreen() {
                 variant="outline"
                 onPress={() => openEdit(item)}
               />
+              {item.status === 'paused' ? (
+                <Button
+                  label={t('superadmin.ads.unblock')}
+                  variant="outline"
+                  onPress={() => void setBlobStatus(item.id, 'active')}
+                />
+              ) : (
+                <Button
+                  label={t('superadmin.ads.block')}
+                  variant="outline"
+                  onPress={() => void setBlobStatus(item.id, 'paused')}
+                />
+              )}
               <Button
                 label={t('superadmin.actions.delete')}
                 variant="ghost"
@@ -733,8 +907,9 @@ const styles = StyleSheet.create({
   card: { gap: 10 },
   row: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   name: { fontWeight: '800', textAlign: 'left' },
-  actions: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end' },
   formActions: { flexDirection: 'row', gap: 8 },
+  formActionsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   poster: {
     width: '100%',
