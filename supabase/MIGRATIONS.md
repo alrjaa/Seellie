@@ -38,9 +38,25 @@ All listed scripts are written to be **idempotent** where possible (`if not exis
 | 29 | `sports-data.sql` / seeds | optional | No | Sports catalog |
 | 30 | **`SHARE-CARDS-REALTIME.sql`** (FIX-02) | 01 | No | Add `share_cards` to `supabase_realtime` (RLS still applies) |
 | 31 | **`FIX-08-HARDENING.sql`** (FIX-08) | 21–23 | No | Offer accept auth · gift integrity · referee organizer/admin gate |
-| 32 | **`F13-P1-PRIVATE-MESSAGES-RLS.sql`** (F13-P1) | 12–15, 21 | No | private_messages INSERT: own inbox only + friendship; peer copy via SECURITY DEFINER RPC only |
-| 33 | F13-P2-01 (source harden; no extra apply) | 32 | No | `#11–#14` / PHASE4 no longer recreate weak `private_messages_insert_thread`; tip remains #32 |
-| 34 | **`F13-P2-02-PROFILES-COMPETITIONS-SELECT.sql`** (F13-P2-02) | 32 | No | Catalog views + owner/admin table SELECT; strip email/mobile/PII from public catalog |
+| 32 | **`FIX-09-P0-HARDENING.sql`** (FIX-09 P0) | 31, 26 | No | Offer immutable fields · referee ownerId-only authz (no payload.refereeIds) · profile privilege lock |
+| 33 | **`FIX-09-P1-04-GIFT-HARDENING.sql`** (FIX-09 P1-04) | 31 | No | Gift server id · uid rate/caps · ledger max length · clientRequestId idempotency |
+
+## FIX-08 / FIX-09 tip-of-chain (F09-P1-10 — docs only)
+
+**Do not apply these scripts from this documentation task.** When an authorized Staging/Lab apply is approved later:
+
+1. **Order:** `FIX-08-HARDENING.sql` (#31) **before** `FIX-09-P0-HARDENING.sql` (#32).
+2. **Gifts:** `FIX-09-P1-04-GIFT-HARDENING.sql` (#33) **after** FIX-08 (#31), because it `create or replace`s `append_gift_transaction` with stronger spam/id rules. Prefer #33 after #32 as well when both are used.
+3. **`app_competitions`:** Ensure `FIX-CLOUD-SYNC.sql` (creates `app_competitions`) has been applied before any competition RLS/RPC that depends on that table (see `SETUP.md`). It is not duplicated as a numbered row above historically; treat it as a **prerequisite** for competition features.
+4. **Never re-apply older offer/referee/gift bodies after FIX-09 tip scripts** without re-applying the tip. Re-running PHASE3/PHASE4/FIX-08 `upsert_offer_in_blob` / `upsert_referee_in_blob` / `append_gift_transaction` **after** FIX-09 P0 / P1-04 can **overwrite** stronger definitions with weaker ones.
+5. **Staging verification:** After any Staging apply, confirm final function bodies with `pg_get_functiondef` (or equivalent) for at least:
+   - `upsert_offer_in_blob`
+   - `upsert_referee_in_blob`
+   - `organizer_controls_referee` (must be `ref.ownerId = auth.uid()` only — **not** `payload.refereeIds`)
+   - `append_gift_transaction` (must match P1-04 caps/server id if #33 was applied)
+   - `set_profile_analyst` / `verify_and_activate_analyst` / `guard_profile_privileged_content` when FIX-09 P0 was applied
+
+This section is **documentation and operator guidance only**. It does not execute migrations.
 
 ## Manual / ops (not schema)
 
@@ -76,4 +92,9 @@ After running migrations, compare policies/tables with this checklist.
 
 ## F16 — Advertiser ad moderation (manual apply)
 
-Run **`supabase/F16-ADVERTISER-MODERATION.sql`** in the Supabase SQL Editor after F15. Adds blocked/deleted statuses, advertiser inbox, and superadmin moderation RPCs.
+Run **`supabase/F16-ADVERTISER-MODERATION.sql`** in the Supabase SQL Editor after F15. It adds `blocked`/`deleted` ad statuses, advertiser inbox notifications, and superadmin RPCs `admin_moderate_advertisement` / `list_admin_advertisements` / `list_my_advertiser_notifications`.
+
+## F17 — Self-service account deletion (manual apply)
+
+Run **`supabase/DELETE-OWN-ACCOUNT.sql`** in the Supabase SQL Editor. It adds `delete_own_account()` so users can permanently delete their own account from app settings (App Store / Play compliance). Requires `is_app_superadmin()` from FIX-CLOUD-SYNC.sql.
+

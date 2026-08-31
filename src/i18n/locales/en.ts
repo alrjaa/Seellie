@@ -164,6 +164,19 @@ export const en: TranslationTree = {
     adsReportAction: 'Report',
     adsReportModalTitle: 'Report this ad',
     adsReportModalDesc: 'Tell us briefly why this ad should be reviewed.',
+    deleteAccountTitle: 'Delete account',
+    deleteAccountWarning:
+      'Your account will be permanently deleted along with all your data: profile, posts, messages, notifications, and related settings. This cannot be undone.',
+    deleteAccountButton: 'Delete account permanently',
+    deleteAccountConfirmTitle: 'Confirm account deletion',
+    deleteAccountConfirmMessage:
+      'Are you sure? Your account and all data will be permanently deleted and cannot be recovered. You can create a new account later with the same email if you wish.',
+    deleteAccountSuccessTitle: 'Account deleted',
+    deleteAccountSuccessDesc:
+      'Your account was permanently removed. You can sign up again anytime.',
+    deleteAccountFailedTitle: 'Could not delete account',
+    deleteAccountFailedDesc: 'Check your connection and try again.',
+    cannotDeleteAdminAccount: 'Admin accounts cannot be deleted from the app.',
   },
   paths: {
     title: 'Account paths — switch & activate',
@@ -1104,6 +1117,8 @@ export const en: TranslationTree = {
     purgeFailedTitle: 'Permanent delete failed',
     purgeFailedDesc:
       'Open Supabase → SQL Editor, run ADMIN-PURGE-USER.sql once, then retry delete here.',
+    deleteAccountMissingRpc:
+      'Run DELETE-OWN-ACCOUNT.sql once in the Supabase SQL Editor, then try again.',
     emailFreedTitle: 'Email freed',
     emailFreedDesc: '%{email} is ready for a new signup.',
     signupRateLimited:

@@ -165,6 +165,18 @@ export const ar = {
     adsReportAction: 'إبلاغ',
     adsReportModalTitle: 'الإبلاغ عن هذا الإعلان',
     adsReportModalDesc: 'أخبرنا باختصار لماذا يجب مراجعة هذا الإعلان.',
+    deleteAccountTitle: 'حذف الحساب',
+    deleteAccountWarning:
+      'سيُحذف حسابك نهائياً مع كل بياناتك: الملف الشخصي، المنشورات، الرسائل، الإشعارات، والإعدادات المرتبطة. لا يمكن التراجع عن هذا الإجراء.',
+    deleteAccountButton: 'حذف الحساب نهائياً',
+    deleteAccountConfirmTitle: 'تأكيد حذف الحساب',
+    deleteAccountConfirmMessage:
+      'هل أنت متأكد؟ سيتم حذف حسابك وجميع بياناتك نهائياً ولن تتمكن من استعادتها. يمكنك إنشاء حساب جديد لاحقاً بنفس البريد إن رغبت.',
+    deleteAccountSuccessTitle: 'تم حذف الحساب',
+    deleteAccountSuccessDesc: 'أُزيل حسابك نهائياً. يمكنك التسجيل من جديد في أي وقت.',
+    deleteAccountFailedTitle: 'تعذّر حذف الحساب',
+    deleteAccountFailedDesc: 'تحقق من الاتصال ثم أعد المحاولة.',
+    cannotDeleteAdminAccount: 'لا يمكن حذف حساب المشرف من التطبيق.',
   },
   paths: {
     title: 'مسارات الحساب — التبديل والتفعيل',
@@ -1100,6 +1112,8 @@ export const ar = {
     purgeFailedTitle: 'الحذف النهائي فشل',
     purgeFailedDesc:
       'افتح Supabase → SQL Editor ونفّذ ملف ADMIN-PURGE-USER.sql مرة واحدة، ثم أعد الحذف من هنا.',
+    deleteAccountMissingRpc:
+      'نفّذ ملف DELETE-OWN-ACCOUNT.sql مرة واحدة في Supabase SQL Editor ثم أعد المحاولة.',
     emailFreedTitle: 'تم تحرير البريد',
     emailFreedDesc: '%{email} جاهز للتسجيل من جديد.',
     signupRateLimited:

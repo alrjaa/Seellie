@@ -6,6 +6,7 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
 import { AccountSocialStats } from '@/components/account/AccountSocialStats';
 import { AvatarPickerCard } from '@/components/account/AvatarPickerCard';
+import { DeleteAccountSection } from '@/components/account/DeleteAccountSection';
 import { Button, Card, Input, Muted, Subtitle, Title } from '@/components/ui';
 
 /** Profile editing only — account paths are in Settings via the dropdown menu */
@@ -136,6 +137,7 @@ export default function AccountScreen() {
         variant="outline"
         onPress={() => router.push('/(follower)/settings' as any)}
       />
+      <DeleteAccountSection />
       <AccountSocialStats user={currentUser} />
       <Button
         label={t('common.back')}

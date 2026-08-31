@@ -21,6 +21,7 @@ import { LanguageCard } from '@/components/account/LanguageCard';
 import { AdminEntryButton } from '@/components/account/AdminEntryButton';
 import { AccountSocialStats } from '@/components/account/AccountSocialStats';
 import { AvatarPickerCard } from '@/components/account/AvatarPickerCard';
+import { DeleteAccountSection } from '@/components/account/DeleteAccountSection';
 import { useTranslation } from '@/providers/LanguageProvider';
 
 export default function SettingsScreen() {
@@ -211,6 +212,7 @@ export default function SettingsScreen() {
         onPress={() => router.push('/terms' as any)}
       />
       <AccountSocialStats user={currentUser} />
+      <DeleteAccountSection />
       <Button label={t('common.logout')} variant="outline" onPress={logout} />
     </Screen>
   );

@@ -342,6 +342,45 @@ export async function updateProfileAdminCloud(input: {
   return { ok: true };
 }
 
+/** حذف الحساب الحالي نهائياً (يتطلب DELETE-OWN-ACCOUNT.sql) */
+export async function deleteOwnAccountCloud(): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: 'not_configured' };
+  }
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: 'no_client' };
+  const { data: sessionData } = await sb.auth.getSession();
+  if (!sessionData.session) {
+    return { ok: false, error: 'no_session' };
+  }
+  const { data, error } = await sb.rpc('delete_own_account');
+  if (error) {
+    console.warn('[supabase] delete_own_account', error.message);
+    const msg = error.message || '';
+    if (/cannot_delete_admin/i.test(msg)) {
+      return { ok: false, error: 'cannot_delete_admin' };
+    }
+    const missing =
+      /could not find|schema cache|function .* does not exist/i.test(msg);
+    return {
+      ok: false,
+      error: missing
+        ? 'missing_rpc: نفّذ DELETE-OWN-ACCOUNT.sql مرة واحدة في SQL Editor'
+        : msg,
+    };
+  }
+  if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
+    return {
+      ok: false,
+      error: String((data as { error?: string }).error || 'delete_failed'),
+    };
+  }
+  return { ok: true };
+}
+
 /** حذف نهائي من Auth + profiles (يتطلب ADMIN-PURGE-USER.sql) */
 export async function adminPurgeUserCloud(
   userId: string

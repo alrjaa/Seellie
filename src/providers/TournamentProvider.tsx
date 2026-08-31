@@ -101,6 +101,7 @@ import {
   updateProfileAdminCloud,
   adminPurgeUserCloud,
   adminPurgeUserByEmailCloud,
+  deleteOwnAccountCloud,
 } from '@/services/supabase-auth';
 import {
   deleteCompetitionRequestCloud,
@@ -635,6 +636,8 @@ export interface TournamentContextType {
   ) => Promise<boolean>;
   /** حذف نهائي بالبريد من Auth (يحرّر الإيميل للتسجيل) */
   purgeUserByEmail: (email: string) => Promise<boolean>;
+  /** حذف الحساب الحالي نهائياً من الإعدادات */
+  deleteOwnAccount: () => Promise<boolean>;
   addReferee: (
     data: Omit<Referee, 'id'>,
     successMessage?: string
@@ -2230,6 +2233,63 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     },
     [toast, currentUser?.id, users]
   );
+
+  const deleteOwnAccount = useCallback(async (): Promise<boolean> => {
+    const user = currentUserRef.current;
+    if (!user?.id) return false;
+
+    if (user.role === 'superadmin' || user.activeRole === 'superadmin') {
+      toast({
+        variant: 'destructive',
+        title: t('settings.deleteAccountFailedTitle'),
+        description: t('settings.cannotDeleteAdminAccount'),
+      });
+      return false;
+    }
+
+    const userId = user.id;
+
+    if (isSupabaseConfigured() && isUuid(userId)) {
+      const result = await deleteOwnAccountCloud();
+      if (!result.ok) {
+        const missingRpc = /missing_rpc/i.test(result.error || '');
+        toast({
+          variant: 'destructive',
+          title: t('settings.deleteAccountFailedTitle'),
+          description: missingRpc
+            ? t('toasts.deleteAccountMissingRpc')
+            : result.error === 'cannot_delete_admin'
+              ? t('settings.cannotDeleteAdminAccount')
+              : result.error || t('settings.deleteAccountFailedDesc'),
+        });
+        return false;
+      }
+    }
+
+    setUsers((prev) => prev.filter((u) => u.id !== userId));
+
+    try {
+      const prev =
+        (await getJson<Record<string, UserCredentialOverride>>(
+          USER_CREDENTIAL_OVERRIDES_KEY
+        )) || {};
+      if (prev[userId]) {
+        const { [userId]: _drop, ...rest } = prev;
+        await setJson(USER_CREDENTIAL_OVERRIDES_KEY, rest);
+      }
+    } catch {
+      /* ignore */
+    }
+
+    logout({ silent: true });
+    router.replace('/(auth)/login' as any);
+    toast({
+      variant: 'success',
+      title: t('settings.deleteAccountSuccessTitle'),
+      description: t('settings.deleteAccountSuccessDesc'),
+    });
+    return true;
+  }, [logout, router, toast, t]);
 
   const purgeUserByEmail = useCallback(
     async (email: string) => {
@@ -6496,6 +6556,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     togglePinnedCompetition,
     deleteUser,
     purgeUserByEmail,
+    deleteOwnAccount,
     addReferee,
     registerRefereeForCompetition,
     updateReferee,
