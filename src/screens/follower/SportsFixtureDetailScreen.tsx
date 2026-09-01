@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
@@ -180,96 +181,149 @@ function parseGrid(grid?: string) {
   return { row, col };
 }
 
-function gridExtents(players: SportsLineupPlayer[]) {
-  let maxRow = 1;
-  let maxCol = 1;
+type PitchPos = { top: number; left: number };
+
+function buildPitchLayout(
+  players: SportsLineupPlayer[],
+  side: 'home' | 'away'
+): Map<number, PitchPos> {
+  const byRow = new Map<number, SportsLineupPlayer[]>();
   for (const p of players) {
-    const g = parseGrid(p.grid);
-    if (!g) continue;
-    maxRow = Math.max(maxRow, g.row);
-    maxCol = Math.max(maxCol, g.col);
+    const row = parseGrid(p.grid)?.row ?? 5;
+    if (!byRow.has(row)) byRow.set(row, []);
+    byRow.get(row)!.push(p);
   }
-  return { maxRow, maxCol };
+
+  const rows = [...byRow.keys()].sort((a, b) =>
+    side === 'away' ? a - b : b - a
+  );
+  const positions = new Map<number, PitchPos>();
+  const rowCount = Math.max(rows.length, 1);
+
+  rows.forEach((rowKey, rowIdx) => {
+    const rowPlayers = [...(byRow.get(rowKey) ?? [])].sort(
+      (a, b) =>
+        (parseGrid(a.grid)?.col ?? 0) - (parseGrid(b.grid)?.col ?? 0)
+    );
+    const top =
+      side === 'away'
+        ? 7 + (rowIdx / Math.max(rowCount - 1, 1)) * 38
+        : 93 - (rowIdx / Math.max(rowCount - 1, 1)) * 38;
+
+    rowPlayers.forEach((p, i) => {
+      const left = ((i + 1) / (rowPlayers.length + 1)) * 88 + 6;
+      positions.set(p.id, { top, left });
+    });
+  });
+
+  return positions;
 }
 
-function pitchCoords(
-  grid: string | undefined,
-  side: 'home' | 'away',
-  maxRow: number,
-  maxCol: number
-) {
-  const g = parseGrid(grid) ?? { row: 1, col: Math.ceil((maxCol + 1) / 2) };
-  const left = (g.col / (maxCol + 1)) * 88 + 6;
-  const rowSpan = Math.max(maxRow - 1, 1);
-  const top =
-    side === 'home'
-      ? 92 - ((g.row - 1) / rowSpan) * 40
-      : 8 + ((g.row - 1) / rowSpan) * 40;
-  return { top: `${top}%`, left: `${left}%` };
+function ratingColor(rating: number) {
+  if (rating >= 8) return '#0d6b32';
+  if (rating >= 7.5) return '#1f8a3f';
+  if (rating >= 7) return '#3aa655';
+  if (rating >= 6.5) return '#8fb31a';
+  if (rating >= 6) return '#c9a227';
+  if (rating >= 5.5) return '#d97b1c';
+  return '#c0392b';
 }
 
-function shortName(name: string) {
+function formatRating(rating: number) {
+  return rating >= 10 ? '10' : rating.toFixed(1);
+}
+
+function displayName(name: string) {
   const parts = name.trim().split(/\s+/);
-  if (parts.length <= 1) return name.slice(0, 10);
-  return parts[parts.length - 1].slice(0, 12);
+  if (parts.length <= 1) return name;
+  return parts[parts.length - 1];
 }
 
 const PitchPlayer = memo(function PitchPlayer({
   player,
-  side,
-  maxRow,
-  maxCol,
+  position,
 }: {
   player: SportsLineupPlayer;
-  side: 'home' | 'away';
-  maxRow: number;
-  maxCol: number;
+  position: PitchPos;
 }) {
-  const theme = useAppTheme();
-  const pos = pitchCoords(player.grid, side, maxRow, maxCol);
-  const ring =
-    side === 'home' ? theme.colors.accent : theme.colors.textInverse;
+  const [photoFailed, setPhotoFailed] = useState(false);
 
   return (
     <View
       style={[
         styles.pitchPlayerAbs,
-        { top: pos.top as `${number}%`, left: pos.left as `${number}%` },
+        { top: `${position.top}%`, left: `${position.left}%` },
       ]}
     >
-      {player.photo ? (
-        <Image source={{ uri: player.photo }} style={styles.pitchAvatar} />
-      ) : (
-        <View
-          style={[
-            styles.pitchAvatar,
-            styles.pitchAvatarFallback,
-            { borderColor: ring, backgroundColor: theme.colors.surface },
-          ]}
-        >
-          <Text style={[styles.pitchNum, { color: theme.colors.text }]}>
-            {player.number ?? '?'}
-          </Text>
+      <View style={styles.pitchPhotoWrap}>
+        {player.photo && !photoFailed ? (
+          <Image
+            source={{ uri: player.photo }}
+            style={styles.pitchPhoto}
+            contentFit="cover"
+            onError={() => setPhotoFailed(true)}
+          />
+        ) : (
+          <View style={[styles.pitchPhoto, styles.pitchPhotoFallback]}>
+            <Ionicons name="person" size={22} color="rgba(255,255,255,0.7)" />
+          </View>
+        )}
+
+        {player.rating != null && player.rating > 0 ? (
+          <View
+            style={[
+              styles.ratingBadge,
+              { backgroundColor: ratingColor(player.rating) },
+            ]}
+          >
+            <Text style={styles.ratingText}>
+              {formatRating(player.rating)}
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={styles.eventBadges}>
+          {(player.goals ?? 0) > 0 ? (
+            <View style={styles.eventBadge}>
+              <Ionicons name="football" size={9} color="#fff" />
+              {(player.goals ?? 0) > 1 ? (
+                <Text style={styles.eventBadgeCount}>{player.goals}</Text>
+              ) : null}
+            </View>
+          ) : null}
+          {(player.assists ?? 0) > 0 ? (
+            <View style={[styles.eventBadge, styles.assistBadge]}>
+              <Ionicons name="footsteps" size={9} color="#fff" />
+              {(player.assists ?? 0) > 1 ? (
+                <Text style={styles.eventBadgeCount}>{player.assists}</Text>
+              ) : null}
+            </View>
+          ) : null}
+          {player.substitutedOut ? (
+            <View style={[styles.eventBadge, styles.subBadge]}>
+              <Ionicons name="arrow-down" size={10} color="#fff" />
+            </View>
+          ) : null}
         </View>
-      )}
-      <Text
-        style={[styles.pitchName, { color: theme.colors.textInverse }]}
-        numberOfLines={1}
-      >
-        {shortName(player.name)}
+      </View>
+
+      <Text style={styles.pitchLabel} numberOfLines={1}>
+        {displayName(player.name)}
+        {player.number != null ? ` ${player.number}` : ''}
       </Text>
     </View>
   );
 });
 
 const FootballPitchLineups = memo(function FootballPitchLineups({
+  detail,
   home,
   away,
 }: {
+  detail: SportsFixtureDetail;
   home?: SportsTeamLineup;
   away?: SportsTeamLineup;
 }) {
-  const theme = useAppTheme();
   const { t } = useTranslation();
 
   if (!home?.startXI?.length && !away?.startXI?.length) {
@@ -282,61 +336,63 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
 
   const homeXi = home?.startXI ?? [];
   const awayXi = away?.startXI ?? [];
-  const homeExt = gridExtents(homeXi);
-  const awayExt = gridExtents(awayXi);
+  const homePos = buildPitchLayout(homeXi, 'home');
+  const awayPos = buildPitchLayout(awayXi, 'away');
+  const statusLabel = isLive(detail.status)
+    ? t('sportsFixture.live')
+    : isFinished(detail.status)
+      ? t('sportsFixture.finished')
+      : detail.status || t('sportsFixture.scheduled');
 
   return (
-    <Card style={styles.sectionCard}>
-      <View style={styles.pitchHeader}>
-        <View style={styles.pitchTeamBadge}>
-          <Avatar uri={away?.teamLogo} name={away?.teamName ?? '—'} size={22} />
-          <Text
-            style={[styles.pitchTeamLabel, { color: theme.colors.text }]}
-            numberOfLines={1}
-          >
-            {away?.teamName ?? '—'}
-            {away?.formation ? ` (${away.formation})` : ''}
-          </Text>
-        </View>
-        <Subtitle>{t('sportsFixture.tabLineups')}</Subtitle>
-        <View style={styles.pitchTeamBadge}>
-          <Avatar uri={home?.teamLogo} name={home?.teamName ?? '—'} size={22} />
-          <Text
-            style={[styles.pitchTeamLabel, { color: theme.colors.text }]}
-            numberOfLines={1}
-          >
-            {home?.teamName ?? '—'}
-            {home?.formation ? ` (${home.formation})` : ''}
-          </Text>
-        </View>
-      </View>
-
+    <Card style={styles.pitchCard}>
       <View style={styles.pitchWrap}>
         <View style={styles.pitchField}>
+          <View style={styles.pitchGrassStripeA} />
+          <View style={styles.pitchGrassStripeB} />
           <View style={styles.pitchHalfLine} />
           <View style={styles.pitchCenterCircle} />
           <View style={styles.pitchBoxTop} />
           <View style={styles.pitchBoxBottom} />
-          {awayXi.map((p) => (
-            <PitchPlayer
-              key={`away-${p.id}-${p.number}`}
-              player={p}
-              side="away"
-              maxRow={awayExt.maxRow}
-              maxCol={awayExt.maxCol}
-            />
-          ))}
-          {homeXi.map((p) => (
-            <PitchPlayer
-              key={`home-${p.id}-${p.number}`}
-              player={p}
-              side="home"
-              maxRow={homeExt.maxRow}
-              maxCol={homeExt.maxCol}
-            />
-          ))}
+          <View style={styles.pitchGoalTop} />
+          <View style={styles.pitchGoalBottom} />
+
+          <View style={styles.pitchScoreBar}>
+            <Avatar uri={detail.homeLogo} name={detail.homeName} size={20} />
+            <Text style={styles.pitchScoreText}>{scoreText(detail)}</Text>
+            <Text style={styles.pitchStatusText}>{statusLabel}</Text>
+            <Avatar uri={detail.awayLogo} name={detail.awayName} size={20} />
+          </View>
+
+          {awayXi.map((p) => {
+            const pos = awayPos.get(p.id);
+            if (!pos) return null;
+            return (
+              <PitchPlayer key={`away-${p.id}`} player={p} position={pos} />
+            );
+          })}
+          {homeXi.map((p) => {
+            const pos = homePos.get(p.id);
+            if (!pos) return null;
+            return (
+              <PitchPlayer key={`home-${p.id}`} player={p} position={pos} />
+            );
+          })}
         </View>
       </View>
+
+      {(home?.formation || away?.formation) ? (
+        <View style={styles.formationRow}>
+          <Muted>
+            {away?.teamName}
+            {away?.formation ? ` · ${away.formation}` : ''}
+          </Muted>
+          <Muted>
+            {home?.teamName}
+            {home?.formation ? ` · ${home.formation}` : ''}
+          </Muted>
+        </View>
+      ) : null}
 
       {(home?.substitutes.length || away?.substitutes.length) ? (
         <View style={styles.subsRow}>
@@ -346,10 +402,7 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
                 {away.teamName} · {t('sportsFixture.substitutes')}
               </Subtitle>
               {away.substitutes.map((p) => (
-                <Text
-                  key={`asub-${p.id}`}
-                  style={[styles.subRow, { color: theme.colors.text }]}
-                >
+                <Text key={`asub-${p.id}`} style={styles.subRow}>
                   {p.number != null ? `${p.number} ` : ''}
                   {p.name}
                 </Text>
@@ -362,10 +415,7 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
                 {home.teamName} · {t('sportsFixture.substitutes')}
               </Subtitle>
               {home.substitutes.map((p) => (
-                <Text
-                  key={`hsub-${p.id}`}
-                  style={[styles.subRow, { color: theme.colors.text }]}
-                >
+                <Text key={`hsub-${p.id}`} style={styles.subRow}>
                   {p.number != null ? `${p.number} ` : ''}
                   {p.name}
                 </Text>
@@ -536,6 +586,7 @@ export default function SportsFixtureDetailScreen() {
         {tab === 'overview' ? (
           <>
             <FootballPitchLineups
+              detail={detail}
               home={detail.lineups.home}
               away={detail.lineups.away}
             />
@@ -598,98 +649,205 @@ const styles = StyleSheet.create({
   eventMin: { width: 42, ...cairoText('semiBold') },
   eventBody: { flex: 1, gap: 2 },
   eventTitle: { fontSize: 14, ...cairoText('semiBold') },
-  pitchHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 8,
-  },
-  pitchTeamBadge: { flex: 1, alignItems: 'center', gap: 4 },
-  pitchTeamLabel: { fontSize: 11, textAlign: 'center', ...cairoText('semiBold') },
-  pitchWrap: { borderRadius: 12, overflow: 'hidden' },
+  pitchCard: { padding: 0, overflow: 'hidden' },
+  pitchWrap: { overflow: 'hidden' },
   pitchField: {
-    aspectRatio: 0.62,
-    backgroundColor: '#2d6a3e',
+    aspectRatio: 0.58,
+    backgroundColor: '#1f5f35',
     position: 'relative',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.55)',
+  },
+  pitchGrassStripeA: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#1f5f35',
+  },
+  pitchGrassStripeB: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: '50%',
+    width: '50%',
+    backgroundColor: '#22643a',
+    opacity: 0.55,
   },
   pitchHalfLine: {
     position: 'absolute',
     top: '50%',
-    left: '4%',
-    right: '4%',
+    left: '3%',
+    right: '3%',
     height: 2,
-    backgroundColor: 'rgba(255,255,255,0.45)',
+    backgroundColor: 'rgba(255,255,255,0.5)',
     marginTop: -1,
+    zIndex: 1,
   },
   pitchCenterCircle: {
     position: 'absolute',
     top: '50%',
     left: '50%',
-    width: '22%',
+    width: '24%',
     aspectRatio: 1,
-    marginTop: '-11%',
-    marginLeft: '-11%',
+    marginTop: '-12%',
+    marginLeft: '-12%',
     borderRadius: 999,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.45)',
+    borderColor: 'rgba(255,255,255,0.5)',
+    zIndex: 1,
   },
   pitchBoxTop: {
     position: 'absolute',
     top: 0,
-    left: '22%',
-    width: '56%',
-    height: '16%',
+    left: '20%',
+    width: '60%',
+    height: '18%',
     borderWidth: 2,
     borderTopWidth: 0,
-    borderColor: 'rgba(255,255,255,0.35)',
+    borderColor: 'rgba(255,255,255,0.4)',
+    zIndex: 1,
   },
   pitchBoxBottom: {
     position: 'absolute',
     bottom: 0,
-    left: '22%',
-    width: '56%',
-    height: '16%',
+    left: '20%',
+    width: '60%',
+    height: '18%',
     borderWidth: 2,
     borderBottomWidth: 0,
-    borderColor: 'rgba(255,255,255,0.35)',
+    borderColor: 'rgba(255,255,255,0.4)',
+    zIndex: 1,
   },
-  pitchPlayerAbs: {
+  pitchGoalTop: {
     position: 'absolute',
-    width: 56,
-    marginLeft: -28,
-    marginTop: -24,
-    alignItems: 'center',
-    gap: 2,
-    zIndex: 2,
-  },
-  pitchAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    top: 0,
+    left: '34%',
+    width: '32%',
+    height: '7%',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderTopWidth: 0,
+    borderColor: 'rgba(255,255,255,0.3)',
+    zIndex: 1,
   },
-  pitchAvatarFallback: {
+  pitchGoalBottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: '34%',
+    width: '32%',
+    height: '7%',
+    borderWidth: 2,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(255,255,255,0.3)',
+    zIndex: 1,
+  },
+  pitchScoreBar: {
+    position: 'absolute',
+    top: 10,
+    left: '8%',
+    right: '8%',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    zIndex: 3,
   },
-  pitchNum: { fontSize: 12, ...cairoText('bold') },
-  pitchName: {
-    fontSize: 9,
-    textAlign: 'center',
-    maxWidth: 54,
-    ...cairoText('semiBold'),
-    textShadowColor: 'rgba(0,0,0,0.6)',
+  pitchScoreText: {
+    color: '#fff',
+    fontSize: 15,
+    ...cairoText('bold'),
+    textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  subsRow: { flexDirection: 'row', gap: 12, marginTop: 10 },
+  pitchStatusText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 11,
+    ...cairoText('semiBold'),
+  },
+  pitchPlayerAbs: {
+    position: 'absolute',
+    width: 62,
+    marginLeft: -31,
+    marginTop: -30,
+    alignItems: 'center',
+    zIndex: 4,
+  },
+  pitchPhotoWrap: {
+    width: 44,
+    height: 44,
+    position: 'relative',
+  },
+  pitchPhoto: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: '#3a3a3a',
+  },
+  pitchPhotoFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ratingBadge: {
+    position: 'absolute',
+    bottom: -4,
+    left: -6,
+    minWidth: 22,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.85)',
+  },
+  ratingText: {
+    color: '#fff',
+    fontSize: 9,
+    ...cairoText('bold'),
+  },
+  eventBadges: {
+    position: 'absolute',
+    top: -2,
+    right: -8,
+    gap: 2,
+    alignItems: 'center',
+  },
+  eventBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+    gap: 1,
+  },
+  assistBadge: { backgroundColor: 'rgba(30,90,160,0.85)' },
+  subBadge: { backgroundColor: 'rgba(192,57,43,0.9)' },
+  eventBadgeCount: {
+    color: '#fff',
+    fontSize: 8,
+    ...cairoText('bold'),
+  },
+  pitchLabel: {
+    marginTop: 3,
+    fontSize: 10,
+    textAlign: 'center',
+    maxWidth: 62,
+    color: '#fff',
+    ...cairoText('semiBold'),
+    textShadowColor: 'rgba(0,0,0,0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  formationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    gap: 8,
+  },
+  subsRow: { flexDirection: 'row', gap: 12, marginTop: 10, padding: 12, paddingTop: 0 },
   subsCol: { flex: 1, gap: 4 },
   subsTitle: { marginBottom: 4, fontSize: 12 },
-  subRow: { fontSize: 12 },
+  subRow: { fontSize: 12, color: '#ccc' },
   pad: { padding: 12 },
   statRow: {
     flexDirection: 'row',

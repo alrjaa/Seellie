@@ -98,7 +98,9 @@ export type SportsMatchEvent = {
   detail?: string;
   teamSide: 'home' | 'away';
   teamName: string;
+  playerId?: number;
   playerName?: string;
+  assistPlayerId?: number;
   assistName?: string;
 };
 
@@ -109,6 +111,10 @@ export type SportsLineupPlayer = {
   position?: string;
   photo?: string;
   grid?: string;
+  rating?: number;
+  goals?: number;
+  assists?: number;
+  substitutedOut?: boolean;
 };
 
 export type SportsTeamLineup = {

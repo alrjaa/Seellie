@@ -225,11 +225,55 @@ function mapFixtures(raw: any) {
   }));
 }
 
+function playerPhotoUrl(playerId: number, raw?: string) {
+  if (raw) return String(raw);
+  if (playerId > 0) {
+    return `https://media.api-sports.io/football/players/${playerId}.png`;
+  }
+  return undefined;
+}
+
+function mapPlayerMatchStats(playersRaw: any) {
+  const map = new Map<
+    number,
+    { rating?: number; goals?: number; assists?: number }
+  >();
+  const teams = Array.isArray(playersRaw?.response) ? playersRaw.response : [];
+  for (const teamBlock of teams) {
+    const players = Array.isArray(teamBlock?.players) ? teamBlock.players : [];
+    for (const entry of players) {
+      const id = Number(entry?.player?.id);
+      if (!id) continue;
+      const stats = Array.isArray(entry?.statistics)
+        ? entry.statistics[0]
+        : null;
+      const ratingRaw = stats?.games?.rating;
+      const rating =
+        ratingRaw != null && ratingRaw !== ''
+          ? parseFloat(String(ratingRaw))
+          : undefined;
+      const goals =
+        stats?.goals?.total != null ? Number(stats.goals.total) : undefined;
+      const assists =
+        stats?.goals?.assists != null
+          ? Number(stats.goals.assists)
+          : undefined;
+      map.set(id, {
+        rating: Number.isFinite(rating) ? rating : undefined,
+        goals: Number.isFinite(goals) ? goals : undefined,
+        assists: Number.isFinite(assists) ? assists : undefined,
+      });
+    }
+  }
+  return map;
+}
+
 function mapFixtureDetail(
   fxRaw: any,
   eventsRaw: any,
   lineupsRaw: any,
-  statsRaw: any
+  statsRaw: any,
+  playersRaw: any
 ) {
   const fx = Array.isArray(fxRaw?.response) ? fxRaw.response[0] : null;
   if (!fx) return null;
@@ -252,22 +296,43 @@ function mapFixtureDetail(
         detail: e.detail ? String(e.detail) : undefined,
         teamSide: side,
         teamName: String(e.team?.name ?? ''),
+        playerId:
+          e.player?.id != null ? Number(e.player.id) : undefined,
         playerName: e.player?.name ? String(e.player.name) : undefined,
+        assistPlayerId:
+          e.assist?.id != null ? Number(e.assist.id) : undefined,
         assistName: e.assist?.name ? String(e.assist.name) : undefined,
       };
     })
     .sort((a: { minute: number }, b: { minute: number }) => a.minute - b.minute);
 
+  const substitutedOut = new Set<number>();
+  for (const e of events) {
+    if (e.type.toLowerCase() === 'subst' && e.assistPlayerId) {
+      substitutedOut.add(e.assistPlayerId);
+    }
+  }
+
+  const playerStats = mapPlayerMatchStats(playersRaw);
+
   const mapPlayers = (list: any[]) =>
-    (list || []).map((row: any) => ({
-      id: Number(row.player?.id ?? 0),
-      name: String(row.player?.name ?? '—'),
-      number:
-        row.player?.number != null ? Number(row.player.number) : undefined,
-      position: row.player?.pos ? String(row.player.pos) : undefined,
-      photo: row.player?.photo ? String(row.player.photo) : undefined,
-      grid: row.player?.grid ? String(row.player.grid) : undefined,
-    }));
+    (list || []).map((row: any) => {
+      const playerId = Number(row.player?.id ?? 0);
+      const stats = playerStats.get(playerId);
+      return {
+        id: playerId,
+        name: String(row.player?.name ?? '—'),
+        number:
+          row.player?.number != null ? Number(row.player.number) : undefined,
+        position: row.player?.pos ? String(row.player.pos) : undefined,
+        photo: playerPhotoUrl(playerId, row.player?.photo),
+        grid: row.player?.grid ? String(row.player.grid) : undefined,
+        rating: stats?.rating,
+        goals: stats?.goals,
+        assists: stats?.assists,
+        substitutedOut: substitutedOut.has(playerId),
+      };
+    });
 
   const lineupsList = Array.isArray(lineupsRaw?.response)
     ? lineupsRaw.response
@@ -341,18 +406,20 @@ function mapFixtureDetail(
 }
 
 async function fetchFixtureDetail(fixtureId: number, apiKey: string) {
-  const [fx, events, lineups, stats] = await Promise.all([
+  const [fx, events, lineups, stats, players] = await Promise.all([
     apiFootball(`/fixtures?id=${fixtureId}`, apiKey),
     apiFootball(`/fixtures/events?fixture=${fixtureId}`, apiKey),
     apiFootball(`/fixtures/lineups?fixture=${fixtureId}`, apiKey),
     apiFootball(`/fixtures/statistics?fixture=${fixtureId}`, apiKey),
+    apiFootball(`/fixtures/players?fixture=${fixtureId}`, apiKey),
   ]);
   if (!fx.ok) return { ok: false as const };
   const detail = mapFixtureDetail(
     fx.data,
     events.ok ? events.data : { response: [] },
     lineups.ok ? lineups.data : { response: [] },
-    stats.ok ? stats.data : { response: [] }
+    stats.ok ? stats.data : { response: [] },
+    players.ok ? players.data : { response: [] }
   );
   if (!detail) return { ok: false as const };
   return { ok: true as const, data: detail };
