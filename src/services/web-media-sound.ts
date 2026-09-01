@@ -1,8 +1,13 @@
 /**
- * فيديو الويب في الفيد:
- * الظهور = تشغيل صامت (autoplay).
- * الصوت = إلغاء كتم عنصر يعمل أصلاً — بدون play() غير صامت وبدون إعادة إنشاء العنصر.
+ * Web feed video sound session — delegates autoplay policy to media-autoplay-engine.
  */
+import {
+  attemptMutedAutoplay,
+  attemptUnmuteWhilePlaying,
+  type PlayableVideo,
+} from '@/services/media-autoplay-engine';
+
+export type { PlayableVideo } from '@/services/media-autoplay-engine';
 
 export type WebSoundSessionEvent = 'unlock' | 'item_change' | 'lock';
 
@@ -15,38 +20,18 @@ export function nextWebSoundSession(
   return unlocked;
 }
 
-export type PlayableVideo = {
-  muted: boolean;
-  defaultMuted: boolean;
-  volume: number;
-  paused?: boolean;
-  play: () => Promise<void> | void;
-};
-
 export async function startVisibleWebVideo(
   el: PlayableVideo
-): Promise<'playing'> {
-  el.volume = 1;
-  el.muted = true;
-  el.defaultMuted = true;
-  await el.play();
-  return 'playing';
+): Promise<'playing' | 'policy_blocked' | 'aborted' | 'failed'> {
+  return attemptMutedAutoplay(el);
 }
 
 export function attachSoundToPlayingVideo(
   el: PlayableVideo
 ): 'unmuted' | 'muted' {
-  if (el.paused) return 'muted';
-  el.volume = 1;
-  el.muted = false;
-  el.defaultMuted = false;
-  if (el.paused) {
-    el.muted = true;
-    el.defaultMuted = true;
-    void el.play();
-    return 'muted';
-  }
-  return 'unmuted';
+  const result = attemptUnmuteWhilePlaying(el);
+  if (result === 'unmuted') return 'unmuted';
+  return 'muted';
 }
 
 type ActiveWebVideo = {
@@ -57,10 +42,13 @@ type ActiveWebVideo = {
 const listeners = new Set<() => void>();
 let unlocked = false;
 let active: ActiveWebVideo | null = null;
-let installed = false;
 
 export function isWebMediaSoundUnlocked(): boolean {
   return unlocked;
+}
+
+export function getActiveWebVideo(): ActiveWebVideo | null {
+  return active;
 }
 
 export function subscribeWebMediaSound(listener: () => void): () => void {
@@ -92,7 +80,6 @@ function notifyUnlocked() {
   for (const listener of listeners) listener();
 }
 
-/** إيماءة الصفحة: صوت فقط إن كان الفيديو يعمل. لا تبدأ التشغيل من هنا. */
 function applyUnlockFromUserGesture() {
   notifyUnlocked();
   const current = active;
@@ -111,11 +98,11 @@ export function resetWebMediaSoundForTests(): void {
   listeners.clear();
 }
 
+/** @deprecated Prefer installMediaUserActivation from media-user-activation.ts */
 export function installWebMediaSoundUnlock(): () => void {
-  if (typeof window === 'undefined' || installed) {
+  if (typeof window === 'undefined') {
     return () => undefined;
   }
-  installed = true;
   const onGesture = () => {
     applyUnlockFromUserGesture();
   };
@@ -129,6 +116,5 @@ export function installWebMediaSoundUnlock(): () => void {
     window.removeEventListener('pointerdown', onGesture, true);
     window.removeEventListener('touchstart', onGesture, true);
     window.removeEventListener('keydown', onGesture, true);
-    installed = false;
   };
 }
