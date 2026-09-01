@@ -34,11 +34,38 @@ export function promoteWebVideoSound(el: PlayableVideo): 'unmuted' | 'muted' {
 }
 
 export function attachSoundToPlayingVideo(
-  el: PlayableVideo
+  el: PlayableVideo,
+  options?: { inGesture?: boolean }
 ): 'unmuted' | 'muted' {
-  const result = attemptUnmuteWhilePlaying(el);
+  const result = attemptUnmuteWhilePlaying(el, options);
   if (result === 'unmuted') return 'unmuted';
   return 'muted';
+}
+
+/** Runs inside pointer/touch/scroll gesture — play + unmute active feed video. */
+export function applyWebMediaSoundFromGesture(): void {
+  markWebMediaSoundUnlocked();
+  const current = getActiveWebVideo();
+  if (!current || current.userPaused()) return;
+  const el = current.el;
+  if (el.paused) {
+    el.volume = 1;
+    el.muted = false;
+    el.defaultMuted = false;
+    try {
+      const result = el.play();
+      if (result && typeof (result as Promise<void>).then === 'function') {
+        void (result as Promise<void>).catch(() => undefined);
+      }
+    } catch {
+      /* fall through to attach */
+    }
+    if (!el.paused) {
+      attachSoundToPlayingVideo(el, { inGesture: true });
+    }
+    return;
+  }
+  attachSoundToPlayingVideo(el, { inGesture: true });
 }
 
 type ActiveWebVideo = {
@@ -88,11 +115,7 @@ function notifyUnlocked() {
 }
 
 function applyUnlockFromUserGesture() {
-  notifyUnlocked();
-  const current = active;
-  if (!current || current.userPaused()) return;
-  if (current.el.paused) return;
-  attachSoundToPlayingVideo(current.el);
+  applyWebMediaSoundFromGesture();
 }
 
 export function markWebMediaSoundUnlocked(): void {

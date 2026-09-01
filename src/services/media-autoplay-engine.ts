@@ -115,17 +115,49 @@ export async function attemptAudibleAutoplay(
   }
 }
 
+export type UnmuteOptions = { inGesture?: boolean };
+
+function invokePlay(el: PlayableVideo): void {
+  try {
+    const result = el.play();
+    if (result && typeof (result as Promise<void>).then === 'function') {
+      void (result as Promise<void>).catch(() => undefined);
+    }
+  } catch {
+    /* policy may reject outside gesture */
+  }
+}
+
 /** After real user activation — unmute without stopping playback when possible. */
-export function attemptUnmuteWhilePlaying(el: PlayableVideo): UnmuteResult {
-  if (el.paused) return 'not_playing';
+export function attemptUnmuteWhilePlaying(
+  el: PlayableVideo,
+  options?: UnmuteOptions
+): UnmuteResult {
+  const inGesture = options?.inGesture === true;
+
+  if (el.paused) {
+    if (!inGesture) return 'not_playing';
+    el.volume = 1;
+    el.muted = false;
+    el.defaultMuted = false;
+    invokePlay(el);
+    if (el.paused) return 'not_playing';
+    return el.muted ? 'muted_still_playing' : 'unmuted';
+  }
+
   el.volume = 1;
   try {
     el.muted = false;
     el.defaultMuted = false;
     if (el.paused) {
+      if (inGesture) {
+        invokePlay(el);
+        if (!el.paused && !el.muted) return 'unmuted';
+        if (!el.paused) return 'muted_still_playing';
+      }
       el.muted = true;
       el.defaultMuted = true;
-      void el.play();
+      invokePlay(el);
       return 'muted_still_playing';
     }
     return 'unmuted';
@@ -133,7 +165,7 @@ export function attemptUnmuteWhilePlaying(el: PlayableVideo): UnmuteResult {
     el.muted = true;
     el.defaultMuted = true;
     if (!el.paused) return 'muted_still_playing';
-    void el.play();
+    invokePlay(el);
     return 'muted_still_playing';
   }
 }

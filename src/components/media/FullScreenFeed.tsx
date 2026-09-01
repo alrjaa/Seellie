@@ -70,13 +70,11 @@ import {
   isWebMediaSoundUnlocked,
   promoteWebVideoSound,
   registerActiveWebVideo,
-  startVisibleWebVideo,
   subscribeWebMediaSound,
   unregisterActiveWebVideo,
 } from '@/services/web-media-sound';
 import {
   attemptAudibleAutoplay,
-  isRealMediaFailure,
 } from '@/services/media-autoplay-engine';
 import { noteWebFeedScrollGesture } from '@/services/media-user-activation';
 import { useNativeFeedVideoAutoplay } from '@/hooks/useNativeFeedVideoAutoplay';
@@ -598,42 +596,14 @@ const Slide = memo(function Slide({
     if (Platform.OS !== 'web') return;
     return subscribeWebMediaSound(() => {
       const el = htmlVideoRef.current;
-      if (!el || userPausedRef.current || el.paused) return;
-      promoteWebVideoSound(el);
-    });
-  }, []);
-
-  const toggleVideoPlayback = useCallback(async () => {
-    if (!playableUri || effectiveLoadError) return;
-    try {
-      if (Platform.OS === 'web') {
-        const el = htmlVideoRef.current;
-        if (!el) return;
-        if (paused || el.paused) {
-          userPausedRef.current = false;
-          await startVisibleWebVideo(el);
-          promoteWebVideoSound(el);
-          setPaused(false);
-        } else {
-          userPausedRef.current = true;
-          el.pause();
-          setPaused(true);
-        }
+      if (!el || userPausedRef.current || !active) return;
+      if (el.paused) {
+        requestWebAutoplay(el);
         return;
       }
-      await nativeAutoplay.toggleUserPause();
-      const player = videoRef.current;
-      if (player) {
-        const status = await player.getStatusAsync();
-        setPaused(status.isLoaded ? !status.isPlaying : true);
-      }
-    } catch (err) {
-      if (Platform.OS === 'web' && isRealMediaFailure(err)) {
-        setLoadError(true);
-        setPaused(true);
-      }
-    }
-  }, [paused, playableUri, effectiveLoadError, nativeAutoplay]);
+      promoteWebVideoSound(el);
+    });
+  }, [active, requestWebAutoplay]);
 
   const handleLikePress = useCallback(() => {
     if (sponsored) return;
@@ -701,16 +671,12 @@ const Slide = memo(function Slide({
       return;
     }
     lastTapRef.current = now;
-    if (item.kind === 'video') {
-      void toggleVideoPlayback();
-    }
+    // التشغيل تلقائي عند الظهور — لا إيقاف/تشغيل بنقرة واحدة (كانت تُعطّل الصوت)
   }, [
     commentsExpanded,
     dismissCommentsPanel,
-    item.kind,
     onDoubleTap,
     sponsored,
-    toggleVideoPlayback,
   ]);
 
   return (
@@ -737,7 +703,7 @@ const Slide = memo(function Slide({
             onPress={handleContentPress}
             style={styles.videoFill}
           >
-            {playableUri && !effectiveLoadError && active && Platform.OS === 'web'
+            {playableUri && !effectiveLoadError && Platform.OS === 'web'
               ? createElement('video', {
                   ref: bindHtmlVideoRef,
                   src: item.mediaUrl,
@@ -756,6 +722,8 @@ const Slide = memo(function Slide({
                     height: '100%',
                     objectFit: 'cover',
                     backgroundColor: '#000',
+                    opacity: active ? 1 : 0,
+                    pointerEvents: active ? 'auto' : 'none',
                   },
                   onError: () => {
                     setLoadError(true);
@@ -1253,10 +1221,12 @@ function FullScreenFeedComponent({
 
   const onScrollBeginDrag = useCallback(() => {
     if (!focused) return;
+    if (Platform.OS === 'web') noteWebFeedScrollGesture();
     noteFloatingScrollBegin(sourceId);
   }, [focused, sourceId]);
   const onMomentumScrollBegin = useCallback(() => {
     if (!focused) return;
+    if (Platform.OS === 'web') noteWebFeedScrollGesture();
     noteFloatingScrollBegin(sourceId);
   }, [focused, sourceId]);
   const onScroll = useCallback(

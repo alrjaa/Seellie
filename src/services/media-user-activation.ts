@@ -2,20 +2,12 @@
  * Real user-gesture unlock for web media sound (pointer / touch / key).
  * Does not synthesize clicks — browser policy compliant.
  */
-import {
-  attachSoundToPlayingVideo,
-  getActiveWebVideo,
-  markWebMediaSoundUnlocked,
-} from '@/services/web-media-sound';
+import { applyWebMediaSoundFromGesture } from '@/services/web-media-sound';
 
 let installed = false;
 
 function onUserActivation() {
-  markWebMediaSoundUnlocked();
-  const current = getActiveWebVideo();
-  if (!current || current.userPaused()) return;
-  if (current.el.paused) return;
-  attachSoundToPlayingVideo(current.el);
+  applyWebMediaSoundFromGesture();
 }
 
 /** Swiping the feed counts as user engagement for web sound (TikTok-style). */

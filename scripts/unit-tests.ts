@@ -612,6 +612,30 @@ test('unmute after user activation keeps video playing when blocked', () => {
   assert.equal(el.paused, false);
 });
 
+test('unmute in user gesture plays paused video with sound', () => {
+  let muted = true;
+  let paused = true;
+  const el = {
+    volume: 1,
+    defaultMuted: true,
+    get muted() {
+      return muted;
+    },
+    set muted(value: boolean) {
+      muted = value;
+    },
+    get paused() {
+      return paused;
+    },
+    play() {
+      paused = false;
+    },
+  };
+  assert.equal(attemptUnmuteWhilePlaying(el, { inGesture: true }), 'unmuted');
+  assert.equal(el.muted, false);
+  assert.equal(el.paused, false);
+});
+
 test('native feed shouldAttemptNativeFeedAutoplay requires ready + active', () => {
   assert.equal(
     shouldAttemptNativeFeedAutoplay({
