@@ -17,7 +17,10 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import {
   forceFloatingVisible,
+  FLOATING_SCROLL_DIM_OPACITY,
   isFloatingSuppressed,
+  noteFloatingScrollBegin,
+  noteFloatingScrollSettle,
   setFloatingSuppressed,
   subscribeFloatingVisibility,
 } from '@/services/floating-scroll-bus';
@@ -93,7 +96,6 @@ function FloatingActionMenuComponent() {
   const [chromeVisible, setChromeVisible] = useState(true);
   const [suppressed, setSuppressed] = useState(() => isFloatingSuppressed());
   const opacity = useRef(new Animated.Value(1)).current;
-  const translateY = useRef(new Animated.Value(0)).current;
   const [pressedKey, setPressedKey] = useState<string | null>(null);
   const [author, setAuthor] = useState<ContentAuthorFocus | null>(null);
 
@@ -156,27 +158,44 @@ function FloatingActionMenuComponent() {
   }, [pathname]);
 
   const fabShown = chromeVisible && !suppressed;
+  const fabOpacityTarget = fabShown ? 1 : FLOATING_SCROLL_DIM_OPACITY;
 
-  // أصلي فقط: Animated — الويب يعتمد CSS عبر View عادي
+  // Smooth opacity on web + native — no translateY jump.
   useEffect(() => {
-    if (Platform.OS === 'web') return;
     opacity.stopAnimation();
-    translateY.stopAnimation();
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: fabShown ? 1 : 0,
-        duration: fabShown ? 220 : 160,
-        easing: fabShown ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: fabShown ? 0 : 28,
-        duration: fabShown ? 220 : 160,
-        easing: fabShown ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [fabShown, opacity, translateY]);
+    Animated.timing(opacity, {
+      toValue: fabOpacityTarget,
+      duration: fabShown ? 240 : 180,
+      easing: fabShown ? Easing.out(Easing.cubic) : Easing.inOut(Easing.cubic),
+      useNativeDriver: Platform.OS !== 'web',
+    }).start();
+  }, [fabOpacityTarget, fabShown, opacity]);
+
+  const onFeedScreen =
+    !!pathname &&
+    (pathname.includes('/general') ||
+      pathname.includes('/highlights') ||
+      pathname.endsWith('general') ||
+      pathname.endsWith('highlights'));
+
+  // Web feed: wheel scroll dims FAB (touch uses FullScreenFeed scroll handlers).
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !onFeedScreen || suppressed) return;
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    const onWheel = () => {
+      noteFloatingScrollBegin('fab:wheel');
+      if (settleTimer) clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => {
+        settleTimer = null;
+        noteFloatingScrollSettle('fab:wheel');
+      }, 380);
+    };
+    document.addEventListener('wheel', onWheel, { passive: true, capture: true });
+    return () => {
+      if (settleTimer) clearTimeout(settleTimer);
+      document.removeEventListener('wheel', onWheel, { capture: true });
+    };
+  }, [onFeedScreen, suppressed]);
 
   const role = currentUser?.activeRole || currentUser?.role;
   const isFollowerLike =
@@ -326,22 +345,11 @@ function FloatingActionMenuComponent() {
     ? identityProfile.handle || identityProfile.name
     : t('menu.contentAuthor');
 
-  const motionStyle =
-    Platform.OS === 'web'
-      ? ({
-          opacity: fabShown ? 1 : 0,
-          transform: [{ translateY: fabShown ? 0 : 24 }],
-          transitionProperty: 'opacity, transform',
-          transitionDuration: fabShown ? '200ms' : '140ms',
-          transitionTimingFunction: 'ease-out',
-          willChange: 'opacity, transform',
-        } as const)
-      : {
-          opacity,
-          transform: [{ translateY }],
-        };
+  const motionStyle = {
+    opacity,
+  };
 
-  const Wrap = Platform.OS === 'web' ? View : Animated.View;
+  const Wrap = Animated.View;
 
   return (
     <View

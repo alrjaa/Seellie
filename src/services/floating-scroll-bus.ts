@@ -26,6 +26,8 @@ let lastY: number | null = null;
 let settleTimer: ReturnType<typeof setTimeout> | null = null;
 let failsafeTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** Opacity while user scrolls the feed — dimmed, not removed. */
+export const FLOATING_SCROLL_DIM_OPACITY = 0.12;
 const MOVE_EPS = 8;
 const SETTLE_SHOW_MS = 200;
 /** ضمان قوي: إظهار حتى لو لم يصل settle من النظام */
@@ -143,7 +145,6 @@ export function releaseFloatingScrollSource(sourceId: string) {
 
 export function noteFloatingScrollBegin(sourceId: string) {
   if (suppressFloating) return;
-  if (!acceptsSource(sourceId)) return;
   if (ownerId == null) ownerId = sourceId;
   scrolling = true;
   lastY = null;
@@ -186,7 +187,6 @@ export function noteFloatingScrollOffset(sourceId: string, y: number) {
 
 export function noteFloatingScrollSettle(sourceId: string) {
   if (suppressFloating) return;
-  if (!acceptsSource(sourceId)) return;
   scrolling = false;
   lastY = null;
   scheduleSettleShow();

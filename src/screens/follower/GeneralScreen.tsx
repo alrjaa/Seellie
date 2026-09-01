@@ -41,6 +41,7 @@ import {
   injectNativeAds,
   type NativeAdFeedItem,
 } from '@/services/native-ads';
+import { playableMediaUrl } from '@/utils/playable-media-url';
 
 type FeedFilter = 'all' | 'media' | 'discussions' | 'posts';
 
@@ -303,10 +304,6 @@ export default function GeneralFeedScreen() {
     setDiscussionModalOpen(false);
   }, [addComment, discussionText]);
 
-  const isHttpUrl = useCallback((url?: string) => {
-    return !!url && /^https?:\/\//i.test(url.trim());
-  }, []);
-
   const feed = useMemo(() => {
     const items: FeedItem[] = [];
     try {
@@ -329,7 +326,8 @@ export default function GeneralFeedScreen() {
         });
 
         (user.media?.photos || []).forEach((photo) => {
-          if (!isHttpUrl(photo.url)) return;
+          const mediaUrl = playableMediaUrl(photo.url);
+          if (!mediaUrl) return;
           items.push({
             id: `photo-user-${photo.id}`,
             type: 'photo',
@@ -337,7 +335,7 @@ export default function GeneralFeedScreen() {
             authorName: user.name,
             authorHandle: user.handle,
             authorAvatar: user.avatar,
-            mediaUrl: photo.url,
+            mediaUrl,
             mediaId: photo.id,
             mediaOwnerId: user.id,
             likes: photo.likes,
@@ -351,7 +349,8 @@ export default function GeneralFeedScreen() {
         });
 
         (user.media?.videos || []).forEach((video) => {
-          if (!isHttpUrl(video.url)) return;
+          const mediaUrl = playableMediaUrl(video.url);
+          if (!mediaUrl) return;
           items.push({
             id: `video-user-${video.id}`,
             type: 'video',
@@ -359,7 +358,7 @@ export default function GeneralFeedScreen() {
             authorName: user.name,
             authorHandle: user.handle,
             authorAvatar: user.avatar,
-            mediaUrl: video.url,
+            mediaUrl,
             mediaId: video.id,
             mediaOwnerId: user.id,
             likes: video.likes,
@@ -375,10 +374,8 @@ export default function GeneralFeedScreen() {
 
       (user.analysisContent || []).forEach((a) => {
         if (a.status === 'blocked' || a.status === 'suspended') return;
-        const videoUrl =
-          a.videoUrl && isHttpUrl(a.videoUrl) ? a.videoUrl.trim() : undefined;
-        const posterUrl =
-          a.posterUrl && isHttpUrl(a.posterUrl) ? a.posterUrl.trim() : undefined;
+        const videoUrl = playableMediaUrl(a.videoUrl);
+        const posterUrl = playableMediaUrl(a.posterUrl);
         const mediaKind = videoUrl ? 'video' : posterUrl ? 'photo' : undefined;
         const rawText = (a.content || '').trim();
         const text =
@@ -387,6 +384,7 @@ export default function GeneralFeedScreen() {
           rawText !== 'Visual analysis'
             ? rawText
             : undefined;
+        if (!videoUrl && !posterUrl && !text && !(a.title || '').trim()) return;
         items.push({
           id: `analysis-${a.id}`,
           type: 'analysis',
@@ -419,7 +417,8 @@ export default function GeneralFeedScreen() {
       const locationRegion = comp.venue?.region;
 
       (comp.media?.photos || []).forEach((photo) => {
-        if (!isHttpUrl(photo.url)) return;
+        const mediaUrl = playableMediaUrl(photo.url);
+        if (!mediaUrl) return;
         items.push({
           id: `photo-comp-${photo.id}`,
           type: 'photo',
@@ -427,7 +426,7 @@ export default function GeneralFeedScreen() {
           authorName: uploaderName,
           authorHandle: uploaderHandle,
           authorAvatar: uploaderAvatar,
-          mediaUrl: photo.url,
+          mediaUrl,
           mediaId: photo.id,
           mediaOwnerId: comp.id,
           likes: photo.likes,
@@ -440,7 +439,8 @@ export default function GeneralFeedScreen() {
         });
       });
       (comp.media?.videos || []).forEach((video) => {
-        if (!isHttpUrl(video.url)) return;
+        const mediaUrl = playableMediaUrl(video.url);
+        if (!mediaUrl) return;
         items.push({
           id: `video-comp-${video.id}`,
           type: 'video',
@@ -448,7 +448,7 @@ export default function GeneralFeedScreen() {
           authorName: uploaderName,
           authorHandle: uploaderHandle,
           authorAvatar: uploaderAvatar,
-          mediaUrl: video.url,
+          mediaUrl,
           mediaId: video.id,
           mediaOwnerId: comp.id,
           likes: video.likes,
@@ -464,7 +464,8 @@ export default function GeneralFeedScreen() {
       (comp.teams || []).forEach((team) => {
         (team.players || []).forEach((player) => {
           (player.media?.photos || []).forEach((photo) => {
-            if (!isHttpUrl(photo.url)) return;
+            const mediaUrl = playableMediaUrl(photo.url);
+            if (!mediaUrl) return;
             items.push({
               id: `photo-player-${player.id}-${photo.id}`,
               type: 'photo',
@@ -472,7 +473,7 @@ export default function GeneralFeedScreen() {
               authorName: player.name || uploaderName,
               authorHandle: uploaderHandle,
               authorAvatar: player.avatar || uploaderAvatar,
-              mediaUrl: photo.url,
+              mediaUrl,
               mediaId: photo.id,
               mediaOwnerId: player.id,
               likes: photo.likes,
@@ -485,7 +486,8 @@ export default function GeneralFeedScreen() {
             });
           });
           (player.media?.videos || []).forEach((video) => {
-            if (!isHttpUrl(video.url)) return;
+            const mediaUrl = playableMediaUrl(video.url);
+            if (!mediaUrl) return;
             items.push({
               id: `video-player-${player.id}-${video.id}`,
               type: 'video',
@@ -493,7 +495,7 @@ export default function GeneralFeedScreen() {
               authorName: player.name || uploaderName,
               authorHandle: uploaderHandle,
               authorAvatar: player.avatar || uploaderAvatar,
-              mediaUrl: video.url,
+              mediaUrl,
               mediaId: video.id,
               mediaOwnerId: player.id,
               likes: video.likes,
@@ -513,7 +515,8 @@ export default function GeneralFeedScreen() {
         const t2 = (comp.teams || []).find((x) => x.id === match.team2Id)?.name || '?';
         const label = `${t1} ${t('screens.vs')} ${t2}`;
         (match.media?.photos || []).forEach((photo) => {
-          if (!isHttpUrl(photo.url)) return;
+          const mediaUrl = playableMediaUrl(photo.url);
+          if (!mediaUrl) return;
           items.push({
             id: `photo-match-${photo.id}`,
             type: 'photo',
@@ -521,7 +524,7 @@ export default function GeneralFeedScreen() {
             authorName: uploaderName,
             authorHandle: uploaderHandle,
             authorAvatar: uploaderAvatar,
-            mediaUrl: photo.url,
+            mediaUrl,
             mediaId: photo.id,
             mediaOwnerId: match.id,
             likes: photo.likes,
@@ -534,7 +537,8 @@ export default function GeneralFeedScreen() {
           });
         });
         (match.media?.videos || []).forEach((video) => {
-          if (!isHttpUrl(video.url)) return;
+          const mediaUrl = playableMediaUrl(video.url);
+          if (!mediaUrl) return;
           items.push({
             id: `video-match-${video.id}`,
             type: 'video',
@@ -542,7 +546,7 @@ export default function GeneralFeedScreen() {
             authorName: uploaderName,
             authorHandle: uploaderHandle,
             authorAvatar: uploaderAvatar,
-            mediaUrl: video.url,
+            mediaUrl,
             mediaId: video.id,
             mediaOwnerId: match.id,
             likes: video.likes,
@@ -560,8 +564,7 @@ export default function GeneralFeedScreen() {
     (comments || []).forEach((c) => {
       if (c.status === 'blocked' || c.status === 'suspended') return;
       const author = users.find((u) => u.id === c.authorId);
-      const forumVideo =
-        c.videoUrl && isHttpUrl(c.videoUrl) ? c.videoUrl.trim() : undefined;
+      const forumVideo = playableMediaUrl(c.videoUrl);
       // فيديو الساحة يظهر في «عام» كوسائط (وليس نص نقاش فقط)
       if (forumVideo) {
         items.push({
@@ -625,7 +628,7 @@ export default function GeneralFeedScreen() {
       console.warn('[GeneralScreen] feed build failed', error);
       return [];
     }
-  }, [users, competitions, comments, quickComments, t, isHttpUrl]);
+  }, [users, competitions, comments, quickComments, t]);
 
   const filtered = useMemo(() => {
     switch (filter) {

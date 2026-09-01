@@ -225,6 +225,8 @@ const Slide = memo(function Slide({
   const videoRef = useRef<Video>(null);
   const htmlVideoRef = useRef<HTMLVideoElement | null>(null);
   const userPausedRef = useRef(false);
+  const activeRef = useRef(active);
+  activeRef.current = active;
   /** F12-P2-05 — ignore stale play()/setState after fast swipe away */
   const playGenRef = useRef(0);
   const inputRef = useRef<TextInput>(null);
@@ -492,7 +494,7 @@ const Slide = memo(function Slide({
             el.addEventListener('canplay', onReady);
           });
         }
-        if (playGenRef.current !== gen || !active) return;
+        if (playGenRef.current !== gen || !activeRef.current) return;
         return attemptAudibleAutoplay(el, {
           generation: gen,
           getGeneration: () => playGenRef.current,
@@ -502,19 +504,27 @@ const Slide = memo(function Slide({
         if (!result) return;
         if (playGenRef.current !== gen) return;
         if (result === 'failed') {
-          setLoadError(true);
-          setPaused(true);
+          // Only real media/decode failures — not policy/abort (classified in engine).
+          if (el.error) {
+            setLoadError(true);
+            setPaused(true);
+          }
           return;
         }
-        if (result === 'aborted' || result === 'policy_blocked') return;
+        if (result === 'aborted') return;
+        if (result === 'policy_blocked') {
+          setFrameReady(true);
+          return;
+        }
         setFrameReady(true);
         setPaused(false);
         if (
           result === 'playing_audible' ||
           result === 'playing_muted'
         ) {
-          promoteWebVideoSound(el);
           if (isWebMediaSoundUnlocked()) {
+            promoteWebVideoSound(el);
+          } else if (result === 'playing_audible') {
             promoteWebVideoSound(el);
           }
           trackVideoStart();
@@ -527,13 +537,12 @@ const Slide = memo(function Slide({
   const bindHtmlVideoRef = useCallback(
     (node: HTMLVideoElement | null) => {
       const prev = htmlVideoRef.current;
-      if (prev && prev !== node) unregisterActiveWebVideo(prev);
-      htmlVideoRef.current = node;
-      if (!node) {
-        unregisterActiveWebVideo(node);
-        return;
+      if (prev && prev !== node) {
+        prev.pause();
+        unregisterActiveWebVideo(prev);
       }
-      registerActiveWebVideo(node, () => userPausedRef.current);
+      htmlVideoRef.current = node;
+      if (!node) return;
       if (item.mediaUrl && node.getAttribute('src') !== item.mediaUrl) {
         node.src = item.mediaUrl;
       }
@@ -542,53 +551,66 @@ const Slide = memo(function Slide({
       node.volume = 1;
       node.playsInline = true;
       node.loop = true;
-      requestWebAutoplay(node);
+      if (!activeRef.current) {
+        node.pause();
+      }
     },
-    [item.mediaUrl, requestWebAutoplay]
+    [item.mediaUrl]
   );
 
   useEffect(() => {
-    if (Platform.OS === 'web') {
-      setLoadError(false);
-    }
+    if (Platform.OS !== 'web') return;
+    playGenRef.current += 1;
+    setLoadError(false);
     setFrameReady(false);
     userPausedRef.current = false;
     setPaused(true);
-    if (Platform.OS === 'web') {
-      void videoRef.current?.pauseAsync().catch(() => undefined);
-      const el = htmlVideoRef.current;
-      if (el) el.pause();
-    }
+    const el = htmlVideoRef.current;
+    if (el) el.pause();
   }, [item.id, item.mediaUrl]);
 
   useEffect(() => {
-    if (!active) {
+    if (Platform.OS !== 'web') {
+      setLoadError(false);
+      setFrameReady(false);
+      userPausedRef.current = false;
       setPaused(true);
-      if (Platform.OS === 'web') {
-        playGenRef.current += 1;
-        userPausedRef.current = false;
-        void videoRef.current?.pauseAsync().catch(() => undefined);
-        const el = htmlVideoRef.current;
-        if (el) el.pause();
+      return;
+    }
+    const el = htmlVideoRef.current;
+    if (!active) {
+      playGenRef.current += 1;
+      userPausedRef.current = false;
+      setPaused(true);
+      if (el) {
+        el.pause();
+        unregisterActiveWebVideo(el);
       }
       return;
     }
     setPaused(false);
     userPausedRef.current = false;
-    if (Platform.OS === 'web') {
-      requestWebAutoplay(htmlVideoRef.current);
-    }
+    if (!el) return;
+    registerActiveWebVideo(el, () => userPausedRef.current);
+    requestWebAutoplay(el);
+    return () => {
+      unregisterActiveWebVideo(el);
+    };
   }, [active, requestWebAutoplay]);
 
   useEffect(() => {
     return () => {
       playGenRef.current += 1;
-      void videoRef.current?.pauseAsync().catch(() => undefined);
       if (Platform.OS === 'web') {
-        void videoRef.current?.unloadAsync().catch(() => undefined);
+        const el = htmlVideoRef.current;
+        if (el) {
+          el.pause();
+          unregisterActiveWebVideo(el);
+        }
+        htmlVideoRef.current = null;
+        return;
       }
-      htmlVideoRef.current?.pause();
-      htmlVideoRef.current = null;
+      void videoRef.current?.pauseAsync().catch(() => undefined);
     };
   }, []);
 
@@ -703,13 +725,12 @@ const Slide = memo(function Slide({
             onPress={handleContentPress}
             style={styles.videoFill}
           >
-            {playableUri && !effectiveLoadError && Platform.OS === 'web'
+            {playableUri && !effectiveLoadError && active && Platform.OS === 'web'
               ? createElement('video', {
                   ref: bindHtmlVideoRef,
                   src: item.mediaUrl,
                   muted: false,
                   defaultMuted: false,
-                  autoPlay: true,
                   playsInline: true,
                   preload: 'auto',
                   loop: true,
@@ -755,7 +776,7 @@ const Slide = memo(function Slide({
                   !active ? styles.nativeVideoInactive : null,
                 ]}
                 resizeMode={ResizeMode.COVER}
-                shouldPlay={nativeAutoplay.shouldPlay}
+                shouldPlay={false}
                 isLooping
                 isMuted={false}
                 volume={1}
@@ -1168,15 +1189,16 @@ function FullScreenFeedComponent({
   const { visible } = useFloatingVisibility(true);
   const reactId = useId();
   const sourceId = `feed:${reactId}`;
-  const [layoutHeight, setLayoutHeight] = useState(0);
-  const heightRef = useRef(0);
-  const fallbackHeight = Math.max(1, Math.round(windowHeight) || 1);
-  const height = layoutHeight > 0 ? layoutHeight : fallbackHeight;
+  const [layoutHeight, setLayoutHeight] = useState(() =>
+    Math.max(1, Math.round(windowHeight) || 1)
+  );
+  const heightRef = useRef(layoutHeight);
+  const height = layoutHeight;
   const freezeFeedHeightRef = useRef(false);
+  const webWheelSettleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   const overlayOpacity = useRef(new Animated.Value(1)).current;
-  const overlayTranslate = useRef(new Animated.Value(0)).current;
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 70,
   }).current;
@@ -1247,6 +1269,27 @@ function FullScreenFeedComponent({
     noteFloatingScrollSettle(sourceId);
   }, [focused, sourceId]);
 
+  // Web: mouse wheel — dim FAB (FlatList may not emit scroll-begin for wheel).
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !focused || typeof document === 'undefined') {
+      return;
+    }
+    const onWheel = () => {
+      noteWebFeedScrollGesture();
+      noteFloatingScrollBegin(sourceId);
+      if (webWheelSettleRef.current) clearTimeout(webWheelSettleRef.current);
+      webWheelSettleRef.current = setTimeout(() => {
+        webWheelSettleRef.current = null;
+        noteFloatingScrollSettle(sourceId);
+      }, 380);
+    };
+    document.addEventListener('wheel', onWheel, { passive: true, capture: true });
+    return () => {
+      if (webWheelSettleRef.current) clearTimeout(webWheelSettleRef.current);
+      document.removeEventListener('wheel', onWheel, { capture: true });
+    };
+  }, [focused, sourceId]);
+
   const overlayPadTop = topOverlaySafeArea
     ? insets.top + HEADER_BELOW_STATUS_GAP
     : 8;
@@ -1254,23 +1297,12 @@ function FullScreenFeedComponent({
 
   useEffect(() => {
     const useNative = Platform.OS !== 'web';
-    if (chromeVisible) {
-      overlayOpacity.setValue(1);
-      overlayTranslate.setValue(0);
-    }
-    Animated.parallel([
-      Animated.timing(overlayOpacity, {
-        toValue: chromeVisible ? 1 : 0,
-        duration: chromeVisible ? 180 : 120,
-        useNativeDriver: useNative,
-      }),
-      Animated.timing(overlayTranslate, {
-        toValue: chromeVisible ? 0 : -12,
-        duration: chromeVisible ? 180 : 120,
-        useNativeDriver: useNative,
-      }),
-    ]).start();
-  }, [overlayOpacity, overlayTranslate, chromeVisible]);
+    Animated.timing(overlayOpacity, {
+      toValue: chromeVisible ? 1 : 0,
+      duration: chromeVisible ? 180 : 120,
+      useNativeDriver: useNative,
+    }).start();
+  }, [overlayOpacity, chromeVisible]);
 
   useEffect(() => {
     setActiveIndex((current) => {
@@ -1289,6 +1321,9 @@ function FullScreenFeedComponent({
       heightRef.current > 0 &&
       next < heightRef.current - 1
     ) {
+      return;
+    }
+    if (heightRef.current > 0 && Math.abs(next - heightRef.current) <= 2) {
       return;
     }
     heightRef.current = next;
@@ -1409,7 +1444,6 @@ function FullScreenFeedComponent({
             {
               paddingTop: overlayPadTop,
               opacity: overlayOpacity,
-              transform: [{ translateY: overlayTranslate }],
             },
           ]}
           pointerEvents={chromeVisible ? 'box-none' : 'none'}

@@ -42,15 +42,7 @@ export function useNativeFeedVideoAutoplay({
   const [userPaused, setUserPaused] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
-  const shouldPlay =
-    Platform.OS !== 'web' &&
-    shouldAttemptNativeFeedAutoplay({
-      active,
-      playable,
-      ready,
-      userPaused,
-      loadError,
-    });
+  const shouldPlay = false;
 
   const markReady = useCallback(() => {
     setReady(true);

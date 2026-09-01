@@ -193,6 +193,7 @@ function InlineVideoPlayerComponent({
         observerRef.current?.disconnect();
         observerRef.current = null;
         observerTargetRef.current = null;
+        if (htmlRef.current) unregisterActiveWebVideo(htmlRef.current);
         htmlRef.current = null;
         return;
       }
@@ -204,7 +205,6 @@ function InlineVideoPlayerComponent({
       node.muted = false;
       node.defaultMuted = false;
       node.volume = 1;
-      registerActiveWebVideo(node);
       setupWebObserver(node);
     },
     [markPlaybackFailed, setupWebObserver]
@@ -258,13 +258,13 @@ function InlineVideoPlayerComponent({
     const el = htmlRef.current;
     if (!el) return;
     if (shouldAutoPlay) {
+      registerActiveWebVideo(el);
       void startVisibleWebVideo(el).then((result) => {
         if (result === 'failed') {
           markPlaybackFailed();
           return;
         }
         if (result === 'playing') {
-          promoteWebVideoSound(el);
           if (isWebMediaSoundUnlocked()) {
             promoteWebVideoSound(el);
           }
@@ -274,6 +274,9 @@ function InlineVideoPlayerComponent({
       el.pause();
       unregisterActiveWebVideo(el);
     }
+    return () => {
+      unregisterActiveWebVideo(el);
+    };
   }, [shouldAutoPlay, playbackFailed, markPlaybackFailed]);
 
   if (!uri) return null;
@@ -339,7 +342,6 @@ function InlineVideoPlayerComponent({
             src: uri,
             muted: false,
             defaultMuted: false,
-            autoPlay: true,
             loop: true,
             playsInline: true,
             preload: 'auto',
@@ -361,7 +363,7 @@ function InlineVideoPlayerComponent({
             resizeMode={ResizeMode.CONTAIN}
             useNativeControls={!autoplayEnabled}
             isLooping={autoplayEnabled}
-            shouldPlay={nativeAutoplay.shouldPlay}
+            shouldPlay={false}
             isMuted={false}
             volume={1}
             onLoad={nativeAutoplay.markReady}

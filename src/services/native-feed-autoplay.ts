@@ -155,11 +155,14 @@ export async function requestNativeFeedAutoplay(
 
     if (after.isLoaded && !after.isPlaying) {
       await player.playAsync();
-      req.onPlaying?.();
-      return 'playing';
+      const retry = await player.getStatusAsync();
+      if (retry.isLoaded && retry.isPlaying) {
+        req.onPlaying?.();
+      }
+      return retry.isLoaded && retry.isPlaying ? 'playing' : 'failed';
     }
 
-    return 'playing';
+    return 'failed';
   } catch (error) {
     if (getGeneration() !== generation) return 'aborted';
     if (!isNativePlaybackMediaFailure(error)) {
