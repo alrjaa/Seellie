@@ -45,6 +45,13 @@ export const TRACKED_LEAGUES: TrackedLeague[] = [
     countryAr: 'ألمانيا',
   },
   {
+    leagueId: 253,
+    slug: 'mls',
+    nameAr: 'الدوري الأمريكي',
+    nameEn: 'MLS',
+    countryAr: 'الولايات المتحدة',
+  },
+  {
     leagueId: 61,
     slug: 'ligue-1',
     nameAr: 'الدوري الفرنسي',

@@ -155,5 +155,6 @@ export const TRACKED_LEAGUE_IDS = [
   140, // La Liga
   135, // Serie A
   78, // Bundesliga
+  253, // MLS
   61, // Ligue 1
 ] as const;

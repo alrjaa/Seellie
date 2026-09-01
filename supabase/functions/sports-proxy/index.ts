@@ -27,6 +27,7 @@ const TRACKED_LEAGUES: Array<{
   { leagueId: 140, slug: 'la-liga', name: 'La Liga', country: 'Spain' },
   { leagueId: 135, slug: 'serie-a', name: 'Serie A', country: 'Italy' },
   { leagueId: 78, slug: 'bundesliga', name: 'Bundesliga', country: 'Germany' },
+  { leagueId: 253, slug: 'mls', name: 'MLS', country: 'USA' },
   { leagueId: 61, slug: 'ligue-1', name: 'Ligue 1', country: 'France' },
 ];
 
