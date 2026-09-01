@@ -24,7 +24,7 @@ import type {
   SportsTeamLineup,
 } from '@/services/sports-data';
 
-type TabKey = 'overview' | 'events' | 'lineups' | 'stats';
+type TabKey = 'overview' | 'events' | 'stats';
 
 function isFinished(status: string) {
   const s = status.toUpperCase();
@@ -173,91 +173,205 @@ const EventsTab = memo(function EventsTab({
   );
 });
 
-function sortByGrid(players: SportsLineupPlayer[]) {
-  return [...players].sort((a, b) => {
-    const ag = (a.grid || '99:99').split(':').map(Number);
-    const bg = (b.grid || '99:99').split(':').map(Number);
-    if (ag[0] !== bg[0]) return ag[0] - bg[0];
-    return (ag[1] || 0) - (bg[1] || 0);
-  });
+function parseGrid(grid?: string) {
+  if (!grid) return null;
+  const [row, col] = grid.split(':').map(Number);
+  if (!row || !col) return null;
+  return { row, col };
 }
 
-const LineupBlock = memo(function LineupBlock({
-  lineup,
+function gridExtents(players: SportsLineupPlayer[]) {
+  let maxRow = 1;
+  let maxCol = 1;
+  for (const p of players) {
+    const g = parseGrid(p.grid);
+    if (!g) continue;
+    maxRow = Math.max(maxRow, g.row);
+    maxCol = Math.max(maxCol, g.col);
+  }
+  return { maxRow, maxCol };
+}
+
+function pitchCoords(
+  grid: string | undefined,
+  side: 'home' | 'away',
+  maxRow: number,
+  maxCol: number
+) {
+  const g = parseGrid(grid) ?? { row: 1, col: Math.ceil((maxCol + 1) / 2) };
+  const left = (g.col / (maxCol + 1)) * 88 + 6;
+  const rowSpan = Math.max(maxRow - 1, 1);
+  const top =
+    side === 'home'
+      ? 92 - ((g.row - 1) / rowSpan) * 40
+      : 8 + ((g.row - 1) / rowSpan) * 40;
+  return { top: `${top}%`, left: `${left}%` };
+}
+
+function shortName(name: string) {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length <= 1) return name.slice(0, 10);
+  return parts[parts.length - 1].slice(0, 12);
+}
+
+const PitchPlayer = memo(function PitchPlayer({
+  player,
+  side,
+  maxRow,
+  maxCol,
 }: {
-  lineup?: SportsTeamLineup;
+  player: SportsLineupPlayer;
+  side: 'home' | 'away';
+  maxRow: number;
+  maxCol: number;
+}) {
+  const theme = useAppTheme();
+  const pos = pitchCoords(player.grid, side, maxRow, maxCol);
+  const ring =
+    side === 'home' ? theme.colors.accent : theme.colors.textInverse;
+
+  return (
+    <View
+      style={[
+        styles.pitchPlayerAbs,
+        { top: pos.top as `${number}%`, left: pos.left as `${number}%` },
+      ]}
+    >
+      {player.photo ? (
+        <Image source={{ uri: player.photo }} style={styles.pitchAvatar} />
+      ) : (
+        <View
+          style={[
+            styles.pitchAvatar,
+            styles.pitchAvatarFallback,
+            { borderColor: ring, backgroundColor: theme.colors.surface },
+          ]}
+        >
+          <Text style={[styles.pitchNum, { color: theme.colors.text }]}>
+            {player.number ?? '?'}
+          </Text>
+        </View>
+      )}
+      <Text
+        style={[styles.pitchName, { color: theme.colors.textInverse }]}
+        numberOfLines={1}
+      >
+        {shortName(player.name)}
+      </Text>
+    </View>
+  );
+});
+
+const FootballPitchLineups = memo(function FootballPitchLineups({
+  home,
+  away,
+}: {
+  home?: SportsTeamLineup;
+  away?: SportsTeamLineup;
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
-  if (!lineup) {
+
+  if (!home?.startXI?.length && !away?.startXI?.length) {
     return (
-      <Muted style={styles.pad}>{t('sportsFixture.noLineup')}</Muted>
+      <Card style={styles.sectionCard}>
+        <Muted style={styles.pad}>{t('sportsFixture.noLineup')}</Muted>
+      </Card>
     );
   }
-  const starters = sortByGrid(lineup.startXI);
+
+  const homeXi = home?.startXI ?? [];
+  const awayXi = away?.startXI ?? [];
+  const homeExt = gridExtents(homeXi);
+  const awayExt = gridExtents(awayXi);
+
   return (
     <Card style={styles.sectionCard}>
-      <View style={styles.lineupHead}>
-        <Avatar uri={lineup.teamLogo} name={lineup.teamName} size={28} />
-        <View style={styles.lineupHeadText}>
-          <Subtitle>{lineup.teamName}</Subtitle>
-          {lineup.formation ? (
-            <Muted>
-              {t('sportsFixture.formation')}: {lineup.formation}
-            </Muted>
-          ) : null}
+      <View style={styles.pitchHeader}>
+        <View style={styles.pitchTeamBadge}>
+          <Avatar uri={away?.teamLogo} name={away?.teamName ?? '—'} size={22} />
+          <Text
+            style={[styles.pitchTeamLabel, { color: theme.colors.text }]}
+            numberOfLines={1}
+          >
+            {away?.teamName ?? '—'}
+            {away?.formation ? ` (${away.formation})` : ''}
+          </Text>
+        </View>
+        <Subtitle>{t('sportsFixture.tabLineups')}</Subtitle>
+        <View style={styles.pitchTeamBadge}>
+          <Avatar uri={home?.teamLogo} name={home?.teamName ?? '—'} size={22} />
+          <Text
+            style={[styles.pitchTeamLabel, { color: theme.colors.text }]}
+            numberOfLines={1}
+          >
+            {home?.teamName ?? '—'}
+            {home?.formation ? ` (${home.formation})` : ''}
+          </Text>
         </View>
       </View>
-      <View
-        style={[
-          styles.pitch,
-          { backgroundColor: theme.colors.surfaceElevated },
-        ]}
-      >
-        {starters.map((p) => (
-          <View key={`${p.id}-${p.number}`} style={styles.pitchPlayer}>
-            {p.photo ? (
-              <Image source={{ uri: p.photo }} style={styles.playerPhoto} />
-            ) : (
-              <View
-                style={[
-                  styles.playerPhotoFallback,
-                  { backgroundColor: theme.colors.border },
-                ]}
-              >
-                <Text style={{ color: theme.colors.text }}>
-                  {p.number ?? '?'}
-                </Text>
-              </View>
-            )}
-            <Text
-              style={[styles.playerName, { color: theme.colors.text }]}
-              numberOfLines={1}
-            >
-              {p.name}
-            </Text>
-            {p.number != null ? (
-              <Text style={[styles.playerNum, { color: theme.colors.textMuted }]}>
-                {p.number}
-              </Text>
-            ) : null}
-          </View>
-        ))}
-      </View>
-      {lineup.substitutes.length > 0 ? (
-        <View style={styles.subsBlock}>
-          <Subtitle style={styles.subsTitle}>
-            {t('sportsFixture.substitutes')}
-          </Subtitle>
-          {lineup.substitutes.map((p) => (
-            <Text
-              key={`sub-${p.id}-${p.number}`}
-              style={[styles.subRow, { color: theme.colors.text }]}
-            >
-              {p.number != null ? `${p.number} ` : ''}
-              {p.name}
-            </Text>
+
+      <View style={styles.pitchWrap}>
+        <View style={styles.pitchField}>
+          <View style={styles.pitchHalfLine} />
+          <View style={styles.pitchCenterCircle} />
+          <View style={styles.pitchBoxTop} />
+          <View style={styles.pitchBoxBottom} />
+          {awayXi.map((p) => (
+            <PitchPlayer
+              key={`away-${p.id}-${p.number}`}
+              player={p}
+              side="away"
+              maxRow={awayExt.maxRow}
+              maxCol={awayExt.maxCol}
+            />
           ))}
+          {homeXi.map((p) => (
+            <PitchPlayer
+              key={`home-${p.id}-${p.number}`}
+              player={p}
+              side="home"
+              maxRow={homeExt.maxRow}
+              maxCol={homeExt.maxCol}
+            />
+          ))}
+        </View>
+      </View>
+
+      {(home?.substitutes.length || away?.substitutes.length) ? (
+        <View style={styles.subsRow}>
+          {away?.substitutes.length ? (
+            <View style={styles.subsCol}>
+              <Subtitle style={styles.subsTitle}>
+                {away.teamName} · {t('sportsFixture.substitutes')}
+              </Subtitle>
+              {away.substitutes.map((p) => (
+                <Text
+                  key={`asub-${p.id}`}
+                  style={[styles.subRow, { color: theme.colors.text }]}
+                >
+                  {p.number != null ? `${p.number} ` : ''}
+                  {p.name}
+                </Text>
+              ))}
+            </View>
+          ) : null}
+          {home?.substitutes.length ? (
+            <View style={styles.subsCol}>
+              <Subtitle style={styles.subsTitle}>
+                {home.teamName} · {t('sportsFixture.substitutes')}
+              </Subtitle>
+              {home.substitutes.map((p) => (
+                <Text
+                  key={`hsub-${p.id}`}
+                  style={[styles.subRow, { color: theme.colors.text }]}
+                >
+                  {p.number != null ? `${p.number} ` : ''}
+                  {p.name}
+                </Text>
+              ))}
+            </View>
+          ) : null}
         </View>
       ) : null}
     </Card>
@@ -345,7 +459,6 @@ export default function SportsFixtureDetailScreen() {
       [
         { key: 'overview' as const, label: t('sportsFixture.tabOverview') },
         { key: 'events' as const, label: t('sportsFixture.tabEvents') },
-        { key: 'lineups' as const, label: t('sportsFixture.tabLineups') },
         { key: 'stats' as const, label: t('sportsFixture.tabStats') },
       ] as const,
     [t]
@@ -422,6 +535,10 @@ export default function SportsFixtureDetailScreen() {
 
         {tab === 'overview' ? (
           <>
+            <FootballPitchLineups
+              home={detail.lineups.home}
+              away={detail.lineups.away}
+            />
             <EventsTab events={detail.events.slice(0, 8)} />
             {detail.statistics.length > 0 ? (
               <StatsTab detail={detail} />
@@ -429,12 +546,6 @@ export default function SportsFixtureDetailScreen() {
           </>
         ) : null}
         {tab === 'events' ? <EventsTab events={detail.events} /> : null}
-        {tab === 'lineups' ? (
-          <>
-            <LineupBlock lineup={detail.lineups.home} />
-            <LineupBlock lineup={detail.lineups.away} />
-          </>
-        ) : null}
         {tab === 'stats' ? <StatsTab detail={detail} /> : null}
       </ScrollView>
     </Screen>
@@ -487,31 +598,98 @@ const styles = StyleSheet.create({
   eventMin: { width: 42, ...cairoText('semiBold') },
   eventBody: { flex: 1, gap: 2 },
   eventTitle: { fontSize: 14, ...cairoText('semiBold') },
-  lineupHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  lineupHeadText: { flex: 1, gap: 2 },
-  pitch: {
-    borderRadius: 12,
-    padding: 10,
+  pitchHeader: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
-    minHeight: 180,
+    marginBottom: 8,
   },
-  pitchPlayer: { width: 72, alignItems: 'center', gap: 4 },
-  playerPhoto: { width: 44, height: 44, borderRadius: 22 },
-  playerPhotoFallback: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  pitchTeamBadge: { flex: 1, alignItems: 'center', gap: 4 },
+  pitchTeamLabel: { fontSize: 11, textAlign: 'center', ...cairoText('semiBold') },
+  pitchWrap: { borderRadius: 12, overflow: 'hidden' },
+  pitchField: {
+    aspectRatio: 0.62,
+    backgroundColor: '#2d6a3e',
+    position: 'relative',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.55)',
+  },
+  pitchHalfLine: {
+    position: 'absolute',
+    top: '50%',
+    left: '4%',
+    right: '4%',
+    height: 2,
+    backgroundColor: 'rgba(255,255,255,0.45)',
+    marginTop: -1,
+  },
+  pitchCenterCircle: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: '22%',
+    aspectRatio: 1,
+    marginTop: '-11%',
+    marginLeft: '-11%',
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.45)',
+  },
+  pitchBoxTop: {
+    position: 'absolute',
+    top: 0,
+    left: '22%',
+    width: '56%',
+    height: '16%',
+    borderWidth: 2,
+    borderTopWidth: 0,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  pitchBoxBottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: '22%',
+    width: '56%',
+    height: '16%',
+    borderWidth: 2,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  pitchPlayerAbs: {
+    position: 'absolute',
+    width: 56,
+    marginLeft: -28,
+    marginTop: -24,
+    alignItems: 'center',
+    gap: 2,
+    zIndex: 2,
+  },
+  pitchAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  pitchAvatarFallback: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  playerName: { fontSize: 10, textAlign: 'center' },
-  playerNum: { fontSize: 10 },
-  subsBlock: { marginTop: 8, gap: 4 },
-  subsTitle: { marginBottom: 4 },
-  subRow: { fontSize: 13 },
+  pitchNum: { fontSize: 12, ...cairoText('bold') },
+  pitchName: {
+    fontSize: 9,
+    textAlign: 'center',
+    maxWidth: 54,
+    ...cairoText('semiBold'),
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  subsRow: { flexDirection: 'row', gap: 12, marginTop: 10 },
+  subsCol: { flex: 1, gap: 4 },
+  subsTitle: { marginBottom: 4, fontSize: 12 },
+  subRow: { fontSize: 12 },
   pad: { padding: 12 },
   statRow: {
     flexDirection: 'row',
