@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation, useLanguage } from '@/providers/LanguageProvider';
 import { Avatar, Card, Muted, Subtitle } from '@/components/ui';
@@ -205,14 +206,22 @@ const NationalFixtures = memo(function NationalFixtures({
 }) {
   const theme = useAppTheme();
   const titleDir = useTitleDir();
+  const router = useRouter();
   if (!fixtures.length) return null;
   return (
     <Card style={styles.card}>
       <Subtitle style={[styles.cardTitle, titleDir]}>{title}</Subtitle>
       {fixtures.slice(0, 6).map((f) => (
-        <View
+        <Pressable
           key={f.id || `${f.homeName}-${f.date}`}
-          style={[styles.fxRow, { borderBottomColor: theme.colors.border }]}
+          onPress={() => {
+            if (!f.id) return;
+            router.push(`/(follower)/sports/fixtures/${f.id}` as any);
+          }}
+          style={({ pressed }) => [
+            styles.fxRow,
+            { borderBottomColor: theme.colors.border, opacity: pressed ? 0.85 : 1 },
+          ]}
         >
           <View style={styles.fxDateCol}>
             <Text
@@ -253,7 +262,7 @@ const NationalFixtures = memo(function NationalFixtures({
           <Text style={[styles.fxScore, { color: theme.colors.text }]}>
             {scoreLabel(f)}
           </Text>
-        </View>
+        </Pressable>
       ))}
     </Card>
   );

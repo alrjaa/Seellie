@@ -23,8 +23,10 @@ import {
   claimFloatingScrollSource,
   forceFloatingVisible,
   noteFloatingScrollBegin,
+  noteFloatingScrollEndDrag,
   noteFloatingScrollOffset,
-  noteFloatingScrollSettle,
+  noteFloatingMomentumScrollBegin,
+  noteFloatingMomentumScrollEnd,
   releaseFloatingScrollSource,
 } from '@/services/floating-scroll-bus';
 import { screenContentBottomPadding } from '@/theme/navigation';
@@ -121,15 +123,15 @@ function ScreenComponent({
   }, [focused, sourceId]);
   const onMomentumScrollBegin = useCallback(() => {
     if (!focused) return;
-    noteFloatingScrollBegin(sourceId);
+    noteFloatingMomentumScrollBegin(sourceId);
   }, [focused, sourceId]);
   const onScrollEndDrag = useCallback(() => {
     if (!focused) return;
-    noteFloatingScrollSettle(sourceId);
+    noteFloatingScrollEndDrag(sourceId);
   }, [focused, sourceId]);
   const onMomentumScrollEnd = useCallback(() => {
     if (!focused) return;
-    noteFloatingScrollSettle(sourceId);
+    noteFloatingMomentumScrollEnd(sourceId);
   }, [focused, sourceId]);
 
   const clearFab = fabClearance ?? !bleed;

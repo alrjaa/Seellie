@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -17,12 +17,12 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import {
   forceFloatingVisible,
+  FLOATING_FADE_IN_MS,
+  FLOATING_FADE_OUT_MS,
   FLOATING_SCROLL_DIM_OPACITY,
   isFloatingSuppressed,
-  noteFloatingScrollBegin,
-  noteFloatingScrollSettle,
   setFloatingSuppressed,
-  subscribeFloatingVisibility,
+  subscribeFloatingScrollPhase,
 } from '@/services/floating-scroll-bus';
 import {
   setContentAuthorFocus,
@@ -93,20 +93,48 @@ function FloatingActionMenuComponent() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { desktop } = useResponsive();
-  const [chromeVisible, setChromeVisible] = useState(true);
   const [suppressed, setSuppressed] = useState(() => isFloatingSuppressed());
   const opacity = useRef(new Animated.Value(1)).current;
+  const opacityTargetRef = useRef(1);
+  const animRef = useRef<Animated.CompositeAnimation | null>(null);
   const [pressedKey, setPressedKey] = useState<string | null>(null);
   const [author, setAuthor] = useState<ContentAuthorFocus | null>(null);
 
   useEffect(() => subscribeContentAuthorFocus(setAuthor), []);
+  const runOpacityTo = useCallback(
+    (toValue: number, duration: number) => {
+      if (opacityTargetRef.current === toValue) return;
+      opacityTargetRef.current = toValue;
+      animRef.current?.stop();
+      opacity.stopAnimation((current) => {
+        if (Math.abs(current - toValue) < 0.02) {
+          opacity.setValue(toValue);
+          return;
+        }
+        animRef.current = Animated.timing(opacity, {
+          toValue,
+          duration,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: Platform.OS !== 'web',
+        });
+        animRef.current.start(({ finished }) => {
+          if (finished) animRef.current = null;
+        });
+      });
+    },
+    [opacity]
+  );
+
   useEffect(
     () =>
-      subscribeFloatingVisibility((next) => {
-        setChromeVisible(next);
-        setSuppressed(isFloatingSuppressed());
+      subscribeFloatingScrollPhase((next) => {
+        if (next === 'scrolling') {
+          runOpacityTo(FLOATING_SCROLL_DIM_OPACITY, FLOATING_FADE_OUT_MS);
+          return;
+        }
+        runOpacityTo(1, FLOATING_FADE_IN_MS);
       }),
-    []
+    [runOpacityTo]
   );
 
   // بذرة فقط إن لم يُحدَّد صاحب محتوى بعد — لا تستبدل صاحب المحتوى الظاهر
@@ -156,46 +184,6 @@ function FloatingActionMenuComponent() {
       forceFloatingVisible();
     }
   }, [pathname]);
-
-  const fabShown = chromeVisible && !suppressed;
-  const fabOpacityTarget = fabShown ? 1 : FLOATING_SCROLL_DIM_OPACITY;
-
-  // Smooth opacity on web + native — no translateY jump.
-  useEffect(() => {
-    opacity.stopAnimation();
-    Animated.timing(opacity, {
-      toValue: fabOpacityTarget,
-      duration: fabShown ? 240 : 180,
-      easing: fabShown ? Easing.out(Easing.cubic) : Easing.inOut(Easing.cubic),
-      useNativeDriver: Platform.OS !== 'web',
-    }).start();
-  }, [fabOpacityTarget, fabShown, opacity]);
-
-  const onFeedScreen =
-    !!pathname &&
-    (pathname.includes('/general') ||
-      pathname.includes('/highlights') ||
-      pathname.endsWith('general') ||
-      pathname.endsWith('highlights'));
-
-  // Web feed: wheel scroll dims FAB (touch uses FullScreenFeed scroll handlers).
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !onFeedScreen || suppressed) return;
-    let settleTimer: ReturnType<typeof setTimeout> | null = null;
-    const onWheel = () => {
-      noteFloatingScrollBegin('fab:wheel');
-      if (settleTimer) clearTimeout(settleTimer);
-      settleTimer = setTimeout(() => {
-        settleTimer = null;
-        noteFloatingScrollSettle('fab:wheel');
-      }, 380);
-    };
-    document.addEventListener('wheel', onWheel, { passive: true, capture: true });
-    return () => {
-      if (settleTimer) clearTimeout(settleTimer);
-      document.removeEventListener('wheel', onWheel, { capture: true });
-    };
-  }, [onFeedScreen, suppressed]);
 
   const role = currentUser?.activeRole || currentUser?.role;
   const isFollowerLike =
@@ -359,7 +347,7 @@ function FloatingActionMenuComponent() {
       style={[styles.layer, Platform.OS === 'web' && styles.layerWeb]}
     >
       <Wrap
-        pointerEvents={fabShown ? 'box-none' : 'none'}
+        pointerEvents="box-none"
         style={[
           styles.wrap,
           Platform.OS === 'web' && styles.wrapWeb,

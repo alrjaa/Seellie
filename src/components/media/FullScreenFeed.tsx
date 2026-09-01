@@ -41,9 +41,12 @@ import { useFloatingVisibility } from '@/hooks/useFloatingVisibility';
 import {
   claimFloatingScrollSource,
   forceFloatingVisible,
+  FLOATING_WHEEL_SETTLE_MS,
   noteFloatingScrollBegin,
+  noteFloatingScrollEndDrag,
   noteFloatingScrollOffset,
-  noteFloatingScrollSettle,
+  noteFloatingMomentumScrollBegin,
+  noteFloatingMomentumScrollEnd,
   releaseFloatingScrollSource,
   setFloatingSuppressed,
 } from '@/services/floating-scroll-bus';
@@ -1249,7 +1252,7 @@ function FullScreenFeedComponent({
   const onMomentumScrollBegin = useCallback(() => {
     if (!focused) return;
     if (Platform.OS === 'web') noteWebFeedScrollGesture();
-    noteFloatingScrollBegin(sourceId);
+    noteFloatingMomentumScrollBegin(sourceId);
   }, [focused, sourceId]);
   const onScroll = useCallback(
     (e: { nativeEvent: { contentOffset: { y: number } } }) => {
@@ -1261,12 +1264,12 @@ function FullScreenFeedComponent({
   const onScrollEndDrag = useCallback(() => {
     if (!focused) return;
     if (Platform.OS === 'web') noteWebFeedScrollGesture();
-    noteFloatingScrollSettle(sourceId);
+    noteFloatingScrollEndDrag(sourceId);
   }, [focused, sourceId]);
   const onMomentumScrollEnd = useCallback(() => {
     if (!focused) return;
     if (Platform.OS === 'web') noteWebFeedScrollGesture();
-    noteFloatingScrollSettle(sourceId);
+    noteFloatingMomentumScrollEnd(sourceId);
   }, [focused, sourceId]);
 
   // Web: mouse wheel — dim FAB (FlatList may not emit scroll-begin for wheel).
@@ -1280,8 +1283,8 @@ function FullScreenFeedComponent({
       if (webWheelSettleRef.current) clearTimeout(webWheelSettleRef.current);
       webWheelSettleRef.current = setTimeout(() => {
         webWheelSettleRef.current = null;
-        noteFloatingScrollSettle(sourceId);
-      }, 380);
+        noteFloatingMomentumScrollEnd(sourceId);
+      }, FLOATING_WHEEL_SETTLE_MS);
     };
     document.addEventListener('wheel', onWheel, { passive: true, capture: true });
     return () => {

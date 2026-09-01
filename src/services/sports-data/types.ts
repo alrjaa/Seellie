@@ -87,6 +87,57 @@ export type SportsDataProvider = {
     forceSync?: boolean;
   }): Promise<SportsLeagueBundle | null>;
   syncLeague?(leagueId: number): Promise<SportsLeagueBundle | null>;
+  getFixtureDetail?(fixtureId: string): Promise<SportsFixtureDetail | null>;
+};
+
+export type SportsMatchEvent = {
+  id: string;
+  minute: number;
+  extraMinute?: number;
+  type: string;
+  detail?: string;
+  teamSide: 'home' | 'away';
+  teamName: string;
+  playerName?: string;
+  assistName?: string;
+};
+
+export type SportsLineupPlayer = {
+  id: number;
+  name: string;
+  number?: number;
+  position?: string;
+  photo?: string;
+  grid?: string;
+};
+
+export type SportsTeamLineup = {
+  teamId: number;
+  teamName: string;
+  teamLogo?: string;
+  formation?: string;
+  coach?: string;
+  startXI: SportsLineupPlayer[];
+  substitutes: SportsLineupPlayer[];
+};
+
+export type SportsMatchStat = {
+  type: string;
+  home: string | number;
+  away: string | number;
+};
+
+export type SportsFixtureDetail = SportsFixture & {
+  leagueId?: number;
+  leagueName?: string;
+  season?: number;
+  venue?: string;
+  city?: string;
+  referee?: string;
+  events: SportsMatchEvent[];
+  lineups: { home?: SportsTeamLineup; away?: SportsTeamLineup };
+  statistics: SportsMatchStat[];
+  fetchedAt: string;
 };
 
 /** الدوري السعودي للمحترفين في API-Football */

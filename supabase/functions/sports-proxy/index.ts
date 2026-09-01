@@ -37,7 +37,8 @@ type Resource =
   | 'sync_all'
   | 'sync_topscorers'
   | 'window'
-  | 'topscorers';
+  | 'topscorers'
+  | 'fixture_detail';
 
 type CacheEntry = { expires: number; body: unknown };
 const memoryCache = new Map<string, CacheEntry>();
@@ -45,6 +46,7 @@ const memoryCache = new Map<string, CacheEntry>();
 const TTL_MS = {
   bundle: 2 * 60 * 1000,
   live: 30 * 1000,
+  fixtureDetail: 45 * 1000,
 };
 
 const corsHeaders: Record<string, string> = {
@@ -221,6 +223,139 @@ function mapFixtures(raw: any) {
         : null,
     round: f.league?.round ? String(f.league.round) : undefined,
   }));
+}
+
+function mapFixtureDetail(
+  fxRaw: any,
+  eventsRaw: any,
+  lineupsRaw: any,
+  statsRaw: any
+) {
+  const fx = Array.isArray(fxRaw?.response) ? fxRaw.response[0] : null;
+  if (!fx) return null;
+
+  const base = mapFixtures({ response: [fx] })[0];
+  const homeId = Number(fx.teams?.home?.id);
+  const awayId = Number(fx.teams?.away?.id);
+
+  const events = (Array.isArray(eventsRaw?.response) ? eventsRaw.response : [])
+    .map((e: any, i: number) => {
+      const teamId = Number(e.team?.id);
+      const side: 'home' | 'away' =
+        teamId === homeId ? 'home' : teamId === awayId ? 'away' : 'home';
+      return {
+        id: `${e.time?.elapsed ?? 0}-${i}-${e.type ?? ''}`,
+        minute: Number(e.time?.elapsed ?? 0),
+        extraMinute:
+          e.time?.extra != null ? Number(e.time.extra) : undefined,
+        type: String(e.type ?? ''),
+        detail: e.detail ? String(e.detail) : undefined,
+        teamSide: side,
+        teamName: String(e.team?.name ?? ''),
+        playerName: e.player?.name ? String(e.player.name) : undefined,
+        assistName: e.assist?.name ? String(e.assist.name) : undefined,
+      };
+    })
+    .sort((a: { minute: number }, b: { minute: number }) => a.minute - b.minute);
+
+  const mapPlayers = (list: any[]) =>
+    (list || []).map((row: any) => ({
+      id: Number(row.player?.id ?? 0),
+      name: String(row.player?.name ?? '—'),
+      number:
+        row.player?.number != null ? Number(row.player.number) : undefined,
+      position: row.player?.pos ? String(row.player.pos) : undefined,
+      photo: row.player?.photo ? String(row.player.photo) : undefined,
+      grid: row.player?.grid ? String(row.player.grid) : undefined,
+    }));
+
+  const lineupsList = Array.isArray(lineupsRaw?.response)
+    ? lineupsRaw.response
+    : [];
+  const homeLineup = lineupsList.find(
+    (l: any) => Number(l.team?.id) === homeId
+  );
+  const awayLineup = lineupsList.find(
+    (l: any) => Number(l.team?.id) === awayId
+  );
+
+  const mapTeamLineup = (raw: any) =>
+    raw
+      ? {
+          teamId: Number(raw.team?.id ?? 0),
+          teamName: String(raw.team?.name ?? '—'),
+          teamLogo: raw.team?.logo ? String(raw.team.logo) : undefined,
+          formation: raw.formation ? String(raw.formation) : undefined,
+          coach: raw.coach?.name ? String(raw.coach.name) : undefined,
+          startXI: mapPlayers(raw.startXI),
+          substitutes: mapPlayers(raw.substitutes),
+        }
+      : undefined;
+
+  const statsList = Array.isArray(statsRaw?.response) ? statsRaw.response : [];
+  const homeStats = statsList.find((s: any) => Number(s.team?.id) === homeId);
+  const awayStats = statsList.find((s: any) => Number(s.team?.id) === awayId);
+  const homeStatRows = Array.isArray(homeStats?.statistics)
+    ? homeStats.statistics
+    : [];
+  const awayStatRows = Array.isArray(awayStats?.statistics)
+    ? awayStats.statistics
+    : [];
+  const statTypes = new Set<string>();
+  for (const s of homeStatRows) {
+    if (s?.type) statTypes.add(String(s.type));
+  }
+  for (const s of awayStatRows) {
+    if (s?.type) statTypes.add(String(s.type));
+  }
+  const statistics = [...statTypes].map((type) => {
+    const h = homeStatRows.find((s: any) => String(s.type) === type);
+    const a = awayStatRows.find((s: any) => String(s.type) === type);
+    return {
+      type,
+      home: h?.value ?? '—',
+      away: a?.value ?? '—',
+    };
+  });
+
+  return {
+    ...base,
+    leagueId: fx.league?.id != null ? Number(fx.league.id) : undefined,
+    leagueName: fx.league?.name ? String(fx.league.name) : undefined,
+    season: fx.league?.season != null ? Number(fx.league.season) : undefined,
+    venue: fx.fixture?.venue?.name
+      ? String(fx.fixture.venue.name)
+      : undefined,
+    city: fx.fixture?.venue?.city
+      ? String(fx.fixture.venue.city)
+      : undefined,
+    referee: fx.fixture?.referee ? String(fx.fixture.referee) : undefined,
+    events,
+    lineups: {
+      home: mapTeamLineup(homeLineup),
+      away: mapTeamLineup(awayLineup),
+    },
+    statistics,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+async function fetchFixtureDetail(fixtureId: number, apiKey: string) {
+  const [fx, events, lineups, stats] = await Promise.all([
+    apiFootball(`/fixtures?id=${fixtureId}`, apiKey),
+    apiFootball(`/fixtures/events?fixture=${fixtureId}`, apiKey),
+    apiFootball(`/fixtures/lineups?fixture=${fixtureId}`, apiKey),
+    apiFootball(`/fixtures/statistics?fixture=${fixtureId}`, apiKey),
+  ]);
+  if (!fx.ok) return { ok: false as const };
+  const detail = mapFixtureDetail(
+    fx.data,
+    events.ok ? events.data : { response: [] },
+    lineups.ok ? lineups.data : { response: [] },
+    stats.ok ? stats.data : { response: [] }
+  );
+  if (!detail) return { ok: false as const };
+  return { ok: true as const, data: detail };
 }
 
 function leagueMeta(raw: any, fallbackId: number, season: number) {
@@ -895,6 +1030,7 @@ serve(async (req) => {
     leagueId?: number;
     forceSync?: boolean;
     season?: number;
+    fixtureId?: number | string;
   } = {};
   try {
     body = (await req.json()) as typeof body;
@@ -1190,6 +1326,25 @@ serve(async (req) => {
 
     cacheSet(cacheKey, r.bundle, TTL_MS.bundle);
     return json({ ok: true, cached: false, data: r.bundle });
+  }
+
+  if (resource === 'fixture_detail') {
+    const fixtureId = Number(body.fixtureId);
+    if (!Number.isFinite(fixtureId) || fixtureId <= 0) {
+      return safeError('invalid_fixture_id', 400);
+    }
+    if (!checkSyncRate('fixture_detail:global', 90, 60_000)) {
+      return safeError('rate_limited', 429);
+    }
+    const cacheKey = `fixture:${fixtureId}`;
+    const cached = cacheGet(cacheKey);
+    if (cached) return json({ ok: true, cached: true, data: cached });
+
+    if (!apiKey) return safeError('provider_not_configured', 503);
+    const r = await fetchFixtureDetail(fixtureId, apiKey);
+    if (!r.ok || !r.data) return safeError('fixture_not_found', 404);
+    cacheSet(cacheKey, r.data, TTL_MS.fixtureDetail);
+    return json({ ok: true, cached: false, data: r.data });
   }
 
   return safeError('unknown_resource', 400);

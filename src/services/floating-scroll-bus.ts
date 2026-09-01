@@ -1,39 +1,52 @@
 /**
- * ظهور/إخفاء الواجهة العائمة — عقد ثابت وموثوق.
+ * حالة شفافية الواجهة العائمة أثناء التمرير — آلة حالات واحدة.
  *
- * السلوك:
- * 1) الافتراضي: ظاهرة
- * 2) بداية تمرير / حركة معتبرة → إخفاء
- * 3) نهاية التمرير (settle) → إظهار بعد تأخير قصير
- * 4) ضمان أقصى: لن تبقى مخفية أكثر من MAX_HIDDEN_MS
- * 5) suppressFloating: يخفي زر FAB فقط دون إخفاء topOverlay (نموذج النشر في الفريد / الخاصة)
+ * idle ⇄ scrolling  (بعد توقف حقيقي + تأخير → idle)
  *
- * الخلل السابق: كل حدث onScroll كان يعيد جدولة مؤقّت الإظهار،
- * فأحداث الاهتزاز/الصفحات تمنع الظهور إلى الأبد. هنا أثناء الإخفاء
- * نتجاهل إزاحات التمرير ولا نؤجّل الظهور.
+ * لا translateY — opacity فقط. لا مرحلة restoring منفصلة (كانت تسبب رمشة).
  */
 
+export type FloatingScrollPhase = 'idle' | 'scrolling';
+
 type VisibilityListener = (visible: boolean) => void;
+type PhaseListener = (phase: FloatingScrollPhase) => void;
 
 const listeners = new Set<VisibilityListener>();
+const phaseListeners = new Set<PhaseListener>();
 
-let visible = true;
+export const FLOATING_SCROLL_DIM_OPACITY = 0.12;
+export const FLOATING_FADE_OUT_MS = 200;
+export const FLOATING_RESTORE_DELAY_MS = 520;
+export const FLOATING_FADE_IN_MS = 250;
+/** Wheel: لا settle قبل توقف التمرير الفعلي */
+export const FLOATING_WHEEL_SETTLE_MS = 650;
+/** بعد رفع الإصبع: انتظر قليلاً قبل settle إن لم يبدأ momentum */
+export const FLOATING_DRAG_SETTLE_MS = 160;
+
+const MOVE_EPS = 8;
+const MAX_SCROLLING_MS = 4000;
+
+let phase: FloatingScrollPhase = 'idle';
 let suppressFloating = false;
 let ownerId: string | null = null;
-/** المستخدم في تفاعل تمرير حالياً */
-let scrolling = false;
 let lastY: number | null = null;
-let settleTimer: ReturnType<typeof setTimeout> | null = null;
-let failsafeTimer: ReturnType<typeof setTimeout> | null = null;
+let restoreTimer: ReturnType<typeof setTimeout> | null = null;
+let dragSettleTimer: ReturnType<typeof setTimeout> | null = null;
+let scrollingFailsafeTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Opacity while user scrolls the feed — dimmed, not removed. */
-export const FLOATING_SCROLL_DIM_OPACITY = 0.12;
-const MOVE_EPS = 8;
-const SETTLE_SHOW_MS = 200;
-/** ضمان قوي: إظهار حتى لو لم يصل settle من النظام */
-const MAX_HIDDEN_MS = 850;
+function phaseToVisible(p: FloatingScrollPhase): boolean {
+  return p !== 'scrolling';
+}
 
-function notify() {
+function notifyPhase() {
+  phaseListeners.forEach((listener) => {
+    try {
+      listener(phase);
+    } catch {
+      // ignore
+    }
+  });
+  const visible = phaseToVisible(phase);
   listeners.forEach((listener) => {
     try {
       listener(visible);
@@ -43,72 +56,86 @@ function notify() {
   });
 }
 
-function emit(next: boolean) {
-  if (visible === next) return;
-  visible = next;
-  notify();
-}
-
-function clearSettleTimer() {
-  if (settleTimer) {
-    clearTimeout(settleTimer);
-    settleTimer = null;
+function clearRestoreTimer() {
+  if (restoreTimer) {
+    clearTimeout(restoreTimer);
+    restoreTimer = null;
   }
 }
 
-function clearFailsafeTimer() {
-  if (failsafeTimer) {
-    clearTimeout(failsafeTimer);
-    failsafeTimer = null;
+function clearDragSettleTimer() {
+  if (dragSettleTimer) {
+    clearTimeout(dragSettleTimer);
+    dragSettleTimer = null;
   }
 }
 
-function showNow() {
-  scrolling = false;
+function clearScrollingFailsafe() {
+  if (scrollingFailsafeTimer) {
+    clearTimeout(scrollingFailsafeTimer);
+    scrollingFailsafeTimer = null;
+  }
+}
+
+function clearAllTimers() {
+  clearRestoreTimer();
+  clearDragSettleTimer();
+  clearScrollingFailsafe();
+}
+
+function setPhase(next: FloatingScrollPhase) {
+  if (phase === next) return;
+  phase = next;
+  notifyPhase();
+}
+
+function enterIdle() {
   lastY = null;
-  clearSettleTimer();
-  clearFailsafeTimer();
-  emit(true);
+  clearAllTimers();
+  setPhase('idle');
 }
 
-function hideForScroll() {
-  emit(false);
-  // يُفعَّل مرة واحدة لكل فترة إخفاء — لا يُعاد ضبطه بأحداث التمرير
-  if (!failsafeTimer) {
-    failsafeTimer = setTimeout(() => {
-      failsafeTimer = null;
-      showNow();
-    }, MAX_HIDDEN_MS);
+function enterScrolling() {
+  clearRestoreTimer();
+  clearDragSettleTimer();
+  if (phase !== 'scrolling') {
+    setPhase('scrolling');
   }
+  clearScrollingFailsafe();
+  scrollingFailsafeTimer = setTimeout(() => {
+    scrollingFailsafeTimer = null;
+    if (phase === 'scrolling') {
+      scheduleRestore();
+    }
+  }, MAX_SCROLLING_MS);
 }
 
-function scheduleSettleShow() {
-  clearSettleTimer();
-  settleTimer = setTimeout(() => {
-    settleTimer = null;
-    showNow();
-  }, SETTLE_SHOW_MS);
+function scheduleRestore() {
+  clearRestoreTimer();
+  clearDragSettleTimer();
+  clearScrollingFailsafe();
+  lastY = null;
+  restoreTimer = setTimeout(() => {
+    restoreTimer = null;
+    if (phase === 'scrolling') {
+      setPhase('idle');
+    }
+  }, FLOATING_RESTORE_DELAY_MS);
 }
 
-function acceptsSource(sourceId: string) {
-  return ownerId == null || ownerId === sourceId;
+function internalSettle() {
+  if (phase !== 'scrolling') return;
+  scheduleRestore();
 }
 
-/**
- * إخفاء عمود الأزرار العائمة فقط (FAB).
- * لا يخفي topOverlay في FullScreenFeed — حتى يبقى نموذج نشر الفريد ظاهراً.
- */
 export function setFloatingSuppressed(suppressed: boolean) {
   suppressFloating = suppressed;
-  scrolling = false;
   lastY = null;
-  clearSettleTimer();
-  clearFailsafeTimer();
-  if (suppressed) {
-    // أبقِ chrome/overlay كما هو؛ FAB يقرأ isFloatingSuppressed()
-    notify();
+  clearAllTimers();
+  if (!suppressed) {
+    enterIdle();
   } else {
-    emit(true);
+    notifyPhase();
   }
 }
 
@@ -116,9 +143,21 @@ export function isFloatingSuppressed() {
   return suppressFloating;
 }
 
+export function getFloatingScrollPhase(): FloatingScrollPhase {
+  return phase;
+}
+
+export function subscribeFloatingScrollPhase(listener: PhaseListener) {
+  phaseListeners.add(listener);
+  listener(phase);
+  return () => {
+    phaseListeners.delete(listener);
+  };
+}
+
 export function subscribeFloatingVisibility(listener: VisibilityListener) {
   listeners.add(listener);
-  listener(visible);
+  listener(phaseToVisible(phase));
   return () => {
     listeners.delete(listener);
   };
@@ -126,44 +165,30 @@ export function subscribeFloatingVisibility(listener: VisibilityListener) {
 
 export function claimFloatingScrollSource(sourceId: string) {
   ownerId = sourceId;
-  scrolling = false;
-  lastY = null;
-  clearSettleTimer();
-  clearFailsafeTimer();
-  emit(true);
+  enterIdle();
 }
 
 export function releaseFloatingScrollSource(sourceId: string) {
   if (ownerId !== sourceId) return;
   ownerId = null;
-  scrolling = false;
-  lastY = null;
-  clearSettleTimer();
-  clearFailsafeTimer();
-  emit(true);
+  enterIdle();
 }
 
 export function noteFloatingScrollBegin(sourceId: string) {
   if (suppressFloating) return;
   if (ownerId == null) ownerId = sourceId;
-  scrolling = true;
   lastY = null;
-  clearSettleTimer();
-  hideForScroll();
+  enterScrolling();
 }
 
-/**
- * أثناء الإخفاء/التمرير: نحدّث lastY فقط — بدون تأجيل الظهور.
- * إن كنا ظاهرين وحصلت حركة معتبرة: نبدأ الإخفاء مرة واحدة.
- */
 export function noteFloatingScrollOffset(sourceId: string, y: number) {
   if (suppressFloating) return;
-  if (!acceptsSource(sourceId)) return;
+  if (ownerId != null && ownerId !== sourceId) return;
   if (ownerId == null) ownerId = sourceId;
 
   const offset = Math.max(0, y);
 
-  if (scrolling || !visible) {
+  if (phase === 'scrolling') {
     lastY = offset;
     notifyScrollLayoutListeners();
     return;
@@ -179,34 +204,43 @@ export function noteFloatingScrollOffset(sourceId: string, y: number) {
   lastY = offset;
   if (dy < MOVE_EPS) return;
 
-  scrolling = true;
-  clearSettleTimer();
-  hideForScroll();
+  enterScrolling();
   notifyScrollLayoutListeners();
 }
 
-export function noteFloatingScrollSettle(sourceId: string) {
+/** بعد رفع الإصبع — settle مؤجّل فقط إن لم يبدأ momentum */
+export function noteFloatingScrollEndDrag(sourceId: string) {
   if (suppressFloating) return;
-  scrolling = false;
-  lastY = null;
-  scheduleSettleShow();
-  notifyScrollLayoutListeners();
+  clearDragSettleTimer();
+  dragSettleTimer = setTimeout(() => {
+    dragSettleTimer = null;
+    internalSettle();
+  }, FLOATING_DRAG_SETTLE_MS);
+}
+
+export function noteFloatingMomentumScrollBegin(sourceId: string) {
+  if (suppressFloating) return;
+  clearDragSettleTimer();
+  noteFloatingScrollBegin(sourceId);
+}
+
+export function noteFloatingMomentumScrollEnd(sourceId: string) {
+  if (suppressFloating) return;
+  clearDragSettleTimer();
+  internalSettle();
+}
+
+/** @deprecated استخدم noteFloatingMomentumScrollEnd أو noteFloatingScrollEndDrag */
+export function noteFloatingScrollSettle(_sourceId: string) {
+  internalSettle();
 }
 
 export function forceFloatingVisible() {
-  showNow();
+  enterIdle();
 }
 
 export function forceFloatingHidden() {
-  clearSettleTimer();
-  scrolling = false;
-  emit(false);
-  if (!suppressFloating && !failsafeTimer) {
-    failsafeTimer = setTimeout(() => {
-      failsafeTimer = null;
-      showNow();
-    }, MAX_HIDDEN_MS);
-  }
+  enterScrolling();
 }
 
 type ScrollLayoutListener = () => void;
@@ -222,7 +256,6 @@ function notifyScrollLayoutListeners() {
   });
 }
 
-/** Inline video visibility checks (measureInWindow) — event-driven on scroll. */
 export function subscribeScrollLayoutChecks(listener: ScrollLayoutListener) {
   scrollLayoutListeners.add(listener);
   return () => {

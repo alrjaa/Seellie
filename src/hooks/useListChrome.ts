@@ -6,8 +6,10 @@ import {
   claimFloatingScrollSource,
   forceFloatingVisible,
   noteFloatingScrollBegin,
+  noteFloatingScrollEndDrag,
   noteFloatingScrollOffset,
-  noteFloatingScrollSettle,
+  noteFloatingMomentumScrollBegin,
+  noteFloatingMomentumScrollEnd,
   releaseFloatingScrollSource,
 } from '@/services/floating-scroll-bus';
 import { screenContentBottomPadding } from '@/theme/navigation';
@@ -66,17 +68,17 @@ export function useListChrome(options: Options = {}) {
 
   const onScrollEndDrag = useCallback(() => {
     if (!enabled || !focused) return;
-    noteFloatingScrollSettle(sourceId);
+    noteFloatingScrollEndDrag(sourceId);
   }, [enabled, focused, sourceId]);
 
   const onMomentumScrollBegin = useCallback(() => {
     if (!enabled || !focused) return;
-    noteFloatingScrollBegin(sourceId);
+    noteFloatingMomentumScrollBegin(sourceId);
   }, [enabled, focused, sourceId]);
 
   const onMomentumScrollEnd = useCallback(() => {
     if (!enabled || !focused) return;
-    noteFloatingScrollSettle(sourceId);
+    noteFloatingMomentumScrollEnd(sourceId);
   }, [enabled, focused, sourceId]);
 
   const paddingBottom = screenContentBottomPadding({

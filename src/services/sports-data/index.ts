@@ -4,9 +4,13 @@ import type { SportsDataProvider } from './types';
 export type {
   SportsDataProvider,
   SportsFixture,
+  SportsFixtureDetail,
   SportsHealth,
   SportsLeagueBundle,
+  SportsMatchEvent,
+  SportsMatchStat,
   SportsStandingRow,
+  SportsTeamLineup,
   SportsTopScorerRow,
   SeasonWindow,
 } from './types';
