@@ -26,6 +26,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useTranslation } from '@/providers/LanguageProvider';
+import { useInlineVideoVisibility } from '@/hooks/useInlineVideoVisibility';
+import { useNativeFeedVideoAutoplay } from '@/hooks/useNativeFeedVideoAutoplay';
 import { clamp } from '@/theme/tokens';
 import {
   attachSoundToPlayingVideo,
@@ -35,6 +37,13 @@ import {
   subscribeWebMediaSound,
   unregisterActiveWebVideo,
 } from '@/services/web-media-sound';
+import { isRealMediaFailure } from '@/services/media-autoplay-engine';
+import {
+  INLINE_VISIBILITY_PLAY_RATIO,
+  INLINE_VISIBILITY_STOP_RATIO,
+  nextInlineVisibilityAutoplay,
+  shouldMarkNativePlaybackFailed,
+} from '@/services/native-feed-autoplay-policy';
 
 type Props = {
   uri: string;
@@ -42,7 +51,7 @@ type Props = {
   height?: number;
   style?: ViewStyle;
   /**
-   * تشغيل صامت تلقائي عند ظهور الفيديو في الشاشة.
+   * تشغيل تلقائي عند ظهور الفيديو في الشاشة.
    * الافتراضي true على الويب؛ يتوقف عند التمرير بعيدًا.
    */
   autoPlayMuted?: boolean;
@@ -50,7 +59,7 @@ type Props = {
 
 /**
  * لقطة فيديو داخل البطاقة (ويب + جوال).
- * على الويب: يعمل عند الظهور ويتوقف عند التخطي.
+ * يستخدم محرك Native المركزي على iOS/Android.
  */
 function InlineVideoPlayerComponent({
   uri,
@@ -64,12 +73,29 @@ function InlineVideoPlayerComponent({
   const focused = useIsFocused();
   const { width, height: winH, tablet } = useResponsive();
   const [fullscreen, setFullscreen] = useState(false);
-  const [inView, setInView] = useState(Platform.OS !== 'web');
+  const [webInView, setWebInView] = useState(false);
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const videoRef = useRef<VideoType | null>(null);
   const fullRef = useRef<VideoType | null>(null);
   const htmlRef = useRef<HTMLVideoElement | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const webVisibleRef = useRef(false);
+  const observerTargetRef = useRef<HTMLVideoElement | null>(null);
+
+  const autoplayEnabled = autoPlayMuted;
+  const { containerRef, inView: nativeInView } = useInlineVideoVisibility({
+    enabled: Platform.OS !== 'web' && autoplayEnabled && focused && !fullscreen,
+  });
+
+  const inView = Platform.OS === 'web' ? webInView : nativeInView;
+
+  const nativeAutoplay = useNativeFeedVideoAutoplay({
+    playerId: uri,
+    active:
+      autoplayEnabled && focused && inView && !fullscreen && !playbackFailed,
+    playable: !!uri && /^https?:\/\//i.test(uri.trim()),
+    videoRef,
+  });
 
   const playerHeight = useMemo(() => {
     if (typeof heightProp === 'number') return heightProp;
@@ -100,13 +126,17 @@ function InlineVideoPlayerComponent({
   const stopAll = useCallback(() => {
     stopInline();
     void fullRef.current?.pauseAsync().catch(() => undefined);
-    // FIX-04 P1: release native decoder resources on stop/unmount (not web-only)
-    void videoRef.current?.unloadAsync().catch(() => undefined);
-    void fullRef.current?.unloadAsync().catch(() => undefined);
+    if (Platform.OS === 'web') {
+      void videoRef.current?.unloadAsync().catch(() => undefined);
+      void fullRef.current?.unloadAsync().catch(() => undefined);
+    }
     setFullscreen(false);
   }, [stopInline]);
 
-  const markPlaybackFailed = useCallback(() => {
+  const markPlaybackFailed = useCallback((error?: unknown) => {
+    if (error != null && Platform.OS !== 'web') {
+      if (!shouldMarkNativePlaybackFailed(error)) return;
+    }
     setPlaybackFailed(true);
     htmlRef.current?.pause();
     void videoRef.current?.pauseAsync().catch(() => undefined);
@@ -114,53 +144,73 @@ function InlineVideoPlayerComponent({
     setFullscreen(false);
   }, []);
 
-  const bindWebVideo = useCallback(
-    (node: HTMLVideoElement | null) => {
+  const setupWebObserver = useCallback(
+    (node: HTMLVideoElement) => {
+      if (observerRef.current && observerTargetRef.current === node) return;
       observerRef.current?.disconnect();
       observerRef.current = null;
-      htmlRef.current = node;
-      if (!node) return;
+      observerTargetRef.current = node;
 
-      node.onerror = () => markPlaybackFailed();
-      node.playsInline = true;
-      node.loop = true;
-      node.muted = true;
-      node.defaultMuted = true;
-      registerActiveWebVideo(node);
-      void startVisibleWebVideo(node).then(() => {
-        attachSoundToPlayingVideo(node);
-      });
-
-      if (!autoPlayMuted || typeof IntersectionObserver === 'undefined') {
-        setInView(true);
+      if (!autoplayEnabled || typeof IntersectionObserver === 'undefined') {
+        webVisibleRef.current = true;
+        setWebInView(true);
         return;
       }
 
       const io = new IntersectionObserver(
         (entries) => {
           const entry = entries[0];
-          const visible =
-            !!entry?.isIntersecting && (entry.intersectionRatio ?? 0) >= 0.3;
-          setInView(visible);
-          const el = htmlRef.current;
-          if (!el) return;
-          if (visible && focused && !fullscreen) {
-            registerActiveWebVideo(el);
-            void startVisibleWebVideo(el).then(() => {
-              attachSoundToPlayingVideo(el);
-            });
-          } else {
-            el.pause();
-            unregisterActiveWebVideo(el);
-          }
+          const ratio = entry?.intersectionRatio ?? 0;
+          const next = nextInlineVisibilityAutoplay(
+            webVisibleRef.current,
+            ratio,
+            INLINE_VISIBILITY_PLAY_RATIO,
+            INLINE_VISIBILITY_STOP_RATIO
+          );
+          if (next === webVisibleRef.current) return;
+          webVisibleRef.current = next;
+          setWebInView(next);
         },
-        { threshold: [0, 0.3, 0.6, 1] }
+        {
+          threshold: [
+            0,
+            INLINE_VISIBILITY_STOP_RATIO,
+            INLINE_VISIBILITY_PLAY_RATIO,
+            0.75,
+            1,
+          ],
+        }
       );
       io.observe(node);
       observerRef.current = io;
     },
-    [autoPlayMuted, focused, fullscreen, markPlaybackFailed]
+    [autoplayEnabled]
   );
+
+  const bindWebVideo = useCallback(
+    (node: HTMLVideoElement | null) => {
+      if (!node) {
+        observerRef.current?.disconnect();
+        observerRef.current = null;
+        observerTargetRef.current = null;
+        htmlRef.current = null;
+        return;
+      }
+
+      htmlRef.current = node;
+      node.onerror = () => markPlaybackFailed();
+      node.playsInline = true;
+      node.loop = true;
+      node.muted = true;
+      node.defaultMuted = true;
+      registerActiveWebVideo(node);
+      setupWebObserver(node);
+    },
+    [markPlaybackFailed, setupWebObserver]
+  );
+
+  const shouldAutoPlay =
+    autoplayEnabled && focused && inView && !fullscreen && !playbackFailed;
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -174,15 +224,18 @@ function InlineVideoPlayerComponent({
 
   useEffect(() => {
     setPlaybackFailed(false);
+    webVisibleRef.current = false;
+    setWebInView(false);
   }, [uri]);
 
   useEffect(() => {
     return () => {
       observerRef.current?.disconnect();
       observerRef.current = null;
+      observerTargetRef.current = null;
       htmlRef.current?.pause();
     };
-  }, [uri]);
+  }, []);
 
   useEffect(() => {
     if (!focused) {
@@ -199,29 +252,26 @@ function InlineVideoPlayerComponent({
     return () => sub.remove();
   }, [stopAll]);
 
-  const shouldAutoPlay =
-    autoPlayMuted && focused && inView && !fullscreen && !playbackFailed;
-
   useEffect(() => {
-    if (playbackFailed) return;
-    if (Platform.OS === 'web') {
-      const el = htmlRef.current;
-      if (!el) return;
-      el.muted = true;
-      if (shouldAutoPlay) {
-        void startVisibleWebVideo(el).then(() => {
-          attachSoundToPlayingVideo(el);
-        });
-      } else el.pause();
-      return;
-    }
-    if (!autoPlayMuted) return;
+    if (playbackFailed || Platform.OS !== 'web') return;
+    const el = htmlRef.current;
+    if (!el) return;
+    el.muted = true;
     if (shouldAutoPlay) {
-      void videoRef.current?.playAsync().catch(() => undefined);
+      void startVisibleWebVideo(el).then((result) => {
+        if (result === 'failed') {
+          markPlaybackFailed();
+          return;
+        }
+        if (result === 'playing') {
+          attachSoundToPlayingVideo(el);
+        }
+      });
     } else {
-      stopInline();
+      el.pause();
+      unregisterActiveWebVideo(el);
     }
-  }, [shouldAutoPlay, autoPlayMuted, stopInline, uri, playbackFailed]);
+  }, [shouldAutoPlay, playbackFailed, markPlaybackFailed]);
 
   if (!uri) return null;
 
@@ -267,6 +317,7 @@ function InlineVideoPlayerComponent({
   return (
     <>
       <View
+        ref={containerRef}
         collapsable={false}
         style={[
           styles.wrap,
@@ -289,8 +340,8 @@ function InlineVideoPlayerComponent({
             loop: true,
             playsInline: true,
             preload: 'auto',
-            controls: !autoPlayMuted,
-            onError: markPlaybackFailed,
+            controls: !autoplayEnabled,
+            onError: () => markPlaybackFailed(),
             style: {
               width: '100%',
               height: '100%',
@@ -305,11 +356,17 @@ function InlineVideoPlayerComponent({
             source={{ uri }}
             style={styles.video}
             resizeMode={ResizeMode.CONTAIN}
-            useNativeControls={!autoPlayMuted}
-            isLooping={autoPlayMuted}
-            shouldPlay={shouldAutoPlay}
-            isMuted={autoPlayMuted}
-            onError={markPlaybackFailed}
+            useNativeControls={!autoplayEnabled}
+            isLooping={autoplayEnabled}
+            shouldPlay={nativeAutoplay.shouldPlay}
+            isMuted={false}
+            volume={1}
+            onLoad={nativeAutoplay.markReady}
+            onReadyForDisplay={nativeAutoplay.markReady}
+            onError={(e) => {
+              if (shouldMarkNativePlaybackFailed(e)) markPlaybackFailed(e);
+            }}
+            onPlaybackStatusUpdate={nativeAutoplay.onNativePlaybackStatusUpdate}
           />
         ) : (
           <View
@@ -355,7 +412,13 @@ function InlineVideoPlayerComponent({
             shouldPlay
             isMuted={false}
             isLooping={false}
-            onError={markPlaybackFailed}
+            onError={(e) => {
+              if (Platform.OS === 'web' && isRealMediaFailure(e)) {
+                markPlaybackFailed(e);
+                return;
+              }
+              if (shouldMarkNativePlaybackFailed(e)) markPlaybackFailed(e);
+            }}
             {...(Platform.OS === 'web'
               ? ({ playsInline: true } as object)
               : null)}

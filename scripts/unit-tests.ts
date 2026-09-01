@@ -59,6 +59,24 @@ import {
   nextWebSoundSession,
   startVisibleWebVideo,
 } from '../src/services/web-media-sound';
+import {
+  attemptMutedAutoplay,
+  attemptUnmuteWhilePlaying,
+  classifyPlayError,
+  isRealMediaFailure,
+} from '../src/services/media-autoplay-engine';
+import {
+  isNativePlaybackMediaFailure,
+  shouldAttemptNativeFeedAutoplay,
+  hasPendingNativeAutoplayRequest,
+  shouldMarkNativePlaybackFailed,
+  nextInlineVisibilityAutoplay,
+  computeVisibleHeightRatio,
+  isStalePlayGeneration,
+  shouldPauseOnDeactivate,
+  INLINE_VISIBILITY_PLAY_RATIO,
+  INLINE_VISIBILITY_STOP_RATIO,
+} from '../src/services/native-feed-autoplay-policy';
 
 function test(name: string, fn: () => void) {
   try {
@@ -485,6 +503,205 @@ test('attach sound keeps playback when unmute is allowed', () => {
   assert.equal(attachSoundToPlayingVideo(el), 'unmuted');
   assert.equal(el.muted, false);
   assert.equal(el.paused, false);
+});
+
+test('classify NotAllowedError as autoplay policy not media failure', () => {
+  assert.equal(
+    classifyPlayError({ name: 'NotAllowedError', message: 'play() failed' }),
+    'policy'
+  );
+  assert.equal(isRealMediaFailure({ name: 'NotAllowedError' }), false);
+});
+
+test('classify AbortError as transition race not media failure', () => {
+  assert.equal(
+    classifyPlayError({ name: 'AbortError', message: 'interrupted' }),
+    'abort'
+  );
+  assert.equal(isRealMediaFailure({ name: 'AbortError' }), false);
+});
+
+test('muted autoplay starts without treating policy block as failure', async () => {
+  const el = {
+    muted: false,
+    defaultMuted: false,
+    volume: 0,
+    paused: true,
+    play: async () => {
+      el.paused = false;
+    },
+  };
+  assert.equal(await attemptMutedAutoplay(el), 'playing');
+  assert.equal(el.muted, true);
+});
+
+test('stale play generation aborts without media failure', async () => {
+  let gen = 0;
+  const el = {
+    muted: true,
+    defaultMuted: true,
+    volume: 1,
+    paused: true,
+    play: async () => {
+      gen += 1;
+      el.paused = false;
+    },
+  };
+  const result = await attemptMutedAutoplay(el, {
+    generation: 0,
+    getGeneration: () => gen,
+  });
+  assert.equal(result, 'aborted');
+});
+
+test('unmute after user activation keeps video playing when blocked', () => {
+  let muted = true;
+  let paused = false;
+  const el = {
+    volume: 1,
+    defaultMuted: true,
+    get muted() {
+      return muted;
+    },
+    set muted(value: boolean) {
+      muted = value;
+      if (value === false) paused = true;
+    },
+    get paused() {
+      return paused;
+    },
+    play() {
+      paused = false;
+    },
+  };
+  assert.equal(attemptUnmuteWhilePlaying(el), 'muted_still_playing');
+  assert.equal(el.muted, true);
+  assert.equal(el.paused, false);
+});
+
+test('native feed shouldAttemptNativeFeedAutoplay requires ready + active', () => {
+  assert.equal(
+    shouldAttemptNativeFeedAutoplay({
+      active: true,
+      playable: true,
+      ready: false,
+      userPaused: false,
+      loadError: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldAttemptNativeFeedAutoplay({
+      active: true,
+      playable: true,
+      ready: true,
+      userPaused: false,
+      loadError: false,
+    }),
+    true
+  );
+});
+
+test('native playback media failure ignores abort errors', () => {
+  assert.equal(isNativePlaybackMediaFailure(new Error('Playback interrupted')), false);
+  assert.equal(isNativePlaybackMediaFailure(new Error('Network failed')), true);
+});
+
+test('native policy/autoplay errors are not media failures', () => {
+  assert.equal(shouldMarkNativePlaybackFailed(new Error('NotAllowedError')), false);
+  assert.equal(shouldMarkNativePlaybackFailed(new Error('autoplay blocked')), false);
+  assert.equal(shouldMarkNativePlaybackFailed(new Error('decode error')), true);
+});
+
+test('native feed autoplay starts with audio enabled when ready', () => {
+  assert.equal(
+    shouldAttemptNativeFeedAutoplay({
+      active: true,
+      playable: true,
+      ready: true,
+      userPaused: false,
+      loadError: false,
+    }),
+    true
+  );
+  assert.equal(
+    shouldAttemptNativeFeedAutoplay({
+      active: true,
+      playable: true,
+      ready: true,
+      userPaused: true,
+      loadError: false,
+    }),
+    false
+  );
+});
+
+test('inline visibility hysteresis play at 50% stop at 20%', () => {
+  assert.equal(
+    nextInlineVisibilityAutoplay(false, INLINE_VISIBILITY_PLAY_RATIO - 0.01),
+    false
+  );
+  assert.equal(
+    nextInlineVisibilityAutoplay(false, INLINE_VISIBILITY_PLAY_RATIO),
+    true
+  );
+  assert.equal(
+    nextInlineVisibilityAutoplay(true, INLINE_VISIBILITY_STOP_RATIO),
+    false
+  );
+  assert.equal(
+    nextInlineVisibilityAutoplay(true, INLINE_VISIBILITY_STOP_RATIO + 0.01),
+    true
+  );
+});
+
+test('computeVisibleHeightRatio measures intersection', () => {
+  assert.equal(computeVisibleHeightRatio(0, 200, 800), 1);
+  assert.equal(computeVisibleHeightRatio(-50, 200, 800), 0.75);
+  assert.equal(computeVisibleHeightRatio(700, 200, 800), 0.5);
+});
+
+test('stale native play generation is detected', () => {
+  assert.equal(isStalePlayGeneration(0, 1), true);
+  assert.equal(isStalePlayGeneration(2, 2), false);
+});
+
+test('native feed pauses when slide deactivates', () => {
+  assert.equal(shouldPauseOnDeactivate(false), true);
+  assert.equal(shouldPauseOnDeactivate(true), false);
+});
+
+test('pending native autoplay when active before ready', () => {
+  assert.equal(
+    hasPendingNativeAutoplayRequest({
+      active: true,
+      playable: true,
+      ready: false,
+      userPaused: false,
+      loadError: false,
+    }),
+    true
+  );
+  assert.equal(
+    shouldAttemptNativeFeedAutoplay({
+      active: true,
+      playable: true,
+      ready: false,
+      userPaused: false,
+      loadError: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldAttemptNativeFeedAutoplay({
+      active: true,
+      playable: true,
+      ready: true,
+      userPaused: false,
+      loadError: false,
+    }),
+    true
+  );
 });
 
 console.log('All tests passed.');

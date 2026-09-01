@@ -25,7 +25,8 @@ import {
 import { transparentHeaderOptions } from '@/theme/navigation';
 import { layoutDirectionStyle } from '@/theme/direction';
 import { injectDesktopWebStyles } from '@/theme/desktop-web';
-import { installWebMediaSoundUnlock } from '@/services/web-media-sound';
+import { installMediaUserActivation } from '@/services/media-user-activation';
+import { ensureNativeFeedAudioSession } from '@/services/native-feed-autoplay';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -39,8 +40,13 @@ function RootNavigator() {
   }, []);
 
   useEffect(() => {
+    if (Platform.OS === 'web') return;
+    void ensureNativeFeedAudioSession();
+  }, []);
+
+  useEffect(() => {
     if (Platform.OS !== 'web') return;
-    return installWebMediaSoundUnlock();
+    return installMediaUserActivation();
   }, []);
 
   useEffect(() => {

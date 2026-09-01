@@ -73,6 +73,11 @@ import {
   subscribeWebMediaSound,
   unregisterActiveWebVideo,
 } from '@/services/web-media-sound';
+import {
+  attemptMutedAutoplay,
+  isRealMediaFailure,
+} from '@/services/media-autoplay-engine';
+import { useNativeFeedVideoAutoplay } from '@/hooks/useNativeFeedVideoAutoplay';
 import { ReasonModal } from '@/components/feedback/ReasonModal';
 
 export type FullScreenContentComment = {
@@ -447,36 +452,134 @@ const Slide = memo(function Slide({
   const playableUri =
     !!item.mediaUrl && /^https?:\/\//i.test(item.mediaUrl.trim());
 
+  const nativeAutoplay = useNativeFeedVideoAutoplay({
+    playerId: item.id,
+    active,
+    playable: playableUri,
+    videoRef,
+    onPlaying: trackVideoStart,
+  });
+
+  const effectiveLoadError =
+    Platform.OS === 'web' ? loadError : nativeAutoplay.loadError;
+
+  const requestWebAutoplay = useCallback(
+    (el: HTMLVideoElement | null) => {
+      if (
+        Platform.OS !== 'web' ||
+        !el ||
+        !active ||
+        !playableUri ||
+        loadError ||
+        userPausedRef.current
+      ) {
+        return;
+      }
+      const gen = playGenRef.current;
+      const run = async () => {
+        if (el.readyState < 2) {
+          await new Promise<void>((resolve) => {
+            if (el.readyState >= 2) {
+              resolve();
+              return;
+            }
+            const onReady = () => {
+              el.removeEventListener('loadeddata', onReady);
+              el.removeEventListener('canplay', onReady);
+              resolve();
+            };
+            el.addEventListener('loadeddata', onReady);
+            el.addEventListener('canplay', onReady);
+          });
+        }
+        if (playGenRef.current !== gen || !active) return;
+        return attemptMutedAutoplay(el, {
+          generation: gen,
+          getGeneration: () => playGenRef.current,
+        });
+      };
+      void run().then((result) => {
+        if (!result) return;
+        if (playGenRef.current !== gen) return;
+        if (result === 'failed') {
+          setLoadError(true);
+          setPaused(true);
+          return;
+        }
+        if (result === 'aborted') return;
+        setFrameReady(true);
+        setPaused(false);
+        if (result === 'playing') {
+          attachSoundToPlayingVideo(el);
+          trackVideoStart();
+        }
+      });
+    },
+    [active, playableUri, loadError, trackVideoStart]
+  );
+
+  const bindHtmlVideoRef = useCallback(
+    (node: HTMLVideoElement | null) => {
+      const prev = htmlVideoRef.current;
+      if (prev && prev !== node) unregisterActiveWebVideo(prev);
+      htmlVideoRef.current = node;
+      if (!node) {
+        unregisterActiveWebVideo(node);
+        return;
+      }
+      registerActiveWebVideo(node, () => userPausedRef.current);
+      if (item.mediaUrl && node.getAttribute('src') !== item.mediaUrl) {
+        node.src = item.mediaUrl;
+      }
+      node.muted = true;
+      node.defaultMuted = true;
+      node.playsInline = true;
+      node.loop = true;
+      requestWebAutoplay(node);
+    },
+    [item.mediaUrl, requestWebAutoplay]
+  );
+
   useEffect(() => {
-    setLoadError(false);
+    if (Platform.OS === 'web') {
+      setLoadError(false);
+    }
     setFrameReady(false);
+    userPausedRef.current = false;
     setPaused(true);
-    void videoRef.current?.pauseAsync().catch(() => undefined);
-    const el = htmlVideoRef.current;
-    if (el) {
-      el.pause();
+    if (Platform.OS === 'web') {
+      void videoRef.current?.pauseAsync().catch(() => undefined);
+      const el = htmlVideoRef.current;
+      if (el) el.pause();
     }
   }, [item.id, item.mediaUrl]);
 
   useEffect(() => {
     if (!active) {
-      playGenRef.current += 1;
       setPaused(true);
-      userPausedRef.current = false;
-      void videoRef.current?.pauseAsync().catch(() => undefined);
-      const el = htmlVideoRef.current;
-      if (el) el.pause();
-      void videoRef.current?.unloadAsync().catch(() => undefined);
+      if (Platform.OS === 'web') {
+        playGenRef.current += 1;
+        userPausedRef.current = false;
+        void videoRef.current?.pauseAsync().catch(() => undefined);
+        const el = htmlVideoRef.current;
+        if (el) el.pause();
+      }
       return;
     }
     setPaused(false);
-  }, [active]);
+    userPausedRef.current = false;
+    if (Platform.OS === 'web') {
+      requestWebAutoplay(htmlVideoRef.current);
+    }
+  }, [active, requestWebAutoplay]);
 
   useEffect(() => {
     return () => {
       playGenRef.current += 1;
       void videoRef.current?.pauseAsync().catch(() => undefined);
-      void videoRef.current?.unloadAsync().catch(() => undefined);
+      if (Platform.OS === 'web') {
+        void videoRef.current?.unloadAsync().catch(() => undefined);
+      }
       htmlVideoRef.current?.pause();
       htmlVideoRef.current = null;
     };
@@ -491,64 +594,8 @@ const Slide = memo(function Slide({
     });
   }, []);
 
-  // ويب: تشغيل صامت فور الظهور — نفس مسار d8b6ce6. الصوت يُلحق بعد أن يعمل.
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !active || !playableUri || loadError || paused) {
-      return;
-    }
-    if (userPausedRef.current) return;
-    const el = htmlVideoRef.current;
-    if (!el || !item.mediaUrl) return;
-    if (el.getAttribute('src') !== item.mediaUrl) {
-      el.src = item.mediaUrl;
-    }
-    el.muted = true;
-    el.defaultMuted = true;
-    el.playsInline = true;
-    el.loop = true;
-    registerActiveWebVideo(el, () => userPausedRef.current);
-    const run = el.play();
-    if (run && typeof run.then === 'function') {
-      void run
-        .then(() => {
-          setFrameReady(true);
-          setPaused(false);
-          attachSoundToPlayingVideo(el);
-          trackVideoStart();
-        })
-        .catch(() => {
-          setFrameReady(true);
-        });
-    } else {
-      setFrameReady(true);
-    }
-    return () => unregisterActiveWebVideo(el);
-  }, [active, playableUri, loadError, paused, item.mediaUrl, trackVideoStart]);
-
-  // أصلي: تشغيل تلقائي عند الظهور
-  useEffect(() => {
-    if (Platform.OS === 'web' || !active || !playableUri || loadError || paused) {
-      return;
-    }
-    const gen = playGenRef.current;
-    void videoRef.current?.playAsync()
-      .then(() => {
-        if (playGenRef.current !== gen) {
-          void videoRef.current?.pauseAsync().catch(() => undefined);
-          void videoRef.current?.unloadAsync().catch(() => undefined);
-        } else {
-          trackVideoStart();
-        }
-      })
-      .catch(() => {
-        if (playGenRef.current !== gen) return;
-        setLoadError(true);
-        setPaused(true);
-      });
-  }, [active, playableUri, loadError, paused]);
-
   const toggleVideoPlayback = useCallback(async () => {
-    if (!playableUri || loadError) return;
+    if (!playableUri || effectiveLoadError) return;
     try {
       if (Platform.OS === 'web') {
         const el = htmlVideoRef.current;
@@ -565,18 +612,19 @@ const Slide = memo(function Slide({
         }
         return;
       }
-      if (paused) {
-        setPaused(false);
-        await videoRef.current?.playAsync();
-      } else {
-        setPaused(true);
-        await videoRef.current?.pauseAsync();
+      await nativeAutoplay.toggleUserPause();
+      const player = videoRef.current;
+      if (player) {
+        const status = await player.getStatusAsync();
+        setPaused(status.isLoaded ? !status.isPlaying : true);
       }
-    } catch {
-      setLoadError(true);
-      setPaused(true);
+    } catch (err) {
+      if (Platform.OS === 'web' && isRealMediaFailure(err)) {
+        setLoadError(true);
+        setPaused(true);
+      }
     }
-  }, [paused, playableUri, loadError]);
+  }, [paused, playableUri, effectiveLoadError, nativeAutoplay]);
 
   const handleLikePress = useCallback(() => {
     if (sponsored) return;
@@ -680,16 +728,9 @@ const Slide = memo(function Slide({
             onPress={handleContentPress}
             style={styles.videoFill}
           >
-            {playableUri && !loadError && active && Platform.OS === 'web'
+            {playableUri && !effectiveLoadError && active && Platform.OS === 'web'
               ? createElement('video', {
-                  ref: (node: HTMLVideoElement | null) => {
-                    htmlVideoRef.current = node;
-                    if (node) {
-                      registerActiveWebVideo(node, () => userPausedRef.current);
-                    } else {
-                      unregisterActiveWebVideo(node);
-                    }
-                  },
+                  ref: bindHtmlVideoRef,
                   src: item.mediaUrl,
                   muted: true,
                   defaultMuted: true,
@@ -711,7 +752,10 @@ const Slide = memo(function Slide({
                     setLoadError(true);
                     setPaused(true);
                   },
-                  onLoadedData: () => setFrameReady(true),
+                  onLoadedData: () => {
+                    setFrameReady(true);
+                    requestWebAutoplay(htmlVideoRef.current);
+                  },
                   onPlaying: () => {
                     setFrameReady(true);
                     setPaused(false);
@@ -721,36 +765,43 @@ const Slide = memo(function Slide({
                 })
               : null}
 
-            {playableUri && !loadError && active && Platform.OS !== 'web' ? (
+            {playableUri && !effectiveLoadError && Platform.OS !== 'web' ? (
               <Video
                 ref={videoRef}
                 source={{ uri: item.mediaUrl! }}
-                style={StyleSheet.absoluteFill}
+                style={[
+                  StyleSheet.absoluteFill,
+                  !active ? styles.nativeVideoInactive : null,
+                ]}
                 resizeMode={ResizeMode.COVER}
-                shouldPlay={!paused}
+                shouldPlay={nativeAutoplay.shouldPlay}
                 isLooping
                 isMuted={false}
+                volume={1}
                 useNativeControls={false}
                 pointerEvents="none"
-                onReadyForDisplay={() => setFrameReady(true)}
-                onError={() => {
-                  setLoadError(true);
-                  setPaused(true);
+                onLoad={nativeAutoplay.markReady}
+                onReadyForDisplay={nativeAutoplay.markReady}
+                onError={(e) => nativeAutoplay.onNativeError(e)}
+                onPlaybackStatusUpdate={(status) => {
+                  nativeAutoplay.onNativePlaybackStatusUpdate(status);
+                  if (status.isLoaded && status.isPlaying) {
+                    setPaused(false);
+                    trackVideoStart();
+                  }
+                  if (sponsored && status.isLoaded && status.didJustFinish) {
+                    trackVideoComplete();
+                  }
                 }}
-                onPlaybackStatusUpdate={
-                  sponsored
-                    ? (status) => {
-                        if (status.isLoaded && status.didJustFinish) {
-                          trackVideoComplete();
-                        }
-                      }
-                    : undefined
-                }
               />
             ) : null}
 
             {item.posterUrl &&
-            (loadError || !playableUri || !active || (!frameReady && paused)) ? (
+            (effectiveLoadError ||
+              !playableUri ||
+              (Platform.OS === 'web'
+                ? !active || (!frameReady && paused)
+                : !active || !nativeAutoplay.ready)) ? (
               <Image
                 source={{ uri: item.posterUrl }}
                 style={StyleSheet.absoluteFill}
@@ -758,7 +809,7 @@ const Slide = memo(function Slide({
               />
             ) : null}
 
-            {loadError || !playableUri ? (
+            {(effectiveLoadError || !playableUri) && active ? (
               <View style={styles.playWrap}>
                 <Ionicons name="alert-circle-outline" size={56} color="#fff" />
                 <Text style={styles.playLabel}>{t('media.videoPlayFailed')}</Text>
@@ -1408,6 +1459,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  nativeVideoInactive: {
+    opacity: 0,
   },
   playWrap: {
     ...StyleSheet.absoluteFillObject,

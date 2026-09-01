@@ -164,11 +164,13 @@ export function noteFloatingScrollOffset(sourceId: string, y: number) {
 
   if (scrolling || !visible) {
     lastY = offset;
+    notifyScrollLayoutListeners();
     return;
   }
 
   if (lastY == null) {
     lastY = offset;
+    notifyScrollLayoutListeners();
     return;
   }
 
@@ -179,6 +181,7 @@ export function noteFloatingScrollOffset(sourceId: string, y: number) {
   scrolling = true;
   clearSettleTimer();
   hideForScroll();
+  notifyScrollLayoutListeners();
 }
 
 export function noteFloatingScrollSettle(sourceId: string) {
@@ -187,6 +190,7 @@ export function noteFloatingScrollSettle(sourceId: string) {
   scrolling = false;
   lastY = null;
   scheduleSettleShow();
+  notifyScrollLayoutListeners();
 }
 
 export function forceFloatingVisible() {
@@ -203,4 +207,25 @@ export function forceFloatingHidden() {
       showNow();
     }, MAX_HIDDEN_MS);
   }
+}
+
+type ScrollLayoutListener = () => void;
+const scrollLayoutListeners = new Set<ScrollLayoutListener>();
+
+function notifyScrollLayoutListeners() {
+  scrollLayoutListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch {
+      // ignore
+    }
+  });
+}
+
+/** Inline video visibility checks (measureInWindow) — event-driven on scroll. */
+export function subscribeScrollLayoutChecks(listener: ScrollLayoutListener) {
+  scrollLayoutListeners.add(listener);
+  return () => {
+    scrollLayoutListeners.delete(listener);
+  };
 }
