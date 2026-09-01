@@ -1,6 +1,6 @@
 import type { CompetitionRequest } from '@/data/initial-data';
 import { getSupabase, isSupabaseConfigured } from '@/services/supabase';
-import { reviveCompetitionRequest } from '@/services/competition-sync-core';
+import { reviveCompetitionRequest } from '@/services/competition-sync';
 import {
   mergeCompetitionRequestsById,
   shouldApplyCompetitionRequestsCloud,

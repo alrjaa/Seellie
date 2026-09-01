@@ -9,9 +9,6 @@ import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Card, Muted, Subtitle, Title } from '@/components/ui';
 import { formatArabicDate } from '@/utils';
-import {
-  normalizeAppreciationStatus,
-} from '@/utils/appreciation';
 
 export type InvoiceItem = {
   id: string;
@@ -25,20 +22,6 @@ export type InvoiceItem = {
   competitionName?: string;
 };
 
-function invoiceStatusLabel(
-  status: string | undefined,
-  t: typeof translateFn
-): string {
-  const n = normalizeAppreciationStatus(status);
-  if (n === 'paid') return t('superadmin.invoices.paid');
-  if (n === 'issued') return t('superadmin.invoices.issued');
-  if (n === 'awaiting_payment') return t('superadmin.invoices.awaitingPayment');
-  if (n === 'failed') return t('superadmin.invoices.failed');
-  if (n === 'cancelled') return t('superadmin.invoices.cancelled');
-  if (n === 'refunded') return t('superadmin.invoices.refunded');
-  return t('superadmin.invoices.pending');
-}
-
 export function buildInvoices(
   giftTransactions: ReturnType<typeof useTournament>['giftTransactions'],
   supportLevels: ReturnType<typeof useTournament>['supportLevels'],
@@ -50,7 +33,7 @@ export function buildInvoices(
       title: t('superadmin.invoices.invoiceTitle', { type: g.certificateType }),
       party: g.gifterName,
       amount: g.amountPaid,
-      status: invoiceStatusLabel(g.status, t),
+      status: t('superadmin.invoices.paid'),
       timestamp: g.timestamp,
       certificateType: g.certificateType,
       recipientName: g.recipientName,

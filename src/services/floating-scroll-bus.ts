@@ -3,18 +3,24 @@
  *
  * idle ⇄ scrolling  (بعد توقف حقيقي + تأخير → idle)
  *
- * لا translateY — opacity فقط. لا مرحلة restoring منفصلة (كانت تسبب رمشة).
+ * opacity + اتجاه التمرير (up/down) — الـ FAB يطبّق translateY محلياً.
  */
 
 export type FloatingScrollPhase = 'idle' | 'scrolling';
 
 type VisibilityListener = (visible: boolean) => void;
 type PhaseListener = (phase: FloatingScrollPhase) => void;
+type DirectionListener = (direction: FloatingScrollDirection) => void;
+
+export type FloatingScrollDirection = 'up' | 'down';
 
 const listeners = new Set<VisibilityListener>();
 const phaseListeners = new Set<PhaseListener>();
+const directionListeners = new Set<DirectionListener>();
 
 export const FLOATING_SCROLL_DIM_OPACITY = 0.12;
+export const FLOATING_SCROLL_PEEK_OPACITY = 0.92;
+export const FLOATING_SCROLL_SLIDE_PX = 18;
 export const FLOATING_FADE_OUT_MS = 200;
 export const FLOATING_RESTORE_DELAY_MS = 520;
 export const FLOATING_FADE_IN_MS = 250;
@@ -27,6 +33,7 @@ const MOVE_EPS = 8;
 const MAX_SCROLLING_MS = 4000;
 
 let phase: FloatingScrollPhase = 'idle';
+let scrollDirection: FloatingScrollDirection = 'down';
 let suppressFloating = false;
 let ownerId: string | null = null;
 let lastY: number | null = null;
@@ -36,6 +43,23 @@ let scrollingFailsafeTimer: ReturnType<typeof setTimeout> | null = null;
 
 function phaseToVisible(p: FloatingScrollPhase): boolean {
   return p !== 'scrolling';
+}
+
+function setScrollDirection(next: FloatingScrollDirection) {
+  if (scrollDirection === next) return;
+  scrollDirection = next;
+  directionListeners.forEach((listener) => {
+    try {
+      listener(scrollDirection);
+    } catch {
+      // ignore
+    }
+  });
+}
+
+function updateScrollDirection(prevY: number, nextY: number) {
+  if (nextY > prevY + MOVE_EPS) setScrollDirection('down');
+  else if (nextY < prevY - MOVE_EPS) setScrollDirection('up');
 }
 
 function notifyPhase() {
@@ -147,6 +171,18 @@ export function getFloatingScrollPhase(): FloatingScrollPhase {
   return phase;
 }
 
+export function getFloatingScrollDirection(): FloatingScrollDirection {
+  return scrollDirection;
+}
+
+export function subscribeFloatingScrollDirection(listener: DirectionListener) {
+  directionListeners.add(listener);
+  listener(scrollDirection);
+  return () => {
+    directionListeners.delete(listener);
+  };
+}
+
 export function subscribeFloatingScrollPhase(listener: PhaseListener) {
   phaseListeners.add(listener);
   listener(phase);
@@ -189,7 +225,9 @@ export function noteFloatingScrollOffset(sourceId: string, y: number) {
   const offset = Math.max(0, y);
 
   if (phase === 'scrolling') {
+    const prev = lastY ?? offset;
     lastY = offset;
+    updateScrollDirection(prev, offset);
     notifyScrollLayoutListeners();
     return;
   }
@@ -200,10 +238,15 @@ export function noteFloatingScrollOffset(sourceId: string, y: number) {
     return;
   }
 
-  const dy = Math.abs(offset - lastY);
+  const prev = lastY;
+  const dy = Math.abs(offset - prev);
   lastY = offset;
-  if (dy < MOVE_EPS) return;
+  if (dy < MOVE_EPS) {
+    notifyScrollLayoutListeners();
+    return;
+  }
 
+  updateScrollDirection(prev, offset);
   enterScrolling();
   notifyScrollLayoutListeners();
 }

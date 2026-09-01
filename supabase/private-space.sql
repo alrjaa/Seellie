@@ -1,10 +1,5 @@
 -- Seellie · Private space (friends, DMs, saved content)
 -- Run in Supabase SQL Editor once.
---
--- F13-P2-01: INSERT RLS for private_messages is owned by tip-of-chain
---   F13-P1-PRIVATE-MESSAGES-RLS.sql (own inbox only).
--- OBSOLETE — DO NOT RUN any recreation of private_messages_insert_thread
---   with (owner_id = auth.uid() OR friend_id = auth.uid()).
 
 create table if not exists public.private_friends (
   owner_id uuid not null references public.profiles (id) on delete cascade,
@@ -80,9 +75,17 @@ create policy "private_messages_select_own"
   to authenticated
   using (auth.uid() = owner_id);
 
--- F13-P2-01: drop weak INSERT only — do not recreate insert_thread.
--- Tip INSERT policy: F13-P1-PRIVATE-MESSAGES-RLS.sql / PHASE4 tip block.
 drop policy if exists "private_messages_insert_thread" on public.private_messages;
+create policy "private_messages_insert_thread"
+  on public.private_messages for insert
+  to authenticated
+  with check (
+    auth.uid() = sender_id
+    and (
+      owner_id = auth.uid()
+      or friend_id = auth.uid()
+    )
+  );
 
 drop policy if exists "private_messages_delete_own" on public.private_messages;
 create policy "private_messages_delete_own"

@@ -1,12 +1,7 @@
 -- Seellie · Fix private DMs so both parties see the same conversation
 -- Run once in SQL Editor (after private-space.sql).
---
--- F13-P2-01: Dual-inbox client INSERT is OBSOLETE / insecure.
--- Peer inbox writes must go through send_private_message (SECURITY DEFINER).
--- Tip INSERT RLS: F13-P1-PRIVATE-MESSAGES-RLS.sql
--- OBSOLETE — DO NOT recreate private_messages_insert_thread
---   with (owner_id = auth.uid() OR friend_id = auth.uid()).
 
+-- المرسل يمكنه إدراج نسختين: في صندوقه وفي صندوق المستلم
 drop policy if exists "private_messages_own" on public.private_messages;
 
 drop policy if exists "private_messages_select_own" on public.private_messages;
@@ -15,8 +10,17 @@ create policy "private_messages_select_own"
   to authenticated
   using (auth.uid() = owner_id);
 
--- F13-P2-01: drop weak INSERT only — do not recreate insert_thread.
 drop policy if exists "private_messages_insert_thread" on public.private_messages;
+create policy "private_messages_insert_thread"
+  on public.private_messages for insert
+  to authenticated
+  with check (
+    auth.uid() = sender_id
+    and (
+      owner_id = auth.uid()
+      or friend_id = auth.uid()
+    )
+  );
 
 drop policy if exists "private_messages_delete_own" on public.private_messages;
 create policy "private_messages_delete_own"

@@ -9,6 +9,7 @@ export type {
   SportsLeagueBundle,
   SportsMatchEvent,
   SportsMatchStat,
+  SportsLineupPlayer,
   SportsStandingRow,
   SportsTeamLineup,
   SportsTopScorerRow,

@@ -9,7 +9,7 @@ import {
 import { usePathname, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/providers/ThemeProvider';
-import { useTournamentCore } from '@/providers/TournamentProvider';
+import { useTournament } from '@/providers/TournamentProvider';
 import { useTranslation, useLanguage } from '@/providers/LanguageProvider';
 import { useResponsive } from '@/hooks/useResponsive';
 import { cairoText } from '@/theme/fonts';
@@ -59,7 +59,7 @@ function DesktopShellComponent({
   brandLabel,
 }: Props) {
   const theme = useAppTheme();
-  const { appName } = useTournamentCore();
+  const { appName } = useTournament();
   const { t } = useTranslation();
   const { isRTL } = useLanguage();
   const router = useRouter();

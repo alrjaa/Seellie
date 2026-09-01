@@ -78,6 +78,16 @@ import {
   INLINE_VISIBILITY_PLAY_RATIO,
   INLINE_VISIBILITY_STOP_RATIO,
 } from '../src/services/native-feed-autoplay-policy';
+import {
+  claimFloatingScrollSource,
+  forceFloatingVisible,
+  getFloatingScrollDirection,
+  getFloatingScrollPhase,
+  noteFloatingMomentumScrollEnd,
+  noteFloatingScrollOffset,
+  releaseFloatingScrollSource,
+} from '../src/services/floating-scroll-bus';
+import { TRACKED_LEAGUES } from '../src/services/sports-data/leagues';
 
 function test(name: string, fn: () => void) {
   try {
@@ -759,6 +769,32 @@ test('pending native autoplay when active before ready', () => {
     }),
     true
   );
+});
+
+test('floating scroll bus tracks direction while scrolling', () => {
+  const source = 'test:fab-direction';
+  claimFloatingScrollSource(source);
+  forceFloatingVisible();
+  assert.equal(getFloatingScrollPhase(), 'idle');
+
+  noteFloatingScrollOffset(source, 0);
+  noteFloatingScrollOffset(source, 40);
+  assert.equal(getFloatingScrollPhase(), 'scrolling');
+  assert.equal(getFloatingScrollDirection(), 'down');
+
+  noteFloatingScrollOffset(source, 10);
+  assert.equal(getFloatingScrollDirection(), 'up');
+
+  noteFloatingMomentumScrollEnd(source);
+  releaseFloatingScrollSource(source);
+});
+
+test('tracked leagues include Saudi, Bundesliga, and MLS', () => {
+  const ids = TRACKED_LEAGUES.map((l) => l.leagueId);
+  assert.ok(ids.includes(307));
+  assert.ok(ids.includes(78));
+  assert.ok(ids.includes(253));
+  assert.equal(TRACKED_LEAGUES.length, 7);
 });
 
 console.log('All tests passed.');

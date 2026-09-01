@@ -3,7 +3,7 @@ import { Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/providers/ThemeProvider';
-import { useTournamentCore } from '@/providers/TournamentProvider';
+import { useTournament } from '@/providers/TournamentProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 
 /**
@@ -13,7 +13,7 @@ function HeaderBackButtonComponent() {
   const theme = useAppTheme();
   const router = useRouter();
   const { t, isRTL } = useTranslation();
-  const { currentUser, routeForRole } = useTournamentCore();
+  const { currentUser, routeForRole } = useTournament();
 
   const onPress = useCallback(() => {
     if (router.canGoBack()) {

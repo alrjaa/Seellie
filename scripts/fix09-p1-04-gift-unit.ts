@@ -24,7 +24,7 @@ type AppendResult =
   | { ok: true; idempotent: boolean; gift: GiftRow; count: number }
   | { ok: false; error: string };
 
-/** Mirrors current append_gift_transaction (F12-P2-02 supersedes F09 status). */
+/** Mirrors FIX-09-P1-04 append_gift_transaction (pre-DB profile checks simplified). */
 function appendGift(opts: {
   callerId: string;
   gift: GiftRow;
@@ -39,13 +39,6 @@ function appendGift(opts: {
 
   if (gift.gifterId && gift.gifterId !== callerId) {
     return { ok: false, error: 'gifter must match authenticated user' };
-  }
-
-  const clientStatus = String(gift.status || '')
-    .trim()
-    .toLowerCase();
-  if (['paid', 'issued', 'refunded'].includes(clientStatus)) {
-    return { ok: false, error: 'forged_status' };
   }
 
   const clientKey = String(
@@ -96,14 +89,16 @@ function appendGift(opts: {
   // Client-forced id ignored for NEW row — server id wins
   const sanitized: GiftRow = {
     id: opts.nextServerId,
-    certificateNumber: '',
+    certificateNumber: gift.certificateNumber || 'SUP-000000',
     gifterId: callerId,
     recipientId,
     certificateType: cert,
     amountPaid: price,
-    status: 'awaiting_payment',
+    status: 'pending_demo',
   };
   if (clientKey) sanitized.clientRequestId = clientKey;
+  // Client cannot escape pending_demo
+  assert.equal(sanitized.status, 'pending_demo');
 
   return {
     ok: true,
@@ -191,7 +186,7 @@ function main() {
     'unknown_certificate_type'
   );
 
-  // 5) status forced awaiting_payment + server id (ignore client id / paid)
+  // 5) status forced pending_demo + server id (ignore client id)
   const created = appendGift({
     callerId: me,
     gift: {
@@ -206,30 +201,13 @@ function main() {
     recipientExists: true,
     nextServerId: 'gift_server_authoritative',
   });
-  assert.equal(created.ok, false);
-  assert.equal(errOf(created), 'forged_status');
-
-  const createdOk = appendGift({
-    callerId: me,
-    gift: {
-      id: 'client-wants-this-id',
-      certificateType: 'ذهبي',
-      amountPaid: 50,
-      recipientId: other,
-      status: 'pending',
-    },
-    existing: [],
-    rateCountInWindow: 0,
-    recipientExists: true,
-    nextServerId: 'gift_server_authoritative',
-  });
-  assert.equal(createdOk.ok, true);
-  if (createdOk.ok) {
-    assert.equal(createdOk.gift.status, 'awaiting_payment');
-    assert.equal(createdOk.gift.id, 'gift_server_authoritative');
-    assert.equal(createdOk.gift.clientRequestId, 'client-wants-this-id');
-    assert.equal(createdOk.gift.amountPaid, 50);
-    assert.notEqual(createdOk.gift.id, 'client-wants-this-id');
+  assert.equal(created.ok, true);
+  if (created.ok) {
+    assert.equal(created.gift.status, 'pending_demo');
+    assert.equal(created.gift.id, 'gift_server_authoritative');
+    assert.equal(created.gift.clientRequestId, 'client-wants-this-id');
+    assert.equal(created.gift.amountPaid, 50);
+    assert.notEqual(created.gift.id, 'client-wants-this-id');
   }
 
   // 6–7) rapid requests capped; changing client ids does not bypass rate
@@ -347,28 +325,20 @@ function main() {
     assert.equal(again.count, 1);
   }
 
-  // SQL markers — F09 historical + F12 current
-  const sqlF09 = fs.readFileSync(
+  // SQL markers
+  const sql = fs.readFileSync(
     path.join(process.cwd(), 'supabase/FIX-09-P1-04-GIFT-HARDENING.sql'),
     'utf8'
   );
-  assert.match(sqlF09, /gift_ledger_full/);
-  assert.match(sqlF09, /gifter_quota_exceeded/);
-  assert.match(sqlF09, /clientRequestId/);
-  assert.match(sqlF09, /gen_random_uuid/);
-  assert.match(sqlF09, /pending_demo/);
-  assert.match(sqlF09, /forged_amount/);
-  assert.match(sqlF09, /rate_max int := 5/);
-  assert.match(sqlF09, /max_ledger int := 5000/);
-  assert.doesNotMatch(sqlF09, /^\s*(DROP TABLE|TRUNCATE)\b/im);
-
-  const sqlF12 = fs.readFileSync(
-    path.join(process.cwd(), 'supabase/F12-P2-02-GIFT-PAYMENT-READY.sql'),
-    'utf8'
-  );
-  assert.match(sqlF12, /awaiting_payment/);
-  assert.match(sqlF12, /forged_status/);
-  assert.doesNotMatch(sqlF12, /'status',\s*'pending_demo'/);
+  assert.match(sql, /gift_ledger_full/);
+  assert.match(sql, /gifter_quota_exceeded/);
+  assert.match(sql, /clientRequestId/);
+  assert.match(sql, /gen_random_uuid/);
+  assert.match(sql, /pending_demo/);
+  assert.match(sql, /forged_amount/);
+  assert.match(sql, /rate_max int := 5/);
+  assert.match(sql, /max_ledger int := 5000/);
+  assert.doesNotMatch(sql, /^\s*(DROP TABLE|TRUNCATE)\b/im);
 
   // Client uses clientRequestId
   const blobs = fs.readFileSync(

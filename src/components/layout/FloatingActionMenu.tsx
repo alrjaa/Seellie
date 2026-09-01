@@ -20,10 +20,15 @@ import {
   FLOATING_FADE_IN_MS,
   FLOATING_FADE_OUT_MS,
   FLOATING_SCROLL_DIM_OPACITY,
+  FLOATING_SCROLL_PEEK_OPACITY,
+  FLOATING_SCROLL_SLIDE_PX,
   isFloatingSuppressed,
   setFloatingSuppressed,
+  subscribeFloatingScrollDirection,
   subscribeFloatingScrollPhase,
+  type FloatingScrollDirection,
 } from '@/services/floating-scroll-bus';
+import { lightTapHaptic } from '@/utils/haptics';
 import {
   setContentAuthorFocus,
   subscribeContentAuthorFocus,
@@ -95,47 +100,75 @@ function FloatingActionMenuComponent() {
   const { desktop } = useResponsive();
   const [suppressed, setSuppressed] = useState(() => isFloatingSuppressed());
   const opacity = useRef(new Animated.Value(1)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
   const opacityTargetRef = useRef(1);
+  const translateTargetRef = useRef(0);
   const animRef = useRef<Animated.CompositeAnimation | null>(null);
+  const [scrollPhase, setScrollPhase] = useState<'idle' | 'scrolling'>('idle');
+  const [scrollDirection, setScrollDirection] =
+    useState<FloatingScrollDirection>('down');
   const [pressedKey, setPressedKey] = useState<string | null>(null);
   const [author, setAuthor] = useState<ContentAuthorFocus | null>(null);
 
   useEffect(() => subscribeContentAuthorFocus(setAuthor), []);
-  const runOpacityTo = useCallback(
-    (toValue: number, duration: number) => {
-      if (opacityTargetRef.current === toValue) return;
-      opacityTargetRef.current = toValue;
+  const runMotionTo = useCallback(
+    (opacityTo: number, translateTo: number, duration: number) => {
+      if (
+        opacityTargetRef.current === opacityTo &&
+        translateTargetRef.current === translateTo
+      ) {
+        return;
+      }
+      opacityTargetRef.current = opacityTo;
+      translateTargetRef.current = translateTo;
       animRef.current?.stop();
-      opacity.stopAnimation((current) => {
-        if (Math.abs(current - toValue) < 0.02) {
-          opacity.setValue(toValue);
-          return;
-        }
-        animRef.current = Animated.timing(opacity, {
-          toValue,
-          duration,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: Platform.OS !== 'web',
-        });
-        animRef.current.start(({ finished }) => {
-          if (finished) animRef.current = null;
+      opacity.stopAnimation(() => {
+        translateY.stopAnimation(() => {
+          animRef.current = Animated.parallel([
+            Animated.timing(opacity, {
+              toValue: opacityTo,
+              duration,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: Platform.OS !== 'web',
+            }),
+            Animated.timing(translateY, {
+              toValue: translateTo,
+              duration,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: Platform.OS !== 'web',
+            }),
+          ]);
+          animRef.current.start(({ finished }) => {
+            if (finished) animRef.current = null;
+          });
         });
       });
     },
-    [opacity]
+    [opacity, translateY]
   );
 
-  useEffect(
-    () =>
-      subscribeFloatingScrollPhase((next) => {
-        if (next === 'scrolling') {
-          runOpacityTo(FLOATING_SCROLL_DIM_OPACITY, FLOATING_FADE_OUT_MS);
-          return;
-        }
-        runOpacityTo(1, FLOATING_FADE_IN_MS);
-      }),
-    [runOpacityTo]
-  );
+  useEffect(() => subscribeFloatingScrollPhase(setScrollPhase), []);
+  useEffect(() => subscribeFloatingScrollDirection(setScrollDirection), []);
+
+  useEffect(() => {
+    if (scrollPhase === 'idle') {
+      runMotionTo(1, 0, FLOATING_FADE_IN_MS);
+      return;
+    }
+    if (scrollDirection === 'down') {
+      runMotionTo(
+        FLOATING_SCROLL_DIM_OPACITY,
+        FLOATING_SCROLL_SLIDE_PX,
+        FLOATING_FADE_OUT_MS
+      );
+      return;
+    }
+    runMotionTo(
+      FLOATING_SCROLL_PEEK_OPACITY,
+      0,
+      FLOATING_FADE_IN_MS
+    );
+  }, [runMotionTo, scrollDirection, scrollPhase]);
 
   // بذرة فقط إن لم يُحدَّد صاحب محتوى بعد — لا تستبدل صاحب المحتوى الظاهر
   useEffect(() => {
@@ -311,6 +344,7 @@ function FloatingActionMenuComponent() {
   );
 
   const openIdentityProfile = () => {
+    lightTapHaptic();
     if (!identityProfile) {
       router.push('/(follower)/highlights' as any);
       return;
@@ -325,6 +359,7 @@ function FloatingActionMenuComponent() {
   };
 
   const onToggleFollow = () => {
+    lightTapHaptic();
     if (!identityProfile || identityProfile.mode !== 'content') return;
     toggleFollowUser(identityProfile.id);
   };
@@ -335,6 +370,7 @@ function FloatingActionMenuComponent() {
 
   const motionStyle = {
     opacity,
+    transform: [{ translateY }],
   };
 
   const Wrap = Animated.View;
@@ -472,7 +508,10 @@ function FloatingActionMenuComponent() {
                     setPressedKey((k) => (k === action.key ? null : k));
                   }, 700);
                 }}
-                onPress={() => router.push(action.href as any)}
+                onPress={() => {
+                  lightTapHaptic();
+                  router.push(action.href as any);
+                }}
                 hitSlop={8}
                 style={({ pressed }) => [
                   styles.btn,

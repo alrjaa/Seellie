@@ -294,32 +294,18 @@ export async function listRecentProfiles(excludeId: string, limit = 30) {
     return [];
   }
   let query = sb
-    .from('profiles')
-    .select('id, name, handle, visible_id, role, email, created_at')
-    .neq('role', 'superadmin')
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  if (excludeId) query = query.neq('id', excludeId);
-  const { data, error } = await query;
-  if (!error && data && data.length > 1) {
-    return mapProfileHits(data as Array<Record<string, unknown>>);
-  }
-  let catalog = sb
     .from('profiles_catalog')
     .select('id, name, handle, visible_id, role, created_at')
     .neq('role', 'superadmin')
     .order('created_at', { ascending: false })
     .limit(limit);
-  if (excludeId) catalog = catalog.neq('id', excludeId);
-  const { data: rows, error: catalogError } = await catalog;
-  if (catalogError || !rows) {
-    console.warn(
-      '[supabase] listRecentProfiles',
-      error?.message || catalogError?.message
-    );
+  if (excludeId) query = query.neq('id', excludeId);
+  const { data, error } = await query;
+  if (error || !data) {
+    console.warn('[supabase] listRecentProfiles', error?.message);
     return [];
   }
-  return mapProfileHits(rows as Array<Record<string, unknown>>);
+  return mapProfileHits(data as Array<Record<string, unknown>>);
 }
 
 export async function searchProfiles(query: string, excludeId: string) {
@@ -345,9 +331,9 @@ export async function searchProfiles(query: string, excludeId: string) {
       return [];
     }
     const rows = (Array.isArray(data) ? data : [data]).filter(
-      (r: { id?: string }) => r?.id && (!excludeId || r.id !== excludeId)
-    );
-    return mapProfileHits(rows as Array<Record<string, unknown>>);
+      (r) => r && (!excludeId || (r as { id?: string }).id !== excludeId)
+    ) as Array<Record<string, unknown>>;
+    return mapProfileHits(rows);
   }
 
   if (q.length < 1) return [];
@@ -356,21 +342,6 @@ export async function searchProfiles(query: string, excludeId: string) {
   if (safe.length < 1) return [];
 
   const { data, error } = await sb
-    .from('profiles')
-    .select('id, name, handle, visible_id, role, email')
-    .or(
-      `name.ilike.%${safe}%,handle.ilike.%${safe}%,visible_id.ilike.%${safe}%`
-    )
-    .neq('role', 'superadmin')
-    .limit(12);
-  if (!error && data && data.length > 1) {
-    return mapProfileHits(
-      (data as Array<Record<string, unknown>>).filter(
-        (r) => !excludeId || r.id !== excludeId
-      )
-    );
-  }
-  const { data: catalog, error: catalogError } = await sb
     .from('profiles_catalog')
     .select('id, name, handle, visible_id, role')
     .or(
@@ -378,15 +349,12 @@ export async function searchProfiles(query: string, excludeId: string) {
     )
     .neq('role', 'superadmin')
     .limit(12);
-  if (catalogError || !catalog) {
-    console.warn(
-      '[supabase] searchProfiles',
-      error?.message || catalogError?.message
-    );
+  if (error || !data) {
+    console.warn('[supabase] searchProfiles', error?.message);
     return [];
   }
   return mapProfileHits(
-    (catalog as Array<Record<string, unknown>>).filter(
+    (data as Array<Record<string, unknown>>).filter(
       (r) => !excludeId || r.id !== excludeId
     )
   );

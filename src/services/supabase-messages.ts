@@ -212,25 +212,23 @@ export async function findProfileIdByEmail(
   const { data, error } = await sb.rpc('find_profile_by_email', {
     p_email: normalized,
   });
-  if (error || !data) {
-    const { data: own } = await sb
-      .from('profiles')
-      .select('id, name, email')
-      .ilike('email', normalized)
-      .maybeSingle();
-    if (!own) return null;
-    return {
-      id: own.id as string,
-      name: own.name as string,
-      email: own.email as string,
-    };
+  if (error) {
+    console.warn('[supabase] findProfileIdByEmail', error.message);
+    return null;
   }
   const row = Array.isArray(data) ? data[0] : data;
-  if (!row) return null;
+  if (!row || typeof row !== 'object') return null;
+  const hit = row as { id?: string; name?: string; email?: string };
+  if (!hit.id) return null;
+  const { data: catalog } = await sb
+    .from('profiles_catalog')
+    .select('id, name, handle, visible_id')
+    .eq('id', hit.id)
+    .maybeSingle();
   return {
-    id: row.id as string,
-    name: row.name as string,
-    email: row.email as string,
+    id: hit.id,
+    name: (catalog?.name as string) || hit.name || '',
+    email: hit.email || normalized,
   };
 }
 
@@ -244,8 +242,8 @@ export async function findSuperadminProfile(): Promise<{
   const { data: sessionData } = await sb.auth.getSession();
   if (!sessionData.session) return null;
   const { data, error } = await sb
-    .from('profiles_catalog')
-    .select('id, name, role, active_role, roles')
+    .from('profiles')
+    .select('id, name, email, role, active_role, roles')
     .or('role.eq.superadmin,active_role.eq.superadmin')
     .order('created_at', { ascending: true })
     .limit(5);
@@ -263,7 +261,7 @@ export async function findSuperadminProfile(): Promise<{
   return {
     id: row.id as string,
     name: row.name as string,
-    email: '',
+    email: row.email as string,
   };
 }
 

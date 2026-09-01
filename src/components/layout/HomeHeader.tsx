@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useTournamentCore } from '@/providers/TournamentProvider';
+import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useLanguage } from '@/providers/LanguageProvider';
 import { Card, Muted } from '@/components/ui';
@@ -29,7 +29,7 @@ function HomeHeaderComponent({
   pageTitle,
   pageSubtitle,
 }: Props) {
-  const { currentUser } = useTournamentCore();
+  const { currentUser } = useTournament();
   const theme = useAppTheme();
   const { isRTL } = useLanguage();
   const { desktop } = useResponsive();

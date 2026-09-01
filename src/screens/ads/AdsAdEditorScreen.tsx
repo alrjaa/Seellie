@@ -50,6 +50,20 @@ import {
 
 const PLACEMENTS: NativeAdPlacement[] = ['general', 'unique', 'highlights'];
 
+type AdEditorPersistStatus = 'draft' | 'active' | 'paused' | 'pending_review';
+type AdEditorUiStatus = AdEditorPersistStatus | 'blocked' | 'deleted';
+
+function toPersistStatus(status: AdEditorUiStatus): AdEditorPersistStatus {
+  if (
+    status === 'active' ||
+    status === 'paused' ||
+    status === 'pending_review'
+  ) {
+    return status;
+  }
+  return 'draft';
+}
+
 async function probeHtmlVideo(
   uri: string
 ): Promise<Pick<AdVideoProbe, 'durationSec' | 'width' | 'height'>> {
@@ -143,9 +157,7 @@ export default function AdsAdEditorScreen() {
   const [targetCountry, setTargetCountry] = useState('');
   const [targetRegion, setTargetRegion] = useState('');
   const [targetCity, setTargetCity] = useState('');
-  const [status, setStatus] = useState<
-    'draft' | 'active' | 'paused' | 'pending_review' | 'blocked' | 'deleted'
-  >('draft');
+  const [status, setStatus] = useState<AdEditorUiStatus>('draft');
   const [placements, setPlacements] = useState<NativeAdPlacement[]>(['general']);
   const [pickingVideo, setPickingVideo] = useState(false);
   const [pickingCover, setPickingCover] = useState(false);
@@ -305,7 +317,7 @@ export default function AdsAdEditorScreen() {
         targetCountry,
         targetRegion,
         targetCity,
-        status,
+        status: toPersistStatus(status),
         placements,
         trimStart,
         trimEnd,
@@ -361,7 +373,11 @@ export default function AdsAdEditorScreen() {
     [ctaUrl, previewUri, probe, status, videoUrl]
   );
 
-  const pipelineStatus = reviewStatusFromChecks(checks, status, processing);
+  const pipelineStatus = reviewStatusFromChecks(
+    checks,
+    toPersistStatus(status),
+    processing
+  );
   const aspect = detectAdAspectRatio(probe.width, probe.height);
 
   const reasonText = (code: AdReviewReasonCode) => t(`adsPortal.reviewReason.${code}`);

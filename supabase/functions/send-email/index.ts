@@ -4,6 +4,9 @@
  * FIX-08 (F08-S04): لا يُسمح بترحيل بريد عشوائي لأي مستخدم مصادق.
  * فقط المشرف + type=analyst_access_code + حقول إلزامية + حد معدل.
  *
+ * F09-P1-06: body.code يجب أن يطابق analyst_access_codes للمستلم (profiles.email = to).
+ * لا يُرسل البريد عند mismatch. Authorization قبل فحص RESEND.
+ *
  * Secrets (Dashboard → Edge Functions → Secrets):
  *   RESEND_API_KEY
  *   EMAIL_FROM (اختياري)
@@ -22,6 +25,8 @@ type Body = {
   to?: string;
   code?: string;
   name?: string;
+  /** Optional: must match profile.id for `to` when provided */
+  userId?: string;
 };
 
 const rateBucket = new Map<string, { count: number; resetAt: number }>();
@@ -38,6 +43,16 @@ function checkRate(userId: string, limit: number, windowMs: number): boolean {
   return true;
 }
 
+/** Avoid leaking timing on code compare (best-effort in JS). */
+function codesEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: cors });
@@ -46,13 +61,8 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const anon = Deno.env.get('SUPABASE_ANON_KEY') || '';
-    const resendKey = Deno.env.get('RESEND_API_KEY') || '';
     const from =
       Deno.env.get('EMAIL_FROM') || 'Seellie <onboarding@resend.dev>';
-
-    if (!resendKey) {
-      return json({ ok: false, error: 'RESEND_API_KEY_missing' }, 503);
-    }
 
     const authHeader = req.headers.get('Authorization') || '';
     const sb = createClient(supabaseUrl, anon, {
@@ -93,8 +103,32 @@ serve(async (req) => {
       .select('id, email, name')
       .eq('email', to)
       .maybeSingle();
-    if (profileErr || !profile) {
+    if (profileErr || !profile?.id) {
       return json({ ok: false, error: 'recipient_not_found' }, 400);
+    }
+
+    // Optional client userId must match resolved profile (no trust of bare claims)
+    const claimedUserId = (body.userId || '').trim();
+    if (claimedUserId && claimedUserId !== profile.id) {
+      return json({ ok: false, error: 'analyst_code_recipient_mismatch' }, 400);
+    }
+
+    // F09-P1-06: code must match analyst_access_codes for THIS recipient only.
+    // Load via superadmin RPC (table RLS is own-row only). Generic error on any fail.
+    const { data: storedCode, error: codeErr } = await sb.rpc(
+      'admin_get_analyst_access_code',
+      { p_id: profile.id }
+    );
+    const expected =
+      typeof storedCode === 'string' ? storedCode.trim() : '';
+    if (codeErr || !expected || !codesEqual(expected, code)) {
+      return json({ ok: false, error: 'analyst_code_recipient_mismatch' }, 400);
+    }
+
+    // Operational: Resend after authorization (F09-P1-06-F)
+    const resendKey = Deno.env.get('RESEND_API_KEY') || '';
+    if (!resendKey) {
+      return json({ ok: false, error: 'RESEND_API_KEY_missing' }, 503);
     }
 
     const name = (body.name || profile.name || '').trim();

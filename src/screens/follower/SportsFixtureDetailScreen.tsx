@@ -516,7 +516,7 @@ export default function SportsFixtureDetailScreen() {
 
   if (loading) {
     return (
-      <Screen title={t('sportsFixture.title')} scroll={false}>
+      <Screen scroll={false}>
         <View style={styles.center}>
           <ActivityIndicator color={theme.colors.accent} />
         </View>
@@ -526,7 +526,7 @@ export default function SportsFixtureDetailScreen() {
 
   if (!detail || error) {
     return (
-      <Screen title={t('sportsFixture.title')} scroll={false}>
+      <Screen scroll={false}>
         <EmptyState
           title={t('sportsFixture.notFound')}
           description={t('sportsFixture.notFoundDesc')}
@@ -538,7 +538,7 @@ export default function SportsFixtureDetailScreen() {
   }
 
   return (
-    <Screen title={t('sportsFixture.title')} scroll={false}>
+    <Screen scroll={false}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}

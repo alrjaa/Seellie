@@ -24,6 +24,19 @@
 4. Confirm storage bucket: `share-media` (public)
 5. Confirm RPC: `replace_profile_content` (hardened), `admin_purge_user`
 
+## FIX-08 / FIX-09 (apply only when Staging/Lab is approved)
+
+Do **not** run these against Production from this note alone. Full ordered checklist: **`supabase/MIGRATIONS.md`**.
+
+When authorized on Staging/Lab:
+
+1. Apply **`FIX-08-HARDENING.sql`** before **`FIX-09-P0-HARDENING.sql`**.
+2. Apply **`FIX-09-P1-04-GIFT-HARDENING.sql`** after FIX-08 (it replaces `append_gift_transaction`).
+3. **Do not** re-apply older PHASE3/PHASE4/FIX-08 offer/referee/gift function bodies after FIX-09 tip scripts without re-applying the tip — older scripts can overwrite stronger protections.
+4. Verify final definitions on Staging (`pg_get_functiondef`) before any Production review.
+
+See **F09-P1-10** section in `MIGRATIONS.md` for details. This SETUP note is documentation only and does not execute SQL.
+
 ## Content sync rule
 Any **add content** action with a cloud Sign-up session must:
 1. Upload local `file://` media to Storage

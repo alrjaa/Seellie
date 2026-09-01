@@ -569,9 +569,8 @@ export async function sendPrivateChatMessage(
         }
       }
 
-      // F13-P1: never fall back to direct private_messages.insert for cloud users.
-      // Dual-inbox writes must go through send_private_message (SECURITY DEFINER).
-      // Direct insert previously allowed forging owner_id=<victim> under weak RLS.
+      // F13-P1 — peer inbox is created only by send_private_message.
+      // Direct insert (own row or dual-row into the peer) is forbidden.
       return {
         state: await loadPrivateSpace(userId),
         ok: false,
