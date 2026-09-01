@@ -113,18 +113,24 @@ export function PrivateSpaceProvider({ children }: { children: ReactNode }) {
   const knownMessageIds = useRef(new Set<string>());
   const initialHydrationDone = useRef(false);
   const readStateRef = useRef<PrivateReadState>({});
+  const stateRef = useRef<PrivateSpaceState>(empty);
+  const usersRef = useRef(users);
   readStateRef.current = readState;
+  stateRef.current = state;
+  usersRef.current = users;
 
   const resolveFriendName = useCallback(
     (friendId: string) => {
-      const known = users.find((u) => u.id === friendId);
+      const known = usersRef.current.find((u) => u.id === friendId);
       if (known?.name) return known.name;
       if (known?.handle) return `@${known.handle.replace(/^@/, '')}`;
-      const fromSaved = state.items.find((i) => i.authorId === friendId);
+      const fromSaved = stateRef.current.items.find(
+        (i) => i.authorId === friendId
+      );
       if (fromSaved?.authorName) return fromSaved.authorName;
       return t('privateSpace.privateMessageSender');
     },
-    [users, state.items, t]
+    [t]
   );
 
   const notifyIncomingPrivate = useCallback(
@@ -168,6 +174,9 @@ export function PrivateSpaceProvider({ children }: { children: ReactNode }) {
     [addNotification, resolveFriendName, t, toast, userId]
   );
 
+  const notifyIncomingPrivateRef = useRef(notifyIncomingPrivate);
+  notifyIncomingPrivateRef.current = notifyIncomingPrivate;
+
   const collectNewIncoming = useCallback(
     (next: PrivateSpaceState): IncomingPrivate[] => {
       const fresh: IncomingPrivate[] = [];
@@ -205,7 +214,7 @@ export function PrivateSpaceProvider({ children }: { children: ReactNode }) {
         ]);
         if (initialHydrationDone.current) {
           const arrived = collectNewIncoming(next);
-          if (arrived.length) notifyIncomingPrivate(arrived);
+          if (arrived.length) notifyIncomingPrivateRef.current(arrived);
         } else {
           initialHydrationDone.current = true;
         }
@@ -219,45 +228,48 @@ export function PrivateSpaceProvider({ children }: { children: ReactNode }) {
         setReady(true);
       }
     });
-  }, [collectNewIncoming, indexMessages, notifyIncomingPrivate, userId]);
+  }, [collectNewIncoming, indexMessages, userId]);
+
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
 
   useEffect(() => {
     knownMessageIds.current = new Set();
     initialHydrationDone.current = false;
     setReady(false);
-    void reload();
-  }, [reload, userId]);
+    void reloadRef.current();
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) return;
     return (
       subscribePrivateSpace(userId, () => {
-        void reload();
+        void reloadRef.current();
       }) || undefined
     );
-  }, [userId, reload]);
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) return;
     const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'active') void reload();
+      if (next === 'active') void reloadRef.current();
     });
     const stopPoll = startForegroundInterval(
       SYNC_FALLBACK_MS.privateSpace,
       () => {
-        if (AppState.currentState === 'active') void reload();
+        if (AppState.currentState === 'active') void reloadRef.current();
       }
     );
     return () => {
       sub.remove();
       stopPoll();
     };
-  }, [userId, reload]);
+  }, [userId]);
 
   const markThreadRead = useCallback(
     (friendId: string) => {
       if (!userId || !friendId) return;
-      const messages = state.chats[friendId] || [];
+      const messages = stateRef.current.chats[friendId] || [];
       const at = readTimestampForThread(messages);
       const prev = readStateRef.current[friendId];
       if (prev && new Date(prev).getTime() >= new Date(at).getTime()) return;
@@ -266,7 +278,7 @@ export function PrivateSpaceProvider({ children }: { children: ReactNode }) {
       setReadState(next);
       void savePrivateReadState(userId, next);
     },
-    [state.chats, userId]
+    [userId]
   );
 
   const unreadPrivateCount = useMemo(

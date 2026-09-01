@@ -1058,7 +1058,7 @@ export default function PrivateScreen() {
     scrollChatToLatest,
   ]);
 
-  if (loading || !space.ready) {
+  if (loading || (!space.ready && space.friendIds.length === 0 && space.items.length === 0)) {
     return <LoadingState fullScreen />;
   }
 
