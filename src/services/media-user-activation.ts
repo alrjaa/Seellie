@@ -18,6 +18,11 @@ function onUserActivation() {
   attachSoundToPlayingVideo(current.el);
 }
 
+/** Swiping the feed counts as user engagement for web sound (TikTok-style). */
+export function noteWebFeedScrollGesture(): void {
+  onUserActivation();
+}
+
 /** Install once at app root — returns teardown. */
 export function installMediaUserActivation(): () => void {
   if (typeof window === 'undefined' || installed) {

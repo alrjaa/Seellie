@@ -30,8 +30,8 @@ import { useInlineVideoVisibility } from '@/hooks/useInlineVideoVisibility';
 import { useNativeFeedVideoAutoplay } from '@/hooks/useNativeFeedVideoAutoplay';
 import { clamp } from '@/theme/tokens';
 import {
-  attachSoundToPlayingVideo,
   isWebMediaSoundUnlocked,
+  promoteWebVideoSound,
   registerActiveWebVideo,
   startVisibleWebVideo,
   subscribeWebMediaSound,
@@ -201,8 +201,9 @@ function InlineVideoPlayerComponent({
       node.onerror = () => markPlaybackFailed();
       node.playsInline = true;
       node.loop = true;
-      node.muted = true;
-      node.defaultMuted = true;
+      node.muted = false;
+      node.defaultMuted = false;
+      node.volume = 1;
       registerActiveWebVideo(node);
       setupWebObserver(node);
     },
@@ -216,7 +217,7 @@ function InlineVideoPlayerComponent({
     if (Platform.OS !== 'web') return;
     const attach = () => {
       const el = htmlRef.current;
-      if (el) attachSoundToPlayingVideo(el);
+      if (el) promoteWebVideoSound(el);
     };
     if (isWebMediaSoundUnlocked()) attach();
     return subscribeWebMediaSound(attach);
@@ -256,7 +257,6 @@ function InlineVideoPlayerComponent({
     if (playbackFailed || Platform.OS !== 'web') return;
     const el = htmlRef.current;
     if (!el) return;
-    el.muted = true;
     if (shouldAutoPlay) {
       void startVisibleWebVideo(el).then((result) => {
         if (result === 'failed') {
@@ -264,7 +264,10 @@ function InlineVideoPlayerComponent({
           return;
         }
         if (result === 'playing') {
-          attachSoundToPlayingVideo(el);
+          promoteWebVideoSound(el);
+          if (isWebMediaSoundUnlocked()) {
+            promoteWebVideoSound(el);
+          }
         }
       });
     } else {
@@ -334,8 +337,8 @@ function InlineVideoPlayerComponent({
             key: uri,
             ref: bindWebVideo,
             src: uri,
-            muted: true,
-            defaultMuted: true,
+            muted: false,
+            defaultMuted: false,
             autoPlay: true,
             loop: true,
             playsInline: true,

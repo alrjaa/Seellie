@@ -60,6 +60,7 @@ import {
   startVisibleWebVideo,
 } from '../src/services/web-media-sound';
 import {
+  attemptAudibleAutoplay,
   attemptMutedAutoplay,
   attemptUnmuteWhilePlaying,
   classifyPlayError,
@@ -447,11 +448,11 @@ test('web media sound stays unlocked across feed items', () => {
   assert.equal(nextWebSoundSession(false, 'unlock'), true);
 });
 
-test('visible video always starts muted so autoplay is not blocked', async () => {
+test('visible video tries audible autoplay first', async () => {
   const plays: boolean[] = [];
   const el = {
-    muted: false,
-    defaultMuted: false,
+    muted: true,
+    defaultMuted: true,
     volume: 0,
     paused: true,
     play: async () => {
@@ -459,10 +460,42 @@ test('visible video always starts muted so autoplay is not blocked', async () =>
       el.paused = false;
     },
   };
-  assert.equal(await startVisibleWebVideo(el), 'playing');
+  assert.equal(await attemptAudibleAutoplay(el), 'playing_audible');
+  assert.equal(el.muted, false);
+  assert.equal(el.paused, false);
+  assert.deepEqual(plays, [false]);
+});
+
+test('audible autoplay falls back to muted when policy blocks', async () => {
+  const el = {
+    muted: false,
+    defaultMuted: false,
+    volume: 1,
+    paused: true,
+    play: async () => {
+      if (!el.muted) {
+        throw Object.assign(new Error('not allowed'), { name: 'NotAllowedError' });
+      }
+      el.paused = false;
+    },
+  };
+  assert.equal(await attemptAudibleAutoplay(el), 'playing_muted');
   assert.equal(el.muted, true);
   assert.equal(el.paused, false);
-  assert.deepEqual(plays, [true]);
+});
+
+test('startVisibleWebVideo uses audible-first path', async () => {
+  const el = {
+    muted: false,
+    defaultMuted: false,
+    volume: 1,
+    paused: true,
+    play: async () => {
+      el.paused = false;
+    },
+  };
+  assert.equal(await startVisibleWebVideo(el), 'playing');
+  assert.equal(el.muted, false);
 });
 
 test('attach sound never leaves a playing video paused', () => {

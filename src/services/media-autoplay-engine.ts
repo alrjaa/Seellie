@@ -19,6 +19,13 @@ export type MutedAutoplayResult =
   | 'aborted'
   | 'failed';
 
+export type AudibleAutoplayResult =
+  | 'playing_audible'
+  | 'playing_muted'
+  | 'policy_blocked'
+  | 'aborted'
+  | 'failed';
+
 export type UnmuteResult = 'unmuted' | 'muted_still_playing' | 'not_playing';
 
 export function classifyPlayError(error: unknown): PlayErrorKind {
@@ -76,6 +83,34 @@ export async function attemptMutedAutoplay(
     const kind = classifyPlayError(error);
     if (kind === 'policy') return 'policy_blocked';
     if (kind === 'abort') return 'aborted';
+    return 'failed';
+  }
+}
+
+/**
+ * TikTok-style: try unmuted autoplay first; fall back to muted so video keeps moving.
+ * Never treats policy block as media failure.
+ */
+export async function attemptAudibleAutoplay(
+  el: PlayableVideo,
+  guard?: AutoplayGuard
+): Promise<AudibleAutoplayResult> {
+  el.volume = 1;
+  el.muted = false;
+  el.defaultMuted = false;
+  try {
+    await el.play();
+    if (isStale(guard)) return 'aborted';
+    if (el.paused) return 'failed';
+    return el.muted ? 'playing_muted' : 'playing_audible';
+  } catch (error) {
+    if (isStale(guard)) return 'aborted';
+    const kind = classifyPlayError(error);
+    if (kind === 'media') return 'failed';
+    const muted = await attemptMutedAutoplay(el, guard);
+    if (muted === 'playing') return 'playing_muted';
+    if (muted === 'policy_blocked') return 'policy_blocked';
+    if (muted === 'aborted') return 'aborted';
     return 'failed';
   }
 }

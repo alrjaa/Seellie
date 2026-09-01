@@ -67,16 +67,18 @@ import { NATIVE_AD_HOOK_MS, extractNativeAdId } from '@/services/native-ads';
 import type { NativeAdPlacement } from '@/services/native-ads';
 import { queueAdEvent } from '@/services/ad-events';
 import {
-  attachSoundToPlayingVideo,
+  isWebMediaSoundUnlocked,
+  promoteWebVideoSound,
   registerActiveWebVideo,
   startVisibleWebVideo,
   subscribeWebMediaSound,
   unregisterActiveWebVideo,
 } from '@/services/web-media-sound';
 import {
-  attemptMutedAutoplay,
+  attemptAudibleAutoplay,
   isRealMediaFailure,
 } from '@/services/media-autoplay-engine';
+import { noteWebFeedScrollGesture } from '@/services/media-user-activation';
 import { useNativeFeedVideoAutoplay } from '@/hooks/useNativeFeedVideoAutoplay';
 import { ReasonModal } from '@/components/feedback/ReasonModal';
 
@@ -493,7 +495,7 @@ const Slide = memo(function Slide({
           });
         }
         if (playGenRef.current !== gen || !active) return;
-        return attemptMutedAutoplay(el, {
+        return attemptAudibleAutoplay(el, {
           generation: gen,
           getGeneration: () => playGenRef.current,
         });
@@ -506,11 +508,17 @@ const Slide = memo(function Slide({
           setPaused(true);
           return;
         }
-        if (result === 'aborted') return;
+        if (result === 'aborted' || result === 'policy_blocked') return;
         setFrameReady(true);
         setPaused(false);
-        if (result === 'playing') {
-          attachSoundToPlayingVideo(el);
+        if (
+          result === 'playing_audible' ||
+          result === 'playing_muted'
+        ) {
+          promoteWebVideoSound(el);
+          if (isWebMediaSoundUnlocked()) {
+            promoteWebVideoSound(el);
+          }
           trackVideoStart();
         }
       });
@@ -531,8 +539,9 @@ const Slide = memo(function Slide({
       if (item.mediaUrl && node.getAttribute('src') !== item.mediaUrl) {
         node.src = item.mediaUrl;
       }
-      node.muted = true;
-      node.defaultMuted = true;
+      node.muted = false;
+      node.defaultMuted = false;
+      node.volume = 1;
       node.playsInline = true;
       node.loop = true;
       requestWebAutoplay(node);
@@ -590,7 +599,7 @@ const Slide = memo(function Slide({
     return subscribeWebMediaSound(() => {
       const el = htmlVideoRef.current;
       if (!el || userPausedRef.current || el.paused) return;
-      attachSoundToPlayingVideo(el);
+      promoteWebVideoSound(el);
     });
   }, []);
 
@@ -603,7 +612,7 @@ const Slide = memo(function Slide({
         if (paused || el.paused) {
           userPausedRef.current = false;
           await startVisibleWebVideo(el);
-          attachSoundToPlayingVideo(el);
+          promoteWebVideoSound(el);
           setPaused(false);
         } else {
           userPausedRef.current = true;
@@ -732,8 +741,8 @@ const Slide = memo(function Slide({
               ? createElement('video', {
                   ref: bindHtmlVideoRef,
                   src: item.mediaUrl,
-                  muted: true,
-                  defaultMuted: true,
+                  muted: false,
+                  defaultMuted: false,
                   autoPlay: true,
                   playsInline: true,
                   preload: 'auto',
@@ -759,6 +768,10 @@ const Slide = memo(function Slide({
                   onPlaying: () => {
                     setFrameReady(true);
                     setPaused(false);
+                    const el = htmlVideoRef.current;
+                    if (el) {
+                      promoteWebVideoSound(el);
+                    }
                     trackVideoStart();
                   },
                   onEnded: sponsored ? () => trackVideoComplete() : undefined,
@@ -1255,10 +1268,12 @@ function FullScreenFeedComponent({
   );
   const onScrollEndDrag = useCallback(() => {
     if (!focused) return;
+    if (Platform.OS === 'web') noteWebFeedScrollGesture();
     noteFloatingScrollSettle(sourceId);
   }, [focused, sourceId]);
   const onMomentumScrollEnd = useCallback(() => {
     if (!focused) return;
+    if (Platform.OS === 'web') noteWebFeedScrollGesture();
     noteFloatingScrollSettle(sourceId);
   }, [focused, sourceId]);
 

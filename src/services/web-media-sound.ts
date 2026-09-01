@@ -2,7 +2,7 @@
  * Web feed video sound session — delegates autoplay policy to media-autoplay-engine.
  */
 import {
-  attemptMutedAutoplay,
+  attemptAudibleAutoplay,
   attemptUnmuteWhilePlaying,
   type PlayableVideo,
 } from '@/services/media-autoplay-engine';
@@ -23,7 +23,14 @@ export function nextWebSoundSession(
 export async function startVisibleWebVideo(
   el: PlayableVideo
 ): Promise<'playing' | 'policy_blocked' | 'aborted' | 'failed'> {
-  return attemptMutedAutoplay(el);
+  const result = await attemptAudibleAutoplay(el);
+  if (result === 'playing_audible' || result === 'playing_muted') return 'playing';
+  return result;
+}
+
+/** After playback starts — promote to audible when allowed. */
+export function promoteWebVideoSound(el: PlayableVideo): 'unmuted' | 'muted' {
+  return attachSoundToPlayingVideo(el);
 }
 
 export function attachSoundToPlayingVideo(
