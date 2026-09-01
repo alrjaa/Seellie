@@ -25,6 +25,7 @@ export type DesktopNavItem = {
   href: string;
   icon: keyof typeof Ionicons.glyphMap;
   section?: string;
+  badge?: number;
 };
 
 type Props = {
@@ -234,6 +235,24 @@ function DesktopShellComponent({
                       >
                         {item.label}
                       </Text>
+                      {item.badge && item.badge > 0 ? (
+                        <View
+                          style={[
+                            styles.navBadge,
+                            { backgroundColor: theme.colors.danger },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.navBadgeText,
+                              cairoText('bold'),
+                              { color: '#fff' },
+                            ]}
+                          >
+                            {item.badge > 99 ? '99+' : item.badge}
+                          </Text>
+                        </View>
+                      ) : null}
                     </Pressable>
                   );
                 })}
@@ -335,6 +354,18 @@ const styles = StyleSheet.create({
   navLabel: {
     flex: 1,
     fontSize: 13,
+  },
+  navBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navBadgeText: {
+    fontSize: 11,
+    lineHeight: 14,
   },
   sidebarFooter: {
     borderTopWidth: StyleSheet.hairlineWidth,

@@ -10,6 +10,8 @@ import { NavigationCairoProvider } from '@/providers/NavigationCairoProvider';
 import { ToastProvider } from '@/providers/ToastProvider';
 import { NotificationsProvider } from '@/providers/NotificationsProvider';
 import { TournamentProvider } from '@/providers/TournamentProvider';
+import { PrivateSpaceProvider } from '@/providers/PrivateSpaceProvider';
+import { AppBadgeSync } from '@/components/layout/AppBadgeSync';
 import { LoadingState } from '@/components/feedback/LoadingState';
 
 /**
@@ -33,7 +35,12 @@ export function AppProviders({ children }: { children: ReactNode }) {
               <NavigationCairoProvider>
                 <ToastProvider>
                   <NotificationsProvider>
-                    <TournamentProvider>{children}</TournamentProvider>
+                    <TournamentProvider>
+                      <PrivateSpaceProvider>
+                        <AppBadgeSync />
+                        {children}
+                      </PrivateSpaceProvider>
+                    </TournamentProvider>
                   </NotificationsProvider>
                 </ToastProvider>
               </NavigationCairoProvider>

@@ -49,6 +49,7 @@ import { ensureSocialLists } from '@/utils/social-stats';
 import { formatArabicDate } from '@/utils';
 import { tabBarTotalHeight } from '@/theme/navigation';
 import { PrivateChatComposer } from '@/components/private/PrivateChatComposer';
+import { setPrivateChatView } from '@/services/private-chat-focus';
 import type {
   PrivateChatMediaKind,
   PrivateContentItem,
@@ -518,6 +519,7 @@ export default function PrivateScreen() {
   const { height: windowHeight } = useWindowDimensions();
   const { desktop } = useResponsive();
   const space = usePrivateSpace(currentUser?.id);
+  const screenFocused = useIsFocused();
   const [section, setSection] = useState<Section>('friends');
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -693,6 +695,26 @@ export default function PrivateScreen() {
     stickToLatestRef.current = true;
     scrollChatToLatest(false);
   }, [section, activeFriend?.id, lastMessageId, chatMessages.length, scrollChatToLatest]);
+
+  useEffect(() => {
+    const viewingFriend =
+      screenFocused && section === 'chat' && activeFriend
+        ? activeFriend.id
+        : null;
+    setPrivateChatView(viewingFriend, screenFocused);
+    return () => setPrivateChatView(null, false);
+  }, [screenFocused, section, activeFriend?.id]);
+
+  useEffect(() => {
+    if (!screenFocused || section !== 'chat' || !activeFriend) return;
+    space.markThreadRead(activeFriend.id);
+  }, [
+    screenFocused,
+    section,
+    activeFriend?.id,
+    chatMessages.length,
+    space.markThreadRead,
+  ]);
 
   // عند الكتابة (لوحة مفاتيح / تغيّر ارتفاع الغلاف) أبقِ آخر رسالة ظاهرة
   useEffect(() => {

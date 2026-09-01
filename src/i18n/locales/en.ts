@@ -849,6 +849,7 @@ export const en: TranslationTree = {
     privateMessageBody: 'New message',
     privateMessagePhoto: 'Photo',
     privateMessageVideo: 'Video',
+    privateMessagesBatch: '%{count} new private messages',
     attachContent: 'Attach content',
     attachFromApp:
       'Pick a photo or video to attach, then tap Send.',

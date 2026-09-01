@@ -1,6 +1,8 @@
 type Listener = (focused: boolean) => void;
 
 let composerFocused = false;
+let privateScreenFocused = false;
+let activeFriendId: string | null = null;
 const listeners = new Set<Listener>();
 
 /**
@@ -17,6 +19,19 @@ export function setPrivateChatComposerFocused(focused: boolean) {
       // ignore
     }
   });
+}
+
+/** المحادثة النشطة أثناء بقاء شاشة الخاصة في المقدمة. */
+export function setPrivateChatView(
+  friendId: string | null,
+  screenFocused: boolean
+) {
+  activeFriendId = friendId;
+  privateScreenFocused = screenFocused;
+}
+
+export function isViewingPrivateFriend(friendId: string) {
+  return privateScreenFocused && activeFriendId === friendId;
 }
 
 export function isPrivateChatComposerFocused() {

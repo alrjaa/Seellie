@@ -88,6 +88,12 @@ import {
   releaseFloatingScrollSource,
 } from '../src/services/floating-scroll-bus';
 import { TRACKED_LEAGUES } from '../src/services/sports-data/leagues';
+import {
+  computePrivateUnreadCount,
+  computeThreadUnreadCount,
+  readTimestampForThread,
+} from '../src/services/private-read-state';
+import type { PrivateSpaceState } from '../src/services/private-space';
 
 function test(name: string, fn: () => void) {
   try {
@@ -795,6 +801,46 @@ test('tracked leagues include Saudi, Bundesliga, and MLS', () => {
   assert.ok(ids.includes(78));
   assert.ok(ids.includes(253));
   assert.equal(TRACKED_LEAGUES.length, 7);
+});
+
+test('private unread counts respect lastReadAt per thread', () => {
+  const space: PrivateSpaceState = {
+    friendIds: ['f1'],
+    chats: {
+      f1: [
+        {
+          id: 'm1',
+          fromMe: false,
+          text: 'old',
+          at: '2026-01-01T10:00:00.000Z',
+        },
+        {
+          id: 'm2',
+          fromMe: false,
+          text: 'new',
+          at: '2026-01-02T10:00:00.000Z',
+        },
+        {
+          id: 'm3',
+          fromMe: true,
+          text: 'mine',
+          at: '2026-01-02T11:00:00.000Z',
+        },
+      ],
+    },
+    items: [],
+  };
+  assert.equal(
+    computeThreadUnreadCount(space.chats.f1, '2026-01-01T12:00:00.000Z'),
+    1
+  );
+  assert.equal(
+    computePrivateUnreadCount(space, {
+      f1: '2026-01-02T10:00:00.000Z',
+    }),
+    0
+  );
+  assert.equal(readTimestampForThread(space.chats.f1), '2026-01-02T11:00:00.000Z');
 });
 
 console.log('All tests passed.');

@@ -20,8 +20,10 @@ import {
 } from '@/theme/navigation';
 import {
   isPrivateChatComposerFocused,
+  setPrivateChatView,
   subscribePrivateChatComposerFocus,
 } from '@/services/private-chat-focus';
+import { usePrivateSpace } from '@/hooks/usePrivateSpace';
 
 export default function FollowerLayout() {
   const { currentUser, loading, routeForRole, messages, featureFlags } =
@@ -46,6 +48,8 @@ export default function FollowerLayout() {
         : 0,
     [messages, currentUser]
   );
+
+  const { unreadPrivateCount } = usePrivateSpace();
 
   const desktopItems = useMemo<DesktopNavItem[]>(
     () => [
@@ -83,6 +87,7 @@ export default function FollowerLayout() {
         href: '/(follower)/private',
         icon: 'lock-closed-outline',
         section: t('tabs.home'),
+        badge: unreadPrivateCount > 0 ? unreadPrivateCount : undefined,
       },
       {
         key: 'unique',
@@ -138,7 +143,7 @@ export default function FollowerLayout() {
         section: t('settings.title'),
       },
     ],
-    [featureFlags.appreciationEnabled, t]
+    [featureFlags.appreciationEnabled, t, unreadPrivateCount]
   );
 
   if (loading) return <LoadingState />;
@@ -241,6 +246,12 @@ export default function FollowerLayout() {
             options={{
               title: t('tabs.private'),
               headerShown: false,
+              tabBarBadge:
+                unreadPrivateCount > 0
+                  ? unreadPrivateCount > 99
+                    ? '99+'
+                    : unreadPrivateCount
+                  : undefined,
               tabBarIcon: ({ color, size }) => (
                 <Ionicons name="lock-closed" color={color} size={size} />
               ),
