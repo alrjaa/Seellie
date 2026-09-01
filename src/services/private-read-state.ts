@@ -55,6 +55,15 @@ export function computePrivateUnreadCount(
   return total;
 }
 
+export function isIncomingMessageUnread(
+  msg: PrivateChatMessage,
+  lastReadAt?: string
+): boolean {
+  if (msg.fromMe) return false;
+  const cutoff = lastReadAt ? new Date(lastReadAt).getTime() : 0;
+  return new Date(msg.at).getTime() > cutoff;
+}
+
 /** آخر طابع زمني في المحادثة — يُستخدم عند تعليمها مقروءة. */
 export function readTimestampForThread(
   messages: PrivateChatMessage[]

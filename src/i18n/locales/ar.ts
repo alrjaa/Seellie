@@ -848,6 +848,7 @@ export const ar = {
     privateMessagePhoto: 'صورة',
     privateMessageVideo: 'فيديو',
     privateMessagesBatch: '%{count} رسائل خاصة جديدة',
+    unreadCount: '%{count} غير مقروءة',
     attachContent: 'إرفاق محتوى',
     attachFromApp:
       'اختر صورة أو فيديو — سيُرفق بالمحادثة ثم اضغط إرسال.',

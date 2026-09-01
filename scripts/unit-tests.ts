@@ -91,6 +91,7 @@ import { TRACKED_LEAGUES } from '../src/services/sports-data/leagues';
 import {
   computePrivateUnreadCount,
   computeThreadUnreadCount,
+  isIncomingMessageUnread,
   readTimestampForThread,
 } from '../src/services/private-read-state';
 import type { PrivateSpaceState } from '../src/services/private-space';
@@ -841,6 +842,21 @@ test('private unread counts respect lastReadAt per thread', () => {
     0
   );
   assert.equal(readTimestampForThread(space.chats.f1), '2026-01-02T11:00:00.000Z');
+});
+
+test('isIncomingMessageUnread ignores outgoing and respects lastReadAt', () => {
+  const msg = {
+    id: 'm2',
+    fromMe: false,
+    text: 'hi',
+    at: '2026-01-02T10:00:00.000Z',
+  };
+  assert.equal(isIncomingMessageUnread(msg, '2026-01-01T00:00:00.000Z'), true);
+  assert.equal(isIncomingMessageUnread(msg, '2026-01-02T10:00:00.000Z'), false);
+  assert.equal(
+    isIncomingMessageUnread({ ...msg, fromMe: true }, undefined),
+    false
+  );
 });
 
 console.log('All tests passed.');

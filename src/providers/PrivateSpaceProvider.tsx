@@ -74,6 +74,7 @@ type PrivateSpaceApi = {
   items: PrivateContentItem[];
   unreadPrivateCount: number;
   unreadForFriend: (friendId: string) => number;
+  lastReadAtForFriend: (friendId: string) => string | undefined;
   markThreadRead: (friendId: string) => void;
   reload: () => Promise<void>;
   addFriend: (
@@ -101,7 +102,7 @@ const PrivateSpaceContext = createContext<PrivateSpaceApi | undefined>(
 export function PrivateSpaceProvider({ children }: { children: ReactNode }) {
   const { currentUser, users } = useTournament();
   const userId = currentUser?.id;
-  const { addNotification } = useNotificationsApi();
+  const { addNotification, markRead } = useNotificationsApi();
   const { toast } = useToast();
   const { t } = useTranslation();
 
@@ -270,6 +271,13 @@ export function PrivateSpaceProvider({ children }: { children: ReactNode }) {
     (friendId: string) => {
       if (!userId || !friendId) return;
       const messages = stateRef.current.chats[friendId] || [];
+
+      for (const msg of messages) {
+        if (!msg.fromMe) {
+          markRead(`pdm-${msg.id}`, userId);
+        }
+      }
+
       const at = readTimestampForThread(messages);
       const prev = readStateRef.current[friendId];
       if (prev && new Date(prev).getTime() >= new Date(at).getTime()) return;
@@ -278,7 +286,7 @@ export function PrivateSpaceProvider({ children }: { children: ReactNode }) {
       setReadState(next);
       void savePrivateReadState(userId, next);
     },
-    [userId]
+    [markRead, userId]
   );
 
   const unreadPrivateCount = useMemo(
@@ -293,6 +301,11 @@ export function PrivateSpaceProvider({ children }: { children: ReactNode }) {
         readState[friendId]
       ),
     [readState, state.chats]
+  );
+
+  const lastReadAtForFriend = useCallback(
+    (friendId: string) => readState[friendId],
+    [readState]
   );
 
   const addFriend = useCallback(
@@ -404,6 +417,7 @@ export function PrivateSpaceProvider({ children }: { children: ReactNode }) {
       items: state.items,
       unreadPrivateCount,
       unreadForFriend,
+      lastReadAtForFriend,
       markThreadRead,
       reload,
       addFriend,
@@ -418,6 +432,7 @@ export function PrivateSpaceProvider({ children }: { children: ReactNode }) {
       state,
       unreadPrivateCount,
       unreadForFriend,
+      lastReadAtForFriend,
       markThreadRead,
       reload,
       addFriend,

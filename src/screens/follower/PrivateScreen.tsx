@@ -54,6 +54,7 @@ import type {
   PrivateChatMediaKind,
   PrivateContentItem,
 } from '@/services/private-space';
+import { isIncomingMessageUnread } from '@/services/private-read-state';
 import type { User } from '@/providers/TournamentProvider';
 import { isUuid } from '@/services/supabase-messages';
 
@@ -712,9 +713,19 @@ export default function PrivateScreen() {
     screenFocused,
     section,
     activeFriend?.id,
-    chatMessages.length,
+    lastMessageId,
     space.markThreadRead,
   ]);
+
+  const openChatWith = useCallback(
+    (friendId: string) => {
+      setActiveFriendId(friendId);
+      setSection('chat');
+      setPendingMedia(null);
+      space.markThreadRead(friendId);
+    },
+    [space.markThreadRead]
+  );
 
   // عند الكتابة (لوحة مفاتيح / تغيّر ارتفاع الغلاف) أبقِ آخر رسالة ظاهرة
   useEffect(() => {
@@ -1181,16 +1192,39 @@ export default function PrivateScreen() {
                   <View style={styles.friendRow}>
                     <Avatar uri={u.avatar} name={u.name} size={40} />
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: theme.colors.text, fontWeight: '800' }}>
+                      <Text
+                        style={{
+                          color: theme.colors.text,
+                          fontWeight:
+                            space.unreadForFriend(u.id) > 0 ? '900' : '800',
+                        }}
+                      >
                         {u.handle || u.name}
                       </Text>
-                      <Muted>{u.name}</Muted>
+                      <Muted>
+                        {space.unreadForFriend(u.id) > 0
+                          ? t('privateSpace.unreadCount', {
+                              count: space.unreadForFriend(u.id),
+                            })
+                          : u.name}
+                      </Muted>
                     </View>
+                    {space.unreadForFriend(u.id) > 0 ? (
+                      <View
+                        style={[
+                          styles.unreadPill,
+                          { backgroundColor: theme.colors.danger },
+                        ]}
+                      >
+                        <Text style={styles.unreadPillText}>
+                          {space.unreadForFriend(u.id) > 99
+                            ? '99+'
+                            : space.unreadForFriend(u.id)}
+                        </Text>
+                      </View>
+                    ) : null}
                     <Pressable
-                      onPress={() => {
-                        setActiveFriendId(u.id);
-                        setSection('chat');
-                      }}
+                      onPress={() => openChatWith(u.id)}
                       hitSlop={6}
                       accessibilityRole="button"
                       accessibilityLabel={t('privateSpace.chat')}
@@ -1377,30 +1411,42 @@ export default function PrivateScreen() {
                 {friends.filter(Boolean).map((u) => {
                   if (!u) return null;
                   const active = activeFriend?.id === u.id;
+                  const unread = space.unreadForFriend(u.id);
                   return (
                     <Pressable
                       key={u.id}
-                      onPress={() => {
-                        setActiveFriendId(u.id);
-                        setPendingMedia(null);
-                      }}
+                      onPress={() => openChatWith(u.id)}
                       style={[
                         styles.friendChip,
                         {
                           borderColor: active
                             ? theme.colors.accent
-                            : theme.colors.border,
+                            : unread > 0
+                              ? theme.colors.danger
+                              : theme.colors.border,
                           backgroundColor: active
                             ? theme.colors.accentSoft
-                            : theme.colors.card,
+                            : unread > 0
+                              ? theme.colors.dangerSoft
+                              : theme.colors.card,
                         },
                       ]}
                     >
-                      <Avatar uri={u.avatar} name={u.name} size={28} />
+                      <View>
+                        <Avatar uri={u.avatar} name={u.name} size={28} />
+                        {unread > 0 ? (
+                          <View
+                            style={[
+                              styles.chipUnreadDot,
+                              { backgroundColor: theme.colors.danger },
+                            ]}
+                          />
+                        ) : null}
+                      </View>
                       <Text
                         style={{
                           color: theme.colors.text,
-                          fontWeight: '700',
+                          fontWeight: unread > 0 ? '900' : '700',
                           fontSize: 12,
                         }}
                         numberOfLines={1}
@@ -1475,17 +1521,31 @@ export default function PrivateScreen() {
                       const mediaUrl = resolved.mediaUrl;
                       const mediaKind = resolved.mediaKind;
                       const caption = resolved.caption;
+                      const unreadMsg =
+                        !m.fromMe &&
+                        isIncomingMessageUnread(
+                          m,
+                          activeFriend
+                            ? space.lastReadAtForFriend(activeFriend.id)
+                            : undefined
+                        );
                       return (
                         <View
                           key={m.id}
                           style={[
                             styles.bubble,
                             mediaUrl ? styles.bubbleWithMedia : null,
+                            unreadMsg ? styles.bubbleUnread : null,
                             {
                               alignSelf: m.fromMe ? 'flex-end' : 'flex-start',
                               backgroundColor: m.fromMe
                                 ? theme.colors.accent
-                                : theme.colors.surfaceElevated,
+                                : unreadMsg
+                                  ? theme.colors.accentSoft
+                                  : theme.colors.surfaceElevated,
+                              borderColor: unreadMsg
+                                ? theme.colors.accent
+                                : 'transparent',
                             },
                           ]}
                         >
@@ -1531,6 +1591,7 @@ export default function PrivateScreen() {
                                 color: m.fromMe
                                   ? theme.colors.textInverse
                                   : theme.colors.text,
+                                fontWeight: unreadMsg ? '800' : '400',
                               }}
                             >
                               {caption}
@@ -1865,6 +1926,29 @@ const styles = StyleSheet.create({
     marginRight: 8,
     maxWidth: 160,
   },
+  chipUnreadDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  unreadPill: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unreadPillText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '800',
+  },
   chatPanel: {
     flex: 1,
     minHeight: 0,
@@ -1907,6 +1991,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     gap: 6,
     overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  bubbleUnread: {
+    borderWidth: 1.5,
   },
   bubbleWithMedia: {
     width: 224,
