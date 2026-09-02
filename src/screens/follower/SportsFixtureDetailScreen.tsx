@@ -458,10 +458,12 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
   detail,
   home,
   away,
+  fillHeight = false,
 }: {
   detail: SportsFixtureDetail;
   home?: SportsTeamLineup;
   away?: SportsTeamLineup;
+  fillHeight?: boolean;
 }) {
   const { t } = useTranslation();
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -489,8 +491,13 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
       : detail.status || t('sportsFixture.scheduled');
 
   return (
-    <Card style={styles.pitchCard}>
-      <View style={[styles.pitchWrap, { height: pitchHeight }]}>
+    <Card style={[styles.pitchCard, fillHeight && styles.pitchCardFill]}>
+      <View
+        style={[
+          styles.pitchWrap,
+          fillHeight ? styles.pitchWrapFill : { height: pitchHeight },
+        ]}
+      >
         <View style={styles.pitchField}>
           <View style={styles.pitchGrassStripeA} />
           <View style={styles.pitchGrassStripeB} />
@@ -547,7 +554,7 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
         </View>
       ) : null}
 
-      {(home?.substitutes.length || away?.substitutes.length) ? (
+      {(home?.substitutes.length || away?.substitutes.length) && !fillHeight ? (
         <View style={styles.subsRow}>
           {away?.substitutes.length ? (
             <View style={styles.subsCol}>
@@ -691,12 +698,8 @@ export default function SportsFixtureDetailScreen() {
   }
 
   return (
-    <Screen scroll={false} fabClearance>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
+    <Screen scroll={false} fabClearance={false}>
+      <View style={styles.page}>
         <View style={styles.topBar}>
           <HeaderBackButton />
         </View>
@@ -744,26 +747,42 @@ export default function SportsFixtureDetailScreen() {
         </ScrollView>
 
         {tab === 'overview' ? (
-          <>
+          <View style={styles.pitchFlex}>
             <FootballPitchLineups
+              fillHeight
               detail={detail}
               home={detail.lineups.home}
               away={detail.lineups.away}
             />
-            {detail.events.length > 0 ? (
-              <EventsTab events={detail.events.slice(0, 6)} />
-            ) : null}
-          </>
-        ) : null}
-        {tab === 'events' ? <EventsTab events={detail.events} /> : null}
-        {tab === 'stats' ? <StatsTab detail={detail} /> : null}
-      </ScrollView>
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.tabScroll}
+            contentContainerStyle={styles.tabScrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {tab === 'events' ? <EventsTab events={detail.events} /> : null}
+            {tab === 'stats' ? <StatsTab detail={detail} /> : null}
+          </ScrollView>
+        )}
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
+  page: {
+    flex: 1,
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  pitchFlex: {
+    flex: 1,
+    minHeight: 0,
+  },
+  tabScroll: { flex: 1 },
+  tabScrollContent: { paddingBottom: 16, gap: 12 },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -824,11 +843,13 @@ const styles = StyleSheet.create({
   eventBody: { flex: 1, gap: 2 },
   eventTitle: { fontSize: 14, ...cairoText('semiBold') },
   pitchCard: { padding: 0, overflow: 'hidden' },
+  pitchCardFill: { flex: 1, minHeight: 0 },
   pitchWrap: {
     width: '100%',
     overflow: 'hidden',
     position: 'relative',
   },
+  pitchWrapFill: { flex: 1, minHeight: 240 },
   pitchField: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#1f5f35',
