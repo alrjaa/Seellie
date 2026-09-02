@@ -287,7 +287,7 @@ function playerPhotoUrl(playerId: number, raw?: string) {
 function mapPlayerMatchStats(playersRaw: any) {
   const map = new Map<
     number,
-    { rating?: number; goals?: number; assists?: number }
+    { rating?: number; goals?: number; assists?: number; position?: string }
   >();
   const teams = Array.isArray(playersRaw?.response) ? playersRaw.response : [];
   for (const teamBlock of teams) {
@@ -309,14 +309,51 @@ function mapPlayerMatchStats(playersRaw: any) {
         stats?.goals?.assists != null
           ? Number(stats.goals.assists)
           : undefined;
+      const positionRaw = stats?.games?.position;
+      const position =
+        positionRaw != null && String(positionRaw).trim() !== ''
+          ? String(positionRaw).trim()
+          : undefined;
       map.set(id, {
         rating: Number.isFinite(rating) ? rating : undefined,
         goals: Number.isFinite(goals) ? goals : undefined,
         assists: Number.isFinite(assists) ? assists : undefined,
+        position,
       });
     }
   }
   return map;
+}
+
+function inferFormationFromPositions(
+  players: Array<{ position?: string }>
+): string | undefined {
+  let defenders = 0;
+  let midfielders = 0;
+  let forwards = 0;
+  for (const player of players) {
+    const pos = String(player.position || '')
+      .trim()
+      .toUpperCase();
+    if (!pos || pos === 'G' || pos === 'GK') continue;
+    if (['D', 'DF', 'DEF', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'SW'].includes(pos)) {
+      defenders += 1;
+      continue;
+    }
+    if (['F', 'FW', 'ST', 'CF', 'ATT', 'SS', 'LW', 'RW'].includes(pos)) {
+      forwards += 1;
+      continue;
+    }
+    midfielders += 1;
+  }
+  if (!defenders && !midfielders && !forwards) return undefined;
+  if (defenders === 4 && forwards === 2 && midfielders === 4) return '4-4-2';
+  if (defenders === 4 && forwards === 1 && midfielders === 5) return '4-2-3-1';
+  if (defenders === 4 && forwards === 3 && midfielders === 3) return '4-3-3';
+  if (defenders >= 3 && forwards >= 1) {
+    return `${defenders}-${midfielders}-${forwards}`;
+  }
+  return undefined;
 }
 
 function mapFixtureDetail(
@@ -379,11 +416,12 @@ function mapFixtureDetail(
         name: String(row.player?.name ?? '—'),
         number:
           row.player?.number != null ? Number(row.player.number) : undefined,
-        position: row.player?.pos
-          ? String(row.player.pos)
-          : row.player?.position
-            ? String(row.player.position)
-            : undefined,
+        position:
+          row.player?.pos
+            ? String(row.player.pos)
+            : row.player?.position
+              ? String(row.player.position)
+              : stats?.position,
         photo: playerPhotoUrl(playerId, row.player?.photo),
         grid:
           row.player?.grid != null && row.player.grid !== ''
@@ -408,18 +446,24 @@ function mapFixtureDetail(
     (l: any) => Number(l.team?.id) === awayId
   );
 
-  const mapTeamLineup = (raw: any) =>
-    raw
-      ? {
-          teamId: Number(raw.team?.id ?? 0),
-          teamName: String(raw.team?.name ?? '—'),
-          teamLogo: raw.team?.logo ? String(raw.team.logo) : undefined,
-          formation: raw.formation ? String(raw.formation) : undefined,
-          coach: raw.coach?.name ? String(raw.coach.name) : undefined,
-          startXI: mapPlayers(raw.startXI),
-          substitutes: mapPlayers(raw.substitutes),
-        }
-      : undefined;
+  const mapTeamLineup = (raw: any) => {
+    if (!raw) return undefined;
+    const startXI = mapPlayers(raw.startXI);
+    const substitutes = mapPlayers(raw.substitutes);
+    const formation =
+      raw.formation != null && String(raw.formation).trim() !== ''
+        ? String(raw.formation)
+        : inferFormationFromPositions(startXI);
+    return {
+      teamId: Number(raw.team?.id ?? 0),
+      teamName: String(raw.team?.name ?? '—'),
+      teamLogo: raw.team?.logo ? String(raw.team.logo) : undefined,
+      formation,
+      coach: raw.coach?.name ? String(raw.coach.name) : undefined,
+      startXI,
+      substitutes,
+    };
+  };
 
   const statsList = Array.isArray(statsRaw?.response) ? statsRaw.response : [];
   const homeStats = statsList.find((s: any) => Number(s.team?.id) === homeId);

@@ -66,12 +66,49 @@ function positionRank(player: SportsLineupPlayer) {
 }
 
 function parseFormationLines(formation?: string) {
-  if (!formation?.trim()) return [4, 4, 2];
+  if (!formation?.trim()) return [4, 2, 3, 1];
   const lines = formation
     .split('-')
     .map((part) => Number(part.trim()))
     .filter((n) => Number.isFinite(n) && n > 0);
-  return lines.length ? lines : [4, 4, 2];
+  return lines.length ? lines : [4, 2, 3, 1];
+}
+
+function playerHasPosition(player: SportsLineupPlayer) {
+  const pos = (player.position || '').trim();
+  return pos.length > 0;
+}
+
+function positionCodeForRank(rank: number) {
+  if (rank === 0) return 'G';
+  if (rank === 1) return 'D';
+  if (rank === 3) return 'F';
+  return 'M';
+}
+
+/** When API omits grid/position (common in some leagues), use startXI order + formation. */
+function enrichPlayersFromOrder(
+  players: SportsLineupPlayer[],
+  formation?: string
+): SportsLineupPlayer[] {
+  const hasGrid = players.some((player) => parseLineupGrid(player.grid) != null);
+  const hasPosition = players.some(playerHasPosition);
+  if (hasGrid || hasPosition) return players;
+
+  const lineSizes = parseFormationLines(formation);
+  const ranks: number[] = [0];
+  lineSizes.forEach((count, lineIdx) => {
+    const isLast = lineIdx === lineSizes.length - 1;
+    const isFirst = lineIdx === 0;
+    const rank = isFirst ? 1 : isLast && count <= 2 ? 3 : 2;
+    for (let i = 0; i < count; i++) ranks.push(rank);
+  });
+  while (ranks.length < players.length) ranks.push(2);
+
+  return players.map((player, idx) => ({
+    ...player,
+    position: positionCodeForRank(ranks[idx] ?? 2),
+  }));
 }
 
 function mapNormToPitch(
@@ -320,16 +357,18 @@ export function buildPitchLineupLayout(
 ): Map<number, PitchPos> {
   if (!players.length) return new Map();
 
-  const fullGrid = buildFromFullGrid(players, side);
-  if (fullGrid.size >= Math.ceil(players.length * 0.9)) {
-    fixGoalkeeperOrientation(players, fullGrid, side);
+  const enriched = enrichPlayersFromOrder(players, formation);
+
+  const fullGrid = buildFromFullGrid(enriched, side);
+  if (fullGrid.size >= Math.ceil(enriched.length * 0.9)) {
+    fixGoalkeeperOrientation(enriched, fullGrid, side);
     return fullGrid;
   }
 
   const lines =
-    assignPlayersToGridRows(players) ??
-    assignPlayersToFormationLines(players, formation);
+    assignPlayersToGridRows(enriched) ??
+    assignPlayersToFormationLines(enriched, formation);
   const positions = placeLinesOnPitch(lines, side);
-  fixGoalkeeperOrientation(players, positions, side);
+  fixGoalkeeperOrientation(enriched, positions, side);
   return positions;
 }
