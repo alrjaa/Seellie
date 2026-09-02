@@ -320,155 +320,255 @@ const EventsTab = memo(function EventsTab({
   );
 });
 
+type PitchPos = { top: number; left: number };
+
 function parseGrid(grid?: string) {
   if (!grid) return null;
-  const parts = grid.split(/[:,-]/).map((s) => Number(s.trim()));
-  const row = parts[0];
-  const col = parts[1];
-  if (!row || !col) return null;
+  const match = String(grid).trim().match(/^(\d+)\s*[:,-]\s*(\d+)$/);
+  if (!match) return null;
+  const row = Number(match[1]);
+  const col = Number(match[2]);
+  if (!Number.isFinite(row) || !Number.isFinite(col) || row < 1 || col < 1) {
+    return null;
+  }
   return { row, col };
 }
 
 const POSITION_DEPTH: Record<string, number> = {
-  G: 1,
-  GK: 1,
-  D: 2,
-  DF: 2,
-  DEF: 2,
-  CB: 2,
-  LB: 2,
-  RB: 2,
-  M: 3,
-  MF: 3,
-  MID: 3,
-  CM: 3,
-  DM: 3,
-  AM: 3,
-  F: 4,
-  FW: 4,
-  ST: 4,
-  CF: 4,
-  ATT: 4,
+  G: 0,
+  GK: 0,
+  D: 1,
+  DF: 1,
+  DEF: 1,
+  CB: 1,
+  LB: 1,
+  RB: 1,
+  LWB: 1,
+  RWB: 1,
+  SW: 1,
+  M: 2,
+  MF: 2,
+  MID: 2,
+  CM: 2,
+  DM: 2,
+  AM: 2,
+  CDM: 2,
+  CAM: 2,
+  RM: 2,
+  LM: 2,
+  F: 3,
+  FW: 3,
+  ST: 3,
+  CF: 3,
+  ATT: 3,
+  SS: 3,
+  LW: 3,
+  RW: 3,
 };
-
-function playerDepth(player: SportsLineupPlayer, fallbackRow: number): number {
-  const fromGrid = parseGrid(player.grid)?.row;
-  if (fromGrid) return fromGrid;
-  const pos = (player.position || '').trim().toUpperCase();
-  if (pos && POSITION_DEPTH[pos] != null) return POSITION_DEPTH[pos];
-  return fallbackRow;
-}
 
 function isGoalkeeper(player: SportsLineupPlayer) {
   const pos = (player.position || '').trim().toUpperCase();
   return pos === 'G' || pos === 'GK';
 }
 
-function buildFallbackRowMap(players: SportsLineupPlayer[]): Map<number, number> {
-  const map = new Map<number, number>();
-  const buckets: SportsLineupPlayer[][] = [[], [], [], []];
-
-  players.forEach((player) => {
-    const depth = playerDepth(player, 3);
-    const bucketIdx = Math.min(Math.max(depth - 1, 0), 3);
-    buckets[bucketIdx].push(player);
-  });
-
-  buckets.forEach((bucket, rowIdx) => {
-    bucket.forEach((player) => {
-      map.set(player.id, rowIdx + 1);
-    });
-  });
-
-  return map;
+function positionRank(player: SportsLineupPlayer) {
+  if (isGoalkeeper(player)) return 0;
+  const pos = (player.position || '').trim().toUpperCase();
+  if (pos && POSITION_DEPTH[pos] != null) return POSITION_DEPTH[pos];
+  return 2;
 }
 
-function hasReliableGrid(players: SportsLineupPlayer[]): boolean {
-  if (!players.length) return false;
-  const withGrid = players.filter((p) => parseGrid(p.grid)).length;
-  return withGrid >= Math.ceil(players.length * 0.45);
+function parseFormationLines(formation?: string) {
+  if (!formation?.trim()) return [4, 4, 2];
+  const lines = formation
+    .split('-')
+    .map((part) => Number(part.trim()))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  return lines.length ? lines : [4, 4, 2];
 }
 
-type PitchPos = { top: number; left: number };
+type GridBounds = {
+  minRow: number;
+  maxRow: number;
+  minCol: number;
+  maxCol: number;
+};
 
-function rowForGoalkeeper(
+const PITCH_AWAY_START = 6;
+const PITCH_HOME_END = 94;
+const PITCH_HALF_SPAN = 38;
+const PITCH_LEFT_MIN = 10;
+const PITCH_LEFT_SPAN = 80;
+
+function mapNormToPitch(
+  rowNorm: number,
+  colNorm: number,
+  side: 'home' | 'away'
+): PitchPos {
+  const top =
+    side === 'away'
+      ? PITCH_AWAY_START + rowNorm * PITCH_HALF_SPAN
+      : PITCH_HOME_END - rowNorm * PITCH_HALF_SPAN;
+  const left = PITCH_LEFT_MIN + colNorm * PITCH_LEFT_SPAN;
+  return { top, left };
+}
+
+function gridBounds(entries: { row: number; col: number }[]): GridBounds {
+  const rows = entries.map((e) => e.row);
+  const cols = entries.map((e) => e.col);
+  return {
+    minRow: Math.min(...rows),
+    maxRow: Math.max(...rows),
+    minCol: Math.min(...cols),
+    maxCol: Math.max(...cols),
+  };
+}
+
+function shouldInvertGridRows(
   players: SportsLineupPlayer[],
-  byRow: Map<number, SportsLineupPlayer[]>
+  bounds: GridBounds
 ) {
+  if (bounds.maxRow <= bounds.minRow) return false;
   const gk = players.find(isGoalkeeper);
-  if (!gk) return null;
-  for (const [row, list] of byRow) {
-    if (list.some((p) => p.id === gk.id)) return row;
-  }
-  return null;
+  const gkRow = gk ? parseGrid(gk.grid)?.row : null;
+  return gkRow != null && gkRow === bounds.maxRow;
 }
 
-function normalizeRowsByGoalkeeper(
-  players: SportsLineupPlayer[],
-  byRow: Map<number, SportsLineupPlayer[]>
-) {
-  const rowKeys = [...byRow.keys()];
-  if (rowKeys.length < 2) return byRow;
-
-  const minRow = Math.min(...rowKeys);
-  const maxRow = Math.max(...rowKeys);
-  const gkRow = rowForGoalkeeper(players, byRow);
-  if (gkRow == null || gkRow !== maxRow) return byRow;
-
-  const flipped = new Map<number, SportsLineupPlayer[]>();
-  for (const [row, list] of byRow) {
-    flipped.set(maxRow - row + minRow, list);
-  }
-  return flipped;
-}
-
-function buildPitchLayout(
+function buildFromGrid(
   players: SportsLineupPlayer[],
   side: 'home' | 'away'
 ): Map<number, PitchPos> {
   const positions = new Map<number, PitchPos>();
-  if (!players.length) return positions;
+  const entries = players
+    .map((player) => ({ player, grid: parseGrid(player.grid) }))
+    .filter(
+      (
+        entry
+      ): entry is {
+        player: SportsLineupPlayer;
+        grid: { row: number; col: number };
+      } => entry.grid != null
+    );
 
-  const fallbackRows = buildFallbackRowMap(players);
-  const useGrid = hasReliableGrid(players);
-  let byRow = new Map<number, SportsLineupPlayer[]>();
+  if (entries.length < Math.max(6, Math.ceil(players.length * 0.55))) {
+    return positions;
+  }
 
-  players.forEach((player) => {
-    const row = useGrid
-      ? playerDepth(player, fallbackRows.get(player.id) ?? 3)
-      : fallbackRows.get(player.id) ?? playerDepth(player, 3);
-    if (!byRow.has(row)) byRow.set(row, []);
-    byRow.get(row)!.push(player);
+  const bounds = gridBounds(entries.map((entry) => entry.grid));
+  const uniqueRows = new Set(entries.map((entry) => entry.grid.row)).size;
+  const uniqueCols = new Set(entries.map((entry) => entry.grid.col)).size;
+  if (
+    bounds.maxRow === bounds.minRow ||
+    bounds.maxCol === bounds.minCol ||
+    uniqueRows < 3 ||
+    uniqueCols < 3
+  ) {
+    return positions;
+  }
+
+  const invertRows = shouldInvertGridRows(players, bounds);
+
+  entries.forEach(({ player, grid }) => {
+    const row = invertRows
+      ? bounds.minRow + bounds.maxRow - grid.row
+      : grid.row;
+    const rowNorm =
+      bounds.maxRow === bounds.minRow
+        ? 0
+        : (row - bounds.minRow) / (bounds.maxRow - bounds.minRow);
+    const colNorm =
+      bounds.maxCol === bounds.minCol
+        ? 0.5
+        : (grid.col - bounds.minCol) / (bounds.maxCol - bounds.minCol);
+    positions.set(player.id, mapNormToPitch(rowNorm, colNorm, side));
   });
 
-  byRow = normalizeRowsByGoalkeeper(players, byRow);
+  return positions;
+}
 
-  const rows = [...byRow.keys()].sort((a, b) => a - b);
-  const rowCount = Math.max(rows.length, 1);
-  const awayStart = 8;
-  const homeEnd = 92;
-  const halfSpan = 34;
-
-  rows.forEach((rowKey, rowIdx) => {
-    const rowPlayers = [...(byRow.get(rowKey) ?? [])].sort((a, b) => {
-      const aCol = parseGrid(a.grid)?.col ?? a.number ?? 0;
-      const bCol = parseGrid(b.grid)?.col ?? b.number ?? 0;
-      return Number(aCol) - Number(bCol);
+function assignPlayersToLines(
+  players: SportsLineupPlayer[],
+  formation?: string
+): SportsLineupPlayer[][] {
+  const goalkeepers = players.filter(isGoalkeeper);
+  const outfield = players
+    .filter((player) => !isGoalkeeper(player))
+    .sort((a, b) => {
+      const rankDiff = positionRank(a) - positionRank(b);
+      if (rankDiff !== 0) return rankDiff;
+      return (a.number ?? 99) - (b.number ?? 99);
     });
 
-    const rowProgress = rowCount <= 1 ? 0.5 : rowIdx / (rowCount - 1);
-    const top =
-      side === 'away'
-        ? awayStart + rowProgress * halfSpan
-        : homeEnd - rowProgress * halfSpan;
+  const lineSizes = parseFormationLines(formation);
+  const lines: SportsLineupPlayer[][] = goalkeepers.length ? [goalkeepers] : [];
+  let cursor = 0;
 
-    rowPlayers.forEach((player, i) => {
-      const left = ((i + 1) / (rowPlayers.length + 1)) * 88 + 6;
-      positions.set(player.id, { top, left });
+  lineSizes.forEach((size) => {
+    const line: SportsLineupPlayer[] = [];
+    for (let i = 0; i < size && cursor < outfield.length; i += 1, cursor += 1) {
+      line.push(outfield[cursor]);
+    }
+    if (line.length) lines.push(line);
+  });
+
+  if (cursor < outfield.length) {
+    const tail = outfield.slice(cursor);
+    if (lines.length) {
+      lines[lines.length - 1].push(...tail);
+    } else {
+      lines.push(tail);
+    }
+  }
+
+  if (!lines.length && players.length) {
+    lines.push([...players]);
+  }
+
+  return lines;
+}
+
+function buildFromFormation(
+  players: SportsLineupPlayer[],
+  side: 'home' | 'away',
+  formation?: string
+): Map<number, PitchPos> {
+  const positions = new Map<number, PitchPos>();
+  const lines = assignPlayersToLines(players, formation);
+  const lineCount = lines.length;
+
+  lines.forEach((linePlayers, lineIdx) => {
+    const rowNorm = lineCount <= 1 ? 0 : lineIdx / (lineCount - 1);
+    linePlayers.forEach((player, playerIdx) => {
+      const colNorm =
+        linePlayers.length === 1
+          ? 0.5
+          : playerIdx / Math.max(linePlayers.length - 1, 1);
+      positions.set(player.id, mapNormToPitch(rowNorm, colNorm, side));
     });
   });
 
   return positions;
+}
+
+function buildPitchLayout(
+  players: SportsLineupPlayer[],
+  side: 'home' | 'away',
+  formation?: string
+): Map<number, PitchPos> {
+  if (!players.length) return new Map();
+
+  const fromGrid = buildFromGrid(players, side);
+  if (fromGrid.size >= Math.max(6, Math.ceil(players.length * 0.55))) {
+    return fromGrid;
+  }
+
+  const fromFormation = buildFromFormation(players, side, formation);
+  players.forEach((player) => {
+    if (!fromFormation.has(player.id) && fromGrid.has(player.id)) {
+      fromFormation.set(player.id, fromGrid.get(player.id)!);
+    }
+  });
+  return fromFormation;
 }
 
 function ratingColor(rating: number) {
@@ -598,8 +698,8 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
 
   const homeXi = home?.startXI ?? [];
   const awayXi = away?.startXI ?? [];
-  const homePos = buildPitchLayout(homeXi, 'home');
-  const awayPos = buildPitchLayout(awayXi, 'away');
+  const homePos = buildPitchLayout(homeXi, 'home', home?.formation);
+  const awayPos = buildPitchLayout(awayXi, 'away', away?.formation);
   const statusLabel = isLive(detail.status)
     ? t('sportsFixture.live')
     : isFinished(detail.status)
