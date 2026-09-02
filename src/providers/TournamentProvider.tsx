@@ -3763,6 +3763,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     },
     [toast, t, competitions, notifyAccountUser]
   );
+
+  const updatePlayerStatus = useCallback(
     (
       competitionId: string,
       teamId: string,
