@@ -22,34 +22,45 @@ import { isUuid } from '@/services/supabase-messages';
 
 const MessageRow = memo(function MessageRow({
   item,
+  currentUserId,
+  peerName,
   onPress,
 }: {
   item: Message;
+  currentUserId: string;
+  peerName: string;
   onPress: () => void;
 }) {
   const theme = useAppTheme();
+  const { t } = useTranslation();
+  const isSent = item.senderId === currentUserId;
+  const unread = !isSent && !item.read;
   return (
     <Pressable
       onPress={onPress}
       hitSlop={6}
       accessibilityRole="button"
-      accessibilityLabel={`${item.subject} — ${item.senderName}`}
-      accessibilityState={{ selected: !item.read }}
+      accessibilityLabel={`${item.subject} — ${peerName}`}
+      accessibilityState={{ selected: unread }}
     >
       <Card
         style={
-          !item.read
+          unread
             ? { ...styles.msgCard, borderColor: theme.colors.accent }
             : styles.msgCard
         }
       >
         <View style={styles.row}>
-          <Avatar uri={item.senderAvatar} name={item.senderName} size={40} />
+          <Avatar uri={item.senderAvatar} name={peerName} size={40} />
           <View style={{ flex: 1, gap: 3 }}>
             <Text style={[styles.subject, { color: theme.colors.text }]}>
               {item.subject}
             </Text>
-            <Muted>{item.senderName}</Muted>
+            <Muted>
+              {isSent
+                ? t('organizer.messages.sentTo', { name: peerName })
+                : t('organizer.messages.fromLineShort', { name: peerName })}
+            </Muted>
             <Text
               style={[styles.body, { color: theme.colors.textMuted }]}
               numberOfLines={2}
@@ -58,7 +69,7 @@ const MessageRow = memo(function MessageRow({
             </Text>
             <Muted>{formatArabicDate(item.timestamp)}</Muted>
           </View>
-          {!item.read ? (
+          {unread ? (
             <View
               style={[styles.dot, { backgroundColor: theme.colors.accent }]}
             />
@@ -103,12 +114,38 @@ export default function MessagesScreen() {
     [users]
   );
 
-  const inbox = useMemo(
-    () =>
-      currentUser
-        ? messages.filter((m) => m.recipientId === currentUser.id)
-        : [],
-    [messages, currentUser]
+  const inbox = useMemo(() => {
+    if (!currentUser) return [];
+    return messages
+      .filter(
+        (m) =>
+          m.senderId === currentUser.id || m.recipientId === currentUser.id
+      )
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  }, [messages, currentUser]);
+
+  const usersById = useMemo(
+    () => new Map(users.map((u) => [u.id, u])),
+    [users]
+  );
+
+  const peerNameFor = useCallback(
+    (msg: Message) => {
+      if (!currentUser) return msg.senderName;
+      const peerId =
+        msg.senderId === currentUser.id ? msg.recipientId : msg.senderId;
+      return usersById.get(peerId)?.name || msg.senderName;
+    },
+    [currentUser, usersById]
+  );
+
+  const onOpenMessage = useCallback(
+    (msg: Message) => {
+      if (msg.recipientId === currentUser?.id) {
+        markMessageAsRead(msg.id);
+      }
+    },
+    [currentUser?.id, markMessageAsRead]
   );
 
   const onSend = useCallback(async () => {
@@ -144,6 +181,7 @@ export default function MessagesScreen() {
           <View style={{ gap: 10, marginBottom: 8 }}>
             <Subtitle>{t('freelancer.inbox')}</Subtitle>
             <Muted>{t('freelancer.inboxSub')}</Muted>
+            <Muted>{t('freelancer.mailboxHint')}</Muted>
             <Muted>{t('freelancer.joinRequestsHint')}</Muted>
             <Button
               label={composing ? t('freelancer.cancelCompose') : t('freelancer.newMessage')}
@@ -220,7 +258,9 @@ export default function MessagesScreen() {
         renderItem={({ item }) => (
           <MessageRow
             item={item}
-            onPress={() => markMessageAsRead(item.id)}
+            currentUserId={currentUser.id}
+            peerName={peerNameFor(item)}
+            onPress={() => onOpenMessage(item)}
           />
         )}
       />

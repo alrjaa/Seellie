@@ -2694,21 +2694,26 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       );
       if (!mine.length) return;
       for (const msg of mine) {
-        const isOrganizerPath =
-          (user.activeRole || user.role) === 'organizer';
+        const role = user.activeRole || user.role;
+        const href =
+          role === 'organizer'
+            ? '/(organizer)/messages'
+            : role === 'freelancer'
+              ? '/(freelancer)/messages'
+              : '/(follower)/messages';
         addNotification({
           id: `msg-${msg.id}`,
           kind: 'message',
           recipientId: user.id,
           title: msg.subject.startsWith('[نظام]')
             ? 'إشعار النظام'
-            : msg.subject.startsWith('[قبول انضمام]')
-              ? t('shareCards.joinAcceptNotifTitle')
-              : t('home.messages'),
+            : msg.subject.startsWith('[طلب انضمام]')
+              ? t('shareCards.joinRequestNotifTitle')
+              : msg.subject.startsWith('[قبول انضمام]')
+                ? t('shareCards.joinAcceptNotifTitle')
+                : t('home.messages'),
           body: `${msg.senderName}: ${msg.subject}`,
-          href: isOrganizerPath
-            ? '/(organizer)/messages'
-            : '/(follower)/messages',
+          href,
         });
       }
       if (opts?.toastOnArrive) {
@@ -4147,6 +4152,37 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         body: t('shareCards.notifBody', { name: currentUser.name }),
         href: '/share-cards',
       });
+
+      if (
+        input.kind === 'join_request' &&
+        isUuid(input.recipientId) &&
+        isUuid(currentUser.id)
+      ) {
+        const subject = `[طلب انضمام] ${input.competitionName?.trim() || 'مسابقة'} — ${input.teamName?.trim() || 'فريق'}`;
+        const lines = [
+          'أدعوك للانضمام كلاعب في:',
+          `• المسابقة: ${input.competitionName?.trim() || '—'}`,
+          `• الفريق: ${input.teamName?.trim() || '—'}`,
+          input.position?.trim() ? `• المركز: ${input.position.trim()}` : '',
+          '',
+        ].filter(Boolean);
+        if (input.body?.trim()) {
+          lines.push('رسالة المنظم:', input.body.trim(), '');
+        }
+        lines.push(`— ${currentUser.name}`);
+        const remote = await insertMessage({
+          senderId: currentUser.id,
+          senderName: currentUser.name,
+          senderAvatar: currentUser.avatar,
+          recipientId: input.recipientId,
+          subject,
+          body: lines.join('\n'),
+        });
+        if (remote.message) {
+          setMessages((prev) => mergeMessagesById([remote.message!], prev));
+        }
+      }
+
       toast({
         variant: 'success',
         title: t('shareCards.sent'),

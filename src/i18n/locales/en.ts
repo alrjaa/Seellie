@@ -579,14 +579,15 @@ export const en: TranslationTree = {
     removeMedia: 'Remove attachment',
     acceptJoinTitle: 'Confirm join acceptance',
     acceptJoinDesc:
-      'Write your conditions and requests for the organizer (optional). Confirming accepts the invite and sends only what you write here — separate from your general messages.',
+      'Write your conditions and requests for the organizer (optional). Confirming accepts the invite and saves the acceptance message in both your and the organizer\'s message history.',
     joinAcceptNote: 'My conditions & requests',
     joinAcceptNoteHint:
       'e.g. availability, preferred position, fees, training attendance...',
     confirmAccept: 'Confirm acceptance',
     joinAcceptSent:
-      'Invite accepted and your conditions/requests were sent to the organizer',
+      'Invite accepted and the acceptance message was saved for both parties',
     joinAcceptNotifTitle: 'Join accepted',
+    joinRequestNotifTitle: 'Join request',
   },
   notifications: {
     title: 'Notifications',
@@ -1401,6 +1402,10 @@ export const en: TranslationTree = {
       inbox: 'Inbox',
       newMessage: 'New message',
       tapToRead: 'Tap a message to read it',
+      mailboxHint:
+        'Inbox and sent — join requests and acceptance messages appear here for both parties',
+      sentTo: 'To: %{name}',
+      fromLineShort: 'From: %{name}',
       empty: 'No messages',
       fromLine: 'From: %{name} · %{date}',
       close: 'Close',
@@ -2145,9 +2150,11 @@ export const en: TranslationTree = {
     offerAccepted: 'Offer accepted successfully.',
     offerDeclined: 'Offer declined.',
     inbox: 'Inbox',
-    inboxSub: 'Messages from organizers and admin',
+    inboxSub: 'Messages from organizers and admin — inbox and sent',
+    mailboxHint:
+      'Join requests and acceptance messages are saved here for both parties. Accept invites from Share cards.',
     joinRequestsHint:
-      'Organizer join invites are accepted in Share cards — not here.',
+      'To accept a join invite: Share cards → Confirm acceptance.',
     cancelCompose: 'Cancel compose',
     newMessage: 'New message',
     sendToOrganizer: 'Send to organizer',

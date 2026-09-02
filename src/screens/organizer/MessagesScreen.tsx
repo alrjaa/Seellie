@@ -23,34 +23,45 @@ import { isUuid } from '@/services/supabase-messages';
 
 const MessageRow = memo(function MessageRow({
   item,
+  currentUserId,
+  peerName,
   onPress,
 }: {
   item: Message;
+  currentUserId: string;
+  peerName: string;
   onPress: () => void;
 }) {
   const theme = useAppTheme();
+  const { t } = useTranslation();
+  const isSent = item.senderId === currentUserId;
+  const unread = !isSent && !item.read;
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${item.subject} — ${item.senderName}`}
-      accessibilityState={{ selected: !item.read }}
+      accessibilityLabel={`${item.subject} — ${peerName}`}
+      accessibilityState={{ selected: unread }}
       hitSlop={6}
     >
       <Card
         style={
-          !item.read
+          unread
             ? { ...styles.card, borderColor: theme.colors.accent }
             : styles.card
         }
       >
         <View style={styles.row}>
-          <Avatar uri={item.senderAvatar} name={item.senderName} size={40} />
+          <Avatar uri={item.senderAvatar} name={peerName} size={40} />
           <View style={{ flex: 1, gap: 3 }}>
             <Text style={[styles.subject, { color: theme.colors.text }]}>
               {item.subject}
             </Text>
-            <Muted>{item.senderName}</Muted>
+            <Muted>
+              {isSent
+                ? t('organizer.messages.sentTo', { name: peerName })
+                : t('organizer.messages.fromLineShort', { name: peerName })}
+            </Muted>
             <Text
               style={[styles.body, { color: theme.colors.textMuted }]}
               numberOfLines={2}
@@ -59,7 +70,7 @@ const MessageRow = memo(function MessageRow({
             </Text>
             <Muted>{formatArabicDate(item.timestamp)}</Muted>
           </View>
-          {!item.read ? (
+          {unread ? (
             <View
               style={[styles.dot, { backgroundColor: theme.colors.accent }]}
             />
@@ -98,10 +109,28 @@ export default function OrganizerMessagesScreen() {
     }, [cloudOk, refreshCloudMessages])
   );
 
-  const inbox = useMemo(
-    () =>
-      messages.filter((m) => m.recipientId === currentUser?.id),
-    [messages, currentUser]
+  const inbox = useMemo(() => {
+    if (!currentUser?.id) return [];
+    return messages
+      .filter(
+        (m) =>
+          m.senderId === currentUser.id || m.recipientId === currentUser.id
+      )
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  }, [messages, currentUser?.id]);
+
+  const usersById = useMemo(
+    () => new Map(users.map((u) => [u.id, u])),
+    [users]
+  );
+
+  const peerNameFor = useCallback(
+    (msg: Message) => {
+      const peerId =
+        msg.senderId === currentUser?.id ? msg.recipientId : msg.senderId;
+      return usersById.get(peerId)?.name || msg.senderName;
+    },
+    [currentUser?.id, usersById]
   );
 
   const contacts = useMemo(
@@ -111,17 +140,24 @@ export default function OrganizerMessagesScreen() {
 
   const openMessage = useCallback(
     (msg: Message) => {
-      markMessageAsRead(msg.id);
+      if (msg.recipientId === currentUser?.id) {
+        markMessageAsRead(msg.id);
+      }
       setSelectedMsg(msg);
     },
-    [markMessageAsRead]
+    [markMessageAsRead, currentUser?.id]
   );
 
   const renderItem = useCallback(
     ({ item }: { item: Message }) => (
-      <MessageRow item={item} onPress={() => openMessage(item)} />
+      <MessageRow
+        item={item}
+        currentUserId={currentUser!.id}
+        peerName={peerNameFor(item)}
+        onPress={() => openMessage(item)}
+      />
     ),
-    [openMessage]
+    [openMessage, currentUser, peerNameFor]
   );
 
   return (
@@ -145,7 +181,7 @@ export default function OrganizerMessagesScreen() {
                 }}
               />
             </View>
-            <Muted>{t('organizer.messages.tapToRead')}</Muted>
+            <Muted>{t('organizer.messages.mailboxHint')}</Muted>
           </View>
         }
         ListEmptyComponent={
