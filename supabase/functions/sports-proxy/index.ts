@@ -379,9 +379,18 @@ function mapFixtureDetail(
         name: String(row.player?.name ?? '—'),
         number:
           row.player?.number != null ? Number(row.player.number) : undefined,
-        position: row.player?.pos ? String(row.player.pos) : undefined,
+        position: row.player?.pos
+          ? String(row.player.pos)
+          : row.player?.position
+            ? String(row.player.position)
+            : undefined,
         photo: playerPhotoUrl(playerId, row.player?.photo),
-        grid: row.player?.grid ? String(row.player.grid) : undefined,
+        grid:
+          row.player?.grid != null && row.player.grid !== ''
+            ? String(row.player.grid)
+            : row.grid != null && row.grid !== ''
+              ? String(row.grid)
+              : undefined,
         rating: stats?.rating,
         goals: stats?.goals,
         assists: stats?.assists,

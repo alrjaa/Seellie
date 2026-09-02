@@ -434,6 +434,24 @@ function shouldInvertGridRows(
   return gkRow != null && gkRow === bounds.maxRow;
 }
 
+function mapGridPlayer(
+  grid: { row: number; col: number },
+  bounds: GridBounds,
+  invertRows: boolean,
+  side: 'home' | 'away'
+): PitchPos {
+  const row = invertRows ? bounds.minRow + bounds.maxRow - grid.row : grid.row;
+  const rowNorm =
+    bounds.maxRow === bounds.minRow
+      ? 0
+      : (row - bounds.minRow) / (bounds.maxRow - bounds.minRow);
+  const colNorm =
+    bounds.maxCol === bounds.minCol
+      ? 0.5
+      : (grid.col - bounds.minCol) / (bounds.maxCol - bounds.minCol);
+  return mapNormToPitch(rowNorm, colNorm, side);
+}
+
 function buildFromGrid(
   players: SportsLineupPlayer[],
   side: 'home' | 'away'
@@ -450,40 +468,42 @@ function buildFromGrid(
       } => entry.grid != null
     );
 
-  if (entries.length < Math.max(6, Math.ceil(players.length * 0.55))) {
-    return positions;
-  }
+  if (!entries.length) return positions;
 
   const bounds = gridBounds(entries.map((entry) => entry.grid));
   const uniqueRows = new Set(entries.map((entry) => entry.grid.row)).size;
-  const uniqueCols = new Set(entries.map((entry) => entry.grid.col)).size;
-  if (
-    bounds.maxRow === bounds.minRow ||
-    bounds.maxCol === bounds.minCol ||
-    uniqueRows < 3 ||
-    uniqueCols < 3
-  ) {
-    return positions;
-  }
+  if (uniqueRows < 2) return positions;
 
   const invertRows = shouldInvertGridRows(players, bounds);
 
   entries.forEach(({ player, grid }) => {
-    const row = invertRows
-      ? bounds.minRow + bounds.maxRow - grid.row
-      : grid.row;
-    const rowNorm =
-      bounds.maxRow === bounds.minRow
-        ? 0
-        : (row - bounds.minRow) / (bounds.maxRow - bounds.minRow);
-    const colNorm =
-      bounds.maxCol === bounds.minCol
-        ? 0.5
-        : (grid.col - bounds.minCol) / (bounds.maxCol - bounds.minCol);
-    positions.set(player.id, mapNormToPitch(rowNorm, colNorm, side));
+    positions.set(player.id, mapGridPlayer(grid, bounds, invertRows, side));
   });
 
   return positions;
+}
+
+function rolePoolKey(player: SportsLineupPlayer): 'def' | 'mid' | 'fwd' {
+  const rank = positionRank(player);
+  if (rank <= 1) return 'def';
+  if (rank >= 3) return 'fwd';
+  return 'mid';
+}
+
+function takeFromPool(pool: SportsLineupPlayer[], count: number) {
+  const line: SportsLineupPlayer[] = [];
+  while (line.length < count && pool.length) {
+    line.push(pool.shift()!);
+  }
+  return line;
+}
+
+function sortLinePlayers(players: SportsLineupPlayer[]) {
+  return [...players].sort((a, b) => {
+    const aCol = parseGrid(a.grid)?.col ?? a.number ?? 0;
+    const bCol = parseGrid(b.grid)?.col ?? b.number ?? 0;
+    return Number(aCol) - Number(bCol);
+  });
 }
 
 function assignPlayersToLines(
@@ -491,40 +511,92 @@ function assignPlayersToLines(
   formation?: string
 ): SportsLineupPlayer[][] {
   const goalkeepers = players.filter(isGoalkeeper);
-  const outfield = players
-    .filter((player) => !isGoalkeeper(player))
-    .sort((a, b) => {
-      const rankDiff = positionRank(a) - positionRank(b);
-      if (rankDiff !== 0) return rankDiff;
-      return (a.number ?? 99) - (b.number ?? 99);
-    });
+  const outfield = players.filter((player) => !isGoalkeeper(player));
+  const pools = {
+    def: sortLinePlayers(outfield.filter((p) => rolePoolKey(p) === 'def')),
+    mid: sortLinePlayers(outfield.filter((p) => rolePoolKey(p) === 'mid')),
+    fwd: sortLinePlayers(outfield.filter((p) => rolePoolKey(p) === 'fwd')),
+  };
+  const unknown = sortLinePlayers(
+    outfield.filter(
+      (p) =>
+        !pools.def.includes(p) &&
+        !pools.mid.includes(p) &&
+        !pools.fwd.includes(p)
+    )
+  );
+  pools.mid.push(...unknown);
 
   const lineSizes = parseFormationLines(formation);
-  const lines: SportsLineupPlayer[][] = goalkeepers.length ? [goalkeepers] : [];
-  let cursor = 0;
+  const lines: SportsLineupPlayer[][] = goalkeepers.length
+    ? [sortLinePlayers(goalkeepers)]
+    : [];
 
-  lineSizes.forEach((size) => {
-    const line: SportsLineupPlayer[] = [];
-    for (let i = 0; i < size && cursor < outfield.length; i += 1, cursor += 1) {
-      line.push(outfield[cursor]);
+  lineSizes.forEach((size, lineIdx) => {
+    const isLast = lineIdx === lineSizes.length - 1;
+    const isFirst = lineIdx === 0;
+    const pool = isFirst ? 'def' : isLast && size <= 2 ? 'fwd' : 'mid';
+    const line = takeFromPool(pools[pool], size);
+    if (!line.length && pool !== 'mid') {
+      line.push(...takeFromPool(pools.mid, size));
     }
-    if (line.length) lines.push(line);
+    if (!line.length && pool !== 'def') {
+      line.push(...takeFromPool(pools.def, size));
+    }
+    if (line.length) lines.push(sortLinePlayers(line));
   });
 
-  if (cursor < outfield.length) {
-    const tail = outfield.slice(cursor);
+  const leftovers = [...pools.def, ...pools.mid, ...pools.fwd];
+  if (leftovers.length) {
     if (lines.length) {
-      lines[lines.length - 1].push(...tail);
+      lines[lines.length - 1].push(...sortLinePlayers(leftovers));
     } else {
-      lines.push(tail);
+      lines.push(sortLinePlayers(leftovers));
     }
   }
 
   if (!lines.length && players.length) {
-    lines.push([...players]);
+    lines.push(sortLinePlayers(players));
   }
 
   return lines;
+}
+
+function goalLineTop(side: 'home' | 'away') {
+  return side === 'away' ? PITCH_AWAY_START : PITCH_HOME_END;
+}
+
+function attackLineTop(side: 'home' | 'away') {
+  return side === 'away'
+    ? PITCH_AWAY_START + PITCH_HALF_SPAN
+    : PITCH_HOME_END - PITCH_HALF_SPAN;
+}
+
+function fixGoalkeeperOrientation(
+  players: SportsLineupPlayer[],
+  positions: Map<number, PitchPos>,
+  side: 'home' | 'away'
+) {
+  const gk = players.find(isGoalkeeper);
+  if (!gk) return;
+  const gkPos = positions.get(gk.id);
+  if (!gkPos) return;
+
+  const goalTop = goalLineTop(side);
+  const attackTop = attackLineTop(side);
+  const distGoal = Math.abs(gkPos.top - goalTop);
+  const distAttack = Math.abs(gkPos.top - attackTop);
+  if (distGoal <= distAttack) return;
+
+  const axisCenter = (goalTop + attackTop) / 2;
+  players.forEach((player) => {
+    const pos = positions.get(player.id);
+    if (!pos) return;
+    positions.set(player.id, {
+      top: axisCenter + (axisCenter - pos.top),
+      left: pos.left,
+    });
+  });
 }
 
 function buildFromFormation(
@@ -538,15 +610,17 @@ function buildFromFormation(
 
   lines.forEach((linePlayers, lineIdx) => {
     const rowNorm = lineCount <= 1 ? 0 : lineIdx / (lineCount - 1);
-    linePlayers.forEach((player, playerIdx) => {
+    const sorted = sortLinePlayers(linePlayers);
+    sorted.forEach((player, playerIdx) => {
       const colNorm =
-        linePlayers.length === 1
+        sorted.length === 1
           ? 0.5
-          : playerIdx / Math.max(linePlayers.length - 1, 1);
+          : playerIdx / Math.max(sorted.length - 1, 1);
       positions.set(player.id, mapNormToPitch(rowNorm, colNorm, side));
     });
   });
 
+  fixGoalkeeperOrientation(players, positions, side);
   return positions;
 }
 
@@ -557,18 +631,20 @@ function buildPitchLayout(
 ): Map<number, PitchPos> {
   if (!players.length) return new Map();
 
-  const fromGrid = buildFromGrid(players, side);
-  if (fromGrid.size >= Math.max(6, Math.ceil(players.length * 0.55))) {
-    return fromGrid;
+  const positions = buildFromGrid(players, side);
+  const missing = players.filter((player) => !positions.has(player.id));
+
+  if (missing.length) {
+    const fallback = buildFromFormation(missing, side, formation);
+    fallback.forEach((pos, id) => positions.set(id, pos));
   }
 
-  const fromFormation = buildFromFormation(players, side, formation);
-  players.forEach((player) => {
-    if (!fromFormation.has(player.id) && fromGrid.has(player.id)) {
-      fromFormation.set(player.id, fromGrid.get(player.id)!);
-    }
-  });
-  return fromFormation;
+  if (positions.size < Math.max(6, Math.ceil(players.length * 0.6))) {
+    return buildFromFormation(players, side, formation);
+  }
+
+  fixGoalkeeperOrientation(players, positions, side);
+  return positions;
 }
 
 function ratingColor(rating: number) {
