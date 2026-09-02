@@ -579,13 +579,13 @@ export const ar = {
     removeMedia: 'إزالة المرفق',
     acceptJoinTitle: 'تأكيد قبول الانضمام',
     acceptJoinDesc:
-      'سيُرسل للمنظم رسالة تتضمن شروطك ورغباتك. يمكنك تعديلها قبل الإرسال.',
-    joinConditions: 'شروط الانضمام',
-    joinConditionsHint: 'مثال: التوفر أيام محددة، رسوم، التزام بحضور التدريبات...',
-    joinPreferences: 'رغباتي',
-    joinPreferencesHint: 'مثال: مركز مفضل، أوقات اللعب، أهدافي في المسابقة...',
-    acceptAndNotify: 'قبول وإرسال للمنظم',
-    organizerNotified: 'تم إبلاغ المنظم برسالة تتضمن شروطك ورغباتك',
+      'اكتب شروطك وطلباتك للمنظم (اختياري). عند التأكيد تُقبل الدعوة ويُرسل ما كتبته للمنظم فقط — منفصل عن رسائلك العامة.',
+    joinAcceptNote: 'شروطي وطلباتي',
+    joinAcceptNoteHint:
+      'مثال: التوفر، المركز المفضل، رسوم، التزام بحضور التدريبات...',
+    confirmAccept: 'تأكيد الموافقة',
+    joinAcceptSent: 'تم قبول الدعوة وإرسال شروطك وطلباتك للمنظم',
+    joinAcceptNotifTitle: 'قبول انضمام',
   },
   notifications: {
     title: 'الإشعارات',
@@ -1517,6 +1517,8 @@ export const ar = {
     offerDeclined: 'تم رفض العرض.',
     inbox: 'صندوق الوارد',
     inboxSub: 'رسائل المنظمين والإدارة',
+    joinRequestsHint:
+      'طلبات انضمام المنظمين تُقبل من «بطاقات المشاركة» — وليس من هنا.',
     cancelCompose: 'إلغاء الإنشاء',
     newMessage: 'رسالة جديدة',
     sendToOrganizer: 'إرسال إلى منظم',

@@ -579,16 +579,14 @@ export const en: TranslationTree = {
     removeMedia: 'Remove attachment',
     acceptJoinTitle: 'Confirm join acceptance',
     acceptJoinDesc:
-      'A message with your conditions and preferences will be sent to the organizer. You can edit them before sending.',
-    joinConditions: 'Join conditions',
-    joinConditionsHint:
-      'e.g. availability on specific days, fees, training attendance...',
-    joinPreferences: 'My preferences',
-    joinPreferencesHint:
-      'e.g. preferred position, playing times, goals in the competition...',
-    acceptAndNotify: 'Accept & notify organizer',
-    organizerNotified:
-      'The organizer was notified with your conditions and preferences',
+      'Write your conditions and requests for the organizer (optional). Confirming accepts the invite and sends only what you write here — separate from your general messages.',
+    joinAcceptNote: 'My conditions & requests',
+    joinAcceptNoteHint:
+      'e.g. availability, preferred position, fees, training attendance...',
+    confirmAccept: 'Confirm acceptance',
+    joinAcceptSent:
+      'Invite accepted and your conditions/requests were sent to the organizer',
+    joinAcceptNotifTitle: 'Join accepted',
   },
   notifications: {
     title: 'Notifications',
@@ -2148,6 +2146,8 @@ export const en: TranslationTree = {
     offerDeclined: 'Offer declined.',
     inbox: 'Inbox',
     inboxSub: 'Messages from organizers and admin',
+    joinRequestsHint:
+      'Organizer join invites are accepted in Share cards — not here.',
     cancelCompose: 'Cancel compose',
     newMessage: 'New message',
     sendToOrganizer: 'Send to organizer',

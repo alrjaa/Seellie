@@ -798,8 +798,7 @@ export interface TournamentContextType {
     status: ShareCardStatus,
     options?: {
       joinAccept?: {
-        conditions?: string;
-        preferences?: string;
+        note?: string;
       };
     }
   ) => boolean;
@@ -2703,7 +2702,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           recipientId: user.id,
           title: msg.subject.startsWith('[نظام]')
             ? 'إشعار النظام'
-            : t('home.messages'),
+            : msg.subject.startsWith('[قبول انضمام]')
+              ? t('shareCards.joinAcceptNotifTitle')
+              : t('home.messages'),
           body: `${msg.senderName}: ${msg.subject}`,
           href: isOrganizerPath
             ? '/(organizer)/messages'
@@ -4161,8 +4162,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       status: ShareCardStatus,
       options?: {
         joinAccept?: {
-          conditions?: string;
-          preferences?: string;
+          note?: string;
         };
       }
     ) => {
@@ -4251,52 +4251,22 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           return next;
         });
 
-        const conditions = options?.joinAccept?.conditions?.trim();
-        const preferences = options?.joinAccept?.preferences?.trim();
+        const note = options?.joinAccept?.note?.trim();
         const organizerId = card.senderId;
         if (isUuid(organizerId)) {
-          const subject = `[نظام] قبول الانضمام — ${card.competitionName || 'مسابقة'} / ${card.teamName || 'فريق'}`;
+          const subject = `[قبول انضمام] ${card.competitionName || 'مسابقة'} — ${card.teamName || 'فريق'}`;
           const lines = [
-            `قبلتُ طلب الانضمام كلاعب في:`,
+            `وافقتُ على طلب انضمامك لي كلاعب في:`,
             `• المسابقة: ${card.competitionName || '—'}`,
             `• الفريق: ${card.teamName || '—'}`,
             card.position ? `• المركز: ${card.position}` : '',
             '',
           ].filter(Boolean);
-          if (conditions) {
-            lines.push('شروطي:', conditions, '');
-          }
-          if (preferences) {
-            lines.push('رغباتي:', preferences, '');
-          }
-          if (!conditions && !preferences) {
-            lines.push(
-              'أؤكد قبول الانضمام وفق تفاصيل الطلب أعلاه.',
-              ''
-            );
+          if (note) {
+            lines.push('شروطي وطلباتي:', note, '');
           }
           lines.push(`— ${currentUser.name}`);
           void notifyAccountUser(organizerId, subject, lines.join('\n'));
-        }
-
-        const nextConditions = conditions || currentUser.joinConditions;
-        const nextBio = preferences || currentUser.bio;
-        if (
-          (conditions && conditions !== currentUser.joinConditions) ||
-          (preferences && preferences !== currentUser.bio)
-        ) {
-          const updatedUser: User = {
-            ...currentUser,
-            joinConditions: nextConditions,
-            bio: nextBio,
-          };
-          setUsers((prev) =>
-            prev.map((u) => (u.id === updatedUser.id ? updatedUser : u))
-          );
-          setCurrentUser(updatedUser);
-          if (isUuid(updatedUser.id) && isSupabaseConfigured()) {
-            void upsertUserContentCloud(updatedUser);
-          }
         }
       }
 
@@ -4310,7 +4280,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
               : t('shareCards.updated'),
         description:
           status === 'accepted' && card.kind === 'join_request'
-            ? t('shareCards.organizerNotified')
+            ? t('shareCards.joinAcceptSent')
             : undefined,
       });
       return true;

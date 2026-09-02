@@ -144,6 +144,7 @@ export default function MessagesScreen() {
           <View style={{ gap: 10, marginBottom: 8 }}>
             <Subtitle>{t('freelancer.inbox')}</Subtitle>
             <Muted>{t('freelancer.inboxSub')}</Muted>
+            <Muted>{t('freelancer.joinRequestsHint')}</Muted>
             <Button
               label={composing ? t('freelancer.cancelCompose') : t('freelancer.newMessage')}
               variant={composing ? 'ghost' : 'primary'}

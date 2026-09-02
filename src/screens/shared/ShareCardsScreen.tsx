@@ -80,8 +80,7 @@ export default function ShareCardsScreen() {
   const [pendingJoinAccept, setPendingJoinAccept] = useState<ShareCard | null>(
     null
   );
-  const [acceptConditions, setAcceptConditions] = useState('');
-  const [acceptPreferences, setAcceptPreferences] = useState('');
+  const [acceptNote, setAcceptNote] = useState('');
 
   useFocusEffect(
     useCallback(() => {
@@ -292,21 +291,18 @@ export default function ShareCardsScreen() {
 
   const openJoinAccept = (card: ShareCard) => {
     setPendingJoinAccept(card);
-    setAcceptConditions(currentUser.joinConditions || '');
-    setAcceptPreferences(currentUser.bio || '');
+    setAcceptNote('');
   };
 
   const confirmJoinAccept = () => {
     if (!pendingJoinAccept) return;
     updateShareCardStatus(pendingJoinAccept.id, 'accepted', {
       joinAccept: {
-        conditions: acceptConditions.trim() || undefined,
-        preferences: acceptPreferences.trim() || undefined,
+        note: acceptNote.trim() || undefined,
       },
     });
     setPendingJoinAccept(null);
-    setAcceptConditions('');
-    setAcceptPreferences('');
+    setAcceptNote('');
   };
 
   const renderCardActions = (card: ShareCard) => {
@@ -326,7 +322,7 @@ export default function ShareCardsScreen() {
     return (
       <View style={styles.rowBtns}>
         <Button
-          label={t('shareCards.accept')}
+          label={t('shareCards.confirmAccept')}
           style={{ flex: 1 }}
           onPress={() => openJoinAccept(card)}
         />
@@ -363,19 +359,22 @@ export default function ShareCardsScreen() {
           >
             <Subtitle>{t('shareCards.acceptJoinTitle')}</Subtitle>
             <Muted>{t('shareCards.acceptJoinDesc')}</Muted>
+            {pendingJoinAccept ? (
+              <Card style={{ gap: 4, padding: 10 }}>
+                <Muted>
+                  {pendingJoinAccept.competitionName} — {pendingJoinAccept.teamName}
+                </Muted>
+                {pendingJoinAccept.position ? (
+                  <Muted>{pendingJoinAccept.position}</Muted>
+                ) : null}
+              </Card>
+            ) : null}
             <Input
-              label={t('shareCards.joinConditions')}
-              value={acceptConditions}
-              onChangeText={setAcceptConditions}
+              label={t('shareCards.joinAcceptNote')}
+              value={acceptNote}
+              onChangeText={setAcceptNote}
               multiline
-              placeholder={t('shareCards.joinConditionsHint')}
-            />
-            <Input
-              label={t('shareCards.joinPreferences')}
-              value={acceptPreferences}
-              onChangeText={setAcceptPreferences}
-              multiline
-              placeholder={t('shareCards.joinPreferencesHint')}
+              placeholder={t('shareCards.joinAcceptNoteHint')}
             />
             <View style={styles.rowBtns}>
               <Button
@@ -385,7 +384,7 @@ export default function ShareCardsScreen() {
                 onPress={() => setPendingJoinAccept(null)}
               />
               <Button
-                label={t('shareCards.acceptAndNotify')}
+                label={t('shareCards.confirmAccept')}
                 style={{ flex: 1 }}
                 onPress={confirmJoinAccept}
               />

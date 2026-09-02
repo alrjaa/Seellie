@@ -42,9 +42,6 @@ export default function SettingsScreen() {
   const router = useRouter();
   const [name, setName] = useState(currentUser?.name ?? '');
   const [bio, setBio] = useState(currentUser?.bio ?? '');
-  const [joinConditions, setJoinConditions] = useState(
-    currentUser?.joinConditions ?? ''
-  );
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
@@ -84,14 +81,6 @@ export default function SettingsScreen() {
           value={bio}
           onChangeText={setBio}
           multiline
-          placeholder={t('shareCards.joinPreferencesHint')}
-        />
-        <Input
-          label={t('shareCards.joinConditions')}
-          value={joinConditions}
-          onChangeText={setJoinConditions}
-          multiline
-          placeholder={t('shareCards.joinConditionsHint')}
         />
         <Button
           label={t('common.save')}
@@ -101,7 +90,6 @@ export default function SettingsScreen() {
                 ...currentUser,
                 name: name.trim() || currentUser.name,
                 bio: bio.trim(),
-                joinConditions: joinConditions.trim() || undefined,
               },
               t('account.profileUpdated')
             )
