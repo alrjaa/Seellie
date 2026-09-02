@@ -200,30 +200,80 @@ function mapStandings(raw: any) {
   }));
 }
 
+function resolveTeamSide(
+  e: any,
+  homeId: number,
+  awayId: number,
+  homeName: string,
+  awayName: string
+): 'home' | 'away' {
+  const teamId = Number(e.team?.id);
+  if (teamId === homeId) return 'home';
+  if (teamId === awayId) return 'away';
+
+  const evtName = String(e.team?.name ?? '')
+    .toLowerCase()
+    .trim();
+  const home = String(homeName ?? '')
+    .toLowerCase()
+    .trim();
+  const away = String(awayName ?? '')
+    .toLowerCase()
+    .trim();
+  if (
+    evtName &&
+    home &&
+    (evtName === home || evtName.includes(home) || home.includes(evtName))
+  ) {
+    return 'home';
+  }
+  if (
+    evtName &&
+    away &&
+    (evtName === away || evtName.includes(away) || away.includes(evtName))
+  ) {
+    return 'away';
+  }
+  return 'away';
+}
+
 function mapFixtures(raw: any) {
   const list = Array.isArray(raw?.response) ? raw.response : [];
-  return list.map((f: any) => ({
-    id: String(f.fixture?.id ?? ''),
-    date: f.fixture?.date ? String(f.fixture.date) : '',
-    status: String(f.fixture?.status?.short ?? ''),
-    elapsed:
-      f.fixture?.status?.elapsed != null
-        ? Number(f.fixture.status.elapsed)
-        : undefined,
-    homeName: String(f.teams?.home?.name ?? '—'),
-    awayName: String(f.teams?.away?.name ?? '—'),
-    homeLogo: f.teams?.home?.logo ? String(f.teams.home.logo) : undefined,
-    awayLogo: f.teams?.away?.logo ? String(f.teams.away.logo) : undefined,
-    homeScore:
-      f.goals?.home != null && f.goals.home !== ''
-        ? Number(f.goals.home)
-        : null,
-    awayScore:
-      f.goals?.away != null && f.goals.away !== ''
-        ? Number(f.goals.away)
-        : null,
-    round: f.league?.round ? String(f.league.round) : undefined,
-  }));
+  return list.map((f: any) => {
+    const status = String(f.fixture?.status?.short ?? '');
+    const finished = ['FT', 'AET', 'PEN', 'AWD', 'WO'].includes(status);
+    const ftHome = f.score?.fulltime?.home;
+    const ftAway = f.score?.fulltime?.away;
+    const homeScore =
+      finished && ftHome != null && ftHome !== ''
+        ? Number(ftHome)
+        : f.goals?.home != null && f.goals.home !== ''
+          ? Number(f.goals.home)
+          : null;
+    const awayScore =
+      finished && ftAway != null && ftAway !== ''
+        ? Number(ftAway)
+        : f.goals?.away != null && f.goals.away !== ''
+          ? Number(f.goals.away)
+          : null;
+
+    return {
+      id: String(f.fixture?.id ?? ''),
+      date: f.fixture?.date ? String(f.fixture.date) : '',
+      status,
+      elapsed:
+        f.fixture?.status?.elapsed != null
+          ? Number(f.fixture.status.elapsed)
+          : undefined,
+      homeName: String(f.teams?.home?.name ?? '—'),
+      awayName: String(f.teams?.away?.name ?? '—'),
+      homeLogo: f.teams?.home?.logo ? String(f.teams.home.logo) : undefined,
+      awayLogo: f.teams?.away?.logo ? String(f.teams.away.logo) : undefined,
+      homeScore,
+      awayScore,
+      round: f.league?.round ? String(f.league.round) : undefined,
+    };
+  });
 }
 
 function playerPhotoUrl(playerId: number, raw?: string) {
@@ -285,9 +335,13 @@ function mapFixtureDetail(
 
   const events = (Array.isArray(eventsRaw?.response) ? eventsRaw.response : [])
     .map((e: any, i: number) => {
-      const teamId = Number(e.team?.id);
-      const side: 'home' | 'away' =
-        teamId === homeId ? 'home' : teamId === awayId ? 'away' : 'home';
+      const side = resolveTeamSide(
+        e,
+        homeId,
+        awayId,
+        String(fx.teams?.home?.name ?? ''),
+        String(fx.teams?.away?.name ?? '')
+      );
       return {
         id: `${e.time?.elapsed ?? 0}-${i}-${e.type ?? ''}`,
         minute: Number(e.time?.elapsed ?? 0),
