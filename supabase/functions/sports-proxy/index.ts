@@ -325,6 +325,82 @@ function mapPlayerMatchStats(playersRaw: any) {
   return map;
 }
 
+function mapSquadPosition(pos?: string): string | undefined {
+  if (!pos) return undefined;
+  const p = pos.trim().toLowerCase();
+  if (p.startsWith('g')) return 'G';
+  if (p.includes('def')) return 'D';
+  if (p.includes('mid')) return 'M';
+  if (p.includes('att') || p.includes('forward') || p.includes('strik')) {
+    return 'F';
+  }
+  return pos.trim().toUpperCase();
+}
+
+async function fetchSquadPositionMap(teamId: number, apiKey: string) {
+  const map = new Map<number, string>();
+  if (!teamId) return map;
+  const up = await apiFootball(`/players/squads?team=${teamId}`, apiKey);
+  if (!up.ok) return map;
+  const block = Array.isArray(up.data?.response) ? up.data.response[0] : null;
+  const list = Array.isArray(block?.players) ? block.players : [];
+  for (const row of list) {
+    const id = Number(row?.id);
+    const pos = mapSquadPosition(row?.position);
+    if (id && pos) map.set(id, pos);
+  }
+  return map;
+}
+
+function lineupNeedsEnrichment(lineupsRaw: any) {
+  const list = Array.isArray(lineupsRaw?.response) ? lineupsRaw.response : [];
+  for (const team of list) {
+    for (const row of team?.startXI ?? []) {
+      const player = row?.player ?? row;
+      const hasPos = player?.pos || player?.position;
+      const hasGrid = player?.grid || row?.grid;
+      if (!hasPos && !hasGrid) return true;
+    }
+  }
+  return false;
+}
+
+function inferFormationFromSequentialOrder(
+  players: Array<{ position?: string }>
+): string | undefined {
+  if (players.length !== 11) return undefined;
+  let defenders = 0;
+  let midfielders = 0;
+  let forwards = 0;
+  for (const player of players) {
+    const rank = inferPositionRank(player.position);
+    if (rank === 0) continue;
+    if (rank === 1) defenders += 1;
+    else if (rank === 3) forwards += 1;
+    else midfielders += 1;
+  }
+  if (defenders === 4 && forwards === 3 && midfielders === 3) return '4-3-3';
+  if (defenders === 4 && forwards === 1 && midfielders === 5) return '4-2-3-1';
+  if (defenders === 4 && forwards === 2 && midfielders === 4) return '4-4-2';
+  if (defenders === 3 && forwards === 2 && midfielders === 5) return '3-5-2';
+  if (defenders === 5 && forwards === 2 && midfielders === 3) return '5-3-2';
+  return undefined;
+}
+
+function inferPositionRank(position?: string) {
+  const pos = String(position || '')
+    .trim()
+    .toUpperCase();
+  if (!pos || pos === 'G' || pos === 'GK') return 0;
+  if (['D', 'DF', 'DEF', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'SW'].includes(pos)) {
+    return 1;
+  }
+  if (['F', 'FW', 'ST', 'CF', 'ATT', 'SS', 'LW', 'RW'].includes(pos)) {
+    return 3;
+  }
+  return 2;
+}
+
 function inferFormationFromPositions(
   players: Array<{ position?: string }>
 ): string | undefined {
@@ -332,28 +408,25 @@ function inferFormationFromPositions(
   let midfielders = 0;
   let forwards = 0;
   for (const player of players) {
-    const pos = String(player.position || '')
-      .trim()
-      .toUpperCase();
-    if (!pos || pos === 'G' || pos === 'GK') continue;
-    if (['D', 'DF', 'DEF', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'SW'].includes(pos)) {
-      defenders += 1;
-      continue;
-    }
-    if (['F', 'FW', 'ST', 'CF', 'ATT', 'SS', 'LW', 'RW'].includes(pos)) {
-      forwards += 1;
-      continue;
-    }
-    midfielders += 1;
+    const rank = inferPositionRank(player.position);
+    if (rank === 0) continue;
+    if (rank === 1) defenders += 1;
+    else if (rank === 3) forwards += 1;
+    else midfielders += 1;
   }
   if (!defenders && !midfielders && !forwards) return undefined;
-  if (defenders === 4 && forwards === 2 && midfielders === 4) return '4-4-2';
-  if (defenders === 4 && forwards === 1 && midfielders === 5) return '4-2-3-1';
-  if (defenders === 4 && forwards === 3 && midfielders === 3) return '4-3-3';
-  if (defenders >= 3 && forwards >= 1) {
-    return `${defenders}-${midfielders}-${forwards}`;
-  }
-  return undefined;
+  return (
+    inferFormationFromSequentialOrder(players) ??
+    (defenders === 4 && forwards === 2 && midfielders === 4
+      ? '4-4-2'
+      : defenders === 4 && forwards === 1 && midfielders === 5
+        ? '4-2-3-1'
+        : defenders === 4 && forwards === 3 && midfielders === 3
+          ? '4-3-3'
+          : defenders >= 3 && forwards >= 1
+            ? `${defenders}-${midfielders}-${forwards}`
+            : undefined)
+  );
 }
 
 function mapFixtureDetail(
@@ -361,7 +434,8 @@ function mapFixtureDetail(
   eventsRaw: any,
   lineupsRaw: any,
   statsRaw: any,
-  playersRaw: any
+  playersRaw: any,
+  squadPositions: Map<number, string> = new Map()
 ) {
   const fx = Array.isArray(fxRaw?.response) ? fxRaw.response[0] : null;
   if (!fx) return null;
@@ -421,7 +495,7 @@ function mapFixtureDetail(
             ? String(row.player.pos)
             : row.player?.position
               ? String(row.player.position)
-              : stats?.position,
+              : stats?.position ?? squadPositions.get(playerId),
         photo: playerPhotoUrl(playerId, row.player?.photo),
         grid:
           row.player?.grid != null && row.player.grid !== ''
@@ -522,12 +596,28 @@ async function fetchFixtureDetail(fixtureId: number, apiKey: string) {
     apiFootball(`/fixtures/players?fixture=${fixtureId}`, apiKey),
   ]);
   if (!fx.ok) return { ok: false as const };
+
+  const fxObj = Array.isArray(fx.data?.response) ? fx.data.response[0] : null;
+  const homeId = Number(fxObj?.teams?.home?.id);
+  const awayId = Number(fxObj?.teams?.away?.id);
+  const lineupsData = lineups.ok ? lineups.data : { response: [] };
+
+  let squadPositions = new Map<number, string>();
+  if (lineupNeedsEnrichment(lineupsData) && homeId && awayId) {
+    const [homeSquad, awaySquad] = await Promise.all([
+      fetchSquadPositionMap(homeId, apiKey),
+      fetchSquadPositionMap(awayId, apiKey),
+    ]);
+    squadPositions = new Map([...homeSquad, ...awaySquad]);
+  }
+
   const detail = mapFixtureDetail(
     fx.data,
     events.ok ? events.data : { response: [] },
-    lineups.ok ? lineups.data : { response: [] },
+    lineupsData,
     stats.ok ? stats.data : { response: [] },
-    players.ok ? players.data : { response: [] }
+    players.ok ? players.data : { response: [] },
+    squadPositions
   );
   if (!detail) return { ok: false as const };
   return { ok: true as const, data: detail };

@@ -2,9 +2,12 @@ import type { SportsLineupPlayer } from '@/services/sports-data';
 
 export type PitchPos = { top: number; left: number };
 
-const PITCH_AWAY_START = 6;
-const PITCH_HOME_END = 94;
-const PITCH_HALF_SPAN = 38;
+const PITCH_AWAY_START = 8;
+const PITCH_HOME_END = 92;
+const PITCH_HALF_SPAN = 40;
+const PITCH_FULL_START = 10;
+const PITCH_FULL_END = 90;
+const PITCH_FULL_SPAN = 80;
 const PITCH_LEFT_MIN = 10;
 const PITCH_LEFT_SPAN = 80;
 const MIN_GRID_ROWS_FOR_FULL = 4;
@@ -111,24 +114,37 @@ function enrichPlayersFromOrder(
   }));
 }
 
+export type PitchScope = 'half' | 'full';
+
 function mapNormToPitch(
   rowNorm: number,
   colNorm: number,
-  side: 'home' | 'away'
+  side: 'home' | 'away',
+  scope: PitchScope = 'half'
 ): PitchPos {
   const top =
-    side === 'away'
-      ? PITCH_AWAY_START + rowNorm * PITCH_HALF_SPAN
-      : PITCH_HOME_END - rowNorm * PITCH_HALF_SPAN;
+    scope === 'full'
+      ? side === 'away'
+        ? PITCH_FULL_START + rowNorm * PITCH_FULL_SPAN
+        : PITCH_FULL_END - rowNorm * PITCH_FULL_SPAN
+      : side === 'away'
+        ? PITCH_AWAY_START + rowNorm * PITCH_HALF_SPAN
+        : PITCH_HOME_END - rowNorm * PITCH_HALF_SPAN;
   const left = PITCH_LEFT_MIN + colNorm * PITCH_LEFT_SPAN;
   return { top, left };
 }
 
 function sortLinePlayers(players: SportsLineupPlayer[]) {
   return [...players].sort((a, b) => {
-    const aCol = parseLineupGrid(a.grid)?.col ?? a.number ?? 0;
-    const bCol = parseLineupGrid(b.grid)?.col ?? b.number ?? 0;
-    return Number(aCol) - Number(bCol);
+    const aGrid = parseLineupGrid(a.grid);
+    const bGrid = parseLineupGrid(b.grid);
+    if (aGrid && bGrid && aGrid.col !== bGrid.col) {
+      return aGrid.col - bGrid.col;
+    }
+    const aNum = a.number ?? 999;
+    const bNum = b.number ?? 999;
+    if (aNum !== bNum) return aNum - bNum;
+    return a.name.localeCompare(b.name);
   });
 }
 
@@ -188,9 +204,9 @@ function assignPlayersToFormationLines(
     : [];
 
   lineSizes.forEach((size, lineIdx) => {
-    const isLast = lineIdx === lineSizes.length - 1;
     const isFirst = lineIdx === 0;
-    const pool = isFirst ? 'def' : isLast && size <= 2 ? 'fwd' : 'mid';
+    const isLast = lineIdx === lineSizes.length - 1;
+    const pool = isFirst ? 'def' : isLast ? 'fwd' : 'mid';
     const line = takeFromPool(pools[pool], size);
     if (!line.length && pool !== 'mid') {
       line.push(...takeFromPool(pools.mid, size));
@@ -245,11 +261,19 @@ function assignPlayersToGridRows(
   return lines;
 }
 
-function goalLineTop(side: 'home' | 'away') {
+function goalLineTop(side: 'home' | 'away', scope: PitchScope = 'half') {
+  if (scope === 'full') {
+    return side === 'away' ? PITCH_FULL_START : PITCH_FULL_END;
+  }
   return side === 'away' ? PITCH_AWAY_START : PITCH_HOME_END;
 }
 
-function attackLineTop(side: 'home' | 'away') {
+function attackLineTop(side: 'home' | 'away', scope: PitchScope = 'half') {
+  if (scope === 'full') {
+    return side === 'away'
+      ? PITCH_FULL_START + PITCH_FULL_SPAN
+      : PITCH_FULL_END - PITCH_FULL_SPAN;
+  }
   return side === 'away'
     ? PITCH_AWAY_START + PITCH_HALF_SPAN
     : PITCH_HOME_END - PITCH_HALF_SPAN;
@@ -258,15 +282,16 @@ function attackLineTop(side: 'home' | 'away') {
 function fixGoalkeeperOrientation(
   players: SportsLineupPlayer[],
   positions: Map<number, PitchPos>,
-  side: 'home' | 'away'
+  side: 'home' | 'away',
+  scope: PitchScope = 'half'
 ) {
   const gk = players.find(isGoalkeeper);
   if (!gk) return;
   const gkPos = positions.get(gk.id);
   if (!gkPos) return;
 
-  const goalTop = goalLineTop(side);
-  const attackTop = attackLineTop(side);
+  const goalTop = goalLineTop(side, scope);
+  const attackTop = attackLineTop(side, scope);
   const distGoal = Math.abs(gkPos.top - goalTop);
   const distAttack = Math.abs(gkPos.top - attackTop);
   if (distGoal <= distAttack) return;
@@ -284,7 +309,8 @@ function fixGoalkeeperOrientation(
 
 function placeLinesOnPitch(
   lines: SportsLineupPlayer[][],
-  side: 'home' | 'away'
+  side: 'home' | 'away',
+  scope: PitchScope = 'half'
 ) {
   const positions = new Map<number, PitchPos>();
   const lineCount = lines.length;
@@ -296,7 +322,7 @@ function placeLinesOnPitch(
       const colNorm = colNormForPlayer(player, sorted, playerIdx);
       positions.set(
         player.id,
-        mapNormToPitch(rowNorm, Math.min(1, Math.max(0, colNorm)), side)
+        mapNormToPitch(rowNorm, Math.min(1, Math.max(0, colNorm)), side, scope)
       );
     });
   });
@@ -306,7 +332,8 @@ function placeLinesOnPitch(
 
 function buildFromFullGrid(
   players: SportsLineupPlayer[],
-  side: 'home' | 'away'
+  side: 'home' | 'away',
+  scope: PitchScope = 'half'
 ): Map<number, PitchPos> {
   const positions = new Map<number, PitchPos>();
   const entries = players
@@ -344,7 +371,7 @@ function buildFromFullGrid(
     const rowNorm = (row - minRow) / (maxRow - minRow);
     const colNorm =
       maxCol === minCol ? 0.5 : (grid.col - minCol) / (maxCol - minCol);
-    positions.set(player.id, mapNormToPitch(rowNorm, colNorm, side));
+    positions.set(player.id, mapNormToPitch(rowNorm, colNorm, side, scope));
   });
 
   return positions;
@@ -353,22 +380,23 @@ function buildFromFullGrid(
 export function buildPitchLineupLayout(
   players: SportsLineupPlayer[],
   side: 'home' | 'away',
-  formation?: string
+  formation?: string,
+  scope: PitchScope = 'half'
 ): Map<number, PitchPos> {
   if (!players.length) return new Map();
 
   const enriched = enrichPlayersFromOrder(players, formation);
 
-  const fullGrid = buildFromFullGrid(enriched, side);
+  const fullGrid = buildFromFullGrid(enriched, side, scope);
   if (fullGrid.size >= Math.ceil(enriched.length * 0.9)) {
-    fixGoalkeeperOrientation(enriched, fullGrid, side);
+    fixGoalkeeperOrientation(enriched, fullGrid, side, scope);
     return fullGrid;
   }
 
   const lines =
     assignPlayersToGridRows(enriched) ??
     assignPlayersToFormationLines(enriched, formation);
-  const positions = placeLinesOnPitch(lines, side);
-  fixGoalkeeperOrientation(enriched, positions, side);
+  const positions = placeLinesOnPitch(lines, side, scope);
+  fixGoalkeeperOrientation(enriched, positions, side, scope);
   return positions;
 }

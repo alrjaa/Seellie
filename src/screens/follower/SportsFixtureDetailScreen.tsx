@@ -21,7 +21,7 @@ import { EmptyState } from '@/components/feedback/EmptyState';
 import { Avatar, Card, Muted, Subtitle } from '@/components/ui';
 import { useSportsFixtureDetail } from '@/hooks/useSportsFixtureDetail';
 import { formatArabicDate, formatArabicTime } from '@/utils';
-import { buildPitchLineupLayout, type PitchPos } from '@/utils/pitch-lineup-layout';
+import { buildPitchLineupLayout, type PitchPos, type PitchScope } from '@/utils/pitch-lineup-layout';
 import { cairoText } from '@/theme/fonts';
 import { tabBarTotalHeight } from '@/theme/navigation';
 import type {
@@ -417,6 +417,8 @@ const PitchPlayer = memo(function PitchPlayer({
   );
 });
 
+type LineupView = 'both' | 'home' | 'away';
+
 const FootballPitchLineups = memo(function FootballPitchLineups({
   detail,
   home,
@@ -430,8 +432,10 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
   pitchHeight?: number;
   overviewMode?: boolean;
 }) {
+  const theme = useAppTheme();
   const { t } = useTranslation();
   const { width: screenW, height: screenH } = useWindowDimensions();
+  const [lineupView, setLineupView] = useState<LineupView>('both');
   const scores = resolvedScores(detail);
   const fallbackHeight = Math.round(
     Math.min(Math.max(screenW * 1.58, 540), screenH * 0.82)
@@ -448,8 +452,22 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
 
   const homeXi = home?.startXI ?? [];
   const awayXi = away?.startXI ?? [];
-  const homePos = buildPitchLineupLayout(homeXi, 'home', home?.formation);
-  const awayPos = buildPitchLineupLayout(awayXi, 'away', away?.formation);
+  const showHome = lineupView === 'both' || lineupView === 'home';
+  const showAway = lineupView === 'both' || lineupView === 'away';
+  const homeScope: PitchScope = lineupView === 'home' ? 'full' : 'half';
+  const awayScope: PitchScope = lineupView === 'away' ? 'full' : 'half';
+  const homePos = buildPitchLineupLayout(
+    homeXi,
+    'home',
+    home?.formation,
+    homeScope
+  );
+  const awayPos = buildPitchLineupLayout(
+    awayXi,
+    'away',
+    away?.formation,
+    awayScope
+  );
   const statusLabel = isLive(detail.status)
     ? t('sportsFixture.live')
     : isFinished(detail.status)
@@ -458,55 +476,169 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
 
   return (
     <Card style={styles.pitchCard}>
+      <View style={styles.lineupTeamTabs}>
+        {away?.startXI?.length ? (
+          <Pressable
+            onPress={() =>
+              setLineupView((prev) => (prev === 'away' ? 'both' : 'away'))
+            }
+            style={[
+              styles.lineupTeamTab,
+              {
+                backgroundColor:
+                  lineupView === 'away'
+                    ? theme.colors.accent
+                    : theme.colors.surfaceElevated,
+                borderColor: theme.colors.border,
+              },
+            ]}
+          >
+            <Avatar uri={detail.awayLogo} name={detail.awayName} size={20} />
+            <Text
+              style={[
+                styles.lineupTeamTabText,
+                {
+                  color:
+                    lineupView === 'away'
+                      ? theme.colors.textInverse
+                      : theme.colors.text,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {away.teamName || detail.awayName}
+            </Text>
+          </Pressable>
+        ) : null}
+        {home?.startXI?.length ? (
+          <Pressable
+            onPress={() =>
+              setLineupView((prev) => (prev === 'home' ? 'both' : 'home'))
+            }
+            style={[
+              styles.lineupTeamTab,
+              {
+                backgroundColor:
+                  lineupView === 'home'
+                    ? theme.colors.accent
+                    : theme.colors.surfaceElevated,
+                borderColor: theme.colors.border,
+              },
+            ]}
+          >
+            <Avatar uri={detail.homeLogo} name={detail.homeName} size={20} />
+            <Text
+              style={[
+                styles.lineupTeamTabText,
+                {
+                  color:
+                    lineupView === 'home'
+                      ? theme.colors.textInverse
+                      : theme.colors.text,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {home.teamName || detail.homeName}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+
       <View style={[styles.pitchWrap, { height: pitchHeight }]}>
         <View style={styles.pitchField}>
           <View style={styles.pitchGrassStripeA} />
           <View style={styles.pitchGrassStripeB} />
-          <View style={styles.pitchHalfLine} />
-          <View style={styles.pitchCenterCircle} />
-          <View style={styles.pitchBoxTop} />
-          <View style={styles.pitchBoxBottom} />
-          <View style={styles.pitchGoalTop} />
-          <View style={styles.pitchGoalBottom} />
+          {lineupView === 'both' ? (
+            <>
+              <View style={styles.pitchHalfLine} />
+              <View style={styles.pitchCenterCircle} />
+            </>
+          ) : null}
+          <View
+            style={[
+              styles.pitchBoxTop,
+              lineupView === 'home' && styles.pitchMarkHidden,
+            ]}
+          />
+          <View
+            style={[
+              styles.pitchBoxBottom,
+              lineupView === 'away' && styles.pitchMarkHidden,
+            ]}
+          />
+          <View
+            style={[
+              styles.pitchGoalTop,
+              lineupView === 'home' && styles.pitchMarkHidden,
+            ]}
+          />
+          <View
+            style={[
+              styles.pitchGoalBottom,
+              lineupView === 'away' && styles.pitchMarkHidden,
+            ]}
+          />
 
-          <View style={styles.pitchScoreBar}>
-            <View style={styles.pitchScoreSide}>
-              <Avatar uri={detail.homeLogo} name={detail.homeName} size={18} />
-              <Text style={styles.pitchScoreTeamText}>
-                {scores.home != null ? scores.home : '—'}
-              </Text>
+          {lineupView === 'both' ? (
+            <View style={styles.pitchScoreBar}>
+              <View style={styles.pitchScoreSide}>
+                <Avatar uri={detail.homeLogo} name={detail.homeName} size={18} />
+                <Text style={styles.pitchScoreTeamText}>
+                  {scores.home != null ? scores.home : '—'}
+                </Text>
+              </View>
+              <Text style={styles.pitchStatusText}>{statusLabel}</Text>
+              <View style={styles.pitchScoreSide}>
+                <Text style={styles.pitchScoreTeamText}>
+                  {scores.away != null ? scores.away : '—'}
+                </Text>
+                <Avatar uri={detail.awayLogo} name={detail.awayName} size={18} />
+              </View>
             </View>
-            <Text style={styles.pitchStatusText}>{statusLabel}</Text>
-            <View style={styles.pitchScoreSide}>
-              <Text style={styles.pitchScoreTeamText}>
-                {scores.away != null ? scores.away : '—'}
-              </Text>
-              <Avatar uri={detail.awayLogo} name={detail.awayName} size={18} />
+          ) : null}
+
+          {showAway
+            ? awayXi.map((p) => {
+                const pos = awayPos.get(p.id);
+                if (!pos) return null;
+                return (
+                  <PitchPlayer key={`away-${p.id}`} player={p} position={pos} />
+                );
+              })
+            : null}
+          {showHome
+            ? homeXi.map((p) => {
+                const pos = homePos.get(p.id);
+                if (!pos) return null;
+                return (
+                  <PitchPlayer key={`home-${p.id}`} player={p} position={pos} />
+                );
+              })
+            : null}
+
+          {away?.formation && showAway ? (
+            <View
+              style={[
+                styles.pitchFormationBadge,
+                lineupView === 'away'
+                  ? styles.pitchFormationBadgeBottom
+                  : styles.pitchFormationBadgeTop,
+              ]}
+            >
+              <Text style={styles.pitchFormationBadgeText}>{away.formation}</Text>
             </View>
-          </View>
-
-          {awayXi.map((p) => {
-            const pos = awayPos.get(p.id);
-            if (!pos) return null;
-            return (
-              <PitchPlayer key={`away-${p.id}`} player={p} position={pos} />
-            );
-          })}
-          {homeXi.map((p) => {
-            const pos = homePos.get(p.id);
-            if (!pos) return null;
-            return (
-              <PitchPlayer key={`home-${p.id}`} player={p} position={pos} />
-            );
-          })}
-
-          {overviewMode && (home?.formation || away?.formation) ? (
-            <View style={styles.pitchFormationOverlay}>
-              <Muted style={styles.pitchFormationText}>
-                {away?.formation ? `${away.formation}` : ''}
-                {away?.formation && home?.formation ? ' · ' : ''}
-                {home?.formation ? `${home.formation}` : ''}
-              </Muted>
+          ) : null}
+          {home?.formation && showHome ? (
+            <View
+              style={[
+                styles.pitchFormationBadge,
+                lineupView === 'home'
+                  ? styles.pitchFormationBadgeBottom
+                  : styles.pitchFormationBadgeBottom,
+              ]}
+            >
+              <Text style={styles.pitchFormationBadgeText}>{home.formation}</Text>
             </View>
           ) : null}
         </View>
@@ -835,7 +967,53 @@ const styles = StyleSheet.create({
   eventMin: { width: 42, ...cairoText('semiBold') },
   eventBody: { flex: 1, gap: 2 },
   eventTitle: { fontSize: 14, ...cairoText('semiBold') },
-  pitchCard: { padding: 0, overflow: 'hidden' },
+  pitchCard: { padding: 0, overflow: 'hidden', gap: 0 },
+  lineupTeamTabs: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+  lineupTeamTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  lineupTeamTabText: {
+    flex: 1,
+    fontSize: 12,
+    textAlign: 'center',
+    ...cairoText('semiBold'),
+  },
+  pitchMarkHidden: { opacity: 0 },
+  pitchFormationBadge: {
+    position: 'absolute',
+    zIndex: 4,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  pitchFormationBadgeTop: {
+    top: 10,
+    left: 10,
+  },
+  pitchFormationBadgeBottom: {
+    bottom: 10,
+    left: 10,
+  },
+  pitchFormationBadgeText: {
+    fontSize: 12,
+    color: '#1a1a1a',
+    ...cairoText('bold'),
+  },
   pitchWrap: {
     width: '100%',
     overflow: 'hidden',
