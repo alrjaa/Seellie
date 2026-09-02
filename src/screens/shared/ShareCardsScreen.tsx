@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
+  Modal,
   Pressable,
   StyleSheet,
   View,
@@ -76,6 +77,11 @@ export default function ShareCardsScreen() {
   const [recipientQuery, setRecipientQuery] = useState('');
   const [picking, setPicking] = useState(false);
   const [sending, setSending] = useState(false);
+  const [pendingJoinAccept, setPendingJoinAccept] = useState<ShareCard | null>(
+    null
+  );
+  const [acceptConditions, setAcceptConditions] = useState('');
+  const [acceptPreferences, setAcceptPreferences] = useState('');
 
   useFocusEffect(
     useCallback(() => {
@@ -284,6 +290,25 @@ export default function ShareCardsScreen() {
     }
   };
 
+  const openJoinAccept = (card: ShareCard) => {
+    setPendingJoinAccept(card);
+    setAcceptConditions(currentUser.joinConditions || '');
+    setAcceptPreferences(currentUser.bio || '');
+  };
+
+  const confirmJoinAccept = () => {
+    if (!pendingJoinAccept) return;
+    updateShareCardStatus(pendingJoinAccept.id, 'accepted', {
+      joinAccept: {
+        conditions: acceptConditions.trim() || undefined,
+        preferences: acceptPreferences.trim() || undefined,
+      },
+    });
+    setPendingJoinAccept(null);
+    setAcceptConditions('');
+    setAcceptPreferences('');
+  };
+
   const renderCardActions = (card: ShareCard) => {
     if (card.recipientId !== currentUser.id) return null;
     if (card.kind !== 'join_request' || card.status !== 'pending') {
@@ -303,7 +328,7 @@ export default function ShareCardsScreen() {
         <Button
           label={t('shareCards.accept')}
           style={{ flex: 1 }}
-          onPress={() => updateShareCardStatus(card.id, 'accepted')}
+          onPress={() => openJoinAccept(card)}
         />
         <Button
           label={t('shareCards.decline')}
@@ -319,6 +344,55 @@ export default function ShareCardsScreen() {
 
   return (
     <View style={styles.root}>
+      <Modal
+        visible={!!pendingJoinAccept}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPendingJoinAccept(null)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setPendingJoinAccept(null)}
+        >
+          <Pressable
+            style={[
+              styles.modalCard,
+              { backgroundColor: theme.colors.surfaceElevated },
+            ]}
+            onPress={(e) => e.stopPropagation?.()}
+          >
+            <Subtitle>{t('shareCards.acceptJoinTitle')}</Subtitle>
+            <Muted>{t('shareCards.acceptJoinDesc')}</Muted>
+            <Input
+              label={t('shareCards.joinConditions')}
+              value={acceptConditions}
+              onChangeText={setAcceptConditions}
+              multiline
+              placeholder={t('shareCards.joinConditionsHint')}
+            />
+            <Input
+              label={t('shareCards.joinPreferences')}
+              value={acceptPreferences}
+              onChangeText={setAcceptPreferences}
+              multiline
+              placeholder={t('shareCards.joinPreferencesHint')}
+            />
+            <View style={styles.rowBtns}>
+              <Button
+                label={t('common.cancel')}
+                variant="outline"
+                style={{ flex: 1 }}
+                onPress={() => setPendingJoinAccept(null)}
+              />
+              <Button
+                label={t('shareCards.acceptAndNotify')}
+                style={{ flex: 1 }}
+                onPress={confirmJoinAccept}
+              />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
       <StackTopChrome />
       <Screen
         scroll={tab === 'compose'}
@@ -600,4 +674,18 @@ const styles = StyleSheet.create({
   rowBtns: { flexDirection: 'row', gap: 8 },
   list: { gap: 12, paddingBottom: 20, flexGrow: 1 },
   item: { gap: 8 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    borderRadius: 14,
+    padding: 16,
+    gap: 10,
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
+  },
 });

@@ -577,6 +577,18 @@ export const en: TranslationTree = {
     pickMediaHint: 'Pick a photo or video from your device to attach',
     noMediaYet: 'No media attached yet — pick a photo or video',
     removeMedia: 'Remove attachment',
+    acceptJoinTitle: 'Confirm join acceptance',
+    acceptJoinDesc:
+      'A message with your conditions and preferences will be sent to the organizer. You can edit them before sending.',
+    joinConditions: 'Join conditions',
+    joinConditionsHint:
+      'e.g. availability on specific days, fees, training attendance...',
+    joinPreferences: 'My preferences',
+    joinPreferencesHint:
+      'e.g. preferred position, playing times, goals in the competition...',
+    acceptAndNotify: 'Accept & notify organizer',
+    organizerNotified:
+      'The organizer was notified with your conditions and preferences',
   },
   notifications: {
     title: 'Notifications',

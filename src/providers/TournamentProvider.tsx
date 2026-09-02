@@ -795,7 +795,13 @@ export interface TournamentContextType {
 
   updateShareCardStatus: (
     cardId: string,
-    status: ShareCardStatus
+    status: ShareCardStatus,
+    options?: {
+      joinAccept?: {
+        conditions?: string;
+        preferences?: string;
+      };
+    }
   ) => boolean;
   markShareCardRead: (cardId: string) => void;
   addTeam: (
@@ -4150,7 +4156,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const updateShareCardStatus = useCallback(
-    (cardId: string, status: ShareCardStatus) => {
+    (
+      cardId: string,
+      status: ShareCardStatus,
+      options?: {
+        joinAccept?: {
+          conditions?: string;
+          preferences?: string;
+        };
+      }
+    ) => {
       if (!currentUser) return false;
       const card = shareCards.find(
         (c) => c.id === cardId && c.recipientId === currentUser.id
@@ -4166,7 +4181,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       );
       void updateShareCardRemote(cardId, { status, read: true });
 
-      // قبول طلب انضمام → إضافة اللاعب للفريق فعلياً
+      // قبول طلب انضمام → إضافة اللاعب للفريق + إرسال رسالة للمنظم
       if (
         status === 'accepted' &&
         card.kind === 'join_request' &&
@@ -4235,6 +4250,54 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           void syncCompetitions(next);
           return next;
         });
+
+        const conditions = options?.joinAccept?.conditions?.trim();
+        const preferences = options?.joinAccept?.preferences?.trim();
+        const organizerId = card.senderId;
+        if (isUuid(organizerId)) {
+          const subject = `[نظام] قبول الانضمام — ${card.competitionName || 'مسابقة'} / ${card.teamName || 'فريق'}`;
+          const lines = [
+            `قبلتُ طلب الانضمام كلاعب في:`,
+            `• المسابقة: ${card.competitionName || '—'}`,
+            `• الفريق: ${card.teamName || '—'}`,
+            card.position ? `• المركز: ${card.position}` : '',
+            '',
+          ].filter(Boolean);
+          if (conditions) {
+            lines.push('شروطي:', conditions, '');
+          }
+          if (preferences) {
+            lines.push('رغباتي:', preferences, '');
+          }
+          if (!conditions && !preferences) {
+            lines.push(
+              'أؤكد قبول الانضمام وفق تفاصيل الطلب أعلاه.',
+              ''
+            );
+          }
+          lines.push(`— ${currentUser.name}`);
+          void notifyAccountUser(organizerId, subject, lines.join('\n'));
+        }
+
+        const nextConditions = conditions || currentUser.joinConditions;
+        const nextBio = preferences || currentUser.bio;
+        if (
+          (conditions && conditions !== currentUser.joinConditions) ||
+          (preferences && preferences !== currentUser.bio)
+        ) {
+          const updatedUser: User = {
+            ...currentUser,
+            joinConditions: nextConditions,
+            bio: nextBio,
+          };
+          setUsers((prev) =>
+            prev.map((u) => (u.id === updatedUser.id ? updatedUser : u))
+          );
+          setCurrentUser(updatedUser);
+          if (isUuid(updatedUser.id) && isSupabaseConfigured()) {
+            void upsertUserContentCloud(updatedUser);
+          }
+        }
       }
 
       toast({
@@ -4245,10 +4308,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             : status === 'declined'
               ? t('shareCards.declined')
               : t('shareCards.updated'),
+        description:
+          status === 'accepted' && card.kind === 'join_request'
+            ? t('shareCards.organizerNotified')
+            : undefined,
       });
       return true;
     },
-    [currentUser, shareCards, toast, t]
+    [currentUser, shareCards, toast, t, notifyAccountUser, syncCompetitions]
   );
 
   const markShareCardRead = useCallback(

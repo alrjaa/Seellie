@@ -17,6 +17,7 @@ export type UserContentPayload = {
   followers?: string[];
   analyst?: User['analyst'];
   permissions?: User['permissions'];
+  joinConditions?: string;
   city?: string;
   region?: string;
   country?: string;
@@ -102,6 +103,10 @@ export function applyContentPayload(
             (id): id is string => typeof id === 'string' && !!id.trim()
           )
         : user.followers || [],
+      joinConditions:
+        typeof content.joinConditions === 'string'
+          ? content.joinConditions
+          : user.joinConditions,
       analyst: content.analyst
         ? stripAnalystAccessCode({
             ...content.analyst,
@@ -158,6 +163,7 @@ export function userToContentPayload(user: User): UserContentPayload {
       ? stripAnalystAccessCode({ ...user.analyst })
       : user.analyst,
     permissions: user.permissions,
+    joinConditions: user.joinConditions,
     city: user.city,
     region: user.region,
     country: user.country,

@@ -80,6 +80,8 @@ export interface User {
   };
   personalityPhotos: string[]; // Nominated photos for "Player Personality"
   participationHistoryText?: string;
+  /** شروط الانضمام للمسابقات (لاعب حر) */
+  joinConditions?: string;
   permissions: {
       canComment: boolean;
       canUseVoice: boolean;

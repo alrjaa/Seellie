@@ -577,6 +577,15 @@ export const ar = {
     pickMediaHint: 'اختر صورة أو فيديو من جهازك لإرفاقه بالبطاقة',
     noMediaYet: 'لم يُرفق وسائط بعد — اختر صورة أو فيديو',
     removeMedia: 'إزالة المرفق',
+    acceptJoinTitle: 'تأكيد قبول الانضمام',
+    acceptJoinDesc:
+      'سيُرسل للمنظم رسالة تتضمن شروطك ورغباتك. يمكنك تعديلها قبل الإرسال.',
+    joinConditions: 'شروط الانضمام',
+    joinConditionsHint: 'مثال: التوفر أيام محددة، رسوم، التزام بحضور التدريبات...',
+    joinPreferences: 'رغباتي',
+    joinPreferencesHint: 'مثال: مركز مفضل، أوقات اللعب، أهدافي في المسابقة...',
+    acceptAndNotify: 'قبول وإرسال للمنظم',
+    organizerNotified: 'تم إبلاغ المنظم برسالة تتضمن شروطك ورغباتك',
   },
   notifications: {
     title: 'الإشعارات',
