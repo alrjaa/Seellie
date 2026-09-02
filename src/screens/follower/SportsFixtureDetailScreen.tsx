@@ -1,6 +1,7 @@
-import React, { memo, useMemo, useState } from 'react';
+import React, { memo, useMemo, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
+  LayoutChangeEvent,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -31,15 +32,15 @@ import type {
 
 type TabKey = 'overview' | 'events' | 'stats';
 
-function useViewportPitchHeight() {
+function useViewportPitchHeight(chromeHeight: number) {
   const insets = useSafeAreaInsets();
   const { height: screenH, width: screenW } = useWindowDimensions();
   return useMemo(() => {
     const tabH = tabBarTotalHeight(insets.bottom);
-    const chrome = 48 + 220 + 44 + 28;
-    const available = screenH - insets.top - tabH - chrome;
-    return Math.round(Math.max(available, screenW * 1.08, 400));
-  }, [screenH, screenW, insets.top, insets.bottom]);
+    const chrome = chromeHeight > 0 ? chromeHeight : 280;
+    const available = screenH - insets.top - tabH - chrome - 8;
+    return Math.round(Math.max(available, screenW * 0.92, 360));
+  }, [screenH, screenW, insets.top, insets.bottom, chromeHeight]);
 }
 
 
@@ -135,14 +136,82 @@ function eventMinute(e: SportsMatchEvent) {
 
 const MatchHeader = memo(function MatchHeader({
   detail,
+  compact = false,
 }: {
   detail: SportsFixtureDetail;
+  compact?: boolean;
 }) {
   const theme = useAppTheme();
   const { t } = useTranslation();
   const scores = resolvedScores(detail);
   const homeGoals = goalEventsForTeam(detail, 'home');
   const awayGoals = goalEventsForTeam(detail, 'away');
+
+  const statusText = isLive(detail.status)
+    ? `${t('sportsFixture.live')}${detail.elapsed != null ? ` · ${detail.elapsed}'` : ''}`
+    : isFinished(detail.status)
+      ? t('sportsFixture.finished')
+      : detail.status || t('sportsFixture.scheduled');
+
+  const metaText = [
+    detail.date
+      ? `${formatArabicDate(detail.date)} · ${formatArabicTime(detail.date)}`
+      : '',
+    detail.venue,
+    detail.city,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  if (compact) {
+    return (
+      <Card style={styles.headerCardCompact}>
+        <View style={styles.compactTopRow}>
+          <Text
+            style={[styles.leagueLineCompact, { color: theme.colors.textMuted }]}
+            numberOfLines={1}
+          >
+            {detail.leagueName || t('sportsFixture.league')}
+            {detail.round ? ` · ${detail.round}` : ''}
+          </Text>
+          <Text style={[styles.statusLineCompact, { color: theme.colors.accent }]}>
+            {statusText}
+          </Text>
+        </View>
+        <View style={styles.scoreBoardCompact}>
+          <View style={styles.teamColCompact}>
+            <Avatar uri={detail.homeLogo} name={detail.homeName} size={32} />
+            <Text
+              style={[styles.teamNameCompact, { color: theme.colors.text }]}
+              numberOfLines={1}
+            >
+              {detail.homeName}
+            </Text>
+            <Text style={[styles.teamScoreCompact, { color: theme.colors.text }]}>
+              {scores.home != null ? scores.home : '—'}
+            </Text>
+          </View>
+          <View style={styles.teamColCompact}>
+            <Avatar uri={detail.awayLogo} name={detail.awayName} size={32} />
+            <Text
+              style={[styles.teamNameCompact, { color: theme.colors.text }]}
+              numberOfLines={1}
+            >
+              {detail.awayName}
+            </Text>
+            <Text style={[styles.teamScoreCompact, { color: theme.colors.text }]}>
+              {scores.away != null ? scores.away : '—'}
+            </Text>
+          </View>
+        </View>
+        {metaText ? (
+          <Muted style={styles.metaLineCompact} numberOfLines={1}>
+            {metaText}
+          </Muted>
+        ) : null}
+      </Card>
+    );
+  }
 
   return (
     <Card style={styles.headerCard}>
@@ -151,11 +220,7 @@ const MatchHeader = memo(function MatchHeader({
         {detail.round ? ` · ${detail.round}` : ''}
       </Text>
       <Text style={[styles.statusLine, { color: theme.colors.accent }]}>
-        {isLive(detail.status)
-          ? `${t('sportsFixture.live')}${detail.elapsed != null ? ` · ${detail.elapsed}'` : ''}`
-          : isFinished(detail.status)
-            ? t('sportsFixture.finished')
-            : detail.status || t('sportsFixture.scheduled')}
+        {statusText}
       </Text>
       <View style={styles.scoreBoard}>
         <View style={styles.teamCol}>
@@ -207,11 +272,7 @@ const MatchHeader = memo(function MatchHeader({
         </View>
       </View>
       <Muted style={styles.metaLine}>
-        {detail.date
-          ? `${formatArabicDate(detail.date)} · ${formatArabicTime(detail.date)}`
-          : ''}
-        {detail.venue ? ` · ${detail.venue}` : ''}
-        {detail.city ? `, ${detail.city}` : ''}
+        {metaText}
       </Muted>
     </Card>
   );
@@ -473,11 +534,13 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
   home,
   away,
   pitchHeight: pitchHeightProp,
+  overviewMode = false,
 }: {
   detail: SportsFixtureDetail;
   home?: SportsTeamLineup;
   away?: SportsTeamLineup;
   pitchHeight?: number;
+  overviewMode?: boolean;
 }) {
   const { t } = useTranslation();
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -548,10 +611,20 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
               <PitchPlayer key={`home-${p.id}`} player={p} position={pos} />
             );
           })}
+
+          {overviewMode && (home?.formation || away?.formation) ? (
+            <View style={styles.pitchFormationOverlay}>
+              <Muted style={styles.pitchFormationText}>
+                {away?.formation ? `${away.formation}` : ''}
+                {away?.formation && home?.formation ? ' · ' : ''}
+                {home?.formation ? `${home.formation}` : ''}
+              </Muted>
+            </View>
+          ) : null}
         </View>
       </View>
 
-      {(home?.formation || away?.formation) ? (
+      {!overviewMode && (home?.formation || away?.formation) ? (
         <View style={styles.formationRow}>
           <Muted>
             {away?.teamName}
@@ -564,7 +637,7 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
         </View>
       ) : null}
 
-      {(home?.substitutes.length || away?.substitutes.length) ? (
+      {!overviewMode && (home?.substitutes.length || away?.substitutes.length) ? (
         <View style={styles.subsRow}>
           {away?.substitutes.length ? (
             <View style={styles.subsCol}>
@@ -673,7 +746,13 @@ export default function SportsFixtureDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { loading, detail, error, reload } = useSportsFixtureDetail(id);
   const [tab, setTab] = useState<TabKey>('overview');
-  const pitchHeight = useViewportPitchHeight();
+  const [chromeHeight, setChromeHeight] = useState(0);
+  const pitchHeight = useViewportPitchHeight(chromeHeight);
+  const onChromeLayout = useCallback((e: LayoutChangeEvent) => {
+    const next = Math.round(e.nativeEvent.layout.height);
+    setChromeHeight((prev) => (prev === next ? prev : next));
+  }, []);
+  const isOverview = tab === 'overview';
 
   const tabs = useMemo(
     () =>
@@ -710,55 +789,58 @@ export default function SportsFixtureDetailScreen() {
 
   return (
     <Screen scroll fabClearance={false}>
-      <View style={styles.topBar}>
-        <HeaderBackButton />
-      </View>
+      <View onLayout={onChromeLayout} style={styles.chromeBlock}>
+        <View style={styles.topBar}>
+          <HeaderBackButton />
+        </View>
 
-      <MatchHeader detail={detail} />
+        <MatchHeader detail={detail} compact={isOverview} />
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabsRow}
-        style={styles.tabsScroll}
-      >
-        {tabs.map((item) => {
-          const active = tab === item.key;
-          return (
-            <Pressable
-              key={item.key}
-              onPress={() => setTab(item.key)}
-              style={[
-                styles.tabBtn,
-                {
-                  backgroundColor: active
-                    ? theme.colors.accent
-                    : theme.colors.surfaceElevated,
-                  borderColor: theme.colors.border,
-                },
-              ]}
-            >
-              <Text
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsRow}
+          style={styles.tabsScroll}
+        >
+          {tabs.map((item) => {
+            const active = tab === item.key;
+            return (
+              <Pressable
+                key={item.key}
+                onPress={() => setTab(item.key)}
                 style={[
-                  styles.tabText,
-                  cairoText('semiBold'),
+                  styles.tabBtn,
                   {
-                    color: active
-                      ? theme.colors.textInverse
-                      : theme.colors.text,
+                    backgroundColor: active
+                      ? theme.colors.accent
+                      : theme.colors.surfaceElevated,
+                    borderColor: theme.colors.border,
                   },
                 ]}
               >
-                {item.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+                <Text
+                  style={[
+                    styles.tabText,
+                    cairoText('semiBold'),
+                    {
+                      color: active
+                        ? theme.colors.textInverse
+                        : theme.colors.text,
+                    },
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
 
-      {tab === 'overview' ? (
+      {isOverview ? (
         <>
           <FootballPitchLineups
+            overviewMode
             pitchHeight={pitchHeight}
             detail={detail}
             home={detail.lineups.home}
@@ -776,16 +858,46 @@ export default function SportsFixtureDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  chromeBlock: { gap: 8 },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 40,
+    minHeight: 36,
   },
   tabsScroll: {
     flexGrow: 0,
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   headerCard: { padding: 12, gap: 6 },
+  headerCardCompact: { padding: 8, gap: 4 },
+  compactTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  leagueLineCompact: { flex: 1, fontSize: 11 },
+  statusLineCompact: { fontSize: 11, ...cairoText('semiBold') },
+  scoreBoardCompact: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+    direction: 'ltr',
+  },
+  teamColCompact: { flex: 1, alignItems: 'center', gap: 2 },
+  teamNameCompact: {
+    fontSize: 11,
+    textAlign: 'center',
+    ...cairoText('semiBold'),
+  },
+  teamScoreCompact: {
+    fontSize: 22,
+    lineHeight: 26,
+    textAlign: 'center',
+    ...cairoText('bold'),
+  },
+  metaLineCompact: { textAlign: 'center', fontSize: 10 },
   leagueLine: { fontSize: 13, textAlign: 'center' },
   statusLine: { fontSize: 12, textAlign: 'center', ...cairoText('semiBold') },
   scoreBoard: {
@@ -955,6 +1067,19 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
     fontSize: 11,
     ...cairoText('semiBold'),
+  },
+  pitchFormationOverlay: {
+    position: 'absolute',
+    bottom: 6,
+    left: '8%',
+    right: '8%',
+    alignItems: 'center',
+    zIndex: 3,
+  },
+  pitchFormationText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 10,
+    textAlign: 'center',
   },
   pitchPlayerAbs: {
     position: 'absolute',
