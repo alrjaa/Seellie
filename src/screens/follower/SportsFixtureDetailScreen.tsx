@@ -351,8 +351,6 @@ const POSITION_DEPTH: Record<string, number> = {
   ATT: 4,
 };
 
-const FALLBACK_ROW_SIZES = [1, 4, 4, 2];
-
 function playerDepth(player: SportsLineupPlayer, fallbackRow: number): number {
   const fromGrid = parseGrid(player.grid)?.row;
   if (fromGrid) return fromGrid;
@@ -361,18 +359,27 @@ function playerDepth(player: SportsLineupPlayer, fallbackRow: number): number {
   return fallbackRow;
 }
 
+function isGoalkeeper(player: SportsLineupPlayer) {
+  const pos = (player.position || '').trim().toUpperCase();
+  return pos === 'G' || pos === 'GK';
+}
+
 function buildFallbackRowMap(players: SportsLineupPlayer[]): Map<number, number> {
   const map = new Map<number, number>();
-  let index = 0;
-  FALLBACK_ROW_SIZES.forEach((count, rowIdx) => {
-    for (let i = 0; i < count && index < players.length; i += 1, index += 1) {
-      map.set(players[index].id, rowIdx + 1);
-    }
+  const buckets: SportsLineupPlayer[][] = [[], [], [], []];
+
+  players.forEach((player) => {
+    const depth = playerDepth(player, 3);
+    const bucketIdx = Math.min(Math.max(depth - 1, 0), 3);
+    buckets[bucketIdx].push(player);
   });
-  while (index < players.length) {
-    map.set(players[index].id, 3);
-    index += 1;
-  }
+
+  buckets.forEach((bucket, rowIdx) => {
+    bucket.forEach((player) => {
+      map.set(player.id, rowIdx + 1);
+    });
+  });
+
   return map;
 }
 
@@ -384,6 +391,37 @@ function hasReliableGrid(players: SportsLineupPlayer[]): boolean {
 
 type PitchPos = { top: number; left: number };
 
+function rowForGoalkeeper(
+  players: SportsLineupPlayer[],
+  byRow: Map<number, SportsLineupPlayer[]>
+) {
+  const gk = players.find(isGoalkeeper);
+  if (!gk) return null;
+  for (const [row, list] of byRow) {
+    if (list.some((p) => p.id === gk.id)) return row;
+  }
+  return null;
+}
+
+function normalizeRowsByGoalkeeper(
+  players: SportsLineupPlayer[],
+  byRow: Map<number, SportsLineupPlayer[]>
+) {
+  const rowKeys = [...byRow.keys()];
+  if (rowKeys.length < 2) return byRow;
+
+  const minRow = Math.min(...rowKeys);
+  const maxRow = Math.max(...rowKeys);
+  const gkRow = rowForGoalkeeper(players, byRow);
+  if (gkRow == null || gkRow !== maxRow) return byRow;
+
+  const flipped = new Map<number, SportsLineupPlayer[]>();
+  for (const [row, list] of byRow) {
+    flipped.set(maxRow - row + minRow, list);
+  }
+  return flipped;
+}
+
 function buildPitchLayout(
   players: SportsLineupPlayer[],
   side: 'home' | 'away'
@@ -393,7 +431,7 @@ function buildPitchLayout(
 
   const fallbackRows = buildFallbackRowMap(players);
   const useGrid = hasReliableGrid(players);
-  const byRow = new Map<number, SportsLineupPlayer[]>();
+  let byRow = new Map<number, SportsLineupPlayer[]>();
 
   players.forEach((player) => {
     const row = useGrid
@@ -403,9 +441,9 @@ function buildPitchLayout(
     byRow.get(row)!.push(player);
   });
 
-  const rows = [...byRow.keys()].sort((a, b) =>
-    side === 'away' ? a - b : b - a
-  );
+  byRow = normalizeRowsByGoalkeeper(players, byRow);
+
+  const rows = [...byRow.keys()].sort((a, b) => a - b);
   const rowCount = Math.max(rows.length, 1);
   const awayStart = 8;
   const homeEnd = 92;
