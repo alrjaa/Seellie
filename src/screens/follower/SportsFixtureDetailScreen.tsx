@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +21,7 @@ import { Avatar, Card, Muted, Subtitle } from '@/components/ui';
 import { useSportsFixtureDetail } from '@/hooks/useSportsFixtureDetail';
 import { formatArabicDate, formatArabicTime } from '@/utils';
 import { cairoText } from '@/theme/fonts';
+import { tabBarTotalHeight } from '@/theme/navigation';
 import type {
   SportsFixtureDetail,
   SportsLineupPlayer,
@@ -28,6 +30,18 @@ import type {
 } from '@/services/sports-data';
 
 type TabKey = 'overview' | 'events' | 'stats';
+
+function useViewportPitchHeight() {
+  const insets = useSafeAreaInsets();
+  const { height: screenH, width: screenW } = useWindowDimensions();
+  return useMemo(() => {
+    const tabH = tabBarTotalHeight(insets.bottom);
+    const chrome = 48 + 220 + 44 + 28;
+    const available = screenH - insets.top - tabH - chrome;
+    return Math.round(Math.max(available, screenW * 1.08, 400));
+  }, [screenH, screenW, insets.top, insets.bottom]);
+}
+
 
 function isFinished(status: string) {
   const s = status.toUpperCase();
@@ -458,19 +472,20 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
   detail,
   home,
   away,
-  fillHeight = false,
+  pitchHeight: pitchHeightProp,
 }: {
   detail: SportsFixtureDetail;
   home?: SportsTeamLineup;
   away?: SportsTeamLineup;
-  fillHeight?: boolean;
+  pitchHeight?: number;
 }) {
   const { t } = useTranslation();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const scores = resolvedScores(detail);
-  const pitchHeight = Math.round(
+  const fallbackHeight = Math.round(
     Math.min(Math.max(screenW * 1.58, 540), screenH * 0.82)
   );
+  const pitchHeight = pitchHeightProp ?? fallbackHeight;
 
   if (!home?.startXI?.length && !away?.startXI?.length) {
     return (
@@ -491,13 +506,8 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
       : detail.status || t('sportsFixture.scheduled');
 
   return (
-    <Card style={[styles.pitchCard, fillHeight && styles.pitchCardFill]}>
-      <View
-        style={[
-          styles.pitchWrap,
-          fillHeight ? styles.pitchWrapFill : { height: pitchHeight },
-        ]}
-      >
+    <Card style={styles.pitchCard}>
+      <View style={[styles.pitchWrap, { height: pitchHeight }]}>
         <View style={styles.pitchField}>
           <View style={styles.pitchGrassStripeA} />
           <View style={styles.pitchGrassStripeB} />
@@ -554,7 +564,7 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
         </View>
       ) : null}
 
-      {(home?.substitutes.length || away?.substitutes.length) && !fillHeight ? (
+      {(home?.substitutes.length || away?.substitutes.length) ? (
         <View style={styles.subsRow}>
           {away?.substitutes.length ? (
             <View style={styles.subsCol}>
@@ -663,6 +673,7 @@ export default function SportsFixtureDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { loading, detail, error, reload } = useSportsFixtureDetail(id);
   const [tab, setTab] = useState<TabKey>('overview');
+  const pitchHeight = useViewportPitchHeight();
 
   const tabs = useMemo(
     () =>
@@ -698,91 +709,73 @@ export default function SportsFixtureDetailScreen() {
   }
 
   return (
-    <Screen scroll={false} fabClearance={false}>
-      <View style={styles.page}>
-        <View style={styles.topBar}>
-          <HeaderBackButton />
-        </View>
+    <Screen scroll fabClearance={false}>
+      <View style={styles.topBar}>
+        <HeaderBackButton />
+      </View>
 
-        <MatchHeader detail={detail} />
+      <MatchHeader detail={detail} />
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsRow}
-          style={styles.tabsScroll}
-        >
-          {tabs.map((item) => {
-            const active = tab === item.key;
-            return (
-              <Pressable
-                key={item.key}
-                onPress={() => setTab(item.key)}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabsRow}
+        style={styles.tabsScroll}
+      >
+        {tabs.map((item) => {
+          const active = tab === item.key;
+          return (
+            <Pressable
+              key={item.key}
+              onPress={() => setTab(item.key)}
+              style={[
+                styles.tabBtn,
+                {
+                  backgroundColor: active
+                    ? theme.colors.accent
+                    : theme.colors.surfaceElevated,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Text
                 style={[
-                  styles.tabBtn,
+                  styles.tabText,
+                  cairoText('semiBold'),
                   {
-                    backgroundColor: active
-                      ? theme.colors.accent
-                      : theme.colors.surfaceElevated,
-                    borderColor: theme.colors.border,
+                    color: active
+                      ? theme.colors.textInverse
+                      : theme.colors.text,
                   },
                 ]}
               >
-                <Text
-                  style={[
-                    styles.tabText,
-                    cairoText('semiBold'),
-                    {
-                      color: active
-                        ? theme.colors.textInverse
-                        : theme.colors.text,
-                    },
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
 
-        {tab === 'overview' ? (
-          <View style={styles.pitchFlex}>
-            <FootballPitchLineups
-              fillHeight
-              detail={detail}
-              home={detail.lineups.home}
-              away={detail.lineups.away}
-            />
-          </View>
-        ) : (
-          <ScrollView
-            style={styles.tabScroll}
-            contentContainerStyle={styles.tabScrollContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            {tab === 'events' ? <EventsTab events={detail.events} /> : null}
-            {tab === 'stats' ? <StatsTab detail={detail} /> : null}
-          </ScrollView>
-        )}
-      </View>
+      {tab === 'overview' ? (
+        <>
+          <FootballPitchLineups
+            pitchHeight={pitchHeight}
+            detail={detail}
+            home={detail.lineups.home}
+            away={detail.lineups.away}
+          />
+          {detail.events.length > 0 ? (
+            <EventsTab events={detail.events.slice(0, 6)} />
+          ) : null}
+        </>
+      ) : null}
+      {tab === 'events' ? <EventsTab events={detail.events} /> : null}
+      {tab === 'stats' ? <StatsTab detail={detail} /> : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  pitchFlex: {
-    flex: 1,
-    minHeight: 0,
-  },
-  tabScroll: { flex: 1 },
-  tabScrollContent: { paddingBottom: 16, gap: 12 },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -843,13 +836,11 @@ const styles = StyleSheet.create({
   eventBody: { flex: 1, gap: 2 },
   eventTitle: { fontSize: 14, ...cairoText('semiBold') },
   pitchCard: { padding: 0, overflow: 'hidden' },
-  pitchCardFill: { flex: 1, minHeight: 0 },
   pitchWrap: {
     width: '100%',
     overflow: 'hidden',
     position: 'relative',
   },
-  pitchWrapFill: { flex: 1, minHeight: 240 },
   pitchField: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#1f5f35',
