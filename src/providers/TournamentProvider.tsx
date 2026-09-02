@@ -232,6 +232,7 @@ import { DEFAULT_LOGO, APP_DISPLAY_NAME } from '@/theme/brand';
 import { certificateImageUri } from '@/theme/certificates';
 import {
   migrateToRecognitionCatalog,
+  needsRecognitionCatalogRepair,
   shouldMigrateLegacySupportLevels,
 } from '@/data/recognition-certificate-levels';
 
@@ -409,7 +410,7 @@ async function saveOfferRemote(offer: Offer) {
 
 const APP_LOGO_KEY = 'seellie.appLogo.v3';
 const APP_NAME_KEY = 'seellie.appName';
-const SUPPORT_LEVELS_KEY = 'seellie.supportLevels.v2';
+const SUPPORT_LEVELS_KEY = 'seellie.supportLevels.v3';
 
 /** FIX-01: لا تُخزَّن accessCode ولا كلمات مرور سحابية في الجلسة المحلية */
 function sanitizeUserSecrets(user: User): User {
@@ -1349,7 +1350,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           );
         }
         if (storedSupportLevels && storedSupportLevels.length > 0) {
-          setSupportLevels(normalizeSupportLevels(storedSupportLevels));
+          const next = normalizeSupportLevels(storedSupportLevels);
+          setSupportLevels(next);
+          if (needsRecognitionCatalogRepair(storedSupportLevels)) {
+            void saveSupportLevels(next);
+          }
         }
         if (storedShareCards && storedShareCards.length > 0) {
           setShareCards(
@@ -2901,7 +2906,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     if (blobs.levels?.length) {
       const next = normalizeSupportLevels(blobs.levels);
       setSupportLevels(next);
-      if (shouldMigrateLegacySupportLevels(blobs.levels)) {
+      if (needsRecognitionCatalogRepair(blobs.levels)) {
         void saveSupportLevels(next);
       }
     }

@@ -22,6 +22,7 @@ import { createId } from '@/utils/id';
 import { matchesSearchQuery } from '@/utils/search';
 import { useResponsive } from '@/hooks/useResponsive';
 import { confirmDestructive } from '@/utils/confirm';
+import { restoreDefaultRecognitionLevels } from '@/data/recognition-certificate-levels';
 import {
   certificateImageSource,
   certificateImageUri,
@@ -130,6 +131,24 @@ export default function SupportScreen() {
       ),
     [giftTransactions, query]
   );
+
+  const restoreDefaults = async () => {
+    const ok = await confirmDestructive({
+      title: t('superadmin.support.restoreDefaultsTitle'),
+      message: t('superadmin.support.restoreDefaultsConfirm'),
+      cancelLabel: t('common.cancel'),
+      confirmLabel: t('common.confirm'),
+    });
+    if (!ok) return;
+    const defaults = restoreDefaultRecognitionLevels();
+    setLevels(defaults);
+    updateSupportLevels(defaults);
+    toast({
+      variant: 'success',
+      title: t('superadmin.support.restoredDefaultsTitle'),
+      description: t('superadmin.support.restoredDefaultsDesc'),
+    });
+  };
 
   const saveLevels = () => {
     const cleaned = levels
@@ -394,6 +413,11 @@ export default function SupportScreen() {
         </View>
       )}
 
+      <Button
+        label={t('superadmin.support.restoreDefaults')}
+        variant="outline"
+        onPress={() => void restoreDefaults()}
+      />
       <Button
         label={t('superadmin.support.addLevel')}
         variant="secondary"
