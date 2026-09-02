@@ -50,6 +50,7 @@ function pickAvatarUrl(
   for (const raw of candidates) {
     const value = (raw || '').trim();
     if (!value) continue;
+    if (/placehold\.co/i.test(value)) continue;
     if (
       /^https?:\/\//i.test(value) ||
       value.startsWith('data:') ||

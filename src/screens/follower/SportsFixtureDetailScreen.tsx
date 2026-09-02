@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
@@ -176,9 +177,64 @@ const EventsTab = memo(function EventsTab({
 
 function parseGrid(grid?: string) {
   if (!grid) return null;
-  const [row, col] = grid.split(':').map(Number);
+  const parts = grid.split(/[:,-]/).map((s) => Number(s.trim()));
+  const row = parts[0];
+  const col = parts[1];
   if (!row || !col) return null;
   return { row, col };
+}
+
+const POSITION_DEPTH: Record<string, number> = {
+  G: 1,
+  GK: 1,
+  D: 2,
+  DF: 2,
+  DEF: 2,
+  CB: 2,
+  LB: 2,
+  RB: 2,
+  M: 3,
+  MF: 3,
+  MID: 3,
+  CM: 3,
+  DM: 3,
+  AM: 3,
+  F: 4,
+  FW: 4,
+  ST: 4,
+  CF: 4,
+  ATT: 4,
+};
+
+const FALLBACK_ROW_SIZES = [1, 4, 4, 2];
+
+function playerDepth(player: SportsLineupPlayer, fallbackRow: number): number {
+  const fromGrid = parseGrid(player.grid)?.row;
+  if (fromGrid) return fromGrid;
+  const pos = (player.position || '').trim().toUpperCase();
+  if (pos && POSITION_DEPTH[pos] != null) return POSITION_DEPTH[pos];
+  return fallbackRow;
+}
+
+function buildFallbackRowMap(players: SportsLineupPlayer[]): Map<number, number> {
+  const map = new Map<number, number>();
+  let index = 0;
+  FALLBACK_ROW_SIZES.forEach((count, rowIdx) => {
+    for (let i = 0; i < count && index < players.length; i += 1, index += 1) {
+      map.set(players[index].id, rowIdx + 1);
+    }
+  });
+  while (index < players.length) {
+    map.set(players[index].id, 3);
+    index += 1;
+  }
+  return map;
+}
+
+function hasReliableGrid(players: SportsLineupPlayer[]): boolean {
+  if (!players.length) return false;
+  const withGrid = players.filter((p) => parseGrid(p.grid)).length;
+  return withGrid >= Math.ceil(players.length * 0.45);
 }
 
 type PitchPos = { top: number; left: number };
@@ -187,32 +243,45 @@ function buildPitchLayout(
   players: SportsLineupPlayer[],
   side: 'home' | 'away'
 ): Map<number, PitchPos> {
+  const positions = new Map<number, PitchPos>();
+  if (!players.length) return positions;
+
+  const fallbackRows = buildFallbackRowMap(players);
+  const useGrid = hasReliableGrid(players);
   const byRow = new Map<number, SportsLineupPlayer[]>();
-  for (const p of players) {
-    const row = parseGrid(p.grid)?.row ?? 5;
+
+  players.forEach((player) => {
+    const row = useGrid
+      ? playerDepth(player, fallbackRows.get(player.id) ?? 3)
+      : fallbackRows.get(player.id) ?? playerDepth(player, 3);
     if (!byRow.has(row)) byRow.set(row, []);
-    byRow.get(row)!.push(p);
-  }
+    byRow.get(row)!.push(player);
+  });
 
   const rows = [...byRow.keys()].sort((a, b) =>
     side === 'away' ? a - b : b - a
   );
-  const positions = new Map<number, PitchPos>();
   const rowCount = Math.max(rows.length, 1);
+  const topMargin = 16;
+  const bottomMargin = 16;
+  const span = 34;
 
   rows.forEach((rowKey, rowIdx) => {
-    const rowPlayers = [...(byRow.get(rowKey) ?? [])].sort(
-      (a, b) =>
-        (parseGrid(a.grid)?.col ?? 0) - (parseGrid(b.grid)?.col ?? 0)
-    );
+    const rowPlayers = [...(byRow.get(rowKey) ?? [])].sort((a, b) => {
+      const aCol = parseGrid(a.grid)?.col ?? a.number ?? 0;
+      const bCol = parseGrid(b.grid)?.col ?? b.number ?? 0;
+      return Number(aCol) - Number(bCol);
+    });
+
+    const rowProgress = rowCount <= 1 ? 0.5 : rowIdx / (rowCount - 1);
     const top =
       side === 'away'
-        ? 7 + (rowIdx / Math.max(rowCount - 1, 1)) * 38
-        : 93 - (rowIdx / Math.max(rowCount - 1, 1)) * 38;
+        ? topMargin + rowProgress * span
+        : 100 - bottomMargin - rowProgress * span;
 
-    rowPlayers.forEach((p, i) => {
-      const left = ((i + 1) / (rowPlayers.length + 1)) * 88 + 6;
-      positions.set(p.id, { top, left });
+    rowPlayers.forEach((player, i) => {
+      const left = ((i + 1) / (rowPlayers.length + 1)) * 84 + 8;
+      positions.set(player.id, { top, left });
     });
   });
 
@@ -325,6 +394,10 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
   away?: SportsTeamLineup;
 }) {
   const { t } = useTranslation();
+  const { width: screenW, height: screenH } = useWindowDimensions();
+  const pitchHeight = Math.round(
+    Math.min(Math.max(screenW * 1.42, 460), screenH * 0.62)
+  );
 
   if (!home?.startXI?.length && !away?.startXI?.length) {
     return (
@@ -346,7 +419,7 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
 
   return (
     <Card style={styles.pitchCard}>
-      <View style={styles.pitchWrap}>
+      <View style={[styles.pitchWrap, { height: pitchHeight }]}>
         <View style={styles.pitchField}>
           <View style={styles.pitchGrassStripeA} />
           <View style={styles.pitchGrassStripeB} />
@@ -650,11 +723,14 @@ const styles = StyleSheet.create({
   eventBody: { flex: 1, gap: 2 },
   eventTitle: { fontSize: 14, ...cairoText('semiBold') },
   pitchCard: { padding: 0, overflow: 'hidden' },
-  pitchWrap: { overflow: 'hidden' },
-  pitchField: {
-    aspectRatio: 0.58,
-    backgroundColor: '#1f5f35',
+  pitchWrap: {
+    width: '100%',
+    overflow: 'hidden',
     position: 'relative',
+  },
+  pitchField: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#1f5f35',
   },
   pitchGrassStripeA: {
     ...StyleSheet.absoluteFillObject,
@@ -762,9 +838,9 @@ const styles = StyleSheet.create({
   },
   pitchPlayerAbs: {
     position: 'absolute',
-    width: 62,
-    marginLeft: -31,
-    marginTop: -30,
+    width: 56,
+    marginLeft: -28,
+    marginTop: -28,
     alignItems: 'center',
     zIndex: 4,
   },
@@ -827,10 +903,10 @@ const styles = StyleSheet.create({
     ...cairoText('bold'),
   },
   pitchLabel: {
-    marginTop: 3,
-    fontSize: 10,
+    marginTop: 2,
+    fontSize: 9,
     textAlign: 'center',
-    maxWidth: 62,
+    maxWidth: 56,
     color: '#fff',
     ...cairoText('semiBold'),
     textShadowColor: 'rgba(0,0,0,0.75)',
