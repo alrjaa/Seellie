@@ -356,13 +356,17 @@ export default function FollowerLayout() {
               headerRight: () => null,
             }}
           />
-          <Tabs.Screen name="sports" options={{ href: null }} />
+          <Tabs.Screen
+            name="sports"
+            options={{ href: null, headerShown: false, title: '' }}
+          />
           <Tabs.Screen
             name="sports/fixtures/[id]"
             options={{
               href: null,
-              title: t('sportsFixture.title'),
+              title: '',
               headerShown: false,
+              headerTitle: () => null,
             }}
           />
         </Tabs>

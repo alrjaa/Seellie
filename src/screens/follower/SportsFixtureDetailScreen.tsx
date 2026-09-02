@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { Screen } from '@/components/layout/Screen';
+import { HeaderBackButton } from '@/components/layout/HeaderBackButton';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Avatar, Card, Muted, Subtitle } from '@/components/ui';
 import { useSportsFixtureDetail } from '@/hooks/useSportsFixtureDetail';
@@ -83,7 +84,7 @@ const MatchHeader = memo(function MatchHeader({
       </Text>
       <View style={styles.scoreBoard}>
         <View style={styles.teamCol}>
-          <Avatar uri={detail.homeLogo} name={detail.homeName} size={56} />
+          <Avatar uri={detail.homeLogo} name={detail.homeName} size={48} />
           <Text
             style={[styles.teamName, { color: theme.colors.text }]}
             numberOfLines={2}
@@ -104,7 +105,7 @@ const MatchHeader = memo(function MatchHeader({
           {scoreText(detail)}
         </Text>
         <View style={styles.teamCol}>
-          <Avatar uri={detail.awayLogo} name={detail.awayName} size={56} />
+          <Avatar uri={detail.awayLogo} name={detail.awayName} size={48} />
           <Text
             style={[styles.teamName, { color: theme.colors.text }]}
             numberOfLines={2}
@@ -262,9 +263,9 @@ function buildPitchLayout(
     side === 'away' ? a - b : b - a
   );
   const rowCount = Math.max(rows.length, 1);
-  const topMargin = 16;
-  const bottomMargin = 16;
-  const span = 34;
+  const topMargin = 12;
+  const bottomMargin = 12;
+  const span = 40;
 
   rows.forEach((rowKey, rowIdx) => {
     const rowPlayers = [...(byRow.get(rowKey) ?? [])].sort((a, b) => {
@@ -280,7 +281,7 @@ function buildPitchLayout(
         : 100 - bottomMargin - rowProgress * span;
 
     rowPlayers.forEach((player, i) => {
-      const left = ((i + 1) / (rowPlayers.length + 1)) * 84 + 8;
+      const left = ((i + 1) / (rowPlayers.length + 1)) * 88 + 6;
       positions.set(player.id, { top, left });
     });
   });
@@ -334,7 +335,7 @@ const PitchPlayer = memo(function PitchPlayer({
           />
         ) : (
           <View style={[styles.pitchPhoto, styles.pitchPhotoFallback]}>
-            <Ionicons name="person" size={22} color="rgba(255,255,255,0.7)" />
+            <Ionicons name="person" size={16} color="rgba(255,255,255,0.7)" />
           </View>
         )}
 
@@ -388,15 +389,17 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
   detail,
   home,
   away,
+  fillHeight = false,
 }: {
   detail: SportsFixtureDetail;
   home?: SportsTeamLineup;
   away?: SportsTeamLineup;
+  fillHeight?: boolean;
 }) {
   const { t } = useTranslation();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const pitchHeight = Math.round(
-    Math.min(Math.max(screenW * 1.42, 460), screenH * 0.62)
+    Math.min(Math.max(screenW * 1.55, 520), screenH * 0.78)
   );
 
   if (!home?.startXI?.length && !away?.startXI?.length) {
@@ -418,8 +421,13 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
       : detail.status || t('sportsFixture.scheduled');
 
   return (
-    <Card style={styles.pitchCard}>
-      <View style={[styles.pitchWrap, { height: pitchHeight }]}>
+    <Card style={[styles.pitchCard, fillHeight && styles.pitchCardFill]}>
+      <View
+        style={[
+          styles.pitchWrap,
+          fillHeight ? styles.pitchWrapFill : { height: pitchHeight },
+        ]}
+      >
         <View style={styles.pitchField}>
           <View style={styles.pitchGrassStripeA} />
           <View style={styles.pitchGrassStripeB} />
@@ -454,7 +462,7 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
         </View>
       </View>
 
-      {(home?.formation || away?.formation) ? (
+      {(home?.formation || away?.formation) && !fillHeight ? (
         <View style={styles.formationRow}>
           <Muted>
             {away?.teamName}
@@ -467,7 +475,7 @@ const FootballPitchLineups = memo(function FootballPitchLineups({
         </View>
       ) : null}
 
-      {(home?.substitutes.length || away?.substitutes.length) ? (
+      {(home?.substitutes.length || away?.substitutes.length) && !fillHeight ? (
         <View style={styles.subsRow}>
           {away?.substitutes.length ? (
             <View style={styles.subsCol}>
@@ -611,16 +619,19 @@ export default function SportsFixtureDetailScreen() {
   }
 
   return (
-    <Screen scroll={false}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
+    <Screen scroll={false} fabClearance>
+      <View style={styles.page}>
+        <View style={styles.topBar}>
+          <HeaderBackButton />
+        </View>
+
         <MatchHeader detail={detail} />
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.tabsRow}
+          style={styles.tabsScroll}
         >
           {tabs.map((item) => {
             const active = tab === item.key;
@@ -657,29 +668,53 @@ export default function SportsFixtureDetailScreen() {
         </ScrollView>
 
         {tab === 'overview' ? (
-          <>
+          <View style={styles.overviewPitch}>
             <FootballPitchLineups
+              fillHeight
               detail={detail}
               home={detail.lineups.home}
               away={detail.lineups.away}
             />
-            <EventsTab events={detail.events.slice(0, 8)} />
-            {detail.statistics.length > 0 ? (
-              <StatsTab detail={detail} />
-            ) : null}
-          </>
-        ) : null}
-        {tab === 'events' ? <EventsTab events={detail.events} /> : null}
-        {tab === 'stats' ? <StatsTab detail={detail} /> : null}
-      </ScrollView>
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.tabScroll}
+            contentContainerStyle={styles.tabScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {tab === 'events' ? <EventsTab events={detail.events} /> : null}
+            {tab === 'stats' ? <StatsTab detail={detail} /> : null}
+          </ScrollView>
+        )}
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  page: {
+    flex: 1,
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 40,
+  },
+  overviewPitch: {
+    flex: 1,
+    minHeight: 0,
+    paddingBottom: 4,
+  },
+  tabsScroll: {
+    flexGrow: 0,
+  },
+  tabScroll: { flex: 1 },
+  tabScrollContent: { paddingBottom: 24, gap: 12 },
   scroll: { padding: 16, paddingBottom: 32, gap: 12 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  headerCard: { padding: 16, gap: 8 },
+  headerCard: { padding: 12, gap: 6 },
   leagueLine: { fontSize: 13, textAlign: 'center' },
   statusLine: { fontSize: 12, textAlign: 'center', ...cairoText('semiBold') },
   scoreBoard: {
@@ -697,11 +732,11 @@ const styles = StyleSheet.create({
   },
   scorer: { fontSize: 11, textAlign: 'center' },
   bigScore: {
-    fontSize: 34,
+    fontSize: 30,
     ...cairoText('bold'),
-    minWidth: 88,
+    minWidth: 80,
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: 8,
   },
   metaLine: { textAlign: 'center', marginTop: 4 },
   tabsRow: { gap: 8, paddingVertical: 4 },
@@ -723,11 +758,13 @@ const styles = StyleSheet.create({
   eventBody: { flex: 1, gap: 2 },
   eventTitle: { fontSize: 14, ...cairoText('semiBold') },
   pitchCard: { padding: 0, overflow: 'hidden' },
+  pitchCardFill: { flex: 1, minHeight: 320 },
   pitchWrap: {
     width: '100%',
     overflow: 'hidden',
     position: 'relative',
   },
+  pitchWrapFill: { flex: 1 },
   pitchField: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#1f5f35',
@@ -838,21 +875,21 @@ const styles = StyleSheet.create({
   },
   pitchPlayerAbs: {
     position: 'absolute',
-    width: 56,
-    marginLeft: -28,
-    marginTop: -28,
+    width: 48,
+    marginLeft: -24,
+    marginTop: -22,
     alignItems: 'center',
     zIndex: 4,
   },
   pitchPhotoWrap: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
     position: 'relative',
   },
   pitchPhoto: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 7,
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.9)',
     backgroundColor: '#3a3a3a',
@@ -863,12 +900,12 @@ const styles = StyleSheet.create({
   },
   ratingBadge: {
     position: 'absolute',
-    bottom: -4,
-    left: -6,
-    minWidth: 22,
-    height: 16,
-    borderRadius: 8,
-    paddingHorizontal: 4,
+    bottom: -3,
+    left: -5,
+    minWidth: 20,
+    height: 14,
+    borderRadius: 7,
+    paddingHorizontal: 3,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -876,7 +913,7 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     color: '#fff',
-    fontSize: 9,
+    fontSize: 8,
     ...cairoText('bold'),
   },
   eventBadges: {
@@ -904,9 +941,9 @@ const styles = StyleSheet.create({
   },
   pitchLabel: {
     marginTop: 2,
-    fontSize: 9,
+    fontSize: 8,
     textAlign: 'center',
-    maxWidth: 56,
+    maxWidth: 48,
     color: '#fff',
     ...cairoText('semiBold'),
     textShadowColor: 'rgba(0,0,0,0.75)',

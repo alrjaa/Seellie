@@ -12,7 +12,18 @@ export default function SportsLayout() {
       screenOptions={{
         ...transparentHeaderOptions(theme, insets.top),
         headerShown: false,
+        title: '',
+        headerTitle: () => null,
       }}
-    />
+    >
+      <Stack.Screen
+        name="fixtures/[id]"
+        options={{
+          headerShown: false,
+          title: '',
+          headerTitle: () => null,
+        }}
+      />
+    </Stack>
   );
 }
