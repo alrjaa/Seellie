@@ -16,17 +16,13 @@ import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import {
-  forceFloatingVisible,
   FLOATING_FADE_IN_MS,
-  FLOATING_FADE_OUT_MS,
   FLOATING_SCROLL_DIM_OPACITY,
-  FLOATING_SCROLL_PEEK_OPACITY,
   FLOATING_SCROLL_SLIDE_PX,
+  forceFloatingVisible,
   isFloatingSuppressed,
   setFloatingSuppressed,
-  subscribeFloatingScrollDirection,
-  subscribeFloatingScrollPhase,
-  type FloatingScrollDirection,
+  subscribeFloatingVisibilityProgress,
 } from '@/services/floating-scroll-bus';
 import { lightTapHaptic } from '@/utils/haptics';
 import {
@@ -72,7 +68,6 @@ function isIoniconName(
   return name in Ionicons.glyphMap;
 }
 
-/** تبويب الرئيسية للمتابع — الأفاتار هنا لصاحب الحساب لا لصاحب المحتوى */
 function isFollowerHomePath(pathname?: string | null) {
   if (!pathname) return false;
   const p = pathname.replace(/\/+$/, '') || '/';
@@ -85,10 +80,17 @@ function isFollowerHomePath(pathname?: string | null) {
   );
 }
 
-/**
- * أزرار تنقل عائمة — الجوال / متصفح الجوال.
- * أسفل العمود: أفاتار صاحب المحتوى الظاهر (يتغيّر مع التمرير) + متابعة.
- */
+function motionFromProgress(progress: number) {
+  const clamped = Math.max(0, Math.min(1, progress));
+  const hidden = 1 - clamped;
+  return {
+    opacity:
+      FLOATING_SCROLL_DIM_OPACITY +
+      (1 - FLOATING_SCROLL_DIM_OPACITY) * clamped,
+    translateY: hidden * FLOATING_SCROLL_SLIDE_PX,
+  };
+}
+
 function FloatingActionMenuComponent() {
   const { currentUser, fabIcons, users, toggleFollowUser, competitions } =
     useTournament();
@@ -101,76 +103,56 @@ function FloatingActionMenuComponent() {
   const [suppressed, setSuppressed] = useState(() => isFloatingSuppressed());
   const opacity = useRef(new Animated.Value(1)).current;
   const translateY = useRef(new Animated.Value(0)).current;
-  const opacityTargetRef = useRef(1);
-  const translateTargetRef = useRef(0);
   const animRef = useRef<Animated.CompositeAnimation | null>(null);
-  const [scrollPhase, setScrollPhase] = useState<'idle' | 'scrolling'>('idle');
-  const [scrollDirection, setScrollDirection] =
-    useState<FloatingScrollDirection>('down');
+  const lastProgressRef = useRef(1);
   const [pressedKey, setPressedKey] = useState<string | null>(null);
   const [author, setAuthor] = useState<ContentAuthorFocus | null>(null);
 
   useEffect(() => subscribeContentAuthorFocus(setAuthor), []);
-  const runMotionTo = useCallback(
-    (opacityTo: number, translateTo: number, duration: number) => {
-      if (
-        opacityTargetRef.current === opacityTo &&
-        translateTargetRef.current === translateTo
-      ) {
+
+  const applyMotion = useCallback(
+    (progress: number, animated: boolean) => {
+      const { opacity: opacityTo, translateY: translateTo } =
+        motionFromProgress(progress);
+      lastProgressRef.current = progress;
+      animRef.current?.stop();
+
+      if (!animated || progress >= 0.995) {
+        opacity.setValue(opacityTo);
+        translateY.setValue(translateTo);
         return;
       }
-      opacityTargetRef.current = opacityTo;
-      translateTargetRef.current = translateTo;
-      animRef.current?.stop();
-      opacity.stopAnimation(() => {
-        translateY.stopAnimation(() => {
-          animRef.current = Animated.parallel([
-            Animated.timing(opacity, {
-              toValue: opacityTo,
-              duration,
-              easing: Easing.out(Easing.cubic),
-              useNativeDriver: Platform.OS !== 'web',
-            }),
-            Animated.timing(translateY, {
-              toValue: translateTo,
-              duration,
-              easing: Easing.out(Easing.cubic),
-              useNativeDriver: Platform.OS !== 'web',
-            }),
-          ]);
-          animRef.current.start(({ finished }) => {
-            if (finished) animRef.current = null;
-          });
-        });
+
+      animRef.current = Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: opacityTo,
+          duration: FLOATING_FADE_IN_MS * 0.35,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.timing(translateY, {
+          toValue: translateTo,
+          duration: FLOATING_FADE_IN_MS * 0.35,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+      ]);
+      animRef.current.start(({ finished }) => {
+        if (finished) animRef.current = null;
       });
     },
     [opacity, translateY]
   );
 
-  useEffect(() => subscribeFloatingScrollPhase(setScrollPhase), []);
-  useEffect(() => subscribeFloatingScrollDirection(setScrollDirection), []);
+  useEffect(
+    () =>
+      subscribeFloatingVisibilityProgress((progress) => {
+        const restoring = progress > lastProgressRef.current + 0.02;
+        applyMotion(progress, restoring);
+      }),
+    [applyMotion]
+  );
 
-  useEffect(() => {
-    if (scrollPhase === 'idle') {
-      runMotionTo(1, 0, FLOATING_FADE_IN_MS);
-      return;
-    }
-    if (scrollDirection === 'down') {
-      runMotionTo(
-        FLOATING_SCROLL_DIM_OPACITY,
-        FLOATING_SCROLL_SLIDE_PX,
-        FLOATING_FADE_OUT_MS
-      );
-      return;
-    }
-    runMotionTo(
-      FLOATING_SCROLL_PEEK_OPACITY,
-      0,
-      FLOATING_FADE_IN_MS
-    );
-  }, [runMotionTo, scrollDirection, scrollPhase]);
-
-  // بذرة فقط إن لم يُحدَّد صاحب محتوى بعد — لا تستبدل صاحب المحتوى الظاهر
   useEffect(() => {
     if (author?.id) return;
     if (!competitions?.length) return;
@@ -203,9 +185,6 @@ function FloatingActionMenuComponent() {
     }
   }, [author?.id, competitions, users, currentUser?.id]);
 
-  // مسار الخاصة يخفي العائمة؛ أي تبويب آخر يلغي الإخفاء فوراً
-  // (تبويبات Expo تبقى مركّبة — لا نعتمد على unmount)
-  // ملاحظة: شاشة الفريد تضغط setFloatingSuppressed أثناء نموذج النشر
   useEffect(() => {
     const onPrivate =
       !!pathname &&
@@ -293,7 +272,6 @@ function FloatingActionMenuComponent() {
 
   const onHome = isFollowerHomePath(pathname);
 
-  /** الرئيسية → حسابي | اللقطات/عام/… → صاحب المحتوى الظاهر */
   const identityProfile = useMemo(() => {
     if (onHome && currentUser) {
       return {
@@ -323,7 +301,6 @@ function FloatingActionMenuComponent() {
   if (!currentUser) return null;
   if (!isFollowerLike && actions.length === 0) return null;
   if (desktop) return null;
-  // عند الإخفاء القسري فقط (محادثة الخاصة…) — لا تُلغَ الواجهة عند التمرير
   if (suppressed) return null;
   if (onPrivateSpace) return null;
   if (
@@ -388,8 +365,6 @@ function FloatingActionMenuComponent() {
           styles.wrap,
           Platform.OS === 'web' && styles.wrapWeb,
           {
-            // ثابت فيزيائياً يسار الشاشة في العربية والإنجليزية —
-            // لا left/right حسب isRTL (كان ينقل العمود يميناً مع RTL).
             left: Math.max(insets.left, 10),
             right: undefined,
             bottom,
@@ -397,7 +372,6 @@ function FloatingActionMenuComponent() {
           },
         ]}
       >
-        {/* أسفل العمود: حسابي في الرئيسية · صاحب المحتوى في اللقطات/عام/… */}
         {isFollowerLike ? (
           <View style={[styles.authorItem, styles.itemRaised]}>
             <Pressable
@@ -550,7 +524,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 999,
     elevation: 999,
-
     overflow: 'visible',
   },
   layerWeb: {
@@ -563,20 +536,20 @@ const styles = StyleSheet.create({
   },
   wrap: {
     position: 'absolute',
-    // عزل عن RTL الأب حتى تبقى left = يسار الشاشة فعلياً
     direction: 'ltr',
-    // العمود من الأسفل للأعلى: العنصر الأول في القمة
     flexDirection: 'column-reverse',
     gap: 12,
-    // محاذاة مركزية على خط واحد رغم اختلاف أحجام الأزرار
     alignItems: 'center',
-
     overflow: 'visible',
   },
-  wrapWeb: {
-    position: 'fixed' as any,
-    zIndex: 2147483001,
-  },
+  wrapWeb: Platform.select({
+    web: {
+      position: 'fixed' as const,
+      zIndex: 2147483001,
+      willChange: 'transform, opacity',
+    },
+    default: {},
+  }),
   item: {
     position: 'relative',
     width: 44,

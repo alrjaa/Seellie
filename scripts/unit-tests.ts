@@ -83,6 +83,7 @@ import {
   forceFloatingVisible,
   getFloatingScrollDirection,
   getFloatingScrollPhase,
+  getFloatingVisibilityProgress,
   noteFloatingMomentumScrollEnd,
   noteFloatingScrollOffset,
   releaseFloatingScrollSource,
@@ -783,14 +784,17 @@ test('floating scroll bus tracks direction while scrolling', () => {
   claimFloatingScrollSource(source);
   forceFloatingVisible();
   assert.equal(getFloatingScrollPhase(), 'idle');
+  assert.equal(getFloatingVisibilityProgress(), 1);
 
   noteFloatingScrollOffset(source, 0);
   noteFloatingScrollOffset(source, 40);
   assert.equal(getFloatingScrollPhase(), 'scrolling');
   assert.equal(getFloatingScrollDirection(), 'down');
+  assert.ok(getFloatingVisibilityProgress() < 0.5);
 
   noteFloatingScrollOffset(source, 10);
   assert.equal(getFloatingScrollDirection(), 'up');
+  assert.ok(getFloatingVisibilityProgress() > 0.15);
 
   noteFloatingMomentumScrollEnd(source);
   releaseFloatingScrollSource(source);

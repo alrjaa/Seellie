@@ -1,48 +1,55 @@
 /**
- * حالة شفافية الواجهة العائمة أثناء التمرير — آلة حالات واحدة.
+ * حالة شفافية الواجهة العائمة أثناء التمرير.
  *
- * idle ⇄ scrolling  (بعد توقف حقيقي + تأخير → idle)
- *
- * opacity + اتجاه التمرير (up/down) — الـ FAB يطبّق translateY محلياً.
+ * visibility 0→1 يتبع حركة التمرير مباشرة (لا انتظار طويل).
+ * idle ⇄ scrolling للتوافق مع المستمعين القديمين.
  */
 
 export type FloatingScrollPhase = 'idle' | 'scrolling';
+export type FloatingScrollDirection = 'up' | 'down';
 
 type VisibilityListener = (visible: boolean) => void;
 type PhaseListener = (phase: FloatingScrollPhase) => void;
 type DirectionListener = (direction: FloatingScrollDirection) => void;
-
-export type FloatingScrollDirection = 'up' | 'down';
+type ProgressListener = (visibility: number) => void;
 
 const listeners = new Set<VisibilityListener>();
 const phaseListeners = new Set<PhaseListener>();
 const directionListeners = new Set<DirectionListener>();
+const progressListeners = new Set<ProgressListener>();
 
-export const FLOATING_SCROLL_DIM_OPACITY = 0.12;
-export const FLOATING_SCROLL_PEEK_OPACITY = 0.92;
-export const FLOATING_SCROLL_SLIDE_PX = 18;
-export const FLOATING_FADE_OUT_MS = 200;
-export const FLOATING_RESTORE_DELAY_MS = 520;
-export const FLOATING_FADE_IN_MS = 250;
-/** Wheel: لا settle قبل توقف التمرير الفعلي */
-export const FLOATING_WHEEL_SETTLE_MS = 650;
-/** بعد رفع الإصبع: انتظر قليلاً قبل settle إن لم يبدأ momentum */
-export const FLOATING_DRAG_SETTLE_MS = 160;
+/** مدى التمرير لإخفاء كامل */
+export const FLOATING_HIDE_RANGE_PX = 52;
+export const FLOATING_SCROLL_DIM_OPACITY = 0.22;
+export const FLOATING_SCROLL_PEEK_OPACITY = 1;
+export const FLOATING_SCROLL_SLIDE_PX = 22;
+export const FLOATING_FADE_OUT_MS = 90;
+export const FLOATING_FADE_IN_MS = 180;
+export const FLOATING_RESTORE_DELAY_MS = 72;
+export const FLOATING_WHEEL_SETTLE_MS = 140;
+export const FLOATING_DRAG_SETTLE_MS = 36;
 
-const MOVE_EPS = 8;
-const MAX_SCROLLING_MS = 4000;
+const MOVE_EPS = 2;
+const MAX_SCROLLING_MS = 2800;
+const VISIBILITY_EPS = 0.004;
 
 let phase: FloatingScrollPhase = 'idle';
 let scrollDirection: FloatingScrollDirection = 'down';
+let visibility = 1;
 let suppressFloating = false;
 let ownerId: string | null = null;
 let lastY: number | null = null;
 let restoreTimer: ReturnType<typeof setTimeout> | null = null;
 let dragSettleTimer: ReturnType<typeof setTimeout> | null = null;
 let scrollingFailsafeTimer: ReturnType<typeof setTimeout> | null = null;
+let restoreRaf: number | null = null;
 
 function phaseToVisible(p: FloatingScrollPhase): boolean {
   return p !== 'scrolling';
+}
+
+function clampVisibility(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
 
 function setScrollDirection(next: FloatingScrollDirection) {
@@ -80,6 +87,25 @@ function notifyPhase() {
   });
 }
 
+function setVisibility(next: number) {
+  const clamped = clampVisibility(next);
+  if (Math.abs(clamped - visibility) < VISIBILITY_EPS) return;
+  visibility = clamped;
+  progressListeners.forEach((listener) => {
+    try {
+      listener(visibility);
+    } catch {
+      // ignore
+    }
+  });
+  const nextPhase: FloatingScrollPhase =
+    visibility >= 0.98 ? 'idle' : 'scrolling';
+  if (phase !== nextPhase) {
+    phase = nextPhase;
+    notifyPhase();
+  }
+}
+
 function clearRestoreTimer() {
   if (restoreTimer) {
     clearTimeout(restoreTimer);
@@ -101,10 +127,18 @@ function clearScrollingFailsafe() {
   }
 }
 
+function clearRestoreRaf() {
+  if (restoreRaf != null && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(restoreRaf);
+  }
+  restoreRaf = null;
+}
+
 function clearAllTimers() {
   clearRestoreTimer();
   clearDragSettleTimer();
   clearScrollingFailsafe();
+  clearRestoreRaf();
 }
 
 function setPhase(next: FloatingScrollPhase) {
@@ -116,12 +150,14 @@ function setPhase(next: FloatingScrollPhase) {
 function enterIdle() {
   lastY = null;
   clearAllTimers();
+  setVisibility(1);
   setPhase('idle');
 }
 
 function enterScrolling() {
   clearRestoreTimer();
   clearDragSettleTimer();
+  clearRestoreRaf();
   if (phase !== 'scrolling') {
     setPhase('scrolling');
   }
@@ -134,6 +170,36 @@ function enterScrolling() {
   }, MAX_SCROLLING_MS);
 }
 
+function animateVisibilityRestore() {
+  clearRestoreRaf();
+  const start = visibility;
+  if (start >= 0.995) {
+    enterIdle();
+    return;
+  }
+  const startAt =
+    typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const duration = FLOATING_FADE_IN_MS;
+
+  const tick = (now: number) => {
+    const t = Math.min(1, (now - startAt) / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    setVisibility(start + (1 - start) * eased);
+    if (t < 1) {
+      restoreRaf = requestAnimationFrame(tick);
+      return;
+    }
+    restoreRaf = null;
+    enterIdle();
+  };
+
+  if (typeof requestAnimationFrame === 'function') {
+    restoreRaf = requestAnimationFrame(tick);
+    return;
+  }
+  enterIdle();
+}
+
 function scheduleRestore() {
   clearRestoreTimer();
   clearDragSettleTimer();
@@ -141,15 +207,35 @@ function scheduleRestore() {
   lastY = null;
   restoreTimer = setTimeout(() => {
     restoreTimer = null;
-    if (phase === 'scrolling') {
-      setPhase('idle');
-    }
+    animateVisibilityRestore();
   }, FLOATING_RESTORE_DELAY_MS);
 }
 
 function internalSettle() {
-  if (phase !== 'scrolling') return;
+  if (visibility >= 0.995 && phase === 'idle') return;
   scheduleRestore();
+}
+
+function applyScrollDelta(dy: number) {
+  if (dy > 0) {
+    setScrollDirection('down');
+    setVisibility(visibility - dy / FLOATING_HIDE_RANGE_PX);
+  } else if (dy < 0) {
+    setScrollDirection('up');
+    setVisibility(visibility - dy / (FLOATING_HIDE_RANGE_PX * 0.62));
+  }
+}
+
+export function getFloatingVisibilityProgress(): number {
+  return visibility;
+}
+
+export function subscribeFloatingVisibilityProgress(listener: ProgressListener) {
+  progressListeners.add(listener);
+  listener(visibility);
+  return () => {
+    progressListeners.delete(listener);
+  };
 }
 
 export function setFloatingSuppressed(suppressed: boolean) {
@@ -213,8 +299,9 @@ export function releaseFloatingScrollSource(sourceId: string) {
 export function noteFloatingScrollBegin(sourceId: string) {
   if (suppressFloating) return;
   if (ownerId == null) ownerId = sourceId;
-  lastY = null;
-  enterScrolling();
+  clearRestoreTimer();
+  clearDragSettleTimer();
+  clearRestoreRaf();
 }
 
 export function noteFloatingScrollOffset(sourceId: string, y: number) {
@@ -224,14 +311,6 @@ export function noteFloatingScrollOffset(sourceId: string, y: number) {
 
   const offset = Math.max(0, y);
 
-  if (phase === 'scrolling') {
-    const prev = lastY ?? offset;
-    lastY = offset;
-    updateScrollDirection(prev, offset);
-    notifyScrollLayoutListeners();
-    return;
-  }
-
   if (lastY == null) {
     lastY = offset;
     notifyScrollLayoutListeners();
@@ -239,19 +318,20 @@ export function noteFloatingScrollOffset(sourceId: string, y: number) {
   }
 
   const prev = lastY;
-  const dy = Math.abs(offset - prev);
+  const dy = offset - prev;
   lastY = offset;
-  if (dy < MOVE_EPS) {
+
+  if (Math.abs(dy) < MOVE_EPS) {
     notifyScrollLayoutListeners();
     return;
   }
 
   updateScrollDirection(prev, offset);
+  applyScrollDelta(dy);
   enterScrolling();
   notifyScrollLayoutListeners();
 }
 
-/** بعد رفع الإصبع — settle مؤجّل فقط إن لم يبدأ momentum */
 export function noteFloatingScrollEndDrag(sourceId: string) {
   if (suppressFloating) return;
   clearDragSettleTimer();
@@ -264,6 +344,7 @@ export function noteFloatingScrollEndDrag(sourceId: string) {
 export function noteFloatingMomentumScrollBegin(sourceId: string) {
   if (suppressFloating) return;
   clearDragSettleTimer();
+  clearRestoreRaf();
   noteFloatingScrollBegin(sourceId);
 }
 
@@ -283,7 +364,9 @@ export function forceFloatingVisible() {
 }
 
 export function forceFloatingHidden() {
-  enterScrolling();
+  clearAllTimers();
+  setVisibility(0);
+  setPhase('scrolling');
 }
 
 type ScrollLayoutListener = () => void;
