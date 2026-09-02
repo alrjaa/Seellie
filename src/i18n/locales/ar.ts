@@ -1632,7 +1632,8 @@ export const ar = {
   },
   appreciation: {
     title: 'التقدير والتكريم',
-    subtitle: 'هدايا التقدير الاعتيادية وشهادات التقدير الاستثنائية',
+    subtitle: 'شهادات تقدير رقمية بمستويات متدرجة — من متداول إلى الأعلى.',
+    tabCatalog: 'شهادات التقدير',
     tabGifts: 'الهدايا',
     tabCertificates: 'شهادات التقدير',
     tabSent: 'أرسلت',
@@ -1644,7 +1645,7 @@ export const ar = {
     emptyReceivedTitle: 'لا توجد عمليات مستلمة',
     emptyReceivedDesc: 'ستظهر هنا الهدايا والشهادات التي تستلمها.',
     emptyCertificatesTitle: 'لا توجد مستويات شهادات',
-    emptyCertificatesDesc: 'يمكن للمشرف إضافة مستويات شهادات من كتالوج التقدير.',
+    emptyCertificatesDesc: 'يمكن للمشرف إدارة مستويات شهادات التقدير من لوحة الدعم.',
     issueCertificate: 'إصدار شهادة',
     giftItem: 'هدية · %{type}',
     certificateItem: 'شهادة تقدير · %{type}',

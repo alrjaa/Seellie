@@ -230,6 +230,10 @@ export type {
 
 import { DEFAULT_LOGO, APP_DISPLAY_NAME } from '@/theme/brand';
 import { certificateImageUri } from '@/theme/certificates';
+import {
+  migrateToRecognitionCatalog,
+  shouldMigrateLegacySupportLevels,
+} from '@/data/recognition-certificate-levels';
 
 const USER_STORAGE_KEY = 'tajjd.secure.currentUser';
 const USER_CREDENTIAL_OVERRIDES_KEY = 'seellie.userCredentialOverrides.v1';
@@ -405,7 +409,7 @@ async function saveOfferRemote(offer: Offer) {
 
 const APP_LOGO_KEY = 'seellie.appLogo.v3';
 const APP_NAME_KEY = 'seellie.appName';
-const SUPPORT_LEVELS_KEY = 'seellie.supportLevels.v1';
+const SUPPORT_LEVELS_KEY = 'seellie.supportLevels.v2';
 
 /** FIX-01: لا تُخزَّن accessCode ولا كلمات مرور سحابية في الجلسة المحلية */
 function sanitizeUserSecrets(user: User): User {
@@ -419,13 +423,14 @@ function sanitizeUserSecrets(user: User): User {
 }
 
 function normalizeSupportLevels(levels: SupportLevel[]): SupportLevel[] {
+  const source = migrateToRecognitionCatalog(levels);
   const mapOne = (level: SupportLevel, index: number): SupportLevel => {
     const bundled = certificateImageUri(level.name);
     const price = Number(level.price) || 0;
     const kind =
       level.kind === 'gift' || level.kind === 'certificate'
         ? level.kind
-        : price >= 200
+        : price >= 25
           ? ('certificate' as const)
           : ('gift' as const);
     return {
@@ -438,7 +443,7 @@ function normalizeSupportLevels(levels: SupportLevel[]): SupportLevel[] {
     };
   };
 
-  const normalized = levels
+  const normalized = source
     .filter((l) => (l.name as string) !== 'محلل')
     .map(mapOne);
 
@@ -447,7 +452,7 @@ function normalizeSupportLevels(levels: SupportLevel[]): SupportLevel[] {
   if (hasCertificate) return normalized;
 
   const seedCerts = initialSupportLevels
-    .filter((l) => l.kind === 'certificate' || (l.price ?? 0) >= 200)
+    .filter((l) => l.kind === 'certificate' || (l.price ?? 0) >= 25)
     .map(mapOne)
     .filter(
       (s) =>
@@ -2894,7 +2899,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     }
     if (blobs.offers && blobs.offers.length > 0) setOffers(blobs.offers);
     if (blobs.levels?.length) {
-      setSupportLevels(normalizeSupportLevels(blobs.levels));
+      const next = normalizeSupportLevels(blobs.levels);
+      setSupportLevels(next);
+      if (shouldMigrateLegacySupportLevels(blobs.levels)) {
+        void saveSupportLevels(next);
+      }
     }
     if (blobs.gifts && blobs.gifts.length > 0) {
       setGiftTransactions(

@@ -135,18 +135,12 @@ export default function SupportScreen() {
     const cleaned = levels
       .map((l) => {
         const price = Number(l.price) || 0;
-        const kind =
-          l.kind === 'gift' || l.kind === 'certificate'
-            ? l.kind
-            : price >= 200
-              ? ('certificate' as const)
-              : ('gift' as const);
         return {
           ...l,
           name: l.name.trim(),
           description: l.description.trim(),
           price,
-          kind,
+          kind: 'certificate' as const,
           imageUrl: l.imageUrl || certificateImageUri(l.name) || '',
         };
       })
@@ -197,7 +191,7 @@ export default function SupportScreen() {
         price: 0,
         description: '',
         imageUrl: '',
-        kind: 'gift',
+        kind: 'certificate',
       },
     ]);
   };
@@ -311,6 +305,7 @@ export default function SupportScreen() {
             >
               <View style={styles.cardHeader}>
                 <Subtitle style={{ flex: 1 }}>{level.name || '—'}</Subtitle>
+                <Muted>{t('appreciation.tabCertificates')}</Muted>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={t('superadmin.support.deleteLevel')}
@@ -323,30 +318,6 @@ export default function SupportScreen() {
                     color={theme.colors.danger}
                   />
                 </Pressable>
-              </View>
-              <View style={styles.kindRow}>
-                <Chip
-                  label={t('appreciation.tabGifts')}
-                  active={level.kind !== 'certificate'}
-                  onPress={() =>
-                    setLevels((prev) =>
-                      prev.map((l) =>
-                        l.id === level.id ? { ...l, kind: 'gift' } : l
-                      )
-                    )
-                  }
-                />
-                <Chip
-                  label={t('appreciation.tabCertificates')}
-                  active={level.kind === 'certificate'}
-                  onPress={() =>
-                    setLevels((prev) =>
-                      prev.map((l) =>
-                        l.id === level.id ? { ...l, kind: 'certificate' } : l
-                      )
-                    )
-                  }
-                />
               </View>
 
               <View

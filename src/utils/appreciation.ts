@@ -17,16 +17,22 @@ export type AppreciationPurchaseStatus =
   /** توافق سجلات قديمة من الخادم — لا تُنشأ جديدًا */
   | 'pending_demo';
 
-export type { AppreciationKind };
+import {
+  RECOGNITION_ENTRY_MIN_PRICE,
+  RECOGNITION_STANDARD_BASE_PRICE,
+  RECOGNITION_STANDARD_STEP,
+} from '@/data/recognition-certificate-catalog';
 
-export const CERTIFICATE_BASE_PRICE = 200;
-export const CERTIFICATE_PRICE_STEP = 200;
-export const DEFAULT_CERTIFICATE_TIER_COUNT = 6;
+export type { AppreciationKind };
 
 /** Canonical status after server accepts a new purchase intent */
 export const SERVER_INTENT_STATUS: AppreciationProcessStatus = 'awaiting_payment';
 
-/** مستويات شهادات التقدير: 200، 400، … — قابل للتوسع دون إعادة بناء الواجهة */
+export const CERTIFICATE_BASE_PRICE = RECOGNITION_STANDARD_BASE_PRICE;
+export const CERTIFICATE_PRICE_STEP = RECOGNITION_STANDARD_STEP;
+export const DEFAULT_CERTIFICATE_TIER_COUNT = 5;
+
+/** مستويات شهادة التقدير القياسية: 100، 300، … — قابلة للتوسع */
 export function buildCertificateAppreciationLevels(
   count = DEFAULT_CERTIFICATE_TIER_COUNT
 ): Array<{ tier: number; price: number; id: string; nameAr: string }> {
@@ -52,7 +58,7 @@ export function resolveAppreciationKind(
   level: Pick<SupportLevel, 'kind' | 'price'>
 ): AppreciationKind {
   if (level.kind === 'gift' || level.kind === 'certificate') return level.kind;
-  return level.price >= CERTIFICATE_BASE_PRICE ? 'certificate' : 'gift';
+  return level.price >= RECOGNITION_ENTRY_MIN_PRICE ? 'certificate' : 'gift';
 }
 
 /**

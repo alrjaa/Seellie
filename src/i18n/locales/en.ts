@@ -2259,7 +2259,8 @@ export const en: TranslationTree = {
   },
   appreciation: {
     title: 'Appreciation & ceremonies',
-    subtitle: 'Standard appreciation gifts and exceptional appreciation certificates',
+    subtitle: 'Digital recognition certificates — from trending to the highest tier.',
+    tabCatalog: 'Recognition',
     tabGifts: 'Gifts',
     tabCertificates: 'Appreciation certificates',
     tabSent: 'Sent',

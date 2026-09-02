@@ -45,7 +45,7 @@ import {
   resolveAppreciationKindFromTx,
 } from '@/utils/appreciation';
 
-type CatalogTab = 'gifts' | 'certificates' | 'sent' | 'received';
+type CatalogTab = 'catalog' | 'sent' | 'received';
 
 type SupportRecipient = {
   id: string;
@@ -117,7 +117,7 @@ export default function CertificatesScreen() {
   const insets = useSafeAreaInsets();
   const { desktop } = useResponsive();
 
-  const [catalogTab, setCatalogTab] = useState<CatalogTab>('gifts');
+  const [catalogTab, setCatalogTab] = useState<CatalogTab>('catalog');
   const [selectedLevel, setSelectedLevel] = useState<SupportLevel | null>(null);
   const [query, setQuery] = useState('');
   const [reason, setReason] = useState('');
@@ -125,17 +125,13 @@ export default function CertificatesScreen() {
   const [issued, setIssued] = useState<GiftTransaction | null>(null);
   const [buying, setBuying] = useState(false);
 
-  const giftLevels = useMemo(
-    () => filterLevelsByKind(supportLevels, 'gift'),
+  const catalogLevels = useMemo(
+    () =>
+      [...filterLevelsByKind(supportLevels, 'certificate')].sort(
+        (a, b) => (a.price ?? 0) - (b.price ?? 0)
+      ),
     [supportLevels]
   );
-  const certificateLevels = useMemo(
-    () => filterLevelsByKind(supportLevels, 'certificate'),
-    [supportLevels]
-  );
-
-  const catalogLevels =
-    catalogTab === 'certificates' ? certificateLevels : giftLevels;
 
   const sentHistory = useMemo(
     () =>
@@ -358,8 +354,7 @@ export default function CertificatesScreen() {
       <View style={styles.tabs}>
         {(
           [
-            ['gifts', t('appreciation.tabGifts')],
-            ['certificates', t('appreciation.tabCertificates')],
+            ['catalog', t('appreciation.tabCatalog')],
             ['sent', t('appreciation.tabSent')],
             ['received', t('appreciation.tabReceived')],
           ] as const
@@ -399,16 +394,8 @@ export default function CertificatesScreen() {
         )
       ) : catalogLevels.length === 0 ? (
         <EmptyState
-          title={
-            catalogTab === 'certificates'
-              ? t('appreciation.emptyCertificatesTitle')
-              : t('certificates.emptyTitle')
-          }
-          description={
-            catalogTab === 'certificates'
-              ? t('appreciation.emptyCertificatesDesc')
-              : t('certificates.emptyDesc')
-          }
+          title={t('appreciation.emptyCertificatesTitle')}
+          description={t('appreciation.emptyCertificatesDesc')}
           icon="ribbon-outline"
         />
       ) : (
@@ -434,11 +421,7 @@ export default function CertificatesScreen() {
                 </Text>
                 <Muted>{level.description}</Muted>
                 <Button
-                  label={
-                    resolveAppreciationKind(level) === 'certificate'
-                      ? t('appreciation.issueCertificate')
-                      : t('certificates.buy')
-                  }
+                  label={t('appreciation.issueCertificate')}
                   onPress={() => {
                     setSelectedLevel(level);
                     setRecipient(null);

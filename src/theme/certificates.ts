@@ -17,6 +17,20 @@ const CERTIFICATE_MODULES: Record<CertificateLevelName, ImageSourcePropType> = {
 
 /** أسماء عربية + إنجليزية (بعد تعريب البذرة) */
 const CERTIFICATE_NAME_ALIASES: Record<string, CertificateLevelName> = {
+  'تقدير متداول': 'فضي',
+  'Trending Recognition': 'فضي',
+  'تقدير مؤهل': 'ذهبي',
+  'Qualified Recognition': 'ذهبي',
+  'تقدير 100': 'ماسي',
+  'Recognition 100': 'ماسي',
+  'تقدير 300': 'ذهبي',
+  'Recognition 300': 'ذهبي',
+  'تقدير 500': 'ماسي',
+  'Recognition 500': 'ماسي',
+  'تقدير 700': 'ذهبي',
+  'Recognition 700': 'ذهبي',
+  'تقدير 900': 'ماسي',
+  'Recognition 900': 'ماسي',
   إبداع: 'إبداع',
   Creativity: 'إبداع',
   creativity: 'إبداع',

@@ -1,4 +1,4 @@
-import { certificateImageUri } from '@/theme/certificates';
+import { buildInitialSupportLevels } from '@/data/recognition-certificate-levels';
 
 // 1. Data Interfaces
 
@@ -899,20 +899,8 @@ export const initialQuickComments: Comment[] = [
 ];
 export const initialMessages: Message[] = [];
 export const initialSupporters: Supporter[] = [];
-export const initialSupportLevels: SupportLevel[] = [
-    { id: 'level-creativity', kind: 'gift', name: 'إبداع', price: 5, description: 'للإشادة بالمهارات الاستثنائية والأفكار المبتكرة.', imageUrl: certificateImageUri('إبداع') },
-    { id: 'level-bronze', kind: 'gift', name: 'برونزي', price: 10, description: 'تقديرًا للجهد المتميز والأداء المتطور.', imageUrl: certificateImageUri('برونزي') },
-    { id: 'level-silver', kind: 'gift', name: 'فضي', price: 25, description: 'للاحتفاء بالإنجازات البارزة والمساهمات القيمة.', imageUrl: certificateImageUri('فضي') },
-    { id: 'level-gold', kind: 'gift', name: 'ذهبي', price: 50, description: 'للاعتراف بالتفوق الواضح وتحقيق نتائج مبهرة.', imageUrl: certificateImageUri('ذهبي') },
-    { id: 'level-diamond', kind: 'gift', name: 'ماسي', price: 100, description: 'أعلى مراتب التكريم، للإنجازات الاستثنائية والتأثير الملهم.', imageUrl: certificateImageUri('ماسي') },
-    // شهادات التقدير — قابلة للتوسع عبر buildCertificateAppreciationLevels دون إعادة بناء الواجهة
-    { id: 'cert-tier-1', kind: 'certificate', name: 'تقدير 200', price: 200, description: 'شهادة تقدير استثنائية — مستوى 1.', imageUrl: certificateImageUri('ماسي') },
-    { id: 'cert-tier-2', kind: 'certificate', name: 'تقدير 400', price: 400, description: 'شهادة تقدير استثنائية — مستوى 2.', imageUrl: certificateImageUri('ذهبي') },
-    { id: 'cert-tier-3', kind: 'certificate', name: 'تقدير 600', price: 600, description: 'شهادة تقدير استثنائية — مستوى 3.', imageUrl: certificateImageUri('ماسي') },
-    { id: 'cert-tier-4', kind: 'certificate', name: 'تقدير 800', price: 800, description: 'شهادة تقدير استثنائية — مستوى 4.', imageUrl: certificateImageUri('ذهبي') },
-    { id: 'cert-tier-5', kind: 'certificate', name: 'تقدير 1000', price: 1000, description: 'شهادة تقدير استثنائية — مستوى 5.', imageUrl: certificateImageUri('ماسي') },
-    { id: 'cert-tier-6', kind: 'certificate', name: 'تقدير 1200', price: 1200, description: 'شهادة تقدير استثنائية — مستوى 6.', imageUrl: certificateImageUri('ذهبي') },
-];
+export const initialSupportLevels: SupportLevel[] = buildInitialSupportLevels();
+
 export const initialOffers: Offer[] = [
     {
         id: 'offer-1',
