@@ -629,7 +629,11 @@ export interface TournamentContextType {
   updateAppFeatureFlags: (
     patch: Partial<AppFeatureFlags>
   ) => Promise<boolean>;
-  updateUser: (user: User, successMessage?: string) => void;
+  updateUser: (
+    user: User,
+    successMessage?: string,
+    options?: { notifyReason?: string }
+  ) => void;
   /** مزامنة كل حسابات profiles من Supabase إلى قائمة إدارة المستخدمين */
   syncCloudUsers: () => Promise<number>;
   /** جلب طلبات تنظيم المسابقات من السحابة */
@@ -1093,6 +1097,33 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       return res.ok;
     },
     [t, toast]
+  );
+
+  const notifyAccountUser = useCallback(
+    async (recipientId: string, subject: string, body: string) => {
+      const sender = currentUserRef.current;
+      if (
+        !isSupabaseConfigured() ||
+        !sender ||
+        !isUuid(sender.id) ||
+        !isUuid(recipientId) ||
+        recipientId === sender.id
+      ) {
+        return;
+      }
+      const notify = await insertMessage({
+        senderId: sender.id,
+        senderName: sender.name || 'المشرف',
+        senderAvatar: sender.avatar,
+        recipientId,
+        subject,
+        body,
+      });
+      if (notify.message) {
+        setMessages((prev) => mergeMessagesById([notify.message!], prev));
+      }
+    },
+    []
   );
 
   /**
@@ -2128,7 +2159,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const updateUser = useCallback(
-    (updatedUser: User, successMessage?: string) => {
+    (
+      updatedUser: User,
+      successMessage?: string,
+      options?: { notifyReason?: string }
+    ) => {
       const normalized = normalizeUserRoles(updatedUser);
       setUsers((prev) =>
         prev.map((u) => (u.id === normalized.id ? normalized : u))
@@ -2174,11 +2209,26 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           allowCrossUser: normalized.id !== currentUser?.id,
         });
       }
+      const notifyReason = options?.notifyReason?.trim();
+      if (
+        notifyReason &&
+        (normalized.status === 'warned' || normalized.status === 'suspended')
+      ) {
+        const subject =
+          normalized.status === 'warned'
+            ? `[نظام] إنذار لحسابك`
+            : `[نظام] إيقاف حسابك`;
+        const body =
+          normalized.status === 'warned'
+            ? `تم توجيه إنذار لحسابك «${normalized.name}».\n\nالسبب: ${notifyReason}`
+            : `تم إيقاف حسابك «${normalized.name}».\n\nالسبب: ${notifyReason}`;
+        void notifyAccountUser(normalized.id, subject, body);
+      }
       if (successMessage) {
         toast({ variant: 'success', title: t('toasts.t013_5a42a9'), description: successMessage });
       }
     },
-    [toast, t, currentUser?.id]
+    [toast, t, currentUser?.id, notifyAccountUser]
   );
 
   const togglePinnedCompetition = useCallback(
@@ -3614,20 +3664,40 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      const target = competitions.find((c) => c.id === competitionId);
+      const reason = options?.reason?.trim();
+
       setCompetitions((prev) => {
         const next = prev.map((c) =>
           c.id === competitionId
             ? {
                 ...c,
                 status,
-                statusReason:
-                  status === 'active' ? undefined : options?.reason?.trim(),
+                statusReason: status === 'active' ? undefined : reason,
               }
             : c
         );
         void syncCompetitions(next);
         return next;
       });
+
+      if (
+        target &&
+        reason &&
+        status !== 'active' &&
+        isUuid(target.organizerId)
+      ) {
+        const subject =
+          status === 'warned'
+            ? `[نظام] إنذار لمسابقة «${target.name}»`
+            : `[نظام] إيقاف مسابقة «${target.name}»`;
+        const body =
+          status === 'warned'
+            ? `تم توجيه إنذار لمسابقتك «${target.name}».\n\nالسبب: ${reason}\n\nراجع صفحة إدارة المسابقة للتفاصيل.`
+            : `تم إيقاف مسابقتك «${target.name}».\n\nالسبب: ${reason}\n\nراجع صفحة إدارة المسابقة للتفاصيل.`;
+        void notifyAccountUser(target.organizerId, subject, body);
+      }
+
       if (options?.successMessage) {
         toast({
           variant: status === 'suspended' ? 'destructive' : 'success',
@@ -3636,7 +3706,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [toast, t]
+    [toast, t, competitions, notifyAccountUser]
   );
 
   const setCompetitionFixturesSuspended = useCallback(
@@ -3655,6 +3725,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
 
       let found = false;
+      const target = competitions.find((c) => c.id === competitionId);
+      const reason = options?.reason?.trim();
+
       setCompetitions((prev) => {
         const next = prev.map((c) => {
           if (c.id !== competitionId) return c;
@@ -3662,9 +3735,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           return {
             ...c,
             fixturesSuspended: suspended,
-            fixturesSuspendReason: suspended
-              ? options?.reason?.trim()
-              : undefined,
+            fixturesSuspendReason: suspended ? reason : undefined,
           };
         });
         if (found) void syncCompetitions(next);
@@ -3672,6 +3743,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
 
       if (!found) return false;
+
+      if (suspended && target && reason && isUuid(target.organizerId)) {
+        const subject = `[نظام] إيقاف جدول مسابقة «${target.name}»`;
+        const body = `تم إيقاف جدول مباريات مسابقتك «${target.name}».\n\nالسبب: ${reason}\n\nراجع صفحة إدارة المسابقة للتفاصيل.`;
+        void notifyAccountUser(target.organizerId, subject, body);
+      }
 
       toast({
         variant: suspended ? 'destructive' : 'success',
@@ -3684,10 +3761,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [toast, t]
+    [toast, t, competitions, notifyAccountUser]
   );
-
-  const updatePlayerStatus = useCallback(
     (
       competitionId: string,
       teamId: string,

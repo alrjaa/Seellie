@@ -1307,6 +1307,8 @@ export const ar = {
       saveCompetitionName: 'حفظ الاسم',
       deleteCompetition: 'حذف المسابقة',
       deleteCompetitionConfirm: 'حذف المسابقة نهائياً؟ لا يمكن التراجع.',
+      warningTitle: 'تنبيه: تم توجيه إنذار لهذه المسابقة',
+      suspendedTitle: 'تم إيقاف هذه المسابقة',
       editTeamName: 'تصحيح اسم الفريق',
       saveTeamName: 'حفظ اسم الفريق',
       teamLogoSection: 'شعار الفريق',

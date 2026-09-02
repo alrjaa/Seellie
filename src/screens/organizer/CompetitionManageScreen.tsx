@@ -381,6 +381,31 @@ export default function CompetitionManageScreen() {
         </View>
       </View>
 
+      {competition.status === 'warned' || competition.status === 'suspended' ? (
+        <Card style={styles.card}>
+          <Text
+            style={{
+              color:
+                competition.status === 'suspended'
+                  ? theme.colors.danger
+                  : theme.colors.warning,
+              fontWeight: '800',
+            }}
+          >
+            {competition.status === 'warned'
+              ? t('organizer.competitionManage.warningTitle')
+              : t('organizer.competitionManage.suspendedTitle')}
+          </Text>
+          {competition.statusReason ? (
+            <Muted>
+              {t('superadmin.competitionDetail.reasonLine', {
+                reason: competition.statusReason,
+              })}
+            </Muted>
+          ) : null}
+        </Card>
+      ) : null}
+
       <Card style={styles.card}>
         <Subtitle>{t('organizer.competitionManage.logoSection')}</Subtitle>
         <MediaUploadSpecs

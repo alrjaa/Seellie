@@ -14,6 +14,7 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { ReasonModal } from '@/components/feedback/ReasonModal';
 import { Avatar, Card, Chip, Muted, SearchBar, Subtitle } from '@/components/ui';
 import { statusToneColor } from '@/utils/status-tone';
 import { matchesSearchQuery } from '@/utils/search';
@@ -188,6 +189,10 @@ export default function UsersScreen() {
   const [syncing, setSyncing] = useState(false);
   const [purgeEmail, setPurgeEmail] = useState('');
   const [purging, setPurging] = useState(false);
+  const [pending, setPending] = useState<{
+    user: User;
+    action: 'warned' | 'suspended';
+  } | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -248,6 +253,10 @@ export default function UsersScreen() {
         );
         return;
       }
+      if (action === 'warned' || action === 'suspended') {
+        setPending({ user, action });
+        return;
+      }
       const messages = {
         active: t('superadmin.users.activated', { name: user.name }),
         suspended: t('superadmin.users.suspended', { name: user.name }),
@@ -256,6 +265,23 @@ export default function UsersScreen() {
       updateUser({ ...user, status: action }, messages[action]);
     },
     [updateUser, deleteUser, t]
+  );
+
+  const confirmPending = useCallback(
+    (reason: string) => {
+      if (!pending) return;
+      const messages = {
+        warned: t('superadmin.users.warned', { name: pending.user.name }),
+        suspended: t('superadmin.users.suspended', { name: pending.user.name }),
+      };
+      updateUser(
+        { ...pending.user, status: pending.action },
+        messages[pending.action],
+        { notifyReason: reason }
+      );
+      setPending(null);
+    },
+    [pending, updateUser, t]
   );
 
   const onPurgeEmail = useCallback(async () => {
@@ -282,6 +308,23 @@ export default function UsersScreen() {
 
   return (
     <Screen>
+      <ReasonModal
+        visible={!!pending}
+        title={
+          pending?.action === 'warned'
+            ? t('superadmin.actions.warn')
+            : t('superadmin.actions.suspend')
+        }
+        description={t('superadmin.competitionDetail.modals.warnCompetitionDesc')}
+        confirmLabel={
+          pending?.action === 'warned'
+            ? t('superadmin.competitionDetail.modals.confirmWarn')
+            : t('common.confirm')
+        }
+        reasonLabel={t('superadmin.competitionDetail.modals.warnReason')}
+        onCancel={() => setPending(null)}
+        onConfirm={confirmPending}
+      />
       <FlatList
         data={data}
         keyExtractor={(item) => item.id}

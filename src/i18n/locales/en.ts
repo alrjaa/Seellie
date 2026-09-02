@@ -1312,6 +1312,8 @@ export const en: TranslationTree = {
       saveCompetitionName: 'Save name',
       deleteCompetition: 'Delete competition',
       deleteCompetitionConfirm: 'Delete this competition permanently?',
+      warningTitle: 'Warning: this competition has been warned',
+      suspendedTitle: 'This competition has been suspended',
       editTeamName: 'Edit team name',
       saveTeamName: 'Save team name',
       teamLogoSection: 'Team logo',
