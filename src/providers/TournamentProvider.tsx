@@ -760,7 +760,8 @@ export interface TournamentContextType {
   updateOfferStatus: (
     offerId: string,
     status: 'accepted' | 'declined',
-    successMessage?: string
+    successMessage?: string,
+    options?: { joinAccept?: { note?: string } }
   ) => void;
   sendOffer: (freelancerId: string, teamId: string, message: string) => boolean;
   sendMessage: (payload: {
@@ -3974,12 +3975,42 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     [toast]
   );
 
+  const sendJoinAcceptMessage = useCallback(
+    (input: {
+      organizerId: string;
+      competitionName?: string;
+      teamName?: string;
+      position?: string;
+      note?: string;
+    }) => {
+      const sender = currentUserRef.current;
+      if (!sender || !isUuid(input.organizerId) || !isUuid(sender.id)) return;
+      const subject = `[قبول انضمام] ${input.competitionName || 'مسابقة'} — ${input.teamName || 'فريق'}`;
+      const lines = [
+        'وافقتُ على طلب انضمامك لي كلاعب في:',
+        `• المسابقة: ${input.competitionName || '—'}`,
+        `• الفريق: ${input.teamName || '—'}`,
+        input.position ? `• المركز: ${input.position}` : '',
+        '',
+      ].filter(Boolean);
+      const note = input.note?.trim();
+      if (note) {
+        lines.push('شروطي وطلباتي:', note, '');
+      }
+      lines.push(`— ${sender.name}`);
+      void notifyAccountUser(input.organizerId, subject, lines.join('\n'));
+    },
+    [notifyAccountUser]
+  );
+
   const updateOfferStatus = useCallback(
     (
       offerId: string,
       status: 'accepted' | 'declined',
-      successMessage?: string
+      successMessage?: string,
+      options?: { joinAccept?: { note?: string } }
     ) => {
+      const offer = offers.find((o) => o.id === offerId);
       setOffers((prev) => {
         const next = prev.map((o) =>
           o.id === offerId ? { ...o, status } : o
@@ -3991,6 +4022,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           console.warn('[offers] status sync failed', res.error);
         }
       });
+      if (status === 'accepted' && offer && currentUser) {
+        sendJoinAcceptMessage({
+          organizerId: offer.organizerId,
+          competitionName: offer.competitionName,
+          teamName: offer.teamName,
+          note: options?.joinAccept?.note,
+        });
+      }
       if (successMessage) {
         toast({
           variant: status === 'accepted' ? 'success' : 'default',
@@ -3999,7 +4038,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [toast]
+    [toast, t, offers, currentUser, sendJoinAcceptMessage]
   );
 
   const sendOffer = useCallback(
@@ -4287,23 +4326,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           return next;
         });
 
-        const note = options?.joinAccept?.note?.trim();
-        const organizerId = card.senderId;
-        if (isUuid(organizerId)) {
-          const subject = `[قبول انضمام] ${card.competitionName || 'مسابقة'} — ${card.teamName || 'فريق'}`;
-          const lines = [
-            `وافقتُ على طلب انضمامك لي كلاعب في:`,
-            `• المسابقة: ${card.competitionName || '—'}`,
-            `• الفريق: ${card.teamName || '—'}`,
-            card.position ? `• المركز: ${card.position}` : '',
-            '',
-          ].filter(Boolean);
-          if (note) {
-            lines.push('شروطي وطلباتي:', note, '');
-          }
-          lines.push(`— ${currentUser.name}`);
-          void notifyAccountUser(organizerId, subject, lines.join('\n'));
-        }
+      }
+
+      if (status === 'accepted' && card.kind === 'join_request') {
+        sendJoinAcceptMessage({
+          organizerId: card.senderId,
+          competitionName: card.competitionName,
+          teamName: card.teamName,
+          position: card.position,
+          note: options?.joinAccept?.note,
+        });
       }
 
       toast({
@@ -4321,7 +4353,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [currentUser, shareCards, toast, t, notifyAccountUser, syncCompetitions]
+    [currentUser, shareCards, toast, t, sendJoinAcceptMessage, syncCompetitions]
   );
 
   const markShareCardRead = useCallback(

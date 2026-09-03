@@ -577,13 +577,19 @@ export const en: TranslationTree = {
     pickMediaHint: 'Pick a photo or video from your device to attach',
     noMediaYet: 'No media attached yet — pick a photo or video',
     removeMedia: 'Remove attachment',
-    acceptJoinTitle: 'Confirm join acceptance',
+    acceptJoinTitle: 'Join acceptance',
     acceptJoinDesc:
-      'Write your conditions and requests for the organizer (optional). Confirming accepts the invite and saves the acceptance message in both your and the organizer\'s message history.',
+      'Write your conditions and requests for the organizer if you have any, then confirm from this popup.',
+    acceptJoinNotice:
+      'Notice: this popup is only for accepting a join request. Write any conditions or requests for the organizer here. The general Messages screen is a separate service and is not used for acceptance.',
+    acceptJoinHint:
+      'You may leave this blank if you have no conditions, then tap Confirm and send.',
     joinAcceptNote: 'My conditions & requests',
     joinAcceptNoteHint:
       'e.g. availability, preferred position, fees, training attendance...',
+    acceptJoin: 'Accept',
     confirmAccept: 'Confirm acceptance',
+    confirmAcceptSend: 'Confirm acceptance & send',
     joinAcceptSent:
       'Invite accepted and the acceptance message was saved for both parties',
     joinAcceptNotifTitle: 'Join accepted',
@@ -2150,11 +2156,11 @@ export const en: TranslationTree = {
     offerAccepted: 'Offer accepted successfully.',
     offerDeclined: 'Offer declined.',
     inbox: 'Inbox',
-    inboxSub: 'Messages from organizers and admin — inbox and sent',
+    inboxSub: 'General messages with organizers and admin',
     mailboxHint:
-      'Join requests and acceptance messages are saved here for both parties. Accept invites from Share cards.',
+      'This screen is for free messaging whenever you like. Join acceptance is done from Share cards or Offers via the conditions popup.',
     joinRequestsHint:
-      'To accept a join invite: Share cards → Confirm acceptance.',
+      'Join acceptance is not done here — tap Accept on the request, then write your conditions in the popup.',
     cancelCompose: 'Cancel compose',
     newMessage: 'New message',
     sendToOrganizer: 'Send to organizer',

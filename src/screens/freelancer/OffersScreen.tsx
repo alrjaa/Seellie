@@ -7,6 +7,7 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Screen } from '@/components/layout/Screen';
+import { JoinAcceptModal } from '@/components/share/JoinAcceptModal';
 import {
   Avatar,
   Button,
@@ -52,7 +53,7 @@ const OfferRow = memo(function OfferRow({
       {offer.status === 'pending' ? (
         <View style={styles.actions}>
           <Button
-            label={t('common.accept')}
+            label={t('shareCards.acceptJoin')}
             onPress={onAccept}
             style={{ flex: 1 }}
           />
@@ -79,6 +80,8 @@ export default function OffersScreen() {
   } = useTournament();
   const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingOffer, setPendingOffer] = useState<Offer | null>(null);
+  const [acceptNote, setAcceptNote] = useState('');
 
   const myOffers = useMemo(
     () =>
@@ -88,12 +91,22 @@ export default function OffersScreen() {
     [offers, currentUser]
   );
 
-  const onAccept = useCallback(
-    (offerId: string) => {
-      updateOfferStatus(offerId, 'accepted', t('freelancer.offerAccepted'));
-    },
-    [updateOfferStatus, t]
-  );
+  const openJoinAccept = useCallback((offer: Offer) => {
+    setPendingOffer(offer);
+    setAcceptNote('');
+  }, []);
+
+  const confirmJoinAccept = useCallback(() => {
+    if (!pendingOffer) return;
+    updateOfferStatus(
+      pendingOffer.id,
+      'accepted',
+      t('shareCards.joinAcceptSent'),
+      { joinAccept: { note: acceptNote.trim() || undefined } }
+    );
+    setPendingOffer(null);
+    setAcceptNote('');
+  }, [pendingOffer, acceptNote, updateOfferStatus, t]);
 
   const onDecline = useCallback(
     (offerId: string) => {
@@ -122,6 +135,24 @@ export default function OffersScreen() {
 
   return (
     <Screen>
+      <JoinAcceptModal
+        visible={!!pendingOffer}
+        details={
+          pendingOffer
+            ? {
+                competitionName: pendingOffer.competitionName,
+                teamName: pendingOffer.teamName,
+              }
+            : null
+        }
+        note={acceptNote}
+        onChangeNote={setAcceptNote}
+        onCancel={() => {
+          setPendingOffer(null);
+          setAcceptNote('');
+        }}
+        onConfirm={confirmJoinAccept}
+      />
       <FlatList
         data={myOffers}
         keyExtractor={(item) => item.id}
@@ -152,7 +183,7 @@ export default function OffersScreen() {
         renderItem={({ item }) => (
           <OfferRow
             offer={item}
-            onAccept={() => onAccept(item.id)}
+            onAccept={() => openJoinAccept(item)}
             onDecline={() => onDecline(item.id)}
           />
         )}

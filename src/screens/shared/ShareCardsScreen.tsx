@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
-  Modal,
   Pressable,
   StyleSheet,
   View,
@@ -21,6 +20,7 @@ import {
 } from '@/components/layout/StackTopChrome';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { ShareCardPreview } from '@/components/share/ShareCardPreview';
+import { JoinAcceptModal } from '@/components/share/JoinAcceptModal';
 import {
   Button,
   Card,
@@ -322,7 +322,7 @@ export default function ShareCardsScreen() {
     return (
       <View style={styles.rowBtns}>
         <Button
-          label={t('shareCards.confirmAccept')}
+          label={t('shareCards.acceptJoin')}
           style={{ flex: 1 }}
           onPress={() => openJoinAccept(card)}
         />
@@ -340,58 +340,25 @@ export default function ShareCardsScreen() {
 
   return (
     <View style={styles.root}>
-      <Modal
+      <JoinAcceptModal
         visible={!!pendingJoinAccept}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPendingJoinAccept(null)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setPendingJoinAccept(null)}
-        >
-          <Pressable
-            style={[
-              styles.modalCard,
-              { backgroundColor: theme.colors.surfaceElevated },
-            ]}
-            onPress={(e) => e.stopPropagation?.()}
-          >
-            <Subtitle>{t('shareCards.acceptJoinTitle')}</Subtitle>
-            <Muted>{t('shareCards.acceptJoinDesc')}</Muted>
-            {pendingJoinAccept ? (
-              <Card style={{ gap: 4, padding: 10 }}>
-                <Muted>
-                  {pendingJoinAccept.competitionName} — {pendingJoinAccept.teamName}
-                </Muted>
-                {pendingJoinAccept.position ? (
-                  <Muted>{pendingJoinAccept.position}</Muted>
-                ) : null}
-              </Card>
-            ) : null}
-            <Input
-              label={t('shareCards.joinAcceptNote')}
-              value={acceptNote}
-              onChangeText={setAcceptNote}
-              multiline
-              placeholder={t('shareCards.joinAcceptNoteHint')}
-            />
-            <View style={styles.rowBtns}>
-              <Button
-                label={t('common.cancel')}
-                variant="outline"
-                style={{ flex: 1 }}
-                onPress={() => setPendingJoinAccept(null)}
-              />
-              <Button
-                label={t('shareCards.confirmAccept')}
-                style={{ flex: 1 }}
-                onPress={confirmJoinAccept}
-              />
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        details={
+          pendingJoinAccept
+            ? {
+                competitionName: pendingJoinAccept.competitionName,
+                teamName: pendingJoinAccept.teamName,
+                position: pendingJoinAccept.position,
+              }
+            : null
+        }
+        note={acceptNote}
+        onChangeNote={setAcceptNote}
+        onCancel={() => {
+          setPendingJoinAccept(null);
+          setAcceptNote('');
+        }}
+        onConfirm={confirmJoinAccept}
+      />
       <StackTopChrome />
       <Screen
         scroll={tab === 'compose'}
@@ -673,18 +640,4 @@ const styles = StyleSheet.create({
   rowBtns: { flexDirection: 'row', gap: 8 },
   list: { gap: 12, paddingBottom: 20, flexGrow: 1 },
   item: { gap: 8 },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  modalCard: {
-    borderRadius: 14,
-    padding: 16,
-    gap: 10,
-    maxWidth: 480,
-    width: '100%',
-    alignSelf: 'center',
-  },
 });
