@@ -689,7 +689,8 @@ export default function AdsAdEditorScreen() {
               ? t('adsPortal.feedVisibilityPaused')
               : t('adsPortal.feedVisibilityDraft'),
       });
-      router.replace(`/ads/campaign/${campaignId}` as any);
+      // No back chevron in ads portal — return to advertiser home after save.
+      router.replace('/ads/home' as any);
     } catch {
       toast({
         variant: 'destructive',
@@ -731,6 +732,11 @@ export default function AdsAdEditorScreen() {
 
   const form = (
     <View style={styles.formCol}>
+      <Button
+        label={t('adsPortal.backToStudio')}
+        variant="outline"
+        onPress={() => router.replace('/ads/home' as any)}
+      />
       <Title>{isNew ? t('adsPortal.newAd') : t('adsPortal.editAd')}</Title>
       <Muted>{t('adsPortal.studioIntro')}</Muted>
       <MediaUploadSpecs
