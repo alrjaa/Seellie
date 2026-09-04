@@ -2,6 +2,7 @@ import type { SportsLineupPlayer } from '@/services/sports-data';
 
 export type PitchPos = { top: number; left: number };
 
+/** Pitch % bands — keep players inside the playable field. */
 const PITCH_AWAY_START = 8;
 const PITCH_HOME_END = 92;
 const PITCH_HALF_SPAN = 40;
@@ -12,9 +13,16 @@ const PITCH_LEFT_MIN = 10;
 const PITCH_LEFT_SPAN = 80;
 const MIN_GRID_ROWS_FOR_FULL = 4;
 
+/**
+ * Team-local depth: 0 = own goal / GK, 1 = opponent goal / attack.
+ * Screen mapping is applied once via applyTeamDirection + mapToPitch.
+ */
+export type TeamDirection = 'up' | 'down';
+
 const POSITION_DEPTH: Record<string, number> = {
   G: 0,
   GK: 0,
+  GOALKEEPER: 0,
   D: 1,
   DF: 1,
   DEF: 1,
@@ -58,7 +66,9 @@ export function parseLineupGrid(grid?: string) {
 
 function isGoalkeeper(player: SportsLineupPlayer) {
   const pos = (player.position || '').trim().toUpperCase();
-  return pos === 'G' || pos === 'GK';
+  if (!pos) return false;
+  if (pos === 'G' || pos === 'GK' || pos === 'GOALKEEPER') return true;
+  return POSITION_DEPTH[pos] === 0;
 }
 
 function positionRank(player: SportsLineupPlayer) {
@@ -116,22 +126,69 @@ function enrichPlayersFromOrder(
 
 export type PitchScope = 'half' | 'full';
 
-function mapNormToPitch(
-  rowNorm: number,
-  colNorm: number,
+/**
+ * Authoritative playing direction for a side on the pitch.
+ * - both teams (half): away defends TOP, home defends BOTTOM (opposite directions)
+ * - single team (full): always coach view — defend BOTTOM, attack TOP
+ */
+export function resolveTeamDirection(
   side: 'home' | 'away',
   scope: PitchScope = 'half'
+): TeamDirection {
+  if (scope === 'full') return 'up';
+  return side === 'away' ? 'down' : 'up';
+}
+
+/**
+ * ONE canonical orientation transform.
+ * Input (x,y) is team-local: y=0 at own goal (GK), y=1 at attack.
+ * Output y is screen-normalized: 0 = top of allocated band, 1 = bottom.
+ */
+export function applyTeamDirection(
+  x: number,
+  y: number,
+  direction: TeamDirection
+): { x: number; y: number } {
+  if (direction === 'up') {
+    // Attack toward top of screen → GK at bottom → invert depth for screen Y.
+    return { x, y: 1 - y };
+  }
+  // Attack toward bottom of screen → GK at top → depth maps directly.
+  return { x, y };
+}
+
+function mapScreenNormToPitch(
+  screenY: number,
+  colNorm: number,
+  side: 'home' | 'away',
+  scope: PitchScope
 ): PitchPos {
-  const top =
-    scope === 'full'
-      ? side === 'away'
-        ? PITCH_FULL_START + rowNorm * PITCH_FULL_SPAN
-        : PITCH_FULL_END - rowNorm * PITCH_FULL_SPAN
-      : side === 'away'
-        ? PITCH_AWAY_START + rowNorm * PITCH_HALF_SPAN
-        : PITCH_HOME_END - rowNorm * PITCH_HALF_SPAN;
-  const left = PITCH_LEFT_MIN + colNorm * PITCH_LEFT_SPAN;
+  const y = Math.min(1, Math.max(0, screenY));
+  const x = Math.min(1, Math.max(0, colNorm));
+
+  let top: number;
+  if (scope === 'full') {
+    top = PITCH_FULL_START + y * PITCH_FULL_SPAN;
+  } else if (side === 'away') {
+    top = PITCH_AWAY_START + y * PITCH_HALF_SPAN;
+  } else {
+    // Home half band sits in the lower portion of the pitch.
+    top = PITCH_HOME_END - PITCH_HALF_SPAN + y * PITCH_HALF_SPAN;
+  }
+
+  const left = PITCH_LEFT_MIN + x * PITCH_LEFT_SPAN;
   return { top, left };
+}
+
+function placeCanonicalOnPitch(
+  depthNorm: number,
+  colNorm: number,
+  side: 'home' | 'away',
+  scope: PitchScope
+): PitchPos {
+  const direction = resolveTeamDirection(side, scope);
+  const oriented = applyTeamDirection(colNorm, depthNorm, direction);
+  return mapScreenNormToPitch(oriented.y, oriented.x, side, scope);
 }
 
 function sortLinePlayers(players: SportsLineupPlayer[]) {
@@ -261,52 +318,7 @@ function assignPlayersToGridRows(
   return lines;
 }
 
-function goalLineTop(side: 'home' | 'away', scope: PitchScope = 'half') {
-  if (scope === 'full') {
-    return side === 'away' ? PITCH_FULL_START : PITCH_FULL_END;
-  }
-  return side === 'away' ? PITCH_AWAY_START : PITCH_HOME_END;
-}
-
-function attackLineTop(side: 'home' | 'away', scope: PitchScope = 'half') {
-  if (scope === 'full') {
-    return side === 'away'
-      ? PITCH_FULL_START + PITCH_FULL_SPAN
-      : PITCH_FULL_END - PITCH_FULL_SPAN;
-  }
-  return side === 'away'
-    ? PITCH_AWAY_START + PITCH_HALF_SPAN
-    : PITCH_HOME_END - PITCH_HALF_SPAN;
-}
-
-function fixGoalkeeperOrientation(
-  players: SportsLineupPlayer[],
-  positions: Map<number, PitchPos>,
-  side: 'home' | 'away',
-  scope: PitchScope = 'half'
-) {
-  const gk = players.find(isGoalkeeper);
-  if (!gk) return;
-  const gkPos = positions.get(gk.id);
-  if (!gkPos) return;
-
-  const goalTop = goalLineTop(side, scope);
-  const attackTop = attackLineTop(side, scope);
-  const distGoal = Math.abs(gkPos.top - goalTop);
-  const distAttack = Math.abs(gkPos.top - attackTop);
-  if (distGoal <= distAttack) return;
-
-  const axisCenter = (goalTop + attackTop) / 2;
-  players.forEach((player) => {
-    const pos = positions.get(player.id);
-    if (!pos) return;
-    positions.set(player.id, {
-      top: axisCenter + (axisCenter - pos.top),
-      left: pos.left,
-    });
-  });
-}
-
+/** Place tactical lines in team-local depth order (line 0 = GK). */
 function placeLinesOnPitch(
   lines: SportsLineupPlayer[][],
   side: 'home' | 'away',
@@ -316,13 +328,13 @@ function placeLinesOnPitch(
   const lineCount = lines.length;
 
   lines.forEach((linePlayers, lineIdx) => {
-    const rowNorm = lineCount <= 1 ? 0 : lineIdx / (lineCount - 1);
+    const depthNorm = lineCount <= 1 ? 0 : lineIdx / (lineCount - 1);
     const sorted = sortLinePlayers(linePlayers);
     sorted.forEach((player, playerIdx) => {
       const colNorm = colNormForPlayer(player, sorted, playerIdx);
       positions.set(
         player.id,
-        mapNormToPitch(rowNorm, Math.min(1, Math.max(0, colNorm)), side, scope)
+        placeCanonicalOnPitch(depthNorm, colNorm, side, scope)
       );
     });
   });
@@ -330,12 +342,16 @@ function placeLinesOnPitch(
   return positions;
 }
 
+/**
+ * Build from API grids in team-local space, then apply ONE direction transform.
+ * Requires every player to have a parseable grid — otherwise returns null so
+ * the caller can use formation-line fallback (never drop a player).
+ */
 function buildFromFullGrid(
   players: SportsLineupPlayer[],
   side: 'home' | 'away',
   scope: PitchScope = 'half'
-): Map<number, PitchPos> {
-  const positions = new Map<number, PitchPos>();
+): Map<number, PitchPos> | null {
   const entries = players
     .map((player) => ({ player, grid: parseLineupGrid(player.grid) }))
     .filter(
@@ -347,7 +363,10 @@ function buildFromFullGrid(
       } => entry.grid != null
     );
 
-  if (!entries.length) return positions;
+  // Incomplete grids → do not use this path (would omit players).
+  if (entries.length !== players.length || !entries.length) {
+    return null;
+  }
 
   const rows = entries.map((entry) => entry.grid.row);
   const cols = entries.map((entry) => entry.grid.col);
@@ -358,20 +377,24 @@ function buildFromFullGrid(
   const uniqueRows = new Set(rows).size;
 
   if (uniqueRows < MIN_GRID_ROWS_FOR_FULL || maxRow === minRow) {
-    return positions;
+    return null;
   }
 
+  // Normalize API row direction so depth 0 is always the defensive end.
   const gk = players.find(isGoalkeeper);
   const gkRow = gk ? parseLineupGrid(gk.grid)?.row : null;
-  const invertRows =
-    gkRow != null && maxRow > minRow && gkRow === maxRow;
+  const defenseAtMaxRow =
+    gkRow != null ? gkRow === maxRow : false;
 
+  const positions = new Map<number, PitchPos>();
   entries.forEach(({ player, grid }) => {
-    const row = invertRows ? minRow + maxRow - grid.row : grid.row;
-    const rowNorm = (row - minRow) / (maxRow - minRow);
+    const rowForDepth = defenseAtMaxRow
+      ? minRow + maxRow - grid.row
+      : grid.row;
+    const depthNorm = (rowForDepth - minRow) / (maxRow - minRow);
     const colNorm =
       maxCol === minCol ? 0.5 : (grid.col - minCol) / (maxCol - minCol);
-    positions.set(player.id, mapNormToPitch(rowNorm, colNorm, side, scope));
+    positions.set(player.id, placeCanonicalOnPitch(depthNorm, colNorm, side, scope));
   });
 
   return positions;
@@ -388,15 +411,10 @@ export function buildPitchLineupLayout(
   const enriched = enrichPlayersFromOrder(players, formation);
 
   const fullGrid = buildFromFullGrid(enriched, side, scope);
-  if (fullGrid.size >= Math.ceil(enriched.length * 0.9)) {
-    fixGoalkeeperOrientation(enriched, fullGrid, side, scope);
-    return fullGrid;
-  }
+  if (fullGrid) return fullGrid;
 
   const lines =
     assignPlayersToGridRows(enriched) ??
     assignPlayersToFormationLines(enriched, formation);
-  const positions = placeLinesOnPitch(lines, side, scope);
-  fixGoalkeeperOrientation(enriched, positions, side, scope);
-  return positions;
+  return placeLinesOnPitch(lines, side, scope);
 }
