@@ -403,7 +403,7 @@ test('ad studio review blocks bad duration and link', () => {
   assert.match(utm, /utm_source=seellie/);
 });
 
-test('advertiser inbox sanitizer keeps blocked/deleted notices only', () => {
+test('advertiser inbox sanitizer keeps review outcome notices', () => {
   const blocked = sanitizeAdvertiserNotification({
     id: '11111111-1111-4111-8111-111111111111',
     advertiser_id: '22222222-2222-4222-8222-222222222222',
@@ -415,13 +415,22 @@ test('advertiser inbox sanitizer keeps blocked/deleted notices only', () => {
   assert.ok(blocked);
   assert.equal(blocked?.kind, 'blocked');
   assert.equal(sanitizeAdvertiserNotification({ kind: 'blocked' }), null);
+  const rejected = sanitizeAdvertiserNotification({
+    id: '44444444-4444-4444-8444-444444444444',
+    advertiser_id: '22222222-2222-4222-8222-222222222222',
+    kind: 'rejected',
+    ad_title: 'Summer',
+    created_at: '2026-08-19T00:00:00.000Z',
+  });
+  assert.equal(rejected?.kind, 'rejected');
   assert.equal(
     sanitizeAdvertiserNotifications([
       blocked,
       { kind: 'hack' },
       { ...blocked, kind: 'deleted', id: '33333333-3333-4333-8333-333333333333' },
+      rejected,
     ]).length,
-    2
+    3
   );
 });
 

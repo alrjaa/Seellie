@@ -635,6 +635,11 @@ export const en: TranslationTree = {
     inboxTitle: 'Admin notices',
     inboxMarkRead: 'Mark as read',
     inboxRead: 'Read',
+    inboxEmpty:
+      'No notices yet — rejections, approvals, and blocks appear here.',
+    inboxRefresh: 'Refresh notices',
+    inboxLocationHint:
+      'This is the advertiser inbox at the top of the studio on ads.seellie.com (not the user app).',
     inboxKind: {
       blocked:
         'Your ad “%{title}” was blocked and hidden from the app. Create a new ad to publish again.',

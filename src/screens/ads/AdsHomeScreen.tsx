@@ -179,10 +179,14 @@ export default function AdsHomeScreen() {
         {t('adsPortal.dashboardWelcome', { name: account.business_name })}
       </Muted>
       <Muted>{t('adsPortal.studioIntro')}</Muted>
-      {notices.length ? (
-        <>
-          <Subtitle>{t('adsPortal.inboxTitle')}</Subtitle>
-          {notices.map((notice) => (
+
+      <Card style={{ gap: 8 }}>
+        <Subtitle>{t('adsPortal.inboxTitle')}</Subtitle>
+        <Muted>{t('adsPortal.inboxLocationHint')}</Muted>
+        {notices.length === 0 ? (
+          <Muted>{t('adsPortal.inboxEmpty')}</Muted>
+        ) : (
+          notices.map((notice) => (
             <Card key={notice.id} style={{ gap: 8 }}>
               <Subtitle>
                 {t(`adsPortal.inboxKind.${notice.kind}`, {
@@ -204,11 +208,17 @@ export default function AdsHomeScreen() {
                 <Muted>{t('adsPortal.inboxRead')}</Muted>
               )}
             </Card>
-          ))}
-        </>
-      ) : null}
+          ))
+        )}
+        <Button
+          label={t('adsPortal.inboxRefresh')}
+          variant="outline"
+          onPress={() => void load()}
+        />
+      </Card>
+
       {Platform.OS === 'web' ? (
-        <Muted>{t('adsPortal.buildStamp', { version: '1.0.152' })}</Muted>
+        <Muted>{t('adsPortal.buildStamp', { version: '1.0.154' })}</Muted>
       ) : null}
 
       <View style={styles.hero}>
