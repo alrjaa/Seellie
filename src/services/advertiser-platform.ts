@@ -68,6 +68,10 @@ export type DbAdvertisement = {
   target_city?: string | null;
   created_at: string;
   updated_at: string;
+  /** Enriched by admin list RPC (optional until migration applied) */
+  owner_email?: string | null;
+  account_business_name?: string | null;
+  account_contact_name?: string | null;
 };
 
 export type AdvertiserProfileInput = {
@@ -345,12 +349,19 @@ export async function listPendingAdvertisements(): Promise<
   return { data: await parseRpcArray<DbAdvertisement>(data) };
 }
 
-export async function listAdminAdvertisements(): Promise<
-  RpcResult<DbAdvertisement[]>
-> {
-  const { data, error } = await rpc<unknown>('list_admin_advertisements');
-  if (error) return { data: [], error };
-  return { data: await parseRpcArray<DbAdvertisement>(data) };
+export async function listAdminAdvertisements(
+  query?: string
+): Promise<RpcResult<DbAdvertisement[]>> {
+  const q = (query || '').trim() || null;
+  // Prefer text overload (enriched with owner_email). Fall back to zero-arg.
+  let result = await rpc<unknown>('list_admin_advertisements', {
+    p_query: q,
+  });
+  if (result.error === 'schema_missing' || result.error === 'unknown') {
+    result = await rpc<unknown>('list_admin_advertisements');
+  }
+  if (result.error) return { data: [], error: result.error };
+  return { data: await parseRpcArray<DbAdvertisement>(result.data) };
 }
 
 export async function adminModerateAdvertisement(

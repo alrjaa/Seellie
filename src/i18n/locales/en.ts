@@ -1918,6 +1918,10 @@ export const en: TranslationTree = {
       removed: 'Ad removed.',
       empty: 'No in-feed ads',
       emptyDesc: 'Add a short vertical clip to appear inside the feed.',
+      searchPlaceholder:
+        'Search by ad ID, name, handle, or email…',
+      adIdLabel: 'Ad ID',
+      adEmailLabel: 'Email',
       pendingDbTitle: 'Advertiser submissions — pending review',
       pendingDbEmpty:
         'No ads waiting for approval. Drafts or ads without an uploaded MP4 do not appear here — the advertiser must tap “Send for review”.',

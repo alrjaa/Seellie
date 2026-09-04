@@ -20,12 +20,14 @@ import {
   Chip,
   Input,
   Muted,
+  SearchBar,
   Subtitle,
   Title,
 } from '@/components/ui';
 import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
 import { AdPhonePreview } from '@/components/ads/AdPhonePreview';
 import { createId } from '@/utils/id';
+import { matchesSearchQuery } from '@/utils/search';
 import { confirmDestructive } from '@/utils/confirm';
 import { resolvePublicMediaUrl, cloudWriteErrorMessage } from '@/services/cloud-write';
 import { isSupabaseConfigured } from '@/services/supabase';
@@ -103,6 +105,37 @@ function emptyDraft(): Draft {
   };
 }
 
+function matchesDbAd(query: string, row: DbAdvertisement): boolean {
+  return matchesSearchQuery(
+    query,
+    row.id,
+    row.advertiser_id,
+    row.campaign_id,
+    row.advertiser_name,
+    row.advertiser_handle,
+    row.title,
+    row.hook_text,
+    row.body_text,
+    row.owner_email,
+    row.account_business_name,
+    row.account_contact_name,
+    row.status
+  );
+}
+
+function matchesBlobAd(query: string, ad: NativeInFeedAd): boolean {
+  return matchesSearchQuery(
+    query,
+    ad.id,
+    ad.advertiserName,
+    ad.advertiserHandle,
+    ad.title,
+    ad.hookText,
+    ad.text,
+    ad.status
+  );
+}
+
 function adToDraft(ad: NativeInFeedAd): Draft {
   return {
     id: ad.id,
@@ -141,6 +174,7 @@ export default function NativeAdsScreen() {
   const [pendingDbError, setPendingDbError] = useState<string | null>(null);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [previewListId, setPreviewListId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   /** Force re-split of live vs ended when schedule windows expire. */
   const [scheduleTick, setScheduleTick] = useState(0);
 
@@ -153,14 +187,20 @@ export default function NativeAdsScreen() {
     () =>
       ads.filter(
         (ad) =>
-          !isNativeAdScheduleEnded(ad) && !isNativeAdScheduleUpcoming(ad)
+          !isNativeAdScheduleEnded(ad) &&
+          !isNativeAdScheduleUpcoming(ad) &&
+          matchesBlobAd(searchQuery, ad)
       ),
-    [ads, scheduleTick]
+    [ads, scheduleTick, searchQuery]
   );
 
   const endedBlobAds = useMemo(
-    () => ads.filter((ad) => isNativeAdScheduleEnded(ad)),
-    [ads, scheduleTick]
+    () =>
+      ads.filter(
+        (ad) =>
+          isNativeAdScheduleEnded(ad) && matchesBlobAd(searchQuery, ad)
+      ),
+    [ads, scheduleTick, searchQuery]
   );
 
   const liveAdminDb = useMemo(
@@ -170,14 +210,24 @@ export default function NativeAdsScreen() {
           !isNativeAdScheduleEnded(row) &&
           !isNativeAdScheduleUpcoming(row) &&
           row.status !== 'blocked' &&
-          row.status !== 'deleted'
+          row.status !== 'deleted' &&
+          matchesDbAd(searchQuery, row)
       ),
-    [adminDb, scheduleTick]
+    [adminDb, scheduleTick, searchQuery]
   );
 
   const endedAdminDb = useMemo(
-    () => adminDb.filter((row) => isNativeAdScheduleEnded(row)),
-    [adminDb, scheduleTick]
+    () =>
+      adminDb.filter(
+        (row) =>
+          isNativeAdScheduleEnded(row) && matchesDbAd(searchQuery, row)
+      ),
+    [adminDb, scheduleTick, searchQuery]
+  );
+
+  const filteredPendingDb = useMemo(
+    () => pendingDb.filter((row) => matchesDbAd(searchQuery, row)),
+    [pendingDb, searchQuery]
   );
 
   const load = useCallback(async () => {
@@ -608,15 +658,41 @@ export default function NativeAdsScreen() {
         <Title>{t('superadmin.modules.ads.title')}</Title>
         <Muted>{t('superadmin.ads.subtitle')}</Muted>
         <Muted>{t('superadmin.ads.specHint')}</Muted>
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder={t('superadmin.ads.searchPlaceholder')}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
         <Subtitle>{t('superadmin.ads.pendingDbTitle')}</Subtitle>
         {pendingDbError ? (
           <Muted>{t('superadmin.ads.pendingDbLoadFailed')}</Muted>
-        ) : pendingDb.length === 0 ? (
-          <Muted>{t('superadmin.ads.pendingDbEmpty')}</Muted>
+        ) : filteredPendingDb.length === 0 ? (
+          <Muted>
+            {searchQuery.trim()
+              ? t('superadmin.noSearchResults')
+              : t('superadmin.ads.pendingDbEmpty')}
+          </Muted>
         ) : (
-          pendingDb.map((row) => (
+          filteredPendingDb.map((row) => (
             <Card key={row.id} style={{ gap: 8 }}>
               <Subtitle>{row.advertiser_name}</Subtitle>
+              <Muted>
+                {t('superadmin.ads.adIdLabel')}: {row.id}
+              </Muted>
+              {row.owner_email ? (
+                <Muted>
+                  {t('superadmin.ads.adEmailLabel')}: {row.owner_email}
+                </Muted>
+              ) : null}
+              {(row.advertiser_handle || row.account_business_name) && (
+                <Muted>
+                  {[row.advertiser_handle, row.account_business_name]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </Muted>
+              )}
               <Muted numberOfLines={2}>{row.title || row.video_url}</Muted>
               <View style={styles.phonePreviewBox}>
                 <Subtitle>{t('superadmin.ads.phonePreviewTitle')}</Subtitle>
@@ -671,11 +747,23 @@ export default function NativeAdsScreen() {
         <Subtitle>{t('superadmin.ads.liveDbTitle')}</Subtitle>
         <Muted>{t('superadmin.ads.liveDbScheduleHint')}</Muted>
         {liveAdminDb.length === 0 ? (
-          <Muted>{t('superadmin.ads.liveDbEmpty')}</Muted>
+          <Muted>
+            {searchQuery.trim()
+              ? t('superadmin.noSearchResults')
+              : t('superadmin.ads.liveDbEmpty')}
+          </Muted>
         ) : (
           liveAdminDb.map((row) => (
             <Card key={row.id} style={{ gap: 8 }}>
               <Subtitle>{row.advertiser_name}</Subtitle>
+              <Muted>
+                {t('superadmin.ads.adIdLabel')}: {row.id}
+              </Muted>
+              {row.owner_email ? (
+                <Muted>
+                  {t('superadmin.ads.adEmailLabel')}: {row.owner_email}
+                </Muted>
+              ) : null}
               <Muted>
                 {t(`adsPortal.status.${row.status}`)} ·{' '}
                 {row.title || row.video_url}
@@ -738,6 +826,14 @@ export default function NativeAdsScreen() {
             {endedAdminDb.map((row) => (
               <Card key={`ended-${row.id}`} style={{ gap: 6 }}>
                 <Subtitle>{row.advertiser_name}</Subtitle>
+                <Muted>
+                  {t('superadmin.ads.adIdLabel')}: {row.id}
+                </Muted>
+                {row.owner_email ? (
+                  <Muted>
+                    {t('superadmin.ads.adEmailLabel')}: {row.owner_email}
+                  </Muted>
+                ) : null}
                 <Muted>
                   {t('superadmin.ads.endedBadge')} ·{' '}
                   {(row.end_at || '').slice(0, 10) || '—'} ·{' '}
@@ -925,10 +1021,10 @@ export default function NativeAdsScreen() {
       adminDb,
       draft,
       endedAdminDb,
+      filteredPendingDb,
       formOpen,
       isRTL,
       liveAdminDb,
-      pendingDb,
       pendingDbError,
       pickPoster,
       pickVideo,
@@ -940,6 +1036,7 @@ export default function NativeAdsScreen() {
       reviewingId,
       save,
       saving,
+      searchQuery,
       t,
     ]
   );
@@ -1001,6 +1098,9 @@ export default function NativeAdsScreen() {
                 <Text style={[styles.name, { color: theme.colors.text }]}>
                   {item.advertiserName}
                 </Text>
+                <Muted>
+                  {t('superadmin.ads.adIdLabel')}: {item.id}
+                </Muted>
                 <Muted>
                   {t(`superadmin.ads.status.${item.status}`)} · {item.durationSec}
                   {t('media.secondsAbbr')} · {item.placements.join(' · ')}
