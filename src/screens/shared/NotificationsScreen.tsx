@@ -33,6 +33,8 @@ function kindIcon(
       return 'images-outline';
     case 'appreciation':
       return 'ribbon-outline';
+    case 'announcement':
+      return 'megaphone-outline';
     default:
       return 'notifications-outline';
   }

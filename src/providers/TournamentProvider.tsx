@@ -2797,6 +2797,44 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     };
   }, [currentUser?.id, refreshCloudMessages, notifyIncomingMessages]);
 
+  /** سحب إعلامات المنظّم (الإعلام والتنبيه) من صندوق المستلم السحابي */
+  useEffect(() => {
+    const uid = currentUser?.id;
+    if (!uid || !isUuid(uid) || !isSupabaseConfigured()) return;
+    let active = true;
+    void (async () => {
+      const cloud = await fetchAppBlob<
+        Array<{
+          id: string;
+          title: string;
+          body: string;
+          createdAt: string;
+          read?: boolean;
+          kind?: string;
+          competitionId?: string;
+          href?: string;
+        }>
+      >(`alerts-inbox:${uid}`);
+      if (!active || !Array.isArray(cloud.data) || !cloud.data.length) return;
+      for (const row of cloud.data) {
+        if (!row?.id || !row.title) continue;
+        addNotification({
+          id: row.id,
+          kind: 'announcement',
+          recipientId: uid,
+          competitionId: row.competitionId,
+          title: row.title,
+          body: row.body || '',
+          href: row.href || '/notifications',
+          read: !!row.read,
+        });
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [currentUser?.id, addNotification]);
+
   const refreshCloudShareCards = useCallback(async () => {
     const uid = sessionUserIdRef.current;
     if (!uid || !isUuid(uid) || !isSupabaseConfigured()) {

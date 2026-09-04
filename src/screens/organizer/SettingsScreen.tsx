@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useNotifications } from '@/providers/NotificationsProvider';
 import { Screen } from '@/components/layout/Screen';
 import { Button, Card, Input, Muted, Subtitle, Title } from '@/components/ui';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
@@ -16,6 +17,7 @@ import { useTranslation } from '@/providers/LanguageProvider';
 
 export default function OrganizerSettingsScreen() {
   const { currentUser, updateUser, changePassword, logout } = useTournament();
+  const { unreadCountFor } = useNotifications();
   const { preference, setPreference } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
@@ -23,6 +25,7 @@ export default function OrganizerSettingsScreen() {
   const [bio, setBio] = useState(currentUser?.bio || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [nextPassword, setNextPassword] = useState('');
+  const unreadNotifs = unreadCountFor(currentUser?.id);
 
   const saveAccount = () => {
     if (!currentUser) return;
@@ -126,7 +129,11 @@ export default function OrganizerSettingsScreen() {
         onPress={() => router.push('/share-cards' as any)}
       />
       <Button
-        label={t('notifications.title')}
+        label={
+          unreadNotifs > 0
+            ? `${t('notifications.title')} (${unreadNotifs})`
+            : t('notifications.title')
+        }
         variant="outline"
         onPress={() => router.push('/notifications' as any)}
       />

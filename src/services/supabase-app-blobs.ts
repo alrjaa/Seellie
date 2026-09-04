@@ -15,12 +15,16 @@ export type AppBlobKey =
   /** Legacy client key — read fallback only; do not write */
   | 'app_settings'
   | `announcements:${string}`
+  | `competition-alerts:${string}`
+  | `alerts-inbox:${string}`
   | `prizes:${string}`;
 
 export type AppSettingsBlob = {
   autoApproveAnalystRequests?: boolean;
   /** نظام التقدير والتكريم (هدايا + شهادات) */
   appreciationEnabled?: boolean;
+  /** نظام Credits + IAP + شهادات رقمية (F17) */
+  commerceCreditsEnabled?: boolean;
   /** حقل كتابة التعليق فقط — القراءة تبقى */
   commentComposerEnabled?: boolean;
   /** حقل إنشاء المشاركة فقط — القراءة تبقى */
@@ -31,6 +35,7 @@ export type AppSettingsBlob = {
 
 export type AppFeatureFlags = {
   appreciationEnabled: boolean;
+  commerceCreditsEnabled: boolean;
   commentComposerEnabled: boolean;
   postComposerEnabled: boolean;
   arenaComposerEnabled: boolean;
@@ -38,6 +43,7 @@ export type AppFeatureFlags = {
 
 export const DEFAULT_APP_FEATURE_FLAGS: AppFeatureFlags = {
   appreciationEnabled: true,
+  commerceCreditsEnabled: true,
   commentComposerEnabled: true,
   postComposerEnabled: true,
   arenaComposerEnabled: true,
@@ -50,6 +56,9 @@ export function resolveAppFeatureFlags(
   return {
     appreciationEnabled:
       settings?.appreciationEnabled ?? DEFAULT_APP_FEATURE_FLAGS.appreciationEnabled,
+    commerceCreditsEnabled:
+      settings?.commerceCreditsEnabled ??
+      DEFAULT_APP_FEATURE_FLAGS.commerceCreditsEnabled,
     commentComposerEnabled:
       settings?.commentComposerEnabled ??
       DEFAULT_APP_FEATURE_FLAGS.commentComposerEnabled,

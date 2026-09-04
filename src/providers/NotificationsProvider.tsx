@@ -20,9 +20,19 @@ export type AppNotification = {
   createdAt: string;
   read: boolean;
   href?: string;
-  kind: 'follow' | 'message' | 'offer' | 'system' | 'media' | 'appreciation';
+  kind:
+    | 'follow'
+    | 'message'
+    | 'offer'
+    | 'system'
+    | 'media'
+    | 'appreciation'
+    /** إعلام/تنبيه من منظم المسابقة للمشاركين */
+    | 'announcement';
   /** إن وُجد يُعرض فقط لهذا المستخدم */
   recipientId?: string;
+  /** مسابقة المصدر عند كون الإشعار إعلاماً تنظيمياً */
+  competitionId?: string;
 };
 
 type NotificationsApi = {
@@ -123,6 +133,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           kind: input.kind,
           href: input.href,
           recipientId: input.recipientId,
+          competitionId: input.competitionId,
           createdAt: new Date().toISOString(),
           read: input.read ?? false,
         };

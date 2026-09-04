@@ -348,7 +348,7 @@ export const en: TranslationTree = {
     goHome: 'Go home',
     stats: 'Statistics',
     prizes: 'Prizes',
-    announcements: 'Announcements',
+    announcements: 'Announcements & Alerts',
     financials: 'Financials',
     users: 'Manage users',
     analytics: 'Analytics',
@@ -602,7 +602,8 @@ export const en: TranslationTree = {
     markAllRead: 'Mark all as read',
     clear: 'Clear all',
     empty: 'No notifications',
-    emptyDesc: 'Follows, messages, and updates will appear here.',
+    emptyDesc:
+      'Follows, messages, and competition announcements & alerts from your organizers appear here.',
     new: 'New',
     followTitle: 'New follower',
     followBody: '%{name} started following you',
@@ -610,6 +611,7 @@ export const en: TranslationTree = {
     offerBody: 'Offer received from %{name}',
     appreciationGivenTitle: 'Appreciation sent',
     appreciationGivenBody: 'You sent “%{type}” appreciation to %{name}',
+    competitionAlertTitle: 'Announcement & alert — %{competition}',
     backHome: 'Back to home',
   },
   adsPortal: {
@@ -1277,8 +1279,9 @@ export const en: TranslationTree = {
         description: 'Manage tournament prizes',
       },
       announcements: {
-        title: 'Announcements',
-        description: 'Tournament announcements and updates',
+        title: 'Announcements & Alerts',
+        description:
+          'Alerts for team managers, players, and referees in your competition',
       },
       financials: {
         title: 'Financials',
@@ -1455,21 +1458,33 @@ export const en: TranslationTree = {
       messageBody: 'Message body',
     },
     announcements: {
-      title: 'Announcements',
-      subtitle: 'Publish updates and announcements for participants',
-      newAnnouncement: 'New announcement',
-      titleLabel: 'Title',
-      contentLabel: 'Content',
-      publish: 'Publish announcement',
-      empty: 'No announcements',
-      emptyDesc: 'Create a new announcement to notify participants.',
-      published: 'Published',
-      publishedDesc: 'Announcement added successfully.',
+      title: 'Announcements & Alerts',
+      subtitle:
+        'Send an announcement or alert only to your competition participants: team managers, players, and referees.',
+      scopeNote:
+        'This is not Seellie commercial advertising — it only reaches participants in your competition, with a badge in their accounts.',
+      newAnnouncement: 'New announcement / alert',
+      chooseCompetition: 'Target competition',
+      noCompetitions: 'No competitions yet — create or request one first',
+      pickCompetitionRequired: 'Choose a competition before publishing.',
+      audienceSummary:
+        'Audience: %{managers} manager/coach · %{players} player · %{referees} referee · %{linked} linked account(s) will be notified',
+      titleLabel: 'Alert title',
+      contentLabel: 'Alert body',
+      publish: 'Publish announcement & alert',
+      empty: 'No announcements yet',
+      emptyDesc:
+        'Create an alert for your competition participants so they see it with a notification badge.',
+      published: 'Published and notified',
+      publishedDesc: 'Alert sent to %{count} participant account(s).',
       deleted: 'Deleted',
-      deletedDesc: 'Announcement removed.',
-      fieldsRequired: 'Enter an announcement title and body.',
-      deleteConfirmTitle: 'Delete announcement?',
-      deleteConfirmMessage: 'This announcement will be removed from your list.',
+      deletedDesc: 'Alert removed from your list.',
+      fieldsRequired: 'Enter an alert title and body.',
+      deleteConfirmTitle: 'Delete alert?',
+      deleteConfirmMessage:
+        'This alert will be removed from your list (it is not withdrawn from recipients who already received it).',
+      forCompetition: 'Competition: %{name}',
+      sentToCount: 'Sent to %{count}',
     },
     prizes: {
       title: 'Prizes',

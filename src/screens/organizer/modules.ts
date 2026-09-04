@@ -66,7 +66,7 @@ export const ORGANIZER_MODULES: OrganizerModule[] = [
   {
     key: 'announcements',
     href: '/(organizer)/announcements',
-    icon: 'megaphone',
+    icon: 'notifications',
     group: 'comms',
   },
   {

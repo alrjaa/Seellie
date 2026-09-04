@@ -23,6 +23,7 @@ import { AccountSocialStats } from '@/components/account/AccountSocialStats';
 import { AvatarPickerCard } from '@/components/account/AvatarPickerCard';
 import { DeleteAccountSection } from '@/components/account/DeleteAccountSection';
 import { useTranslation } from '@/providers/LanguageProvider';
+import { useNotifications } from '@/providers/NotificationsProvider';
 
 export default function SettingsScreen() {
   const {
@@ -38,12 +39,14 @@ export default function SettingsScreen() {
     toggleMediaLike,
   } = useTournament();
   const { preference, setPreference } = useTheme();
+  const { unreadCountFor } = useNotifications();
   const { t } = useTranslation();
   const router = useRouter();
   const [name, setName] = useState(currentUser?.name ?? '');
   const [bio, setBio] = useState(currentUser?.bio ?? '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const unreadNotifs = unreadCountFor(currentUser?.id);
 
   if (loading) return <LoadingState />;
   if (!currentUser) return <Redirect href="/(auth)/login" />;
@@ -197,7 +200,11 @@ export default function SettingsScreen() {
         onPress={() => router.push('/share-cards' as any)}
       />
       <Button
-        label={t('notifications.title')}
+        label={
+          unreadNotifs > 0
+            ? `${t('notifications.title')} (${unreadNotifs})`
+            : t('notifications.title')
+        }
         variant="outline"
         onPress={() => router.push('/notifications' as any)}
       />
