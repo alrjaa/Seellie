@@ -96,3 +96,21 @@ $$;
 
 revoke all on function public.admin_set_advertisement_status(uuid, text, text) from public;
 grant execute on function public.admin_set_advertisement_status(uuid, text, text) to authenticated;
+
+-- Legacy 2-arg overload so older clients / PostgREST calls without p_note still work.
+create or replace function public.admin_set_advertisement_status(
+  p_ad_id uuid,
+  p_status text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return public.admin_set_advertisement_status(p_ad_id, p_status, '');
+end;
+$$;
+
+revoke all on function public.admin_set_advertisement_status(uuid, text) from public;
+grant execute on function public.admin_set_advertisement_status(uuid, text) to authenticated;

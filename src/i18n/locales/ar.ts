@@ -2268,6 +2268,9 @@ export const ar = {
       pendingDbApproved: 'تم اعتماد الإعلان',
       pendingDbRejected: 'أُعيد الإعلان إلى مسودة',
       pendingDbRejectedNotified: 'تم الرفض وإرسال إشعار للمعلن',
+      rejectTitle: 'رفض الإعلان',
+      rejectConfirm:
+        'إعادة هذا الإعلان إلى المسودة وإرسال إشعار للمعلن؟ يمكنه التعديل ثم إعادة الإرسال للمراجعة.',
       rejectNoteHint:
         'ملاحظة اختيارية للمعلن عن سبب الرفض (يمكن تركها فارغة)',
       liveDbTitle: 'إعلانات المعلنين في التطبيق',

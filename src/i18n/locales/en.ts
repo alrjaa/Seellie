@@ -1934,6 +1934,9 @@ export const en: TranslationTree = {
       pendingDbApproved: 'Ad approved',
       pendingDbRejected: 'Ad returned to draft',
       pendingDbRejectedNotified: 'Rejected and advertiser notified',
+      rejectTitle: 'Reject ad',
+      rejectConfirm:
+        'Return this ad to draft and notify the advertiser? They can edit and resubmit for review.',
       rejectNoteHint:
         'Optional note for the advertiser about the rejection (can be empty)',
       liveDbTitle: 'Advertiser ads in the app',
