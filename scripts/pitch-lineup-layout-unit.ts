@@ -184,7 +184,11 @@ function main() {
     const gk = players.find((p) => p.position === 'G')!;
     assert.ok(pos.has(gk.id), 'GK without grid is placed');
     assert.equal(pos.size, 11, 'all XI placed when GK grid missing');
-    assert.ok(pos.get(gk.id)!.top > 80, 'home GK near bottom goal');
+    assert.ok(pos.get(gk.id)!.top > 75, 'home GK near bottom goal');
+    assert.ok(
+      Math.abs(pos.get(gk.id)!.left - 50) < 1,
+      'home GK horizontally centered'
+    );
   }
 
   // Single-team away must match coach view (GK at bottom) — was wrongly at top
@@ -198,6 +202,31 @@ function main() {
       'full away: GK below forwards'
     );
     assert.ok(pos.get(gk.id)!.top > 70, 'full away: GK near bottom');
+    assert.ok(
+      Math.abs(pos.get(gk.id)!.left - 50) < 1,
+      'full away GK centered'
+    );
+  }
+
+  // Per-row column norm: lone GK / ST must be centered (not pinned left at col 1)
+  {
+    const players = makePlayers('4-2-3-1');
+    const pos = buildPitchLineupLayout(players, 'home', '4-2-3-1', 'half');
+    const gk = players.find((p) => p.position === 'G')!;
+    const st = players.filter((p) => p.position === 'F');
+    assert.ok(Math.abs(pos.get(gk.id)!.left - 50) < 1, 'GK centered on grid path');
+    for (const p of st) {
+      if (st.length === 1) {
+        assert.ok(
+          Math.abs(pos.get(p.id)!.left - 50) < 1,
+          'lone striker centered'
+        );
+      }
+    }
+    const defs = players.filter((p) => p.position === 'D');
+    const defLefts = defs.map((p) => pos.get(p.id)!.left).sort((a, b) => a - b);
+    assert.ok(defLefts[0]! < 20, 'left defender near left flank');
+    assert.ok(defLefts[defLefts.length - 1]! > 80, 'right defender near right flank');
   }
 
   // No horizontal mirror in direction transform

@@ -2,13 +2,13 @@ import type { SportsLineupPlayer } from '@/services/sports-data';
 
 export type PitchPos = { top: number; left: number };
 
-/** Pitch % bands — keep players inside the playable field. */
-const PITCH_AWAY_START = 8;
-const PITCH_HOME_END = 92;
-const PITCH_HALF_SPAN = 40;
-const PITCH_FULL_START = 10;
-const PITCH_FULL_END = 90;
-const PITCH_FULL_SPAN = 80;
+/** Pitch % bands — keep players inside the playable field (inset so GK is not clipped). */
+const PITCH_AWAY_START = 10;
+const PITCH_HOME_END = 90;
+const PITCH_HALF_SPAN = 38;
+const PITCH_FULL_START = 12;
+const PITCH_FULL_END = 88;
+const PITCH_FULL_SPAN = 76;
 const PITCH_LEFT_MIN = 10;
 const PITCH_LEFT_SPAN = 80;
 const MIN_GRID_ROWS_FOR_FULL = 4;
@@ -369,22 +369,27 @@ function buildFromFullGrid(
   }
 
   const rows = entries.map((entry) => entry.grid.row);
-  const cols = entries.map((entry) => entry.grid.col);
   const minRow = Math.min(...rows);
   const maxRow = Math.max(...rows);
-  const minCol = Math.min(...cols);
-  const maxCol = Math.max(...cols);
   const uniqueRows = new Set(rows).size;
 
   if (uniqueRows < MIN_GRID_ROWS_FOR_FULL || maxRow === minRow) {
     return null;
   }
 
+  // Normalize columns PER ROW (not globally). Global min/max pinned GK / lone
+  // strikers to the left flank when their grid col is "1" while defenders use 1–4.
+  const colsByRow = new Map<number, number[]>();
+  entries.forEach(({ grid }) => {
+    const list = colsByRow.get(grid.row) ?? [];
+    list.push(grid.col);
+    colsByRow.set(grid.row, list);
+  });
+
   // Normalize API row direction so depth 0 is always the defensive end.
   const gk = players.find(isGoalkeeper);
   const gkRow = gk ? parseLineupGrid(gk.grid)?.row : null;
-  const defenseAtMaxRow =
-    gkRow != null ? gkRow === maxRow : false;
+  const defenseAtMaxRow = gkRow != null ? gkRow === maxRow : false;
 
   const positions = new Map<number, PitchPos>();
   entries.forEach(({ player, grid }) => {
@@ -392,9 +397,15 @@ function buildFromFullGrid(
       ? minRow + maxRow - grid.row
       : grid.row;
     const depthNorm = (rowForDepth - minRow) / (maxRow - minRow);
+    const rowCols = colsByRow.get(grid.row) ?? [grid.col];
+    const minCol = Math.min(...rowCols);
+    const maxCol = Math.max(...rowCols);
     const colNorm =
       maxCol === minCol ? 0.5 : (grid.col - minCol) / (maxCol - minCol);
-    positions.set(player.id, placeCanonicalOnPitch(depthNorm, colNorm, side, scope));
+    positions.set(
+      player.id,
+      placeCanonicalOnPitch(depthNorm, colNorm, side, scope)
+    );
   });
 
   return positions;
