@@ -1925,6 +1925,13 @@ export const en: TranslationTree = {
         'Verify how the ad looks on a phone inside the app before approving or publishing.',
       showPhonePreview: 'Show phone preview',
       hidePhonePreview: 'Hide preview',
+      liveDbScheduleHint:
+        'Only ads inside their schedule window (from–to) appear here. Expired ads leave the app and this live list automatically, but remain in the advertiser account.',
+      endedDbTitle: 'Schedule ended',
+      endedBlobTitle: 'Manual ads past schedule',
+      endedDbHint:
+        'Removed automatically from the app and live display — still kept in the advertiser account on the ads platform.',
+      endedBadge: 'Ended',
       status: {
         draft: 'Draft',
         active: 'Active',

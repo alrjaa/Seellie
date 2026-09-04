@@ -44,6 +44,8 @@ import {
 } from '@/services/supabase-app-blobs';
 import {
   NATIVE_ADS_BLOB_KEY,
+  isNativeAdScheduleEnded,
+  isNativeAdScheduleUpcoming,
   sanitizeNativeAd,
   sanitizeNativeAdsPayload,
   type NativeAdPlacement,
@@ -139,6 +141,44 @@ export default function NativeAdsScreen() {
   const [pendingDbError, setPendingDbError] = useState<string | null>(null);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [previewListId, setPreviewListId] = useState<string | null>(null);
+  /** Force re-split of live vs ended when schedule windows expire. */
+  const [scheduleTick, setScheduleTick] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setScheduleTick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const liveBlobAds = useMemo(
+    () =>
+      ads.filter(
+        (ad) =>
+          !isNativeAdScheduleEnded(ad) && !isNativeAdScheduleUpcoming(ad)
+      ),
+    [ads, scheduleTick]
+  );
+
+  const endedBlobAds = useMemo(
+    () => ads.filter((ad) => isNativeAdScheduleEnded(ad)),
+    [ads, scheduleTick]
+  );
+
+  const liveAdminDb = useMemo(
+    () =>
+      adminDb.filter(
+        (row) =>
+          !isNativeAdScheduleEnded(row) &&
+          !isNativeAdScheduleUpcoming(row) &&
+          row.status !== 'blocked' &&
+          row.status !== 'deleted'
+      ),
+    [adminDb, scheduleTick]
+  );
+
+  const endedAdminDb = useMemo(
+    () => adminDb.filter((row) => isNativeAdScheduleEnded(row)),
+    [adminDb, scheduleTick]
+  );
 
   const load = useCallback(async () => {
     const [res, pending, admin] = await Promise.all([
@@ -629,10 +669,11 @@ export default function NativeAdsScreen() {
           ))
         )}
         <Subtitle>{t('superadmin.ads.liveDbTitle')}</Subtitle>
-        {adminDb.length === 0 ? (
+        <Muted>{t('superadmin.ads.liveDbScheduleHint')}</Muted>
+        {liveAdminDb.length === 0 ? (
           <Muted>{t('superadmin.ads.liveDbEmpty')}</Muted>
         ) : (
-          adminDb.map((row) => (
+          liveAdminDb.map((row) => (
             <Card key={row.id} style={{ gap: 8 }}>
               <Subtitle>{row.advertiser_name}</Subtitle>
               <Muted>
@@ -690,6 +731,22 @@ export default function NativeAdsScreen() {
             </Card>
           ))
         )}
+        {endedAdminDb.length > 0 ? (
+          <View style={{ gap: 8 }}>
+            <Subtitle>{t('superadmin.ads.endedDbTitle')}</Subtitle>
+            <Muted>{t('superadmin.ads.endedDbHint')}</Muted>
+            {endedAdminDb.map((row) => (
+              <Card key={`ended-${row.id}`} style={{ gap: 6 }}>
+                <Subtitle>{row.advertiser_name}</Subtitle>
+                <Muted>
+                  {t('superadmin.ads.endedBadge')} ·{' '}
+                  {(row.end_at || '').slice(0, 10) || '—'} ·{' '}
+                  {row.title || row.video_url}
+                </Muted>
+              </Card>
+            ))}
+          </View>
+        ) : null}
         <Button label={t('superadmin.ads.add')} onPress={openAdd} />
         {formOpen ? (
           <Card style={{ gap: 10 }}>
@@ -867,8 +924,10 @@ export default function NativeAdsScreen() {
     [
       adminDb,
       draft,
+      endedAdminDb,
       formOpen,
       isRTL,
+      liveAdminDb,
       pendingDb,
       pendingDbError,
       pickPoster,
@@ -888,10 +947,29 @@ export default function NativeAdsScreen() {
   return (
     <Screen>
       <FlatList
-        data={ads}
+        data={liveBlobAds}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         ListHeaderComponent={header}
+        ListFooterComponent={
+          endedBlobAds.length > 0 ? (
+            <View style={{ gap: 8, marginTop: 12 }}>
+              <Subtitle>{t('superadmin.ads.endedBlobTitle')}</Subtitle>
+              <Muted>{t('superadmin.ads.endedDbHint')}</Muted>
+              {endedBlobAds.map((item) => (
+                <Card key={`ended-blob-${item.id}`} style={{ gap: 6 }}>
+                  <Text style={[styles.name, { color: theme.colors.text }]}>
+                    {item.advertiserName}
+                  </Text>
+                  <Muted>
+                    {t('superadmin.ads.endedBadge')} ·{' '}
+                    {(item.endAt || '').slice(0, 10) || '—'}
+                  </Muted>
+                </Card>
+              ))}
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           loading ? (
             <Muted>{t('common.loading')}</Muted>

@@ -23,6 +23,7 @@ import {
   sanitizeNativeAd,
   sanitizeNativeAdsPayload,
   isNativeAdLive,
+  isNativeAdScheduleEnded,
   injectNativeAds,
   nativeAdToFeedItem,
   extractNativeAdId,
@@ -233,6 +234,35 @@ test('native ad live window and status', () => {
     false
   );
   assert.equal(isNativeAdLive(sampleAd(), now), true);
+  assert.equal(
+    isNativeAdLive(sampleAd({ endAt: '2026-05-31T23:59:59.000Z' }), now),
+    false
+  );
+  // Date-only end day is inclusive through end of that UTC day
+  assert.equal(
+    isNativeAdLive(sampleAd({ endAt: '2026-06-01' }), now),
+    true
+  );
+  assert.equal(
+    isNativeAdLive(
+      sampleAd({ endAt: '2026-06-01' }),
+      Date.parse('2026-06-02T00:00:00.000Z')
+    ),
+    false
+  );
+});
+
+test('native ad schedule ended does not delete advertiser ownership concept', () => {
+  const now = Date.parse('2026-06-02T00:00:00.000Z');
+  assert.equal(
+    isNativeAdScheduleEnded(sampleAd({ endAt: '2026-06-01' }), now),
+    true
+  );
+  assert.equal(
+    isNativeAdScheduleEnded({ end_at: '2026-06-01T12:00:00.000Z' }, now),
+    true
+  );
+  assert.equal(isNativeAdScheduleEnded(sampleAd({ endAt: undefined }), now), false);
 });
 
 test('inject native ads every N items', () => {

@@ -154,14 +154,77 @@ export function isNativeAdLive(
   if (ad.status !== 'active') return false;
   if (!ad.videoUrl) return false;
   if (ad.startAt) {
-    const start = Date.parse(ad.startAt);
+    const start = parseAdScheduleMs(ad.startAt, 'start');
     if (Number.isFinite(start) && nowMs < start) return false;
   }
   if (ad.endAt) {
-    const end = Date.parse(ad.endAt);
+    const end = parseAdScheduleMs(ad.endAt, 'end');
     if (Number.isFinite(end) && nowMs > end) return false;
   }
   return true;
+}
+
+/**
+ * True when the schedule window has fully ended (regardless of status).
+ * Used to hide from app/admin live display without deleting advertiser records.
+ */
+export function isNativeAdScheduleEnded(
+  ad: Pick<NativeInFeedAd, 'endAt'> | { end_at?: string | null },
+  nowMs: number = Date.now()
+): boolean {
+  const raw =
+    'endAt' in ad
+      ? ad.endAt
+      : (ad as { end_at?: string | null }).end_at || undefined;
+  if (!raw) return false;
+  const end = parseAdScheduleMs(String(raw), 'end');
+  return Number.isFinite(end) && nowMs > end;
+}
+
+/**
+ * True when the schedule has not started yet.
+ */
+export function isNativeAdScheduleUpcoming(
+  ad: Pick<NativeInFeedAd, 'startAt'> | { start_at?: string | null },
+  nowMs: number = Date.now()
+): boolean {
+  const raw =
+    'startAt' in ad
+      ? ad.startAt
+      : (ad as { start_at?: string | null }).start_at || undefined;
+  if (!raw) return false;
+  const start = parseAdScheduleMs(String(raw), 'start');
+  return Number.isFinite(start) && nowMs < start;
+}
+
+/**
+ * Parse ad schedule boundaries.
+ * Date-only values (YYYY-MM-DD) are inclusive for that calendar day in UTC:
+ * start → 00:00:00.000Z, end → 23:59:59.999Z.
+ */
+export function parseAdScheduleMs(
+  value: string,
+  boundary: 'start' | 'end'
+): number {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return Number.NaN;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return Date.parse(
+      boundary === 'start'
+        ? `${trimmed}T00:00:00.000Z`
+        : `${trimmed}T23:59:59.999Z`
+    );
+  }
+  return Date.parse(trimmed);
+}
+
+/** Ads that should appear in the public app feed right now. */
+export function filterLiveNativeAds(
+  ads: NativeInFeedAd[],
+  nowMs: number = Date.now()
+): NativeInFeedAd[] {
+  if (!Array.isArray(ads) || !ads.length) return [];
+  return ads.filter((ad) => !!ad && isNativeAdLive(ad, nowMs));
 }
 
 export function liveAdsForPlacement(

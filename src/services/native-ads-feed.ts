@@ -5,6 +5,7 @@ import {
 import { fetchPublicNativeAdsFromDb } from '@/services/advertiser-platform';
 import {
   NATIVE_ADS_BLOB_KEY,
+  filterLiveNativeAds,
   nativeAdsEqual,
   sanitizeNativeAdsPayload,
   type NativeInFeedAd,
@@ -65,7 +66,8 @@ export async function fetchLiveNativeAds(): Promise<NativeInFeedAd[]> {
       merged.push(ad);
       if (merged.length >= 40) break;
     }
-    return merged;
+    // Drop expired / not-yet-started ads from the live catalog (keeps advertiser DB rows intact).
+    return filterLiveNativeAds(merged);
   })();
   try {
     return await inflightFetch;
