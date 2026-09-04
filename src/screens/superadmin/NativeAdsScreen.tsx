@@ -24,6 +24,7 @@ import {
   Title,
 } from '@/components/ui';
 import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
+import { AdPhonePreview } from '@/components/ads/AdPhonePreview';
 import { createId } from '@/utils/id';
 import { confirmDestructive } from '@/utils/confirm';
 import { resolvePublicMediaUrl, cloudWriteErrorMessage } from '@/services/cloud-write';
@@ -124,7 +125,7 @@ function adToDraft(ad: NativeInFeedAd): Draft {
 export default function NativeAdsScreen() {
   const theme = useAppTheme();
   const { toast } = useToast();
-  const { t } = useTranslation();
+  const { t, isRTL } = useTranslation();
   const { currentUser } = useTournament();
   const [ads, setAds] = useState<NativeInFeedAd[]>([]);
   const [loading, setLoading] = useState(true);
@@ -137,6 +138,7 @@ export default function NativeAdsScreen() {
   const [adminDb, setAdminDb] = useState<DbAdvertisement[]>([]);
   const [pendingDbError, setPendingDbError] = useState<string | null>(null);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [previewListId, setPreviewListId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [res, pending, admin] = await Promise.all([
@@ -576,6 +578,20 @@ export default function NativeAdsScreen() {
             <Card key={row.id} style={{ gap: 8 }}>
               <Subtitle>{row.advertiser_name}</Subtitle>
               <Muted numberOfLines={2}>{row.title || row.video_url}</Muted>
+              <View style={styles.phonePreviewBox}>
+                <Subtitle>{t('superadmin.ads.phonePreviewTitle')}</Subtitle>
+                <Muted>{t('superadmin.ads.phonePreviewHint')}</Muted>
+                <AdPhonePreview
+                  videoUri={row.video_url}
+                  posterUri={row.poster_url || undefined}
+                  advertiserName={row.advertiser_name}
+                  hookText={row.hook_text || undefined}
+                  title={row.title || undefined}
+                  ctaLabel={row.cta_label || undefined}
+                  isRTL={isRTL}
+                  tapToUnmuteLabel={t('adsPortal.tapToHear')}
+                />
+              </View>
               <View style={styles.formActionsWrap}>
                 <Button
                   label={t('superadmin.ads.pendingDbApprove')}
@@ -623,6 +639,32 @@ export default function NativeAdsScreen() {
                 {t(`adsPortal.status.${row.status}`)} ·{' '}
                 {row.title || row.video_url}
               </Muted>
+              <Button
+                label={
+                  previewListId === row.id
+                    ? t('superadmin.ads.hidePhonePreview')
+                    : t('superadmin.ads.showPhonePreview')
+                }
+                variant="outline"
+                onPress={() =>
+                  setPreviewListId((cur) => (cur === row.id ? null : row.id))
+                }
+              />
+              {previewListId === row.id ? (
+                <View style={styles.phonePreviewBox}>
+                  <Muted>{t('superadmin.ads.phonePreviewHint')}</Muted>
+                  <AdPhonePreview
+                    videoUri={row.video_url}
+                    posterUri={row.poster_url || undefined}
+                    advertiserName={row.advertiser_name}
+                    hookText={row.hook_text || undefined}
+                    title={row.title || undefined}
+                    ctaLabel={row.cta_label || undefined}
+                    isRTL={isRTL}
+                    tapToUnmuteLabel={t('adsPortal.tapToHear')}
+                  />
+                </View>
+              ) : null}
               <View style={styles.formActionsWrap}>
                 {row.status === 'blocked' ? (
                   <Muted>{t('superadmin.ads.alreadyBlocked')}</Muted>
@@ -656,6 +698,8 @@ export default function NativeAdsScreen() {
                 ? t('superadmin.actions.edit')
                 : t('superadmin.ads.newAd')}
             </Subtitle>
+            <View style={styles.formWithPreview}>
+              <View style={styles.formFields}>
             <MediaUploadSpecs
               kind="nativeAdVideo"
               title={t('media.specs.nativeAdTitle')}
@@ -800,6 +844,22 @@ export default function NativeAdsScreen() {
                 style={{ flex: 1 }}
               />
             </View>
+              </View>
+              <View style={styles.phonePreviewBox}>
+                <Subtitle>{t('superadmin.ads.phonePreviewTitle')}</Subtitle>
+                <Muted>{t('superadmin.ads.phonePreviewHint')}</Muted>
+                <AdPhonePreview
+                  videoUri={draft.videoUrl || undefined}
+                  posterUri={draft.posterUrl || undefined}
+                  advertiserName={draft.advertiserName}
+                  hookText={draft.hookText}
+                  title={draft.title}
+                  ctaLabel={draft.ctaLabel}
+                  isRTL={isRTL}
+                  tapToUnmuteLabel={t('adsPortal.tapToHear')}
+                />
+              </View>
+            </View>
           </Card>
         ) : null}
       </View>
@@ -808,12 +868,14 @@ export default function NativeAdsScreen() {
       adminDb,
       draft,
       formOpen,
+      isRTL,
       pendingDb,
       pendingDbError,
       pickPoster,
       pickVideo,
       pickingPoster,
       pickingVideo,
+      previewListId,
       moderateDbAd,
       reviewDbAd,
       reviewingId,
@@ -872,6 +934,17 @@ export default function NativeAdsScreen() {
             </View>
             <View style={styles.actions}>
               <Button
+                label={
+                  previewListId === item.id
+                    ? t('superadmin.ads.hidePhonePreview')
+                    : t('superadmin.ads.showPhonePreview')
+                }
+                variant="outline"
+                onPress={() =>
+                  setPreviewListId((cur) => (cur === item.id ? null : item.id))
+                }
+              />
+              <Button
                 label={t('superadmin.actions.edit')}
                 variant="outline"
                 onPress={() => openEdit(item)}
@@ -895,6 +968,21 @@ export default function NativeAdsScreen() {
                 onPress={() => void remove(item.id)}
               />
             </View>
+            {previewListId === item.id ? (
+              <View style={styles.phonePreviewBox}>
+                <Muted>{t('superadmin.ads.phonePreviewHint')}</Muted>
+                <AdPhonePreview
+                  videoUri={item.videoUrl}
+                  posterUri={item.posterUrl || undefined}
+                  advertiserName={item.advertiserName}
+                  hookText={item.hookText}
+                  title={item.title}
+                  ctaLabel={item.ctaLabel}
+                  isRTL={isRTL}
+                  tapToUnmuteLabel={t('adsPortal.tapToHear')}
+                />
+              </View>
+            ) : null}
           </Card>
         )}
       />
@@ -910,6 +998,20 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end' },
   formActions: { flexDirection: 'row', gap: 8 },
   formActionsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  formWithPreview: {
+    gap: 16,
+    width: '100%',
+    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+  },
+  formFields: { flex: 1, gap: 10, minWidth: 280 },
+  phonePreviewBox: {
+    gap: 8,
+    width: 300,
+    alignSelf: 'center',
+    alignItems: 'center',
+  },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   poster: {
     width: '100%',
