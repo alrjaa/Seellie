@@ -22,7 +22,7 @@ import {
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 export default function SettingsScreen() {
-  const { currentUser, logout, messages } = useTournament();
+  const { currentUser, logout, messages, featureFlags } = useTournament();
   const { unreadCountFor } = useNotifications();
   const { preference, setPreference } = useTheme();
   const { t } = useTranslation();
@@ -63,6 +63,14 @@ export default function SettingsScreen() {
           subtitle={t('settings.editProfileSub')}
           onPress={() => router.push('/(follower)/settings/account' as any)}
         />
+        {featureFlags.commerceCreditsEnabled ? (
+          <ListRow
+            title={t('commerce.balance')}
+            subtitle={t('commerce.balanceMenuSub')}
+            icon="wallet-outline"
+            onPress={() => router.push('/(follower)/wallet' as any)}
+          />
+        ) : null}
       </Card>
 
       <Card style={styles.card}>

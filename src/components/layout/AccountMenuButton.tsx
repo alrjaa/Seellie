@@ -64,7 +64,7 @@ function AccountMenuButtonComponent({
   size = 32,
   compact,
 }: Props) {
-  const { currentUser, logout, switchActiveRole } = useTournament();
+  const { currentUser, logout, switchActiveRole, featureFlags } = useTournament();
   const theme = useAppTheme();
   const { t, isRTL } = useTranslation();
   const router = useRouter();
@@ -105,10 +105,19 @@ function AccountMenuButtonComponent({
     router.push(accountHref as any);
   }, [accountHref, router]);
 
+  const goBalance = useCallback(() => {
+    setOpen(false);
+    router.push('/(follower)/wallet' as any);
+  }, [router]);
+
   const onLogout = useCallback(() => {
     setOpen(false);
     logout();
   }, [logout]);
+
+  const showBalanceEntry =
+    !!featureFlags.commerceCreditsEnabled &&
+    (currentUser?.activeRole || currentUser?.role) === 'follower';
 
   const onSwitchRole = useCallback(
     (role: UserRole) => {
@@ -331,6 +340,34 @@ function AccountMenuButtonComponent({
                     style={[styles.itemLabel, { color: theme.colors.text }, textStart]}
                   >
                     {t('menu.accountPaths')}
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              {showBalanceEntry ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('commerce.balance')}
+                  onPress={goBalance}
+                  style={({ pressed }) => [
+                    styles.item,
+                    {
+                      backgroundColor: pressed
+                        ? theme.colors.accentSoft
+                        : 'transparent',
+                      flexDirection: rowDir,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="wallet-outline"
+                    size={20}
+                    color={theme.colors.accent}
+                  />
+                  <Text
+                    style={[styles.itemLabel, { color: theme.colors.text }, textStart]}
+                  >
+                    {t('commerce.balance')}
                   </Text>
                 </Pressable>
               ) : null}

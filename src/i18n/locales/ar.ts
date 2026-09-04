@@ -2542,6 +2542,11 @@ export const ar = {
     walletTitle: 'محفظة الأرصدة',
     walletSubtitle:
       'اشترِ أرصدة لإهداء الشهادات الرقمية. هذا ليس تحويل أموال مباشر.',
+    balance: 'الرصيد',
+    balanceMenuSub: 'عرض الرصيد وشحن الأرصدة',
+    recharge: 'شحن',
+    rechargeHint:
+      'اختر باقة العملات التي تريدها، ثم أكمل الدفع عبر وسيلة الدفع المتاحة لك.',
     currentCredits: 'الرصيد الحالي',
     creditsHint: 'تُستخدم الأرصدة داخل Seellie للشهادات الرقمية فقط.',
     buyCredits: 'شراء أرصدة',

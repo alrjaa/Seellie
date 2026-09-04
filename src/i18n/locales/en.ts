@@ -2560,6 +2560,11 @@ export const en: TranslationTree = {
     walletTitle: 'Credits Wallet',
     walletSubtitle:
       'Buy Credits for digital certificates. This is not a direct money transfer.',
+    balance: 'Balance',
+    balanceMenuSub: 'View balance and recharge Credits',
+    recharge: 'Recharge',
+    rechargeHint:
+      'Choose a coin package, then complete payment with your available payment method.',
     currentCredits: 'Current Credits',
     creditsHint: 'Credits are used only inside Seellie for certificates.',
     buyCredits: 'Buy Credits',

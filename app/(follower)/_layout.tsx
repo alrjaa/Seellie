@@ -291,6 +291,14 @@ export default function FollowerLayout() {
             }}
           />
           <Tabs.Screen
+            name="wallet"
+            options={{
+              href: null,
+              title: t('commerce.balance'),
+              headerShown: false,
+            }}
+          />
+          <Tabs.Screen
             name="messages"
             options={{
               href: null,

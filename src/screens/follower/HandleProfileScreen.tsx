@@ -10,6 +10,9 @@ import { AccountSocialStats } from '@/components/account/AccountSocialStats';
 import { PlayerMediaSection } from '@/components/media/PlayerMediaSection';
 import { Avatar, Button, Card, Muted, Subtitle } from '@/components/ui';
 import { ensureSocialLists } from '@/utils/social-stats';
+import { ProfileRecognitionSection } from '@/components/commerce/ProfileRecognitionSection';
+import { useCommerce } from '@/providers/CommerceProvider';
+import { userHasRole } from '@/utils/roles';
 
 /** ملف عام موحّد — يظهر لكل الأدوار عبر /profile/[id] */
 export default function HandleProfileScreen() {
@@ -17,7 +20,8 @@ export default function HandleProfileScreen() {
   const router = useRouter();
   const theme = useAppTheme();
   const { t, isRTL } = useTranslation();
-  const { users, currentUser, toggleFollowUser } = useTournament();
+  const { users, currentUser, toggleFollowUser, featureFlags } = useTournament();
+  const commerce = useCommerce();
 
   const user = useMemo(
     () => users.find((u) => u.id === id || u.handle === id),
@@ -45,6 +49,21 @@ export default function HandleProfileScreen() {
 
   const photos = user?.media?.photos || [];
   const videos = user?.media?.videos || [];
+
+  const canReceiveSupport = useMemo(() => {
+    if (!user || user.status === 'suspended') return false;
+    return (
+      userHasRole(user, 'organizer') ||
+      userHasRole(user, 'freelancer') ||
+      userHasRole(user, 'follower')
+    );
+  }, [user]);
+
+  const showSupportCta =
+    !isOwn &&
+    !!currentUser &&
+    featureFlags.appreciationEnabled &&
+    canReceiveSupport;
 
   if (!user) {
     return (
@@ -104,7 +123,27 @@ export default function HandleProfileScreen() {
             onPress={() => toggleFollowUser(user.id)}
           />
         ) : null}
+        {isOwn && featureFlags.commerceCreditsEnabled ? (
+          <Button
+            label={t('commerce.balance')}
+            variant="outline"
+            onPress={() => router.push('/(follower)/wallet' as any)}
+          />
+        ) : null}
+        {showSupportCta ? (
+          <Button
+            label={t('commerce.supportCta')}
+            variant="outline"
+            onPress={() =>
+              router.push(
+                `/(follower)/certificates?recipientId=${encodeURIComponent(user.id)}&tab=certificates` as any
+              )
+            }
+          />
+        ) : null}
       </Card>
+
+      <ProfileRecognitionSection userId={user.id} />
 
       <AccountSocialStats
         user={user}
