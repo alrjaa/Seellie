@@ -24,6 +24,7 @@ type CompetitionAlert = {
   organizerId: string;
   competitionId: string;
   competitionName: string;
+  competitionLogo?: string;
   recipientCount: number;
   recipientIds: string[];
 };
@@ -89,6 +90,10 @@ export default function AnnouncementsScreen() {
           row.competitionName ||
           competitions.find((c) => c.id === row.competitionId)?.name ||
           '',
+        competitionLogo:
+          row.competitionLogo ||
+          competitions.find((c) => c.id === row.competitionId)?.logo ||
+          undefined,
         recipientCount: row.recipientCount ?? row.recipientIds?.length ?? 0,
         recipientIds: Array.isArray(row.recipientIds) ? row.recipientIds : [],
       }));
@@ -110,6 +115,10 @@ export default function AnnouncementsScreen() {
               row.competitionName ||
               competitions.find((c) => c.id === row.competitionId)?.name ||
               '',
+            competitionLogo:
+              row.competitionLogo ||
+              competitions.find((c) => c.id === row.competitionId)?.logo ||
+              undefined,
             recipientCount: row.recipientCount ?? row.recipientIds?.length ?? 0,
             recipientIds: Array.isArray(row.recipientIds) ? row.recipientIds : [],
           }));
@@ -177,6 +186,7 @@ export default function AnnouncementsScreen() {
         organizerId: currentUser.id,
         competitionId: selectedCompetition.id,
         competitionName: selectedCompetition.name,
+        competitionLogo: selectedCompetition.logo,
         recipientCount: recipientIds.length,
         recipientIds,
       };
@@ -185,6 +195,7 @@ export default function AnnouncementsScreen() {
 
       const notifTitle = title.trim();
       const competitionName = selectedCompetition.name;
+      const competitionLogo = selectedCompetition.logo;
 
       for (const recipientId of recipientIds) {
         addNotification({
@@ -193,6 +204,7 @@ export default function AnnouncementsScreen() {
           recipientId,
           competitionId: selectedCompetition.id,
           competitionName,
+          competitionLogo,
           title: notifTitle,
           body: body.trim(),
           href: '/notifications',

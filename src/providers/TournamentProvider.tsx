@@ -2830,6 +2830,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             createdAt: string;
             competitionId?: string;
             competitionName?: string;
+            competitionLogo?: string;
             recipientIds?: string[];
           }>
         >(`announcements:${organizerId}`);
@@ -2843,16 +2844,19 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           ) {
             continue;
           }
+          const competition =
+            competitions.find((c) => c.id === alert.competitionId) || null;
           const competitionName =
-            alert.competitionName ||
-            competitions.find((c) => c.id === alert.competitionId)?.name ||
-            '';
+            alert.competitionName || competition?.name || '';
+          const competitionLogo =
+            alert.competitionLogo || competition?.logo || undefined;
           addNotification({
             id: `alert-${alert.id}-${uid}`,
             kind: 'announcement',
             recipientId: uid,
             competitionId: alert.competitionId,
             competitionName: competitionName || undefined,
+            competitionLogo,
             title: alert.title,
             body: alert.body || '',
             href: '/notifications',

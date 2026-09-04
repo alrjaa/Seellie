@@ -23,7 +23,7 @@ import {
   stackTopChromePad,
 } from '@/components/layout/StackTopChrome';
 import { EmptyState } from '@/components/feedback/EmptyState';
-import { Button, Card, Muted, Subtitle, Title } from '@/components/ui';
+import { Avatar, Button, Card, Muted, Subtitle, Title } from '@/components/ui';
 import { formatArabicDate } from '@/utils';
 
 function kindIcon(
@@ -49,7 +49,7 @@ function kindIcon(
 
 function resolveCompetitionLabel(
   item: AppNotification,
-  competitions: { id: string; name: string }[]
+  competitions: { id: string; name: string; logo?: string }[]
 ) {
   if (item.competitionName?.trim()) return item.competitionName.trim();
   if (item.competitionId) {
@@ -57,6 +57,18 @@ function resolveCompetitionLabel(
     if (hit?.name) return hit.name;
   }
   return '';
+}
+
+function resolveCompetitionLogo(
+  item: AppNotification,
+  competitions: { id: string; name: string; logo?: string }[]
+) {
+  if (item.competitionLogo?.trim()) return item.competitionLogo.trim();
+  if (item.competitionId) {
+    const hit = competitions.find((c) => c.id === item.competitionId);
+    if (hit?.logo) return hit.logo;
+  }
+  return undefined;
 }
 
 export default function NotificationsScreen() {
@@ -79,6 +91,9 @@ export default function NotificationsScreen() {
   const openedCompetition = opened
     ? resolveCompetitionLabel(opened, competitions)
     : '';
+  const openedLogo = opened
+    ? resolveCompetitionLogo(opened, competitions)
+    : undefined;
 
   const goHome = () => {
     if (currentUser) {
@@ -143,6 +158,7 @@ export default function NotificationsScreen() {
               item,
               competitions
             );
+            const competitionLogo = resolveCompetitionLogo(item, competitions);
             return (
               <Pressable
                 onPress={() => {
@@ -169,25 +185,37 @@ export default function NotificationsScreen() {
                       { flexDirection: isRTL ? 'row-reverse' : 'row' },
                     ]}
                   >
-                    <View
-                      style={[
-                        styles.iconWrap,
-                        { backgroundColor: theme.colors.accentSoft },
-                      ]}
-                    >
-                      <Ionicons
-                        name={kindIcon(item.kind)}
-                        size={18}
-                        color={theme.colors.accent}
+                    {item.kind === 'announcement' ? (
+                      <Avatar
+                        uri={competitionLogo}
+                        name={competitionLabel || item.title}
+                        size={40}
                       />
-                    </View>
+                    ) : (
+                      <View
+                        style={[
+                          styles.iconWrap,
+                          { backgroundColor: theme.colors.accentSoft },
+                        ]}
+                      >
+                        <Ionicons
+                          name={kindIcon(item.kind)}
+                          size={18}
+                          color={theme.colors.accent}
+                        />
+                      </View>
+                    )}
                     <View style={{ flex: 1, gap: 4 }}>
                       {item.kind === 'announcement' && competitionLabel ? (
                         <Text
                           style={[
                             styles.competitionLabel,
-                            { color: theme.colors.accent },
+                            {
+                              color: theme.colors.accent,
+                              textAlign: isRTL ? 'right' : 'left',
+                            },
                           ]}
+                          numberOfLines={1}
                         >
                           {t('notifications.fromCompetition', {
                             name: competitionLabel,
@@ -245,18 +273,24 @@ export default function NotificationsScreen() {
                   <View
                     style={[
                       styles.competitionBadge,
-                      { backgroundColor: theme.colors.accentSoft },
+                      {
+                        backgroundColor: theme.colors.accentSoft,
+                        flexDirection: isRTL ? 'row-reverse' : 'row',
+                      },
                     ]}
                   >
-                    <Ionicons
-                      name="trophy-outline"
-                      size={16}
-                      color={theme.colors.accent}
+                    <Avatar
+                      uri={openedLogo}
+                      name={openedCompetition}
+                      size={36}
                     />
                     <Text
                       style={[
                         styles.competitionBadgeText,
-                        { color: theme.colors.accent },
+                        {
+                          color: theme.colors.accent,
+                          textAlign: isRTL ? 'right' : 'left',
+                        },
                       ]}
                     >
                       {t('notifications.fromCompetition', {
@@ -316,9 +350,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   competitionBadge: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,

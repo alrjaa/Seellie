@@ -35,6 +35,8 @@ export type AppNotification = {
   competitionId?: string;
   /** اسم المسابقة الظاهر للمستلم */
   competitionName?: string;
+  /** شعار/أيقونة المسابقة */
+  competitionLogo?: string;
 };
 
 type NotificationsApi = {
@@ -137,6 +139,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           recipientId: input.recipientId,
           competitionId: input.competitionId,
           competitionName: input.competitionName,
+          competitionLogo: input.competitionLogo,
           createdAt: new Date().toISOString(),
           read: input.read ?? false,
         };
