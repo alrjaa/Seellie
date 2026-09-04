@@ -35,7 +35,13 @@ export default function AdsCampaignScreen() {
       const c = camps.find((x) => x.id === id);
       if (!c) return;
       setName(c.name);
-      setBudget(c.budget_cents != null ? String(c.budget_cents / 100) : '');
+      setBudget(
+        c.media_budget_cents != null
+          ? String(c.media_budget_cents / 100)
+          : c.budget_cents != null
+            ? String(c.budget_cents / 100)
+            : ''
+      );
       setStatus(c.status);
       setStartAt(c.start_at ? c.start_at.slice(0, 10) : '');
       setEndAt(c.end_at ? c.end_at.slice(0, 10) : '');
@@ -47,14 +53,16 @@ export default function AdsCampaignScreen() {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      const budgetCents = budget.trim()
+      const mediaBudgetCents = budget.trim()
         ? Math.round(Number(budget) * 100)
         : null;
       const { data: saved, error } = await saveCampaign({
         id: campaignId || undefined,
         name: name.trim(),
         status,
-        budgetCents: Number.isFinite(budgetCents as number) ? budgetCents : null,
+        mediaBudgetCents: Number.isFinite(mediaBudgetCents as number)
+          ? mediaBudgetCents
+          : null,
         startAt: startAt ? `${startAt}T00:00:00.000Z` : undefined,
         endAt: endAt ? `${endAt}T23:59:59.000Z` : undefined,
       });
@@ -82,11 +90,12 @@ export default function AdsCampaignScreen() {
       <Title>{isNew ? t('adsPortal.newCampaign') : t('adsPortal.editCampaign')}</Title>
       <Input label={t('adsPortal.campaignName')} value={name} onChangeText={setName} maxLength={80} />
       <Input
-        label={t('adsPortal.budget')}
+        label={t('adsPortal.mediaBudget')}
         value={budget}
         onChangeText={setBudget}
         keyboardType="decimal-pad"
       />
+      <Muted>{t('adsPortal.mediaBudgetHint')}</Muted>
       <Input label={t('adsPortal.startDate')} value={startAt} onChangeText={setStartAt} placeholder="YYYY-MM-DD" />
       <Input label={t('adsPortal.endDate')} value={endAt} onChangeText={setEndAt} placeholder="YYYY-MM-DD" />
       <Muted>{t('adsPortal.campaignDatesHint')}</Muted>

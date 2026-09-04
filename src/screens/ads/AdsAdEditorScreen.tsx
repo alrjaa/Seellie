@@ -15,6 +15,7 @@ import { resolvePublicMediaUrl, cloudWriteErrorMessage } from '@/services/cloud-
 import { isSupabaseConfigured } from '@/services/supabase';
 import { isUuid } from '@/services/supabase-messages';
 import {
+  findMyAdvertisement,
   listCampaignAds,
   listMyCampaigns,
   saveAdvertisement,
@@ -126,13 +127,25 @@ function captureHtmlFrame(uri: string, atSec: number): Promise<string | null> {
 }
 
 export default function AdsAdEditorScreen() {
-  const params = useLocalSearchParams<{ id: string; campaignId: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    campaignId: string;
+    reuseFrom?: string;
+  }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const campaignId = Array.isArray(params.campaignId)
     ? params.campaignId[0]
     : params.campaignId;
+  const reuseFromRaw = Array.isArray(params.reuseFrom)
+    ? params.reuseFrom[0]
+    : params.reuseFrom;
+  const reuseFrom = reuseFromRaw ? String(reuseFromRaw) : '';
   const isNew = id === 'new';
-  const adKey = isNew ? 'new' : String(id || 'new');
+  const adKey = isNew
+    ? reuseFrom
+      ? `reuse-${reuseFrom}`
+      : 'new'
+    : String(id || 'new');
   const { currentUser } = useTournament();
   const { t, language, isRTL } = useTranslation();
   const { toast } = useToast();
@@ -180,6 +193,7 @@ export default function AdsAdEditorScreen() {
   const [draftHint, setDraftHint] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reuseLoadedRef = useRef(false);
 
   useEffect(() => {
     if (campaignId || !isNew) return;
@@ -255,6 +269,23 @@ export default function AdsAdEditorScreen() {
   useEffect(() => {
     if (!campaignId) return;
     void (async () => {
+      if (isNew && reuseFrom) {
+        if (reuseLoadedRef.current) return;
+        const source = await findMyAdvertisement(reuseFrom);
+        if (source) {
+          reuseLoadedRef.current = true;
+          fillFromDb(source);
+          setStatus('draft');
+          setStartAt('');
+          setEndAt('');
+          toast({
+            variant: 'success',
+            title: t('adsPortal.reuseLoaded'),
+            description: t('adsPortal.reuseLoadedDesc'),
+          });
+        }
+        return;
+      }
       const local = await loadAdStudioDraft(String(campaignId), adKey);
       if (local && isNew) {
         setAdvertiserName(local.advertiserName);
@@ -291,7 +322,7 @@ export default function AdsAdEditorScreen() {
       const ad = rows.find((a) => a.id === id);
       if (ad) fillFromDb(ad);
     })();
-  }, [adKey, campaignId, fillFromDb, id, isNew]);
+  }, [adKey, campaignId, fillFromDb, id, isNew, reuseFrom, t, toast]);
 
   useEffect(() => {
     if (!campaignId) return;
@@ -928,6 +959,9 @@ export default function AdsAdEditorScreen() {
         onChangeText={setEndAt}
         placeholder="YYYY-MM-DD"
       />
+      {isNew && reuseFrom ? (
+        <Muted>{t('adsPortal.reuseLoadedDesc')}</Muted>
+      ) : null}
       <Input
         label={t('adsPortal.insertEveryN')}
         value={insertEveryN}

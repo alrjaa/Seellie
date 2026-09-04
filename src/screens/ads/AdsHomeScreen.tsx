@@ -208,7 +208,7 @@ export default function AdsHomeScreen() {
         </>
       ) : null}
       {Platform.OS === 'web' ? (
-        <Muted>{t('adsPortal.buildStamp', { version: '1.0.97' })}</Muted>
+        <Muted>{t('adsPortal.buildStamp', { version: '1.0.148' })}</Muted>
       ) : null}
 
       <View style={styles.hero}>
@@ -228,6 +228,11 @@ export default function AdsHomeScreen() {
         />
       </View>
 
+      <Button
+        label={t('adsPortal.openHistory')}
+        variant="outline"
+        onPress={() => router.push('/ads/history' as any)}
+      />
       <Button
         label={t('adsPortal.newCampaign')}
         variant="outline"

@@ -29,6 +29,13 @@ export type AdCampaign = {
   id: string;
   advertiser_id: string;
   name: string;
+  /**
+   * Advertising campaign media-budget metadata (cents).
+   * NOT Credits, wallet balance, store purchase, or certificate value.
+   * Legacy API rows may still expose `budget_cents` until DB rename migration is applied.
+   */
+  media_budget_cents?: number | null;
+  /** @deprecated legacy column alias — use media_budget_cents */
   budget_cents?: number | null;
   status: 'draft' | 'active' | 'paused' | 'ended';
   start_at?: string | null;
@@ -75,7 +82,8 @@ export type CampaignInput = {
   id?: string;
   name: string;
   status?: AdCampaign['status'];
-  budgetCents?: number | null;
+  /** Advertising media budget in cents — not Commerce Credits */
+  mediaBudgetCents?: number | null;
   startAt?: string;
   endAt?: string;
 };
@@ -202,30 +210,82 @@ async function parseRpcArray<T>(raw: unknown): Promise<T[]> {
 
 export async function listMyCampaigns(): Promise<AdCampaign[]> {
   const { data } = await rpc<unknown>('list_my_ad_campaigns');
-  return parseRpcArray<AdCampaign>(data);
+  const rows = await parseRpcArray<AdCampaign>(data);
+  return rows.map((c) => ({
+    ...c,
+    media_budget_cents:
+      c.media_budget_cents ?? c.budget_cents ?? null,
+  }));
 }
 
 export async function saveCampaign(
   input: CampaignInput
 ): Promise<RpcResult<AdCampaign>> {
-  return rpc<AdCampaign>('save_ad_campaign', {
+  const mediaBudget =
+    input.mediaBudgetCents == null
+      ? ''
+      : String(Math.round(input.mediaBudgetCents));
+  const result = await rpc<AdCampaign>('save_ad_campaign', {
     p_campaign: {
       id: input.id || '',
       name: input.name,
       status: input.status || 'draft',
-      budgetCents:
-        input.budgetCents == null ? '' : String(Math.round(input.budgetCents)),
+      // Prefer clear advertising name; keep legacy key for older RPCs until DB rename.
+      mediaBudgetCents: mediaBudget,
+      budgetCents: mediaBudget,
       startAt: input.startAt || '',
       endAt: input.endAt || '',
     },
   });
+  if (result.data) {
+    result.data = {
+      ...result.data,
+      media_budget_cents:
+        result.data.media_budget_cents ?? result.data.budget_cents ?? null,
+    };
+  }
+  return result;
 }
 
 export async function listCampaignAds(campaignId: string): Promise<DbAdvertisement[]> {
   const { data } = await rpc<unknown>('list_campaign_advertisements', {
     p_campaign_id: campaignId,
   });
-  return parseRpcArray<DbAdvertisement>(data);
+  return await parseRpcArray<DbAdvertisement>(data);
+}
+
+/**
+ * All non-deleted ads owned by the current advertiser across campaigns.
+ * Uses existing campaign RPCs (no extra DB migration required).
+ */
+export async function listMyAdvertisements(): Promise<DbAdvertisement[]> {
+  const camps = await listMyCampaigns();
+  if (!camps.length) return [];
+  const batches = await Promise.all(camps.map((c) => listCampaignAds(c.id)));
+  const seen = new Set<string>();
+  const rows: DbAdvertisement[] = [];
+  for (const batch of batches) {
+    for (const ad of batch) {
+      if (!ad?.id || seen.has(ad.id)) continue;
+      if (ad.status === 'deleted') continue;
+      seen.add(ad.id);
+      rows.push(ad);
+    }
+  }
+  rows.sort((a, b) => {
+    const tb = Date.parse(b.updated_at || b.created_at || '') || 0;
+    const ta = Date.parse(a.updated_at || a.created_at || '') || 0;
+    return tb - ta;
+  });
+  return rows;
+}
+
+export async function findMyAdvertisement(
+  adId: string
+): Promise<DbAdvertisement | null> {
+  if (!adId.trim()) return null;
+  const rows = await listMyAdvertisements();
+  return rows.find((a) => a.id === adId) || null;
 }
 
 function httpsOnly(url?: string): string {
