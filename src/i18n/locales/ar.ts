@@ -611,6 +611,8 @@ export const ar = {
     appreciationGivenTitle: 'تم تقديم تقدير',
     appreciationGivenBody: 'قدّمت تقديراً «%{type}» إلى %{name}',
     competitionAlertTitle: 'إعلام وتنبيه — %{competition}',
+    fromCompetition: 'المسابقة: %{name}',
+    alertDetailTitle: 'تفاصيل الإعلام والتنبيه',
     backHome: 'العودة للرئيسية',
   },
   adsPortal: {

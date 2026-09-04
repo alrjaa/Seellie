@@ -1,5 +1,12 @@
-import React, { useMemo } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import {
+  FlatList,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,21 +47,38 @@ function kindIcon(
   }
 }
 
+function resolveCompetitionLabel(
+  item: AppNotification,
+  competitions: { id: string; name: string }[]
+) {
+  if (item.competitionName?.trim()) return item.competitionName.trim();
+  if (item.competitionId) {
+    const hit = competitions.find((c) => c.id === item.competitionId);
+    if (hit?.name) return hit.name;
+  }
+  return '';
+}
+
 export default function NotificationsScreen() {
   const theme = useAppTheme();
   const { t, isRTL } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { currentUser, routeForRole } = useTournament();
+  const { currentUser, routeForRole, competitions } = useTournament();
   const { forUser, markRead, markAllRead, clearAll } = useNotifications();
   const topPad = stackTopChromePad(insets.top);
   const userId = currentUser?.id;
+  const [opened, setOpened] = useState<AppNotification | null>(null);
 
   const data = useMemo(() => forUser(userId), [forUser, userId]);
   const unreadCount = useMemo(
     () => data.filter((n) => !n.read).length,
     [data]
   );
+
+  const openedCompetition = opened
+    ? resolveCompetitionLabel(opened, competitions)
+    : '';
 
   const goHome = () => {
     if (currentUser) {
@@ -114,52 +138,74 @@ export default function NotificationsScreen() {
               icon="notifications-outline"
             />
           }
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => {
-                markRead(item.id, userId);
-                if (item.href) router.push(item.href as any);
-              }}
-            >
-              <Card
-                style={[
-                  styles.card,
-                  !item.read && {
-                    borderColor: theme.colors.accent,
-                    borderWidth: 1,
-                  },
-                ]}
+          renderItem={({ item }) => {
+            const competitionLabel = resolveCompetitionLabel(
+              item,
+              competitions
+            );
+            return (
+              <Pressable
+                onPress={() => {
+                  markRead(item.id, userId);
+                  if (item.kind === 'announcement') {
+                    setOpened(item);
+                    return;
+                  }
+                  if (item.href) router.push(item.href as any);
+                }}
               >
-                <View
+                <Card
                   style={[
-                    styles.row,
-                    { flexDirection: isRTL ? 'row-reverse' : 'row' },
+                    styles.card,
+                    !item.read && {
+                      borderColor: theme.colors.accent,
+                      borderWidth: 1,
+                    },
                   ]}
                 >
                   <View
                     style={[
-                      styles.iconWrap,
-                      { backgroundColor: theme.colors.accentSoft },
+                      styles.row,
+                      { flexDirection: isRTL ? 'row-reverse' : 'row' },
                     ]}
                   >
-                    <Ionicons
-                      name={kindIcon(item.kind)}
-                      size={18}
-                      color={theme.colors.accent}
-                    />
+                    <View
+                      style={[
+                        styles.iconWrap,
+                        { backgroundColor: theme.colors.accentSoft },
+                      ]}
+                    >
+                      <Ionicons
+                        name={kindIcon(item.kind)}
+                        size={18}
+                        color={theme.colors.accent}
+                      />
+                    </View>
+                    <View style={{ flex: 1, gap: 4 }}>
+                      {item.kind === 'announcement' && competitionLabel ? (
+                        <Text
+                          style={[
+                            styles.competitionLabel,
+                            { color: theme.colors.accent },
+                          ]}
+                        >
+                          {t('notifications.fromCompetition', {
+                            name: competitionLabel,
+                          })}
+                        </Text>
+                      ) : null}
+                      <Subtitle>{item.title}</Subtitle>
+                      <Muted numberOfLines={3}>{item.body}</Muted>
+                      <Muted>
+                        {formatArabicDate(new Date(item.createdAt))}
+                        {!item.read ? ` · ${t('notifications.new')}` : ''}
+                      </Muted>
+                    </View>
                   </View>
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <Subtitle>{item.title}</Subtitle>
-                    <Muted>{item.body}</Muted>
-                    <Muted>
-                      {formatArabicDate(new Date(item.createdAt))}
-                      {!item.read ? ` · ${t('notifications.new')}` : ''}
-                    </Muted>
-                  </View>
-                </View>
-              </Card>
-            </Pressable>
-          )}
+                </Card>
+              </Pressable>
+            );
+          }}
         />
 
         <Button
@@ -168,6 +214,73 @@ export default function NotificationsScreen() {
           onPress={goHome}
         />
       </Screen>
+
+      <Modal
+        visible={!!opened}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOpened(null)}
+      >
+        <Pressable
+          style={styles.overlay}
+          onPress={() => setOpened(null)}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.close')}
+        >
+          <Pressable
+            style={[
+              styles.modal,
+              {
+                backgroundColor: theme.colors.surfaceElevated,
+                borderColor: theme.colors.border,
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+            accessibilityViewIsModal
+          >
+            {opened ? (
+              <View style={{ gap: 10 }}>
+                <Title>{t('notifications.alertDetailTitle')}</Title>
+                {openedCompetition ? (
+                  <View
+                    style={[
+                      styles.competitionBadge,
+                      { backgroundColor: theme.colors.accentSoft },
+                    ]}
+                  >
+                    <Ionicons
+                      name="trophy-outline"
+                      size={16}
+                      color={theme.colors.accent}
+                    />
+                    <Text
+                      style={[
+                        styles.competitionBadgeText,
+                        { color: theme.colors.accent },
+                      ]}
+                    >
+                      {t('notifications.fromCompetition', {
+                        name: openedCompetition,
+                      })}
+                    </Text>
+                  </View>
+                ) : null}
+                <Subtitle>{opened.title}</Subtitle>
+                <Text
+                  style={[styles.detailBody, { color: theme.colors.text }]}
+                >
+                  {opened.body}
+                </Text>
+                <Muted>{formatArabicDate(new Date(opened.createdAt))}</Muted>
+                <Button
+                  label={t('common.close')}
+                  onPress={() => setOpened(null)}
+                />
+              </View>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -185,5 +298,38 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  competitionLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modal: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 16,
+    gap: 10,
+  },
+  competitionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  competitionBadgeText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  detailBody: {
+    fontSize: 15,
+    lineHeight: 22,
   },
 });

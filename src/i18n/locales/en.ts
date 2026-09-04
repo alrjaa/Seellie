@@ -613,6 +613,8 @@ export const en: TranslationTree = {
     appreciationGivenTitle: 'Appreciation sent',
     appreciationGivenBody: 'You sent “%{type}” appreciation to %{name}',
     competitionAlertTitle: 'Announcement & alert — %{competition}',
+    fromCompetition: 'Competition: %{name}',
+    alertDetailTitle: 'Announcement & alert details',
     backHome: 'Back to home',
   },
   adsPortal: {

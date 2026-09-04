@@ -2843,20 +2843,18 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           ) {
             continue;
           }
-          const title = alert.competitionName
-            ? t('notifications.competitionAlertTitle', {
-                competition: alert.competitionName,
-              })
-            : alert.title;
+          const competitionName =
+            alert.competitionName ||
+            competitions.find((c) => c.id === alert.competitionId)?.name ||
+            '';
           addNotification({
             id: `alert-${alert.id}-${uid}`,
             kind: 'announcement',
             recipientId: uid,
             competitionId: alert.competitionId,
-            title,
-            body: alert.competitionName
-              ? `${alert.title}\n\n${alert.body || ''}`
-              : alert.body || '',
+            competitionName: competitionName || undefined,
+            title: alert.title,
+            body: alert.body || '',
             href: '/notifications',
           });
         }
@@ -2871,7 +2869,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     users,
     referees,
     addNotification,
-    t,
   ]);
 
   const refreshCloudShareCards = useCallback(async () => {

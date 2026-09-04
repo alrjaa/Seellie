@@ -183,10 +183,8 @@ export default function AnnouncementsScreen() {
 
       setItems((prev) => [alert, ...prev]);
 
-      const notifTitle = t('notifications.competitionAlertTitle', {
-        competition: selectedCompetition.name,
-      });
-      const notifBody = title.trim();
+      const notifTitle = title.trim();
+      const competitionName = selectedCompetition.name;
 
       for (const recipientId of recipientIds) {
         addNotification({
@@ -194,8 +192,9 @@ export default function AnnouncementsScreen() {
           kind: 'announcement',
           recipientId,
           competitionId: selectedCompetition.id,
+          competitionName,
           title: notifTitle,
-          body: `${notifBody}\n\n${body.trim()}`,
+          body: body.trim(),
           href: '/notifications',
         });
       }

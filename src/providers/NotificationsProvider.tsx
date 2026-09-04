@@ -33,6 +33,8 @@ export type AppNotification = {
   recipientId?: string;
   /** مسابقة المصدر عند كون الإشعار إعلاماً تنظيمياً */
   competitionId?: string;
+  /** اسم المسابقة الظاهر للمستلم */
+  competitionName?: string;
 };
 
 type NotificationsApi = {
@@ -134,6 +136,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           href: input.href,
           recipientId: input.recipientId,
           competitionId: input.competitionId,
+          competitionName: input.competitionName,
           createdAt: new Date().toISOString(),
           read: input.read ?? false,
         };
