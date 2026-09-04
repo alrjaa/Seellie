@@ -3505,6 +3505,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         })();
         return next;
       });
+      addNotification({
+        id: `appreciation-given-${localId}`,
+        kind: 'appreciation',
+        recipientId: currentUser.id,
+        title: t('notifications.appreciationGivenTitle'),
+        body: t('notifications.appreciationGivenBody', {
+          type: level.name,
+          name: payload.recipientName,
+        }),
+        href: '/(follower)/certificates',
+      });
       toast({
         title: t('toasts.appreciationPendingTitle'),
         description: t('toasts.appreciationPendingDesc', {
@@ -3514,7 +3525,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return gift;
     },
-    [currentUser, featureFlags.appreciationEnabled, supportLevels, toast, t]
+    [
+      addNotification,
+      currentUser,
+      featureFlags.appreciationEnabled,
+      supportLevels,
+      toast,
+      t,
+    ]
   );
 
   const updateCompetition = useCallback(

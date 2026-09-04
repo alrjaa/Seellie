@@ -607,6 +607,8 @@ export const ar = {
     followBody: '%{name} بدأ بمتابعتك',
     offerTitle: 'عرض جديد',
     offerBody: 'وصل عرض من %{name}',
+    appreciationGivenTitle: 'تم تقديم تقدير',
+    appreciationGivenBody: 'قدّمت تقديراً «%{type}» إلى %{name}',
     backHome: 'العودة للرئيسية',
   },
   adsPortal: {
@@ -2397,10 +2399,10 @@ export const ar = {
       duplicatesRemovedDesc: 'أُزيل %{count} سجلاً مكرراً.',
     },
     support: {
-      subtitle: 'المستويات والتوزيع وسجل العملاء',
+      subtitle: 'المستويات والتوزيع وسجل من تلقّوا تقديراً من المتابعين',
       tabs: {
         levels: 'المستويات',
-        beneficiaries: 'الداعمون',
+        beneficiaries: 'مستلمو التقدير',
         freelancers: 'اللاعبون الأحرار',
         distribution: 'التوزيع',
       },
@@ -2430,8 +2432,17 @@ export const ar = {
       permissionTitle: 'الإذن مطلوب',
       permissionDesc: 'اسمح بالوصول للصور لتحديث صورة الشهادة.',
       noLevels: 'لا توجد مستويات',
-      noBeneficiaries: 'لا يوجد داعمون مسجلون',
-      noBeneficiariesDesc: 'سيظهر السجل هنا عند إضافة عملاء.',
+      noBeneficiaries: 'لا يوجد مستلمون لتقدير من المتابعين',
+      noBeneficiariesDesc:
+        'ستظهر هنا الحسابات التي تلقّت تقديراً من متابع، مع نوع التقدير والمعرّف والبريد والاسم.',
+      recipientsHint:
+        'قائمة من تلقّوا تقديراً من المتابعين — النوع، المعرّف، البريد، الاسم. استخدم البحث للتصفية.',
+      recipientsSearchPlaceholder:
+        'بحث بالاسم أو البريد أو المعرّف أو نوع التقدير…',
+      receiptType: 'نوع التقدير',
+      receiptHandle: 'معرّف الحساب',
+      receiptEmail: 'البريد',
+      receiptFromFollower: 'من المتابع %{name} %{handle}',
       noFreelancers: 'لا يوجد لاعبون أحرار',
       noBio: 'بدون نبذة',
       noDistribution: 'لا توجد عمليات توزيع',

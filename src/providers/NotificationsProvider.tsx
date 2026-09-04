@@ -20,7 +20,7 @@ export type AppNotification = {
   createdAt: string;
   read: boolean;
   href?: string;
-  kind: 'follow' | 'message' | 'offer' | 'system' | 'media';
+  kind: 'follow' | 'message' | 'offer' | 'system' | 'media' | 'appreciation';
   /** إن وُجد يُعرض فقط لهذا المستخدم */
   recipientId?: string;
 };

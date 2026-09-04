@@ -30,6 +30,9 @@ import {
 import { resolvePublicMediaUrl, cloudWriteErrorMessage } from '@/services/cloud-write';
 import { isSupabaseConfigured } from '@/services/supabase';
 import { isUuid } from '@/services/supabase-messages';
+import { userHasRole } from '@/utils/roles';
+import { fetchAdminAppreciationReceipts } from '@/services/commerce/admin';
+import type { AdminAppreciationReceipt } from '@/services/commerce/types';
 
 type Tab = 'levels' | 'beneficiaries' | 'freelancers' | 'distribution';
 
@@ -58,7 +61,6 @@ function levelPreviewSource(level: SupportLevel) {
 export default function SupportScreen() {
   const {
     supportLevels,
-    supporters,
     users,
     giftTransactions,
     updateSupportLevels,
@@ -66,17 +68,23 @@ export default function SupportScreen() {
   } = useTournament();
   const theme = useAppTheme();
   const { toast } = useToast();
-  const { t } = useTranslation();
+  const { t, isRTL } = useTranslation();
   const { desktop } = useResponsive();
   const [tab, setTab] = useState<Tab>('levels');
   const [levels, setLevels] = useState<SupportLevel[]>(supportLevels);
   const [pickingId, setPickingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [cloudReceipts, setCloudReceipts] = useState<AdminAppreciationReceipt[]>(
+    []
+  );
 
   const tabs = useMemo(
     (): { key: Tab; label: string }[] => [
       { key: 'levels', label: t('superadmin.support.tabs.levels') },
-      { key: 'beneficiaries', label: t('superadmin.support.tabs.beneficiaries') },
+      {
+        key: 'beneficiaries',
+        label: t('superadmin.support.tabs.beneficiaries'),
+      },
       { key: 'freelancers', label: t('superadmin.support.tabs.freelancers') },
       { key: 'distribution', label: t('superadmin.support.tabs.distribution') },
     ],
@@ -86,6 +94,28 @@ export default function SupportScreen() {
   useEffect(() => {
     setLevels(supportLevels);
   }, [supportLevels]);
+
+  const loadCloudReceipts = useCallback(async (search?: string) => {
+    if (!isSupabaseConfigured()) {
+      setCloudReceipts([]);
+      return;
+    }
+    try {
+      const rows = await fetchAdminAppreciationReceipts({
+        query: search,
+        limit: 150,
+      });
+      setCloudReceipts(rows);
+    } catch {
+      setCloudReceipts([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'beneficiaries' || tab === 'distribution') {
+      void loadCloudReceipts(query);
+    }
+  }, [tab, loadCloudReceipts]);
 
   const freelancers = useMemo(
     () => users.filter((u) => u.role === 'freelancer'),
@@ -100,12 +130,75 @@ export default function SupportScreen() {
     [levels, query]
   );
 
-  const filteredSupporters = useMemo(
+  const followerReceipts = useMemo(() => {
+    const fromGifts: AdminAppreciationReceipt[] = giftTransactions
+      .filter((g) => {
+        const gifter = users.find((u) => u.id === g.gifterId);
+        return userHasRole(gifter, 'follower');
+      })
+      .map((g) => {
+        const recipient = users.find((u) => u.id === g.recipientId);
+        return {
+          id: g.id,
+          certificate_number: g.certificateNumber || null,
+          status: g.status,
+          issued_at:
+            g.timestamp instanceof Date
+              ? g.timestamp.toISOString()
+              : String(g.timestamp || ''),
+          appreciation_type: g.certificateType,
+          recipient_id: g.recipientId,
+          recipient_name: recipient?.name || g.recipientName,
+          recipient_email: recipient?.email || '',
+          recipient_handle: recipient?.handle || g.recipientVisibleId || null,
+          recipient_visible_id:
+            recipient?.visibleId || g.recipientVisibleId || null,
+          recipient_role: recipient?.role || g.recipientType,
+          sender_id: g.gifterId,
+          sender_name: g.gifterName,
+          sender_handle: g.gifterVisibleId || null,
+          sender_visible_id: g.gifterVisibleId || null,
+          sender_role: 'follower',
+          source: 'gift' as const,
+        };
+      });
+
+    const seen = new Set<string>();
+    const merged: AdminAppreciationReceipt[] = [];
+    for (const row of [...cloudReceipts, ...fromGifts]) {
+      const key = row.certificate_number
+        ? `n:${row.certificate_number}`
+        : `id:${row.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(row);
+    }
+    merged.sort((a, b) => {
+      const tb = Date.parse(b.issued_at || '') || 0;
+      const ta = Date.parse(a.issued_at || '') || 0;
+      return tb - ta;
+    });
+    return merged;
+  }, [cloudReceipts, giftTransactions, users]);
+
+  const filteredReceipts = useMemo(
     () =>
-      supporters.filter((s) =>
-        matchesSearchQuery(query, s.name, s.level, s.accountNumber, s.id)
+      followerReceipts.filter((r) =>
+        matchesSearchQuery(
+          query,
+          r.appreciation_type,
+          r.appreciation_type_ar,
+          r.appreciation_type_en,
+          r.recipient_name,
+          r.recipient_email,
+          r.recipient_handle,
+          r.recipient_visible_id,
+          r.sender_name,
+          r.sender_handle,
+          r.certificate_number
+        )
       ),
-    [supporters, query]
+    [followerReceipts, query]
   );
 
   const filteredFreelancers = useMemo(
@@ -118,18 +211,44 @@ export default function SupportScreen() {
 
   const filteredGifts = useMemo(
     () =>
-      giftTransactions.filter((g) =>
-        matchesSearchQuery(
+      giftTransactions.filter((g) => {
+        const recipient = users.find((u) => u.id === g.recipientId);
+        return matchesSearchQuery(
           query,
           g.certificateType,
           g.recipientName,
           g.gifterName,
           g.amountPaid,
           g.id,
-          g.competitionName
-        )
-      ),
-    [giftTransactions, query]
+          g.competitionName,
+          recipient?.email,
+          recipient?.handle,
+          recipient?.visibleId,
+          g.recipientVisibleId,
+          g.gifterVisibleId
+        );
+      }),
+    [giftTransactions, query, users]
+  );
+
+  const appreciationTypeLabel = useCallback(
+    (row: AdminAppreciationReceipt) => {
+      if (isRTL) {
+        return (
+          row.appreciation_type_ar ||
+          row.appreciation_type ||
+          row.appreciation_type_en ||
+          '—'
+        );
+      }
+      return (
+        row.appreciation_type_en ||
+        row.appreciation_type ||
+        row.appreciation_type_ar ||
+        '—'
+      );
+    },
+    [isRTL]
   );
 
   const restoreDefaults = async () => {
@@ -429,7 +548,8 @@ export default function SupportScreen() {
 
   const renderBeneficiaries = () => (
     <View style={{ gap: 8 }}>
-      {filteredSupporters.length === 0 ? (
+      <Muted>{t('superadmin.support.recipientsHint')}</Muted>
+      {filteredReceipts.length === 0 ? (
         <EmptyState
           title={
             query.trim()
@@ -441,17 +561,36 @@ export default function SupportScreen() {
               ? undefined
               : t('superadmin.support.noBeneficiariesDesc')
           }
-          icon="people-outline"
+          icon="ribbon-outline"
         />
       ) : (
-        filteredSupporters.map((s) => (
-          <Card key={s.id} style={styles.card}>
+        filteredReceipts.map((r) => (
+          <Card key={`${r.source || 'x'}-${r.id}`} style={styles.card}>
             <Text style={[styles.name, { color: theme.colors.text }]}>
-              {s.name}
+              {r.recipient_name || '—'}
             </Text>
             <Muted>
-              {s.level} · {s.accountNumber}
+              {t('superadmin.support.receiptType')}: {appreciationTypeLabel(r)}
             </Muted>
+            <Muted>
+              {t('superadmin.support.receiptHandle')}:{' '}
+              {r.recipient_handle || r.recipient_visible_id || '—'}
+            </Muted>
+            <Muted>
+              {t('superadmin.support.receiptEmail')}:{' '}
+              {r.recipient_email || '—'}
+            </Muted>
+            {r.sender_name ? (
+              <Muted>
+                {t('superadmin.support.receiptFromFollower', {
+                  name: r.sender_name,
+                  handle: r.sender_handle || r.sender_visible_id || '',
+                })}
+              </Muted>
+            ) : null}
+            {r.issued_at ? (
+              <Muted>{new Date(r.issued_at).toLocaleString()}</Muted>
+            ) : null}
           </Card>
         ))
       )}
@@ -476,7 +615,10 @@ export default function SupportScreen() {
               {f.name}
             </Text>
             <Muted>{f.email}</Muted>
-            <Muted>{f.bio || t('superadmin.support.noBio')}</Muted>
+            <Muted>
+              {f.handle || f.visibleId || '—'} ·{' '}
+              {f.bio || t('superadmin.support.noBio')}
+            </Muted>
           </Card>
         ))
       )}
@@ -500,22 +642,36 @@ export default function SupportScreen() {
           icon="gift-outline"
         />
       ) : (
-        filteredGifts.map((g) => (
-          <Card key={g.id} style={styles.card}>
-            <Text style={[styles.name, { color: theme.colors.text }]}>
-              {t('superadmin.support.distributionLine', {
-                type: g.certificateType,
-                recipient: g.recipientName,
-              })}
-            </Text>
-            <Muted>
-              {t('superadmin.support.giftLine', {
-                gifter: g.gifterName,
-                amount: g.amountPaid,
-              })}
-            </Muted>
-          </Card>
-        ))
+        filteredGifts.map((g) => {
+          const recipient = users.find((u) => u.id === g.recipientId);
+          return (
+            <Card key={g.id} style={styles.card}>
+              <Text style={[styles.name, { color: theme.colors.text }]}>
+                {t('superadmin.support.distributionLine', {
+                  type: g.certificateType,
+                  recipient: g.recipientName,
+                })}
+              </Text>
+              <Muted>
+                {t('superadmin.support.receiptHandle')}:{' '}
+                {recipient?.handle ||
+                  recipient?.visibleId ||
+                  g.recipientVisibleId ||
+                  '—'}
+              </Muted>
+              <Muted>
+                {t('superadmin.support.receiptEmail')}:{' '}
+                {recipient?.email || '—'}
+              </Muted>
+              <Muted>
+                {t('superadmin.support.giftLine', {
+                  gifter: g.gifterName,
+                  amount: g.amountPaid,
+                })}
+              </Muted>
+            </Card>
+          );
+        })
       )}
     </View>
   );
@@ -554,8 +710,13 @@ export default function SupportScreen() {
             </View>
             <SearchBar
               value={query}
-              onChangeText={setQuery}
-              placeholder={t('superadmin.searchPlaceholder')}
+              onChangeText={(text) => {
+                setQuery(text);
+                if (tab === 'beneficiaries' || tab === 'distribution') {
+                  void loadCloudReceipts(text);
+                }
+              }}
+              placeholder={t('superadmin.support.recipientsSearchPlaceholder')}
               autoCapitalize="none"
               autoCorrect={false}
             />

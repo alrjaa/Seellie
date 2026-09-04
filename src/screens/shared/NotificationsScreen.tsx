@@ -31,6 +31,8 @@ function kindIcon(
       return 'paper-plane-outline';
     case 'media':
       return 'images-outline';
+    case 'appreciation':
+      return 'ribbon-outline';
     default:
       return 'notifications-outline';
   }

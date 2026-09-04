@@ -608,6 +608,8 @@ export const en: TranslationTree = {
     followBody: '%{name} started following you',
     offerTitle: 'New offer',
     offerBody: 'Offer received from %{name}',
+    appreciationGivenTitle: 'Appreciation sent',
+    appreciationGivenBody: 'You sent “%{type}” appreciation to %{name}',
     backHome: 'Back to home',
   },
   adsPortal: {
@@ -2064,10 +2066,10 @@ export const en: TranslationTree = {
       duplicatesRemovedDesc: 'Removed %{count} duplicate record(s).',
     },
     support: {
-      subtitle: 'Tiers, distribution, and customer records',
+      subtitle: 'Tiers, distribution, and accounts that received appreciation from followers',
       tabs: {
         levels: 'Tiers',
-        beneficiaries: 'Supporters',
+        beneficiaries: 'Appreciation recipients',
         freelancers: 'Freelancers',
         distribution: 'Distribution',
       },
@@ -2097,8 +2099,17 @@ export const en: TranslationTree = {
       permissionTitle: 'Permission needed',
       permissionDesc: 'Allow photo access to update the certificate image.',
       noLevels: 'No tiers',
-      noBeneficiaries: 'No registered supporters',
-      noBeneficiariesDesc: 'Records will appear here when customers are added.',
+      noBeneficiaries: 'No appreciation recipients from followers yet',
+      noBeneficiariesDesc:
+        'Accounts that received appreciation from a follower appear here with type, handle, email, and name.',
+      recipientsHint:
+        'Recipients of appreciation from followers — type, handle, email, name. Use search to filter.',
+      recipientsSearchPlaceholder:
+        'Search by name, email, handle, or appreciation type…',
+      receiptType: 'Appreciation type',
+      receiptHandle: 'Account handle',
+      receiptEmail: 'Email',
+      receiptFromFollower: 'From follower %{name} %{handle}',
       noFreelancers: 'No freelancers',
       noBio: 'No bio',
       noDistribution: 'No distribution records',

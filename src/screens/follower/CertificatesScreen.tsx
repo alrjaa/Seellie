@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -35,10 +35,17 @@ import {
 } from '@/components/ui';
 import { userHasRole } from '@/utils/roles';
 import { cairoText } from '@/theme/fonts';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useToast } from '@/providers/ToastProvider';
+import { useNotifications } from '@/providers/NotificationsProvider';
+import { useCommerce } from '@/providers/CommerceProvider';
+import { catalogItemForSupportLevel } from '@/utils/commerce-catalog';
+import type { DigitalCertificate } from '@/services/commerce/types';
+import { DigitalCertificateCard } from '@/components/commerce/DigitalCertificateCard';
 import {
   filterLevelsByKind,
-  giftsReceivedBy,
   giftsSentBy,
+  giftsReceivedBy,
   hasOfficialCertificateNumber,
   normalizeAppreciationStatus,
   resolveAppreciationKind,
@@ -112,6 +119,11 @@ export default function CertificatesScreen() {
     giftTransactions,
     featureFlags,
   } = useTournament();
+  const commerce = useCommerce();
+  const router = useRouter();
+  const params = useLocalSearchParams<{ recipientId?: string; tab?: string }>();
+  const { toast } = useToast();
+  const { addNotification } = useNotifications();
   const theme = useAppTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -123,9 +135,22 @@ export default function CertificatesScreen() {
   const [reason, setReason] = useState('');
   const [recipient, setRecipient] = useState<SupportRecipient | null>(null);
   const [issued, setIssued] = useState<GiftTransaction | null>(null);
+  const [issuedDigital, setIssuedDigital] = useState<DigitalCertificate | null>(
+    null
+  );
   const [buying, setBuying] = useState(false);
+  const [prefillHandled, setPrefillHandled] = useState(false);
 
-  const catalogLevels = useMemo(
+  useEffect(() => {
+    const tab = params.tab;
+    if (tab === 'sent' || tab === 'received') {
+      setCatalogTab(tab);
+    } else if (tab === 'certificates' || tab === 'gifts' || tab === 'catalog') {
+      setCatalogTab('catalog');
+    }
+  }, [params.tab]);
+
+  const recognitionLevels = useMemo(
     () =>
       [...filterLevelsByKind(supportLevels, 'certificate')].sort(
         (a, b) => (a.price ?? 0) - (b.price ?? 0)
@@ -143,6 +168,25 @@ export default function CertificatesScreen() {
       currentUser ? giftsReceivedBy(giftTransactions, currentUser.id) : [],
     [giftTransactions, currentUser]
   );
+
+  const useDigitalHistory =
+    featureFlags.commerceCreditsEnabled && commerce.commerceAvailable;
+
+  const digitalSent = commerce.sentCertificates;
+  const digitalReceived = commerce.receivedCertificates;
+
+  const userNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    users.forEach((u) => map.set(u.id, u.name));
+    competitions.forEach((comp) => {
+      (comp.teams || []).forEach((team) => {
+        (team.players || []).forEach((player) => {
+          if (!map.has(player.id)) map.set(player.id, player.name);
+        });
+      });
+    });
+    return map;
+  }, [users, competitions]);
 
   const recipients = useMemo(() => {
     const list: SupportRecipient[] = [];
@@ -192,6 +236,21 @@ export default function CertificatesScreen() {
     return list;
   }, [users, competitions, t]);
 
+  useEffect(() => {
+    if (prefillHandled || !params.recipientId) return;
+    const hit = recipients.find((r) => r.id === params.recipientId);
+    if (!hit) return;
+    setRecipient(hit);
+    setCatalogTab('catalog');
+    if (recognitionLevels[0]) setSelectedLevel(recognitionLevels[0]);
+    setPrefillHandled(true);
+  }, [
+    params.recipientId,
+    prefillHandled,
+    recipients,
+    recognitionLevels,
+  ]);
+
   const filteredRecipients = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return recipients.slice(0, 40);
@@ -229,12 +288,73 @@ export default function CertificatesScreen() {
     setReason('');
     setRecipient(null);
     setIssued(null);
+    setIssuedDigital(null);
     setBuying(false);
   }, []);
 
-  const confirmPurchase = useCallback(() => {
+  const confirmPurchase = useCallback(async () => {
     if (!selectedLevel || !recipient || buying) return;
     setBuying(true);
+
+    const useCommerce =
+      featureFlags.commerceCreditsEnabled && commerce.commerceAvailable;
+    const catalogItem = useCommerce
+      ? catalogItemForSupportLevel(selectedLevel, commerce.catalog)
+      : null;
+
+    if (useCommerce && catalogItem) {
+      if (commerce.balanceCredits < catalogItem.credits_price) {
+        setBuying(false);
+        toast({
+          variant: 'destructive',
+          title: t('commerce.insufficientCredits'),
+          description: t('commerce.insufficientCreditsDesc'),
+        });
+        return;
+      }
+      const result = await commerce.giftCertificate({
+        catalogSlug: catalogItem.slug,
+        recipientId: recipient.id,
+        reason: reason.trim() || undefined,
+      });
+      setBuying(false);
+      if (result.ok && result.certificate) {
+        setIssuedDigital(result.certificate);
+        if (currentUser?.id) {
+          const typeName =
+            result.certificate.name_ar ||
+            result.certificate.name_en ||
+            catalogItem.slug;
+          addNotification({
+            id: `appreciation-given-${result.certificate.id}`,
+            kind: 'appreciation',
+            recipientId: currentUser.id,
+            title: t('notifications.appreciationGivenTitle'),
+            body: t('notifications.appreciationGivenBody', {
+              type: typeName,
+              name: recipient.name,
+            }),
+            href: '/(follower)/certificates',
+          });
+        }
+        toast({
+          variant: 'success',
+          title: t('commerce.giftSuccess'),
+          description: t('commerce.giftSuccessDesc', {
+            number: result.certificate.certificate_number,
+            name: recipient.name,
+          }),
+        });
+      } else if (!result.ok) {
+        toast({
+          variant: 'destructive',
+          title: t('commerce.purchaseFailed'),
+          description: result.error || t('commerce.tryAgain'),
+        });
+      }
+      return;
+    }
+
     const gift = purchaseSupportGift({
       certificateType: selectedLevel.name,
       recipientId: recipient.id,
@@ -245,7 +365,19 @@ export default function CertificatesScreen() {
     });
     setBuying(false);
     if (gift) setIssued(gift);
-  }, [buying, purchaseSupportGift, reason, recipient, selectedLevel]);
+  }, [
+    addNotification,
+    buying,
+    commerce,
+    currentUser?.id,
+    featureFlags.commerceCreditsEnabled,
+    purchaseSupportGift,
+    reason,
+    recipient,
+    selectedLevel,
+    t,
+    toast,
+  ]);
 
   const renderHistoryItem = useCallback(
     (item: GiftTransaction, perspective: 'sent' | 'received') => {
@@ -293,6 +425,22 @@ export default function CertificatesScreen() {
       );
     },
     [statusLabel, t]
+  );
+
+  const renderDigitalHistoryItem = useCallback(
+    (item: DigitalCertificate, perspective: 'sent' | 'received') => {
+      const counterpartyId =
+        perspective === 'sent' ? item.recipient_id : item.sender_id;
+      return (
+        <DigitalCertificateCard
+          key={item.id}
+          item={item}
+          perspective={perspective}
+          counterpartyName={userNameById.get(counterpartyId)}
+        />
+      );
+    },
+    [userNameById]
   );
 
   if (!featureFlags.appreciationEnabled) {
@@ -347,14 +495,26 @@ export default function CertificatesScreen() {
         >
           {t('appreciation.title')}
         </Text>
-        <View style={styles.topBarEnd} />
+        <View style={styles.topBarEnd}>
+          {commerce.commerceAvailable ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/(follower)/wallet' as any)}
+              hitSlop={8}
+            >
+              <Text style={{ color: theme.colors.accent, fontWeight: '800' }}>
+                {t('commerce.openWallet')} · {commerce.balanceCredits}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
       <Muted>{t('appreciation.subtitle')}</Muted>
 
       <View style={styles.tabs}>
         {(
           [
-            ['catalog', t('appreciation.tabCatalog')],
+            ['catalog', t('appreciation.tabCertificates')],
             ['sent', t('appreciation.tabSent')],
             ['received', t('appreciation.tabReceived')],
           ] as const
@@ -369,7 +529,7 @@ export default function CertificatesScreen() {
       </View>
 
       {catalogTab === 'sent' ? (
-        sentHistory.length === 0 ? (
+        useDigitalHistory && digitalSent.length === 0 && sentHistory.length === 0 ? (
           <EmptyState
             title={t('appreciation.emptySentTitle')}
             description={t('appreciation.emptySentDesc')}
@@ -377,10 +537,15 @@ export default function CertificatesScreen() {
           />
         ) : (
           <View style={styles.historyList}>
+            {useDigitalHistory
+              ? digitalSent.map((c) => renderDigitalHistoryItem(c, 'sent'))
+              : null}
             {sentHistory.map((g) => renderHistoryItem(g, 'sent'))}
           </View>
         )
       ) : catalogTab === 'received' ? (
+        useDigitalHistory &&
+        digitalReceived.length === 0 &&
         receivedHistory.length === 0 ? (
           <EmptyState
             title={t('appreciation.emptyReceivedTitle')}
@@ -389,10 +554,15 @@ export default function CertificatesScreen() {
           />
         ) : (
           <View style={styles.historyList}>
+            {useDigitalHistory
+              ? digitalReceived.map((c) =>
+                  renderDigitalHistoryItem(c, 'received')
+                )
+              : null}
             {receivedHistory.map((g) => renderHistoryItem(g, 'received'))}
           </View>
         )
-      ) : catalogLevels.length === 0 ? (
+      ) : recognitionLevels.length === 0 ? (
         <EmptyState
           title={t('appreciation.emptyCertificatesTitle')}
           description={t('appreciation.emptyCertificatesDesc')}
@@ -400,7 +570,7 @@ export default function CertificatesScreen() {
         />
       ) : (
         <View style={[styles.levelsGrid, desktop && styles.levelsGridDesktop]}>
-          {catalogLevels.map((level) => (
+          {recognitionLevels.map((level) => (
             <Card
               key={level.id || level.name}
               style={[styles.card, desktop && styles.cardDesktop]}
@@ -417,7 +587,17 @@ export default function CertificatesScreen() {
               <View style={styles.body}>
                 <Subtitle>{level.name}</Subtitle>
                 <Text style={[styles.price, { color: theme.colors.accent }]}>
-                  {t('certificates.price', { amount: level.price })}
+                  {(() => {
+                    const catalogItem = commerce.commerceAvailable
+                      ? catalogItemForSupportLevel(level, commerce.catalog)
+                      : null;
+                    if (catalogItem) {
+                      return t('commerce.creditsCost', {
+                        count: catalogItem.credits_price,
+                      });
+                    }
+                    return t('certificates.price', { amount: level.price });
+                  })()}
                 </Text>
                 <Muted>{level.description}</Muted>
                 <Button
@@ -453,7 +633,31 @@ export default function CertificatesScreen() {
             },
           ]}
         >
-          {issued ? (
+          {issuedDigital ? (
+            <View style={styles.modalBody}>
+              <Title>{t('commerce.giftSuccess')}</Title>
+              <Card style={styles.certificate}>
+                <Muted>{t('certificates.certNumber')}</Muted>
+                <Text
+                  style={[styles.certNumber, { color: theme.colors.accent }]}
+                >
+                  {issuedDigital.certificate_number}
+                </Text>
+                <Subtitle>
+                  {issuedDigital.name_ar || issuedDigital.name_en}
+                </Subtitle>
+                <Muted>
+                  {t('commerce.creditsCost', {
+                    count: issuedDigital.credits_cost,
+                  })}
+                </Muted>
+                <Muted>
+                  {t('certificates.beneficiary')}: {recipient?.name}
+                </Muted>
+              </Card>
+              <Button label={t('certificates.done')} onPress={closePurchase} />
+            </View>
+          ) : issued ? (
             <View style={styles.modalBody}>
               <Title>
                 {resolveAppreciationKindFromTx(issued) === 'certificate'
@@ -529,22 +733,36 @@ export default function CertificatesScreen() {
           ) : (
             <View style={styles.modalBody}>
               <Title>
-                {selectedLevel &&
-                resolveAppreciationKind(selectedLevel) === 'certificate'
-                  ? t('appreciation.directCertificateTitle', {
-                      name: selectedLevel?.name ?? '',
-                    })
-                  : t('certificates.directTitle', {
-                      name: selectedLevel?.name ?? '',
-                    })}
+                {t('appreciation.directCertificateTitle', {
+                  name: selectedLevel?.name ?? '',
+                })}
               </Title>
               <Muted>{t('certificates.searchHint')}</Muted>
               {selectedLevel ? (
                 <Text style={[styles.price, { color: theme.colors.accent }]}>
-                  {t('certificates.price', {
-                    amount: selectedLevel.price,
-                  })}
+                  {(() => {
+                    const catalogItem =
+                      commerce.commerceAvailable && selectedLevel
+                        ? catalogItemForSupportLevel(
+                            selectedLevel,
+                            commerce.catalog
+                          )
+                        : null;
+                    if (catalogItem) {
+                      return t('commerce.creditsCost', {
+                        count: catalogItem.credits_price,
+                      });
+                    }
+                    return t('certificates.price', {
+                      amount: selectedLevel.price,
+                    });
+                  })()}
                 </Text>
+              ) : null}
+              {commerce.commerceAvailable && selectedLevel ? (
+                <Muted>
+                  {t('commerce.currentCredits')}: {commerce.balanceCredits}
+                </Muted>
               ) : null}
 
               <SearchBar
@@ -601,8 +819,20 @@ export default function CertificatesScreen() {
               />
 
               <View style={styles.modalActions}>
+                {commerce.commerceAvailable ? (
+                  <Button
+                    label={t('commerce.openWallet')}
+                    variant="outline"
+                    onPress={() => router.push('/(follower)/wallet' as any)}
+                    style={{ flex: 1 }}
+                  />
+                ) : null}
                 <Button
-                  label={t('appreciation.confirmIntent')}
+                  label={
+                    commerce.commerceAvailable
+                      ? t('commerce.confirmGift')
+                      : t('appreciation.confirmIntent')
+                  }
                   onPress={confirmPurchase}
                   disabled={!recipient || buying}
                   loading={buying}
