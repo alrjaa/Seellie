@@ -22,7 +22,7 @@ create table if not exists public.ad_campaigns (
   id uuid primary key default gen_random_uuid(),
   advertiser_id uuid not null references public.advertiser_accounts (id) on delete cascade,
   name text not null check (char_length(name) between 1 and 80),
-  budget_cents integer check (budget_cents is null or budget_cents >= 0),
+  media_budget_cents integer check (media_budget_cents is null or media_budget_cents >= 0),
   status text not null default 'draft'
     check (status in ('draft', 'active', 'paused', 'ended')),
   start_at timestamptz,
@@ -213,11 +213,18 @@ begin
 
   bud := null;
   begin
-    if jsonb_typeof(p_campaign->'budgetCents') = 'number' then
+    -- Prefer advertising-specific key; accept legacy budgetCents until remote rename applied.
+    if jsonb_typeof(p_campaign->'mediaBudgetCents') = 'number' then
+      bud := round((p_campaign->'mediaBudgetCents')::text::numeric)::integer;
+    elsif jsonb_typeof(p_campaign->'budgetCents') = 'number' then
       bud := round((p_campaign->'budgetCents')::text::numeric)::integer;
     else
       bud := round(
-        nullif(trim(coalesce(p_campaign->>'budgetCents', '')), '')::numeric
+        nullif(trim(coalesce(
+          nullif(p_campaign->>'mediaBudgetCents', ''),
+          p_campaign->>'budgetCents',
+          ''
+        )), '')::numeric
       )::integer;
     end if;
   exception when others then
@@ -252,14 +259,14 @@ begin
     update public.ad_campaigns set
       name = nm,
       status = st,
-      budget_cents = bud,
+      media_budget_cents = bud,
       start_at = start_ts,
       end_at = end_ts,
       updated_at = now()
     where id = cid and advertiser_id = aid;
   else
     insert into public.ad_campaigns (
-      advertiser_id, name, status, budget_cents, start_at, end_at
+      advertiser_id, name, status, media_budget_cents, start_at, end_at
     ) values (
       aid, nm, st, bud, start_ts, end_ts
     )
@@ -535,9 +542,13 @@ $$;
 revoke all on function public.list_pending_advertisements() from public;
 grant execute on function public.list_pending_advertisements() to authenticated;
 
+drop function if exists public.admin_set_advertisement_status(uuid, text);
+drop function if exists public.admin_set_advertisement_status(uuid, text, text);
+
 create or replace function public.admin_set_advertisement_status(
   p_ad_id uuid,
-  p_status text
+  p_status text,
+  p_note text default ''
 )
 returns jsonb
 language plpgsql
@@ -547,6 +558,10 @@ as $$
 declare
   st text;
   camp uuid;
+  aid uuid;
+  prev_st text;
+  title text;
+  note text;
 begin
   if not public.is_app_superadmin() then
     raise exception 'forbidden';
@@ -560,15 +575,22 @@ begin
     raise exception 'invalid status';
   end if;
 
+  note := nullif(left(trim(coalesce(p_note, '')), 240), '');
+
+  select a.status, a.advertiser_id, coalesce(nullif(trim(a.title), ''), a.advertiser_name)
+  into prev_st, aid, title
+  from public.advertisements a
+  where a.id = p_ad_id;
+
+  if not found then
+    raise exception 'ad not found';
+  end if;
+
   update public.advertisements set
     status = st,
     updated_at = now()
   where id = p_ad_id
   returning campaign_id into camp;
-
-  if not found then
-    raise exception 'ad not found';
-  end if;
 
   if st = 'active' and camp is not null then
     update public.ad_campaigns set
@@ -577,12 +599,37 @@ begin
     where id = camp and status in ('draft', 'paused');
   end if;
 
+  if prev_st = 'pending_review' and st = 'draft' and aid is not null then
+    insert into public.advertiser_notifications (
+      advertiser_id, advertisement_id, kind, ad_title, note
+    ) values (
+      aid,
+      p_ad_id,
+      'rejected',
+      left(coalesce(title, ''), 80),
+      coalesce(
+        note,
+        'تم رفض الإعلان وإعادته إلى المسودة. راجع المحتوى ثم أعد الإرسال للمراجعة.'
+      )
+    );
+  elsif prev_st = 'pending_review' and st = 'active' and aid is not null then
+    insert into public.advertiser_notifications (
+      advertiser_id, advertisement_id, kind, ad_title, note
+    ) values (
+      aid,
+      p_ad_id,
+      'approved',
+      left(coalesce(title, ''), 80),
+      note
+    );
+  end if;
+
   return (select to_jsonb(a.*) from public.advertisements a where a.id = p_ad_id);
 end;
 $$;
 
-revoke all on function public.admin_set_advertisement_status(uuid, text) from public;
-grant execute on function public.admin_set_advertisement_status(uuid, text) to authenticated;
+revoke all on function public.admin_set_advertisement_status(uuid, text, text) from public;
+grant execute on function public.admin_set_advertisement_status(uuid, text, text) to authenticated;
 
 -- ─── Public feed delivery (authenticated read — same as app_blobs) ─────────
 

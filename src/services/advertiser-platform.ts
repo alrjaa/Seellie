@@ -405,11 +405,13 @@ export async function markAdvertiserNotificationRead(
 
 export async function adminSetAdvertisementStatus(
   adId: string,
-  status: DbAdvertisement['status']
+  status: DbAdvertisement['status'],
+  note?: string
 ): Promise<RpcResult<DbAdvertisement>> {
   return rpc<DbAdvertisement>('admin_set_advertisement_status', {
     p_ad_id: adId,
     p_status: status,
+    p_note: (note || '').trim().slice(0, 240),
   });
 }
 

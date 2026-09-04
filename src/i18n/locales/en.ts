@@ -639,6 +639,9 @@ export const en: TranslationTree = {
       blocked:
         'Your ad “%{title}” was blocked and hidden from the app. Create a new ad to publish again.',
       deleted: 'Your ad “%{title}” was deleted from the app.',
+      rejected:
+        'Your ad “%{title}” was rejected and returned to draft. Edit it, then resubmit for review.',
+      approved: 'Your ad “%{title}” was approved and published in the app.',
     },
     moderatedHint:
       'This ad was blocked or deleted by admin. It cannot be edited — create a new ad.',
@@ -1930,6 +1933,9 @@ export const en: TranslationTree = {
       pendingDbReject: 'Reject (draft)',
       pendingDbApproved: 'Ad approved',
       pendingDbRejected: 'Ad returned to draft',
+      pendingDbRejectedNotified: 'Rejected and advertiser notified',
+      rejectNoteHint:
+        'Optional note for the advertiser about the rejection (can be empty)',
       liveDbTitle: 'Advertiser ads in the app',
       liveDbEmpty: 'No live or blocked advertiser ads right now.',
       block: 'Block',

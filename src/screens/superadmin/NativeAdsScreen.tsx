@@ -535,9 +535,25 @@ export default function NativeAdsScreen() {
 
   const reviewDbAd = useCallback(
     async (adId: string, next: 'active' | 'draft') => {
+      let note = '';
+      if (
+        next === 'draft' &&
+        Platform.OS === 'web' &&
+        typeof window !== 'undefined'
+      ) {
+        note = String(
+          window.prompt(t('superadmin.ads.rejectNoteHint')) || ''
+        )
+          .trim()
+          .slice(0, 240);
+      }
       setReviewingId(adId);
       try {
-        const { data, error } = await adminSetAdvertisementStatus(adId, next);
+        const { data, error } = await adminSetAdvertisementStatus(
+          adId,
+          next,
+          note
+        );
         if (!data) {
           toast({
             variant: 'destructive',
@@ -551,7 +567,7 @@ export default function NativeAdsScreen() {
           title:
             next === 'active'
               ? t('superadmin.ads.pendingDbApproved')
-              : t('superadmin.ads.pendingDbRejected'),
+              : t('superadmin.ads.pendingDbRejectedNotified'),
         });
         await load();
       } finally {

@@ -1,4 +1,4 @@
-export type AdvertiserNoticeKind = 'blocked' | 'deleted';
+export type AdvertiserNoticeKind = 'blocked' | 'deleted' | 'rejected' | 'approved';
 
 export type AdvertiserNotification = {
   id: string;
@@ -24,7 +24,12 @@ export function sanitizeAdvertiserNotification(
   const advertiserId = clipField(row.advertiser_id, 64);
   const kindRaw = clipField(row.kind, 16);
   const kind: AdvertiserNoticeKind | null =
-    kindRaw === 'blocked' || kindRaw === 'deleted' ? kindRaw : null;
+    kindRaw === 'blocked' ||
+    kindRaw === 'deleted' ||
+    kindRaw === 'rejected' ||
+    kindRaw === 'approved'
+      ? kindRaw
+      : null;
   const createdAt = clipField(row.created_at, 40);
   if (!id || !advertiserId || !kind || !createdAt) return null;
   return {

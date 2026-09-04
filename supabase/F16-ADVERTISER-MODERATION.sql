@@ -21,7 +21,7 @@ create table if not exists public.advertiser_notifications (
   id uuid primary key default gen_random_uuid(),
   advertiser_id uuid not null references public.advertiser_accounts (id) on delete cascade,
   advertisement_id uuid references public.advertisements (id) on delete set null,
-  kind text not null check (kind in ('blocked', 'deleted')),
+  kind text not null check (kind in ('blocked', 'deleted', 'rejected', 'approved')),
   ad_title text check (ad_title is null or char_length(ad_title) <= 80),
   note text check (note is null or char_length(note) <= 240),
   read_at timestamptz,
