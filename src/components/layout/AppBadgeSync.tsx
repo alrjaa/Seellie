@@ -2,9 +2,9 @@ import { useEffect, useMemo } from 'react';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useNotifications } from '@/providers/NotificationsProvider';
 import { usePrivateSpaceContext } from '@/providers/PrivateSpaceProvider';
-import { setAppIconBadgeCount } from '@/utils/app-badge';
+import { setAppIconBadgeCount, rememberAppDocumentTitle } from '@/utils/app-badge';
 
-/** يزامن شارة أيقونة التطبيق / عنوان التبويب مع إجمالي غير المقروء. */
+/** يزامن شارة أيقونة التطبيق مع إجمالي غير المقروء (بدون تغيير عنوان التبويب). */
 export function AppBadgeSync() {
   const { currentUser, messages } = useTournament();
   const { unreadPrivateCount } = usePrivateSpaceContext();
@@ -18,6 +18,10 @@ export function AppBadgeSync() {
     const notifs = unreadCountFor(currentUser.id);
     return inbox + unreadPrivateCount + notifs;
   }, [currentUser?.id, messages, unreadCountFor, unreadPrivateCount]);
+
+  useEffect(() => {
+    rememberAppDocumentTitle('Seellie');
+  }, []);
 
   useEffect(() => {
     setAppIconBadgeCount(total);

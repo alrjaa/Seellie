@@ -16,10 +16,15 @@ function webNavigator(): NavigatorBadge | undefined {
 /** يحفظ عنوان الصفحة الأصلي مرة واحدة (ويب). */
 export function rememberAppDocumentTitle(title = DEFAULT_TITLE) {
   if (Platform.OS !== 'web' || typeof document === 'undefined') return;
-  baseTitle = title || DEFAULT_TITLE;
+  const clean = (title || DEFAULT_TITLE).replace(/^\(\d+\)\s+/, '').trim();
+  baseTitle = clean || DEFAULT_TITLE;
+  document.title = baseTitle;
 }
 
-/** شارة على أيقونة التطبيق / عنوان التبويب عند توفر Badging API. */
+/**
+ * شارة أيقونة التطبيق عبر Badging API فقط.
+ * لا نعدّل document.title — تجنّباً لـ "Seellie (1)" في التبويب ونتائج البحث.
+ */
 export function setAppIconBadgeCount(count: number) {
   const safe = Math.max(0, Math.floor(count));
   const nav = webNavigator();
@@ -34,7 +39,10 @@ export function setAppIconBadgeCount(count: number) {
   }
 
   if (Platform.OS === 'web' && typeof document !== 'undefined') {
-    document.title = `(${safe}) ${baseTitle}`;
+    // أبقِ العنوان نظيفاً دائماً (بدون عدّاد)
+    if (document.title !== baseTitle) {
+      document.title = baseTitle;
+    }
   }
 }
 

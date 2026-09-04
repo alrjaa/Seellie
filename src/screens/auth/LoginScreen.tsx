@@ -454,7 +454,17 @@ export default function LoginScreen() {
             </View>
           )}
           {buildLabel ? (
-            <Muted style={styles.buildStamp}>{buildLabel}</Muted>
+            <Muted
+              style={styles.buildStamp}
+              // لا يظهر لقارئات الشاشة / ولا يُفضَّل فهرسته كنص وصفي
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              {...(Platform.OS === 'web'
+                ? ({ 'aria-hidden': true } as object)
+                : null)}
+            >
+              {buildLabel}
+            </Muted>
           ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
