@@ -193,6 +193,7 @@ import { i18n, t } from '@/i18n';
 import { localizeContentTree } from '@/i18n/localize-content';
 import type { CommentTarget, UserRole } from '@/types';
 import { buildRoundRobinFixtures } from '@/utils/competition';
+import { resolveCompetitionAlertAudience } from '@/utils/competition-alert-recipients';
 import {
   getSecondaryRole,
   normalizeUserRoles,
@@ -2797,43 +2798,81 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     };
   }, [currentUser?.id, refreshCloudMessages, notifyIncomingMessages]);
 
-  /** سحب إعلامات المنظّم (الإعلام والتنبيه) من صندوق المستلم السحابي */
+  /**
+   * سحب الإعلام والتنبيه من blobs المنظّمين (مفتاح RLS: announcements:{organizerId}).
+   * المستلمون يقرأون فقط — الكتابة تتم من حساب المنظّم على مفتاحه.
+   */
   useEffect(() => {
     const uid = currentUser?.id;
-    if (!uid || !isUuid(uid) || !isSupabaseConfigured()) return;
+    if (!uid || !isSupabaseConfigured()) return;
     let active = true;
     void (async () => {
-      const cloud = await fetchAppBlob<
-        Array<{
-          id: string;
-          title: string;
-          body: string;
-          createdAt: string;
-          read?: boolean;
-          kind?: string;
-          competitionId?: string;
-          href?: string;
-        }>
-      >(`alerts-inbox:${uid}`);
-      if (!active || !Array.isArray(cloud.data) || !cloud.data.length) return;
-      for (const row of cloud.data) {
-        if (!row?.id || !row.title) continue;
-        addNotification({
-          id: row.id,
-          kind: 'announcement',
-          recipientId: uid,
-          competitionId: row.competitionId,
-          title: row.title,
-          body: row.body || '',
-          href: row.href || '/notifications',
-          read: !!row.read,
-        });
+      const organizerIds = new Set<string>();
+      for (const competition of competitions) {
+        if (!competition?.organizerId || competition.organizerId === uid) continue;
+        const audience = resolveCompetitionAlertAudience(
+          competition,
+          users,
+          referees,
+          undefined
+        );
+        if (!audience.linkedUserIds.includes(uid)) continue;
+        if (isUuid(competition.organizerId)) {
+          organizerIds.add(competition.organizerId);
+        }
+      }
+      for (const organizerId of organizerIds) {
+        const cloud = await fetchAppBlob<
+          Array<{
+            id: string;
+            title: string;
+            body: string;
+            createdAt: string;
+            competitionId?: string;
+            competitionName?: string;
+            recipientIds?: string[];
+          }>
+        >(`announcements:${organizerId}`);
+        if (!active || !Array.isArray(cloud.data)) continue;
+        for (const alert of cloud.data) {
+          if (!alert?.id || !alert.title) continue;
+          if (
+            Array.isArray(alert.recipientIds) &&
+            alert.recipientIds.length > 0 &&
+            !alert.recipientIds.includes(uid)
+          ) {
+            continue;
+          }
+          const title = alert.competitionName
+            ? t('notifications.competitionAlertTitle', {
+                competition: alert.competitionName,
+              })
+            : alert.title;
+          addNotification({
+            id: `alert-${alert.id}-${uid}`,
+            kind: 'announcement',
+            recipientId: uid,
+            competitionId: alert.competitionId,
+            title,
+            body: alert.competitionName
+              ? `${alert.title}\n\n${alert.body || ''}`
+              : alert.body || '',
+            href: '/notifications',
+          });
+        }
       }
     })();
     return () => {
       active = false;
     };
-  }, [currentUser?.id, addNotification]);
+  }, [
+    currentUser?.id,
+    competitions,
+    users,
+    referees,
+    addNotification,
+    t,
+  ]);
 
   const refreshCloudShareCards = useCallback(async () => {
     const uid = sessionUserIdRef.current;

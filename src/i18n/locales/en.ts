@@ -380,6 +380,7 @@ export const en: TranslationTree = {
   },
   cloud: {
     competitionSyncFailed: 'Could not sync competition to the cloud',
+    alertsSyncFailed: 'Could not save the announcement & alert to the cloud',
     messageSendFailed:
       'Could not send the message via the cloud. Make sure messaging is set up, then try again.',
     localAccountCannotMessage:

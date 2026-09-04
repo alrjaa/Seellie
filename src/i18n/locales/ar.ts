@@ -380,6 +380,7 @@ export const ar = {
   },
   cloud: {
     competitionSyncFailed: 'تعذّر مزامنة المسابقة مع السحابة',
+    alertsSyncFailed: 'تعذّر حفظ الإعلام والتنبيه على السحابة',
     messageSendFailed:
       'تعذّر إرسال الرسالة عبر السحابة. تأكد من تهيئة الرسائل ثم أعد المحاولة.',
     localAccountCannotMessage:

@@ -28,9 +28,7 @@ type CompetitionAlert = {
   recipientIds: string[];
 };
 
-const STORAGE_PREFIX = 'seellie.organizer.competition-alerts.v1';
-/** legacy key — يُدمَج عند التحميل ثم لا يُستخدم للكتابة */
-const LEGACY_STORAGE_PREFIX = 'seellie.organizer.announcements.v1';
+const STORAGE_PREFIX = 'seellie.organizer.announcements.v1';
 
 export default function AnnouncementsScreen() {
   const { toast } = useToast();
@@ -79,19 +77,29 @@ export default function AnnouncementsScreen() {
       const stored = await getJson<CompetitionAlert[]>(storageKey);
       let next = Array.isArray(stored) ? stored : [];
 
-      if (!next.length && currentUser?.id) {
-        const legacy = await getJson<
-          Array<{
-            id: string;
-            title: string;
-            body: string;
-            createdAt: string;
-            organizerId: string;
-            competitionId?: string;
-          }>
-        >(`${LEGACY_STORAGE_PREFIX}.${currentUser.id}`);
-        if (Array.isArray(legacy) && legacy.length) {
-          next = legacy.map((row) => ({
+      // تطبيع السجلات القديمة التي بلا competitionName / recipientIds
+      next = next.map((row) => ({
+        id: row.id,
+        title: row.title,
+        body: row.body,
+        createdAt: row.createdAt,
+        organizerId: row.organizerId,
+        competitionId: row.competitionId || '',
+        competitionName:
+          row.competitionName ||
+          competitions.find((c) => c.id === row.competitionId)?.name ||
+          '',
+        recipientCount: row.recipientCount ?? row.recipientIds?.length ?? 0,
+        recipientIds: Array.isArray(row.recipientIds) ? row.recipientIds : [],
+      }));
+
+      if (currentUser?.id && isUuid(currentUser.id)) {
+        // مفتاح RLS المسموح: announcements:{auth.uid()} فقط
+        const cloud = await fetchAppBlob<CompetitionAlert[]>(
+          `announcements:${currentUser.id}`
+        );
+        if (Array.isArray(cloud.data) && cloud.data.length) {
+          next = cloud.data.map((row) => ({
             id: row.id,
             title: row.title,
             body: row.body,
@@ -99,20 +107,12 @@ export default function AnnouncementsScreen() {
             organizerId: row.organizerId,
             competitionId: row.competitionId || '',
             competitionName:
+              row.competitionName ||
               competitions.find((c) => c.id === row.competitionId)?.name ||
               '',
-            recipientCount: 0,
-            recipientIds: [],
+            recipientCount: row.recipientCount ?? row.recipientIds?.length ?? 0,
+            recipientIds: Array.isArray(row.recipientIds) ? row.recipientIds : [],
           }));
-        }
-      }
-
-      if (currentUser?.id && isUuid(currentUser.id)) {
-        const cloud = await fetchAppBlob<CompetitionAlert[]>(
-          `competition-alerts:${currentUser.id}`
-        );
-        if (Array.isArray(cloud.data) && cloud.data.length) {
-          next = cloud.data;
         }
       }
       if (!active) return;
@@ -128,12 +128,13 @@ export default function AnnouncementsScreen() {
     if (!hydrated) return;
     void setJson(storageKey, items);
     if (currentUser?.id && isUuid(currentUser.id)) {
-      void upsertAppBlob(`competition-alerts:${currentUser.id}`, items).then(
+      void upsertAppBlob(`announcements:${currentUser.id}`, items).then(
         (res) => {
           if (!res.ok) {
+            console.warn('[competition-alerts] cloud upsert failed', res.error);
             toast({
               variant: 'destructive',
-              title: t('cloud.competitionSyncFailed'),
+              title: t('cloud.alertsSyncFailed'),
               description: res.error,
             });
           }
@@ -197,36 +198,6 @@ export default function AnnouncementsScreen() {
           body: `${notifBody}\n\n${body.trim()}`,
           href: '/notifications',
         });
-
-        if (isUuid(recipientId)) {
-          const key = `alerts-inbox:${recipientId}` as const;
-          const existing = await fetchAppBlob<
-            Array<{
-              id: string;
-              title: string;
-              body: string;
-              createdAt: string;
-              read: boolean;
-              kind: 'announcement';
-              competitionId?: string;
-              href?: string;
-            }>
-          >(key);
-          const list = Array.isArray(existing.data) ? existing.data : [];
-          const entry = {
-            id: `alert-${alertId}-${recipientId}`,
-            title: notifTitle,
-            body: `${notifBody}\n\n${body.trim()}`,
-            createdAt,
-            read: false,
-            kind: 'announcement' as const,
-            competitionId: selectedCompetition.id,
-            href: '/notifications',
-          };
-          if (!list.some((n) => n.id === entry.id)) {
-            await upsertAppBlob(key, [entry, ...list].slice(0, 80));
-          }
-        }
       }
 
       setTitle('');

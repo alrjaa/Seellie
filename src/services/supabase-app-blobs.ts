@@ -15,8 +15,6 @@ export type AppBlobKey =
   /** Legacy client key — read fallback only; do not write */
   | 'app_settings'
   | `announcements:${string}`
-  | `competition-alerts:${string}`
-  | `alerts-inbox:${string}`
   | `prizes:${string}`;
 
 export type AppSettingsBlob = {
