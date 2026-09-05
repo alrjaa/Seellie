@@ -10,7 +10,7 @@ import { Avatar, Button, Card, Input, Muted, Subtitle } from '@/components/ui';
 import { MEDIA_SPECS, validatePickerAsset } from '@/utils/media-limits';
 
 /**
- * تغيير صورة المعرّف / أيقونة الحساب (منظّم · متابع · لاعب حر).
+ * تغيير صورة المعرّف / أيقونة الحساب (منظّم · متابع · مواهب).
  * تظهر في الهيدر والقائمة والملف الشخصي.
  */
 export function AvatarPickerCard() {

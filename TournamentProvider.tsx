@@ -193,7 +193,6 @@ import { i18n, t } from '@/i18n';
 import { localizeContentTree } from '@/i18n/localize-content';
 import type { CommentTarget, UserRole } from '@/types';
 import { buildRoundRobinFixtures } from '@/utils/competition';
-import { resolveCompetitionAlertAudience } from '@/utils/competition-alert-recipients';
 import {
   getSecondaryRole,
   normalizeUserRoles,
@@ -761,8 +760,7 @@ export interface TournamentContextType {
   updateOfferStatus: (
     offerId: string,
     status: 'accepted' | 'declined',
-    successMessage?: string,
-    options?: { joinAccept?: { note?: string } }
+    successMessage?: string
   ) => void;
   sendOffer: (freelancerId: string, teamId: string, message: string) => boolean;
   sendMessage: (payload: {
@@ -2696,26 +2694,21 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       );
       if (!mine.length) return;
       for (const msg of mine) {
-        const role = user.activeRole || user.role;
-        const href =
-          role === 'organizer'
-            ? '/(organizer)/messages'
-            : role === 'freelancer'
-              ? '/(freelancer)/messages'
-              : '/(follower)/messages';
+        const isOrganizerPath =
+          (user.activeRole || user.role) === 'organizer';
         addNotification({
           id: `msg-${msg.id}`,
           kind: 'message',
           recipientId: user.id,
           title: msg.subject.startsWith('[نظام]')
             ? 'إشعار النظام'
-            : msg.subject.startsWith('[طلب انضمام]')
-              ? t('shareCards.joinRequestNotifTitle')
-              : msg.subject.startsWith('[قبول انضمام]')
-                ? t('shareCards.joinAcceptNotifTitle')
-                : t('home.messages'),
+            : msg.subject.startsWith('[قبول انضمام]')
+              ? t('shareCards.joinAcceptNotifTitle')
+              : t('home.messages'),
           body: `${msg.senderName}: ${msg.subject}`,
-          href,
+          href: isOrganizerPath
+            ? '/(organizer)/messages'
+            : '/(follower)/messages',
         });
       }
       if (opts?.toastOnArrive) {
@@ -2797,83 +2790,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       stop?.();
     };
   }, [currentUser?.id, refreshCloudMessages, notifyIncomingMessages]);
-
-  /**
-   * سحب الإعلام والتنبيه من blobs المنظّمين (مفتاح RLS: announcements:{organizerId}).
-   * المستلمون يقرأون فقط — الكتابة تتم من حساب المنظّم على مفتاحه.
-   */
-  useEffect(() => {
-    const uid = currentUser?.id;
-    if (!uid || !isSupabaseConfigured()) return;
-    let active = true;
-    void (async () => {
-      const organizerIds = new Set<string>();
-      for (const competition of competitions) {
-        if (!competition?.organizerId || competition.organizerId === uid) continue;
-        const audience = resolveCompetitionAlertAudience(
-          competition,
-          users,
-          referees,
-          undefined
-        );
-        if (!audience.linkedUserIds.includes(uid)) continue;
-        if (isUuid(competition.organizerId)) {
-          organizerIds.add(competition.organizerId);
-        }
-      }
-      for (const organizerId of organizerIds) {
-        const cloud = await fetchAppBlob<
-          Array<{
-            id: string;
-            title: string;
-            body: string;
-            createdAt: string;
-            competitionId?: string;
-            competitionName?: string;
-            competitionLogo?: string;
-            recipientIds?: string[];
-          }>
-        >(`announcements:${organizerId}`);
-        if (!active || !Array.isArray(cloud.data)) continue;
-        for (const alert of cloud.data) {
-          if (!alert?.id || !alert.title) continue;
-          if (
-            Array.isArray(alert.recipientIds) &&
-            alert.recipientIds.length > 0 &&
-            !alert.recipientIds.includes(uid)
-          ) {
-            continue;
-          }
-          const competition =
-            competitions.find((c) => c.id === alert.competitionId) || null;
-          const competitionName =
-            alert.competitionName || competition?.name || '';
-          const competitionLogo =
-            alert.competitionLogo || competition?.logo || undefined;
-          addNotification({
-            id: `alert-${alert.id}-${uid}`,
-            kind: 'announcement',
-            recipientId: uid,
-            competitionId: alert.competitionId,
-            competitionName: competitionName || undefined,
-            competitionLogo,
-            title: alert.title,
-            body: alert.body || '',
-            href: '/notifications',
-          });
-        }
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [
-    currentUser?.id,
-    competitions,
-    users,
-    referees,
-    addNotification,
-  ]);
 
   const refreshCloudShareCards = useCallback(async () => {
     const uid = sessionUserIdRef.current;
@@ -3583,17 +3499,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         })();
         return next;
       });
-      addNotification({
-        id: `appreciation-given-${localId}`,
-        kind: 'appreciation',
-        recipientId: currentUser.id,
-        title: t('notifications.appreciationGivenTitle'),
-        body: t('notifications.appreciationGivenBody', {
-          type: level.name,
-          name: payload.recipientName,
-        }),
-        href: '/(follower)/certificates',
-      });
       toast({
         title: t('toasts.appreciationPendingTitle'),
         description: t('toasts.appreciationPendingDesc', {
@@ -3603,14 +3508,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return gift;
     },
-    [
-      addNotification,
-      currentUser,
-      featureFlags.appreciationEnabled,
-      supportLevels,
-      toast,
-      t,
-    ]
+    [currentUser, featureFlags.appreciationEnabled, supportLevels, toast, t]
   );
 
   const updateCompetition = useCallback(
@@ -4071,42 +3969,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     [toast]
   );
 
-  const sendJoinAcceptMessage = useCallback(
-    (input: {
-      organizerId: string;
-      competitionName?: string;
-      teamName?: string;
-      position?: string;
-      note?: string;
-    }) => {
-      const sender = currentUserRef.current;
-      if (!sender || !isUuid(input.organizerId) || !isUuid(sender.id)) return;
-      const subject = `[قبول انضمام] ${input.competitionName || 'مسابقة'} — ${input.teamName || 'فريق'}`;
-      const lines = [
-        'وافقتُ على طلب انضمامك لي كلاعب في:',
-        `• المسابقة: ${input.competitionName || '—'}`,
-        `• الفريق: ${input.teamName || '—'}`,
-        input.position ? `• المركز: ${input.position}` : '',
-        '',
-      ].filter(Boolean);
-      const note = input.note?.trim();
-      if (note) {
-        lines.push('شروطي وطلباتي:', note, '');
-      }
-      lines.push(`— ${sender.name}`);
-      void notifyAccountUser(input.organizerId, subject, lines.join('\n'));
-    },
-    [notifyAccountUser]
-  );
-
   const updateOfferStatus = useCallback(
     (
       offerId: string,
       status: 'accepted' | 'declined',
-      successMessage?: string,
-      options?: { joinAccept?: { note?: string } }
+      successMessage?: string
     ) => {
-      const offer = offers.find((o) => o.id === offerId);
       setOffers((prev) => {
         const next = prev.map((o) =>
           o.id === offerId ? { ...o, status } : o
@@ -4118,14 +3986,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           console.warn('[offers] status sync failed', res.error);
         }
       });
-      if (status === 'accepted' && offer && currentUser) {
-        sendJoinAcceptMessage({
-          organizerId: offer.organizerId,
-          competitionName: offer.competitionName,
-          teamName: offer.teamName,
-          note: options?.joinAccept?.note,
-        });
-      }
       if (successMessage) {
         toast({
           variant: status === 'accepted' ? 'success' : 'default',
@@ -4134,7 +3994,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [toast, t, offers, currentUser, sendJoinAcceptMessage]
+    [toast]
   );
 
   const sendOffer = useCallback(
@@ -4287,37 +4147,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         body: t('shareCards.notifBody', { name: currentUser.name }),
         href: '/share-cards',
       });
-
-      if (
-        input.kind === 'join_request' &&
-        isUuid(input.recipientId) &&
-        isUuid(currentUser.id)
-      ) {
-        const subject = `[طلب انضمام] ${input.competitionName?.trim() || 'مسابقة'} — ${input.teamName?.trim() || 'فريق'}`;
-        const lines = [
-          'أدعوك للانضمام كلاعب في:',
-          `• المسابقة: ${input.competitionName?.trim() || '—'}`,
-          `• الفريق: ${input.teamName?.trim() || '—'}`,
-          input.position?.trim() ? `• المركز: ${input.position.trim()}` : '',
-          '',
-        ].filter(Boolean);
-        if (input.body?.trim()) {
-          lines.push('رسالة المنظم:', input.body.trim(), '');
-        }
-        lines.push(`— ${currentUser.name}`);
-        const remote = await insertMessage({
-          senderId: currentUser.id,
-          senderName: currentUser.name,
-          senderAvatar: currentUser.avatar,
-          recipientId: input.recipientId,
-          subject,
-          body: lines.join('\n'),
-        });
-        if (remote.message) {
-          setMessages((prev) => mergeMessagesById([remote.message!], prev));
-        }
-      }
-
       toast({
         variant: 'success',
         title: t('shareCards.sent'),
@@ -4422,16 +4251,23 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           return next;
         });
 
-      }
-
-      if (status === 'accepted' && card.kind === 'join_request') {
-        sendJoinAcceptMessage({
-          organizerId: card.senderId,
-          competitionName: card.competitionName,
-          teamName: card.teamName,
-          position: card.position,
-          note: options?.joinAccept?.note,
-        });
+        const note = options?.joinAccept?.note?.trim();
+        const organizerId = card.senderId;
+        if (isUuid(organizerId)) {
+          const subject = `[قبول انضمام] ${card.competitionName || 'مسابقة'} — ${card.teamName || 'فريق'}`;
+          const lines = [
+            `وافقتُ على طلب انضمامك لي كلاعب في:`,
+            `• المسابقة: ${card.competitionName || '—'}`,
+            `• الفريق: ${card.teamName || '—'}`,
+            card.position ? `• المركز: ${card.position}` : '',
+            '',
+          ].filter(Boolean);
+          if (note) {
+            lines.push('شروطي وطلباتي:', note, '');
+          }
+          lines.push(`— ${currentUser.name}`);
+          void notifyAccountUser(organizerId, subject, lines.join('\n'));
+        }
       }
 
       toast({
@@ -4449,7 +4285,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [currentUser, shareCards, toast, t, sendJoinAcceptMessage, syncCompetitions]
+    [currentUser, shareCards, toast, t, notifyAccountUser, syncCompetitions]
   );
 
   const markShareCardRead = useCallback(

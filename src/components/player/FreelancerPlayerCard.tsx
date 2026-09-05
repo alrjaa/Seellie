@@ -30,7 +30,7 @@ type Props = {
 };
 
 /**
- * بطاقة لاعب حر للمتابع — تسلسل خطوط واضح وهوية مهنية.
+ * بطاقة مواهب للمتابع — تسلسل خطوط واضح وهوية مهنية.
  */
 function FreelancerPlayerCardComponent({
   name,

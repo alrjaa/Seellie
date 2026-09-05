@@ -125,7 +125,7 @@ const MediaCard = memo(function MediaCard({
   );
 });
 
-/** شخصية — مخصص لمحتوى اللاعب الحر (صور وفيديوهات) مع إعجاب فعّال. */
+/** شخصية — مخصص لمحتوى المواهب (صور وفيديوهات) مع إعجاب فعّال. */
 export default function PersonalityScreen() {
   const { users, currentUser, toggleMediaLike, addMediaComment } = useTournament();
   const theme = useAppTheme();

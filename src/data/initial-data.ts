@@ -52,7 +52,7 @@ export interface User {
   passwordHash: string; // In a real app, never store plain text passwords
   /** الدور النشط حالياً (مرادف activeRole للتوافق) */
   role: 'superadmin' | 'organizer' | 'follower' | 'freelancer';
-  /** كل الأدوار المفعّلة — متابع + مسار ثانٍ واحد (منظم أو لاعب حر) */
+  /** كل الأدوار المفعّلة — متابع + مسار ثانٍ واحد (منظم أو مواهب) */
   roles?: Array<'superadmin' | 'organizer' | 'follower' | 'freelancer'>;
   /** الواجهة الحالية */
   activeRole?: 'superadmin' | 'organizer' | 'follower' | 'freelancer';
@@ -80,7 +80,7 @@ export interface User {
   };
   personalityPhotos: string[]; // Nominated photos for "Player Personality"
   participationHistoryText?: string;
-  /** شروط الانضمام للمسابقات (لاعب حر) */
+  /** شروط الانضمام للمسابقات (مواهب) */
   joinConditions?: string;
   permissions: {
       canComment: boolean;
@@ -552,7 +552,7 @@ export const initialUsers: User[] = [
         comments: [],
         analysisContent: [],
     },
-    { id: 'freelancer-1', name: 'لاعب حر موهوب', email: 'freelancer@test.com', passwordHash: 'password123', role: 'freelancer', status: 'active', handle: '@freelancer', visibleId: 'FLR-1001', avatar: 'https://placehold.co/100x100.png', country: 'الإمارات العربية المتحدة', region: 'دبي', city: 'دبي', mobile: '0509876543', bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`, bio: 'لاعب وسط مهاجم، أبحث عن فرصة لإثبات مهاراتي. أتميز بالتسديد القوي والرؤية الممتازة للملعب.', posts: [{ id: 'post-1', text: 'جاهز للتحدي القادم!', timestamp: new Date(), likes: [] }], media: { photos: [{id: 'freelancer-1-photo-1', url: 'https://placehold.co/400x300.png', likes: [], comments: []}], videos: [{id: 'freelancer-1-video-1', url: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4', likes: ['user-1', 'user-2'], comments: []}] }, personalityPhotos: ['https://placehold.co/400x300.png'], participationHistoryText: ' - لعب في دوري الهواة بالرياض 2023\n - شارك في بطولة الشركات لكرة القدم 2022', permissions: { canComment: true, canUseVoice: true, canNominateToPersonality: true, canCreateContent: false }, analysisContent: [], comments: [] },
+    { id: 'freelancer-1', name: 'موهبة', email: 'freelancer@test.com', passwordHash: 'password123', role: 'freelancer', status: 'active', handle: '@freelancer', visibleId: 'FLR-1001', avatar: 'https://placehold.co/100x100.png', country: 'الإمارات العربية المتحدة', region: 'دبي', city: 'دبي', mobile: '0509876543', bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`, bio: 'لاعب وسط مهاجم، أبحث عن فرصة لإثبات مهاراتي. أتميز بالتسديد القوي والرؤية الممتازة للملعب.', posts: [{ id: 'post-1', text: 'جاهز للتحدي القادم!', timestamp: new Date(), likes: [] }], media: { photos: [{id: 'freelancer-1-photo-1', url: 'https://placehold.co/400x300.png', likes: [], comments: []}], videos: [{id: 'freelancer-1-video-1', url: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4', likes: ['user-1', 'user-2'], comments: []}] }, personalityPhotos: ['https://placehold.co/400x300.png'], participationHistoryText: ' - لعب في دوري الهواة بالرياض 2023\n - شارك في بطولة الشركات لكرة القدم 2022', permissions: { canComment: true, canUseVoice: true, canNominateToPersonality: true, canCreateContent: false }, analysisContent: [], comments: [] },
 ];
 
 export const initialReferees: Referee[] = [
@@ -783,7 +783,7 @@ export const initialComments: Comment[] = [
             {
                 id: 'reply-1-1',
                 authorId: 'freelancer-1',
-                authorName: 'لاعب حر موهوب',
+                authorName: 'موهبة',
                 authorAvatar: 'https://placehold.co/100x100.png',
                 text: 'أتفق معك، كانت مباراة حماسية. أعتقد أن حارس مرمى فريق النسور كان له الدور الأكبر في الفوز.',
                 timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000), // 1 hour ago
@@ -806,7 +806,7 @@ export const initialComments: Comment[] = [
     {
         id: 'comment-3',
         authorId: 'freelancer-1',
-        authorName: 'لاعب حر موهوب',
+        authorName: 'موهبة',
         authorAvatar: 'https://placehold.co/100x100.png',
         text: 'نقاش صوتي حول أفضل تكتيك دفاعي.',
         audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',

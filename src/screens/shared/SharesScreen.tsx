@@ -172,7 +172,7 @@ const ShareCard = memo(function ShareCard({
 
 /**
  * مشاركات اللاعبين: صور + فيديوهات + نصوص.
- * الجميع يشاهد؛ اللاعب الحر فقط ينشر ويدير وسائطه.
+ * الجميع يشاهد؛ المواهب فقط ينشر ويدير وسائطه.
  */
 export default function SharesScreen() {
   const {

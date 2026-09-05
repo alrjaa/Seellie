@@ -48,7 +48,7 @@ export function freelancerPathTerms(): string {
 export const ORGANIZER_PATH_TERMS = '';
 export const FREELANCER_PATH_TERMS = '';
 
-/** المسار الثانوي الوحيد إن وُجد (منظم أو لاعب حر — وليس الاثنين) */
+/** المسار الثانوي الوحيد إن وُجد (منظم أو مواهب — وليس الاثنين) */
 export function getSecondaryRole(
   roles?: UserRole[] | null
 ): SecondaryRole | null {

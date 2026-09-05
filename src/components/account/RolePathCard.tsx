@@ -12,7 +12,7 @@ import {
 import type { UserRole } from '@/types';
 
 /**
- * اختيار مسار ثانٍ واحد (منظم أو لاعب حر) + التبديل بين المتابع والمسار.
+ * اختيار مسار ثانٍ واحد (منظم أو مواهب) + التبديل بين المتابع والمسار.
  */
 export function RolePathCard() {
   const theme = useAppTheme();

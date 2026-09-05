@@ -261,7 +261,7 @@ export async function upsertProfile(input: {
   return profileToUser(data as ProfileRow);
 }
 
-/** تحديث أدوار الحساب السحابي (منظم / لاعب حر) في profiles */
+/** تحديث أدوار الحساب السحابي (منظم / مواهب) في profiles */
 export async function updateProfileRolesCloud(input: {
   id: string;
   email: string;

@@ -14,7 +14,8 @@ export const CONTENT_EN: Record<string, string> = {
   'أحمد المتابع': 'Ahmed the Follower',
   'نورة الرياضية': 'Noura the Athlete',
   'خالد المشجع': 'Khaled the Fan',
-  'لاعب حر موهوب': 'Talented Freelancer',
+  'موهبة': 'Talent',
+  'لاعب حر موهوب': 'Talent',
 
   // Places
   'المملكة العربية السعودية': 'Saudi Arabia',
