@@ -208,6 +208,7 @@ export const ar = {
     upcoming: 'المباريات القادمة',
     upcomingFrom: 'من بطولات %{location} والمثبتة لديك',
     upcomingFallback: 'من البطولات المثبتة أو بعد تحديد مدينتك',
+    localCompetitions: 'المسابقات المحلية',
     nationalLeague: 'الدوري العام',
     nationalLeagueSub: 'الدوري السعودي — نتائج وترتيب (آخر موسمين تشغيلياً)',
     nationalLeagueUnavailable: 'بيانات الدوري العام غير متاحة حالياً',

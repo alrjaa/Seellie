@@ -208,6 +208,7 @@ export const en: TranslationTree = {
     upcoming: 'Upcoming matches',
     upcomingFrom: 'From %{location} competitions and your pins',
     upcomingFallback: 'From pinned competitions or after setting your city',
+    localCompetitions: 'Local competitions',
     nationalLeague: 'National league',
     nationalLeagueSub: 'Saudi Pro League — results & standings (last two seasons)',
     nationalLeagueUnavailable: 'National league data is unavailable right now',

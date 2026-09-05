@@ -541,18 +541,31 @@ export default function FollowerHomeScreen() {
       <HomeHeader
         accountHref="/(follower)/settings/account"
         settingsHref="/(follower)/settings"
-        pageSubtitle={
-          locationLabel
-            ? t('home.regionContent', { location: locationLabel })
-            : t('home.setCityFromAccount')
-        }
       />
 
-      <SearchBar
-        value={query}
-        onChangeText={setQuery}
-        placeholder={t('home.searchPlaceholder')}
-      />
+      {isSearching ? null : <NationalLeagueHomeSection />}
+
+      <View style={styles.section}>
+        <Subtitle style={[styles.sectionTitle, titleDir]}>
+          {t('home.localCompetitions')}
+        </Subtitle>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('home.yourAddress')}
+          onPress={() => router.push('/(follower)/settings/account' as any)}
+        >
+          <Muted style={[styles.sectionTitle, titleDir]}>
+            {locationLabel
+              ? t('home.regionContent', { location: locationLabel })
+              : t('home.setCityFromAccount')}
+          </Muted>
+        </Pressable>
+        <SearchBar
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t('home.searchPlaceholder')}
+        />
+      </View>
 
       {isSearching ? (
         <View style={styles.section}>
@@ -616,7 +629,6 @@ export default function FollowerHomeScreen() {
                       <Text
                         style={[
                           { color: pinned ? theme.colors.textInverse : theme.colors.textMuted, fontSize: 12 },
-                          // cairoText applied via home styles where possible
                           { fontFamily: 'Cairo_700Bold', fontWeight: 'normal' as const },
                         ]}
                       >
@@ -631,8 +643,6 @@ export default function FollowerHomeScreen() {
         </View>
       ) : (
         <>
-          <NationalLeagueHomeSection />
-
           <View style={styles.section}>
             <Subtitle style={[styles.sectionTitle, titleDir]}>{t('home.upcoming')}</Subtitle>
             <Muted style={[styles.sectionTitle, titleDir]}>
