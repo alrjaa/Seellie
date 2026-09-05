@@ -17,7 +17,7 @@ const VIEWPORT_RE =
 
 const SITE_TITLE = 'Seellie';
 const SITE_DESCRIPTION =
-  'Seellie — منصة تنظيم البطولات الرياضية. إدارة الفرق والمباريات والحكام واللاعبين في مكان واحد.';
+  'Seellie منصة رياضية متكاملة لتنظيم وإدارة البطولات، ومتابعة المباريات والنتائج والفرق واللاعبين في مكان واحد.';
 
 const SEO_MARKER = 'data-seellie-seo="1"';
 
