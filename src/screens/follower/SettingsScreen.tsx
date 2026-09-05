@@ -145,6 +145,12 @@ export default function SettingsScreen() {
         onPress={() => router.push('/(follower)/settings/ads' as any)}
       />
       <ListRow
+        title={t('legal.openAbout')}
+        subtitle={t('legal.aboutSubtitle')}
+        icon="book-outline"
+        onPress={() => router.push('/about' as any)}
+      />
+      <ListRow
         title={t('legal.openPrivacy')}
         subtitle={t('legal.privacyTitle')}
         icon="shield-checkmark-outline"

@@ -810,6 +810,9 @@ export const ar = {
       'التطبيق قيد التطوير. بعض الميزات محلية حالياً وسيتم ربط الخلفية السحابية في مرحلة لاحقة.',
     openPrivacy: 'سياسة الخصوصية',
     openTerms: 'شروط الاستخدام',
+    openAbout: 'قصة Seellie',
+    aboutTitle: 'انظر لي',
+    aboutSubtitle: 'لكل اسم حكاية...',
   },
   privateSpace: {
     title: 'مساحة خاصة',

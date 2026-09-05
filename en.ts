@@ -813,6 +813,9 @@ export const en: TranslationTree = {
       'The app is under development. Some features are local for now; cloud backend comes later.',
     openPrivacy: 'Privacy Policy',
     openTerms: 'Terms of Use',
+    openAbout: 'The Seellie story',
+    aboutTitle: 'See me',
+    aboutSubtitle: 'Every name has a story...',
   },
   privateSpace: {
     title: 'Private space',

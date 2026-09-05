@@ -175,6 +175,23 @@ export default function LoginScreen() {
                 <Text style={[styles.desktopHeroTag, { color: 'rgba(255,255,255,0.72)' }]}>
                   {t('auth.tagline')}
                 </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('legal.openAbout')}
+                  onPress={() => router.push('/about' as any)}
+                  hitSlop={8}
+                  style={{ marginTop: 10 }}
+                >
+                  <Text
+                    style={[
+                      styles.storyLink,
+                      cairoText('semiBold'),
+                      { color: theme.colors.accent },
+                    ]}
+                  >
+                    {t('legal.openAbout')}
+                  </Text>
+                </Pressable>
               </View>
               <View style={styles.desktopFormCol}>
                 <View
@@ -334,6 +351,22 @@ export default function LoginScreen() {
                 <Text style={[styles.tagline, { color: theme.colors.textMuted }]}>
                   {t('auth.tagline')}
                 </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('legal.openAbout')}
+                  onPress={() => router.push('/about' as any)}
+                  hitSlop={8}
+                >
+                  <Text
+                    style={[
+                      styles.storyLink,
+                      cairoText('semiBold'),
+                      { color: theme.colors.accent },
+                    ]}
+                  >
+                    {t('legal.openAbout')}
+                  </Text>
+                </Pressable>
               </View>
 
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
@@ -572,6 +605,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     textAlign: 'center',
+  },
+  storyLink: {
+    marginTop: 8,
+    fontSize: 13,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
   },
   sectionTitle: {
     ...cairoText('bold'),

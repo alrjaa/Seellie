@@ -240,6 +240,11 @@ export default function SettingsScreen() {
               desc: t('appreciation.features.appreciationDesc'),
             },
             {
+              key: 'commerceCreditsEnabled' as const,
+              title: t('commerce.features.credits'),
+              desc: t('commerce.features.creditsDesc'),
+            },
+            {
               key: 'commentComposerEnabled' as const,
               title: t('appreciation.features.commentComposer'),
               desc: t('appreciation.features.commentComposerDesc'),
@@ -321,6 +326,11 @@ export default function SettingsScreen() {
         label={t('notifications.title')}
         variant="outline"
         onPress={() => router.push('/notifications' as any)}
+      />
+      <Button
+        label={t('legal.openAbout')}
+        variant="ghost"
+        onPress={() => router.push('/about' as any)}
       />
       <Button
         label={t('legal.openPrivacy')}

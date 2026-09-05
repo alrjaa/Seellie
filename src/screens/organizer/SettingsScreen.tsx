@@ -138,6 +138,11 @@ export default function OrganizerSettingsScreen() {
         onPress={() => router.push('/notifications' as any)}
       />
       <Button
+        label={t('legal.openAbout')}
+        variant="ghost"
+        onPress={() => router.push('/about' as any)}
+      />
+      <Button
         label={t('legal.openPrivacy')}
         variant="ghost"
         onPress={() => router.push('/privacy' as any)}

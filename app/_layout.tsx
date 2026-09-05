@@ -148,6 +148,14 @@ function RootNavigator() {
             }}
           />
           <Stack.Screen
+            name="about"
+            options={{
+              headerShown: false,
+              title: '',
+              ...header,
+            }}
+          />
+          <Stack.Screen
             name="profile/[id]"
             options={{
               headerShown: false,
