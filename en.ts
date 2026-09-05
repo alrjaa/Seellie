@@ -1211,7 +1211,7 @@ export const en: TranslationTree = {
       },
       freelancers: {
         title: 'Talents',
-        description: 'Search for players and send offers',
+        description: 'Search for talents and send offers',
       },
       messages: {
         title: 'Messages',
@@ -1386,7 +1386,7 @@ export const en: TranslationTree = {
     },
     freelancers: {
       title: 'Talents',
-      subtitle: 'Search for players and send join offers to teams',
+      subtitle: 'Search for talents and send join offers to teams',
       empty: 'No talents',
       regIdLine: 'Registration ID: %{id}',
       sendOffer: 'Send offer',
