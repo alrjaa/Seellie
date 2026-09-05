@@ -5208,12 +5208,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
+      const organizer = users.find((u) => u.id === request.organizerId);
       const competitionId = createId('comp');
       const fullAddress = buildCompetitionVenueAddress({
         venueName: request.venueName,
         neighborhood: request.neighborhood,
         city: request.city,
         region: request.region,
+        country: organizer?.country,
       });
       const competition: Competition = {
         id: competitionId,
@@ -5226,6 +5228,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         status: 'active',
         venue: {
           name: request.venueName,
+          country: organizer?.country?.trim() || undefined,
           region: request.region,
           city: request.city,
           neighborhood: request.neighborhood,
@@ -5319,7 +5322,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [competitionRequests, competitions, toast, t, currentUser]
+    [competitionRequests, competitions, toast, t, currentUser, users]
   );
 
   const rejectCompetitionRequest = useCallback(

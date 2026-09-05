@@ -32,9 +32,16 @@ export function buildCompetitionVenueAddress(input: {
   neighborhood: string;
   city: string;
   region: string;
+  country?: string;
 }): string {
-  return [input.venueName, input.neighborhood, input.city, input.region]
-    .map((s) => s.trim())
+  return [
+    input.venueName,
+    input.neighborhood,
+    input.city,
+    input.region,
+    input.country,
+  ]
+    .map((s) => (s || '').trim())
     .filter(Boolean)
     .join('، ');
 }

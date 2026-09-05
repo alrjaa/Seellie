@@ -36,6 +36,7 @@ import { useResponsive } from '@/hooks/useResponsive';
 import { formatArabicDate, formatArabicTime } from '@/utils';
 import {
   computeStandings,
+  competitionMatchesPlaceQuery,
   formatVenueAddress,
   selectHomeCompetitions,
 } from '@/utils/competition';
@@ -439,7 +440,11 @@ export default function FollowerHomeScreen() {
   const unreadNotifs = unreadCountFor(currentUser?.id);
 
   const pinnedIds = currentUser?.pinnedCompetitionIds || [];
-  const locationLabel = [currentUser?.city, currentUser?.region]
+  const locationLabel = [
+    currentUser?.city,
+    currentUser?.region,
+    currentUser?.country,
+  ]
     .filter(Boolean)
     .join(' · ');
 
@@ -449,16 +454,9 @@ export default function FollowerHomeScreen() {
   );
 
   const searchResults = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = query.trim();
     if (!q) return [];
-    return competitions.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.visibleId.toLowerCase().includes(q) ||
-        c.venue?.city?.toLowerCase().includes(q) ||
-        c.venue?.region?.toLowerCase().includes(q) ||
-        c.venue?.name?.toLowerCase().includes(q)
-    );
+    return competitions.filter((c) => competitionMatchesPlaceQuery(c, q));
   }, [competitions, query]);
 
   const isSearching = query.trim().length > 0;

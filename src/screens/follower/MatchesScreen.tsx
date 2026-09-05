@@ -19,6 +19,11 @@ import {
   Subtitle,
 } from '@/components/ui';
 import { formatArabicDate, formatArabicTime } from '@/utils';
+import {
+  competitionMatchesPlaceQuery,
+  selectHomeCompetitions,
+} from '@/utils/competition';
+import { matchesSearchQuery } from '@/utils/search';
 
 type MatchRow = Match & {
   competition: Competition;
@@ -105,15 +110,20 @@ const MatchCard = memo(function MatchCard({ item }: { item: MatchRow }) {
 });
 
 export default function MatchesScreen() {
-  const { competitions } = useTournament();
+  const { competitions, currentUser } = useTournament();
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const listChrome = useListChrome();
 
+  const scopedCompetitions = useMemo(() => {
+    const q = query.trim();
+    if (q) return competitions.filter((c) => c.status === 'active');
+    return selectHomeCompetitions(competitions, currentUser);
+  }, [competitions, currentUser, query]);
 
   const matches = useMemo(() => {
     const rows: MatchRow[] = [];
-    competitions.forEach((comp) => {
+    scopedCompetitions.forEach((comp) => {
       (comp.matches || []).forEach((match) => {
         const team1 = comp.teams.find((t) => t.id === match.team1Id);
         const team2 = comp.teams.find((t) => t.id === match.team2Id);
@@ -131,15 +141,15 @@ export default function MatchesScreen() {
     return rows.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
-  }, [competitions]);
+  }, [scopedCompetitions]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = query.trim();
     if (!q) return matches;
     return matches.filter(
       (m) =>
-        m.team1Name.toLowerCase().includes(q) ||
-        m.team2Name.toLowerCase().includes(q)
+        competitionMatchesPlaceQuery(m.competition, q) ||
+        matchesSearchQuery(q, m.team1Name, m.team2Name, m.competition.name)
     );
   }, [matches, query]);
 
@@ -159,11 +169,15 @@ export default function MatchesScreen() {
         ListHeaderComponent={
           <View style={styles.header}>
             <Subtitle>{t('screens.matches')}</Subtitle>
-            <Muted>{t('home.matchesSub')}</Muted>
+            <Muted>
+              {query.trim()
+                ? t('screens.matchesSearchHint')
+                : t('home.matchesSub')}
+            </Muted>
             <SearchBar
               value={query}
               onChangeText={setQuery}
-              placeholder={t('screens.searchMatches')}
+              placeholder={t('screens.searchMatchesPlaces')}
             />
           </View>
         }

@@ -144,6 +144,8 @@ export function formatVenueAddress(competition: Competition): string {
   return parts.join(sep);
 }
 
+import { matchesSearchQuery } from '@/utils/search';
+
 function normalizePlace(value?: string): string {
   return (value || '').trim().toLowerCase();
 }
@@ -155,30 +157,116 @@ function placesOverlap(a?: string, b?: string): boolean {
   return left === right || left.includes(right) || right.includes(left);
 }
 
-/** تطابق بطولة مع مدينة/منطقة المتابع */
+export type UserLocationFields = {
+  country?: string;
+  region?: string;
+  city?: string;
+  pinnedCompetitionIds?: string[];
+};
+
+/** هل حدّد المتابع عنواناً (دولة / منطقة / مدينة) */
+export function userHasLocation(
+  user: UserLocationFields | null | undefined
+): boolean {
+  return !!(
+    user?.city?.trim() ||
+    user?.region?.trim() ||
+    user?.country?.trim()
+  );
+}
+
+/** تطابق بطولة مع عنوان المتابع (مدينة ثم منطقة ثم دولة) */
 export function competitionMatchesUserLocation(
   competition: Competition,
-  user: { city?: string; region?: string } | null | undefined
+  user: UserLocationFields | null | undefined
 ): boolean {
   if (!user) return false;
   const venue = competition.venue;
   if (!venue) return false;
 
-  if (placesOverlap(user.city, venue.city)) return true;
-  if (placesOverlap(user.region, venue.region)) return true;
-  if (placesOverlap(user.city, venue.region)) return true;
-  if (placesOverlap(user.region, venue.city)) return true;
+  const city = user.city?.trim();
+  const region = user.region?.trim();
+  const country = user.country?.trim();
+
+  if (
+    city &&
+    (placesOverlap(city, venue.city) ||
+      placesOverlap(city, venue.region) ||
+      placesOverlap(city, venue.neighborhood) ||
+      placesOverlap(city, venue.fullAddress))
+  ) {
+    return true;
+  }
+
+  if (
+    region &&
+    (placesOverlap(region, venue.region) ||
+      placesOverlap(region, venue.city) ||
+      placesOverlap(region, venue.fullAddress))
+  ) {
+    return true;
+  }
+
+  if (
+    country &&
+    (placesOverlap(country, venue.country) ||
+      placesOverlap(country, venue.region) ||
+      placesOverlap(country, venue.fullAddress))
+  ) {
+    return true;
+  }
+
   return false;
 }
 
-/** بطولات الرئيسية: مدينة/منطقة المتابع + المثبتة (للتخصيص).
- * إن لم تُحدَّد مدينة/منطقة بعد (حساب جديد) نعرض كل المسابقات النشطة. */
+/** بحث حر عن بطولة بالاسم أو الدولة أو المدينة أو المنطقة أو العنوان */
+export function competitionMatchesPlaceQuery(
+  competition: Competition,
+  query: string
+): boolean {
+  const venue = competition.venue;
+  return matchesSearchQuery(
+    query,
+    competition.name,
+    competition.visibleId,
+    venue?.name,
+    venue?.country,
+    venue?.region,
+    venue?.city,
+    venue?.neighborhood,
+    venue?.fullAddress
+  );
+}
+
+/** دول ومدن متاحة من بطولات نشطة — لمحرك الاستكشاف */
+export function listCompetitionPlaceOptions(competitions: Competition[]): {
+  countries: string[];
+  cities: string[];
+} {
+  const countries = new Set<string>();
+  const cities = new Set<string>();
+  competitions.forEach((c) => {
+    if (c.status !== 'active') return;
+    const country = c.venue?.country?.trim();
+    const city = c.venue?.city?.trim();
+    if (country) countries.add(country);
+    if (city) cities.add(city);
+  });
+  const sortAr = (a: string, b: string) => a.localeCompare(b, 'ar');
+  return {
+    countries: [...countries].sort(sortAr),
+    cities: [...cities].sort(sortAr),
+  };
+}
+
+/** بطولات الرئيسية: عنوان المتابع + المثبتة.
+ * إن لم يُحدَّد عنوان بعد نعرض كل المسابقات النشطة. */
 export function selectHomeCompetitions(
   competitions: Competition[],
-  user: { city?: string; region?: string; pinnedCompetitionIds?: string[] } | null | undefined
+  user: UserLocationFields | null | undefined
 ): Competition[] {
   const pinned = new Set(user?.pinnedCompetitionIds || []);
-  const hasLocation = !!(user?.city?.trim() || user?.region?.trim());
+  const hasLocation = userHasLocation(user);
   return competitions
     .filter(
       (c) =>

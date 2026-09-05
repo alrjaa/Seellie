@@ -30,6 +30,7 @@ import {
 import { useListChrome } from '@/hooks/useListChrome';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { userHasRole } from '@/utils/roles';
+import { competitionMatchesPlaceQuery } from '@/utils/competition';
 
 type Hit = {
   id: string;
@@ -104,9 +105,7 @@ export default function SearchScreen() {
         return;
       }
       if (
-        c.name.toLowerCase().includes(q) ||
-        c.visibleId.toLowerCase().includes(q) ||
-        c.venue?.city?.toLowerCase().includes(q)
+        competitionMatchesPlaceQuery(c, q)
       ) {
         results.push({
           id: `comp-${c.id}`,
