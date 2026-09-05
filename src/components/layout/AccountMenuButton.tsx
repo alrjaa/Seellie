@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
+import { useNotifications } from '@/providers/NotificationsProvider';
 import { headerSafeTop } from '@/theme/navigation';
 import {
   getSecondaryRole,
@@ -65,6 +66,7 @@ function AccountMenuButtonComponent({
   compact,
 }: Props) {
   const { currentUser, logout, switchActiveRole, featureFlags } = useTournament();
+  const { unreadCountFor, forUser } = useNotifications();
   const theme = useAppTheme();
   const { t, isRTL } = useTranslation();
   const router = useRouter();
@@ -75,6 +77,17 @@ function AccountMenuButtonComponent({
   };
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
+
+  const unreadNotifs = unreadCountFor(currentUser?.id);
+  const unreadAlerts = useMemo(
+    () =>
+      forUser(currentUser?.id).filter(
+        (n) => !n.read && n.kind === 'announcement'
+      ).length,
+    [forUser, currentUser?.id]
+  );
+  /** شارة الزر: أولوية لإعلام المسابقة، وإلا أي إشعار غير مقروء */
+  const badgeCount = unreadAlerts > 0 ? unreadAlerts : unreadNotifs;
 
   const pathsHref = useMemo(() => {
     if (settingsHref) return settingsHref;
@@ -110,6 +123,11 @@ function AccountMenuButtonComponent({
     router.push('/(follower)/wallet' as any);
   }, [router]);
 
+  const goNotifications = useCallback(() => {
+    setOpen(false);
+    router.push('/notifications' as any);
+  }, [router]);
+
   const onLogout = useCallback(() => {
     setOpen(false);
     logout();
@@ -137,7 +155,11 @@ function AccountMenuButtonComponent({
     <>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={t('menu.accountMenu')}
+        accessibilityLabel={
+          badgeCount > 0
+            ? t('menu.accountMenuWithAlerts', { count: badgeCount })
+            : t('menu.accountMenu')
+        }
         accessibilityHint={
           isSuperAdmin ? t('menu.accountSettings') : t('menu.accountMenuHint')
         }
@@ -161,11 +183,33 @@ function AccountMenuButtonComponent({
               { flexDirection: rowDir },
             ]}
           >
-            <Avatar
-              uri={currentUser.avatar}
-              name={currentUser.name}
-              size={compact ? 26 : 30}
-            />
+            <View style={styles.avatarWithAlert}>
+              <Avatar
+                uri={currentUser.avatar}
+                name={currentUser.name}
+                size={compact ? 26 : 30}
+              />
+              {badgeCount > 0 ? (
+                <View
+                  style={[
+                    styles.alertBadge,
+                    styles.alertBadgeOnAvatar,
+                    {
+                      backgroundColor: theme.colors.danger,
+                      borderColor: theme.colors.surface,
+                    },
+                  ]}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                >
+                  <Ionicons
+                    name="mail"
+                    size={compact ? 8 : 9}
+                    color="#FFFFFF"
+                  />
+                </View>
+              ) : null}
+            </View>
             <Text
               style={[
                 styles.handleLabel,
@@ -178,13 +222,44 @@ function AccountMenuButtonComponent({
             >
               {currentUser.handle}
             </Text>
+            {badgeCount > 0 ? (
+              <View
+                style={[
+                  styles.alertCountPill,
+                  { backgroundColor: theme.colors.danger },
+                ]}
+              >
+                <Text style={[styles.alertCountText, { color: '#FFFFFF' }]}>
+                  {badgeCount > 99 ? '99+' : String(badgeCount)}
+                </Text>
+              </View>
+            ) : null}
           </View>
         ) : (
-          <Avatar
-            uri={currentUser.avatar}
-            name={currentUser.name}
-            size={size}
-          />
+          <View style={styles.avatarWithAlert}>
+            <Avatar
+              uri={currentUser.avatar}
+              name={currentUser.name}
+              size={size}
+            />
+            {badgeCount > 0 ? (
+              <View
+                style={[
+                  styles.alertBadge,
+                  styles.alertBadgeTop,
+                  isRTL ? styles.alertBadgeTopStart : styles.alertBadgeTopEnd,
+                  {
+                    backgroundColor: theme.colors.danger,
+                    borderColor: theme.colors.surface,
+                  },
+                ]}
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+              >
+                <Ionicons name="mail" size={9} color="#FFFFFF" />
+              </View>
+            ) : null}
+          </View>
         )}
         {variant === 'avatar' ? (
           <View
@@ -447,6 +522,54 @@ function AccountMenuButtonComponent({
 
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={
+                  unreadNotifs > 0
+                    ? t('menu.notificationsUnread', { count: unreadNotifs })
+                    : t('menu.notifications')
+                }
+                onPress={goNotifications}
+                style={({ pressed }) => [
+                  styles.item,
+                  {
+                    backgroundColor: pressed
+                      ? theme.colors.accentSoft
+                      : 'transparent',
+                    flexDirection: rowDir,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={
+                    unreadNotifs > 0
+                      ? 'mail-unread-outline'
+                      : 'notifications-outline'
+                  }
+                  size={20}
+                  color={theme.colors.accent}
+                />
+                <Text
+                  style={[styles.itemLabel, { color: theme.colors.text }, textStart]}
+                >
+                  {unreadNotifs > 0
+                    ? t('menu.notificationsUnread', { count: unreadNotifs })
+                    : t('menu.notifications')}
+                </Text>
+                {unreadNotifs > 0 ? (
+                  <View
+                    style={[
+                      styles.menuUnreadPill,
+                      { backgroundColor: theme.colors.danger },
+                    ]}
+                  >
+                    <Text style={[styles.alertCountText, { color: '#FFFFFF' }]}>
+                      {unreadNotifs > 99 ? '99+' : String(unreadNotifs)}
+                    </Text>
+                  </View>
+                ) : null}
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
                 accessibilityLabel={t('menu.accountSettings')}
                 onPress={sameHref || isSuperAdmin ? goPaths : goAccount}
                 style={({ pressed }) => [
@@ -550,6 +673,54 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 7,
     borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarWithAlert: {
+    position: 'relative',
+  },
+  alertBadge: {
+    position: 'absolute',
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+    zIndex: 2,
+  },
+  alertBadgeOnAvatar: {
+    top: -3,
+    end: -4,
+  },
+  alertBadgeTop: {
+    top: -3,
+  },
+  alertBadgeTopEnd: {
+    right: -3,
+  },
+  alertBadgeTopStart: {
+    left: -3,
+  },
+  alertCountPill: {
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  alertCountText: {
+    fontSize: 9,
+    fontWeight: '900',
+    lineHeight: 11,
+  },
+  menuUnreadPill: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 5,
     alignItems: 'center',
     justifyContent: 'center',
   },

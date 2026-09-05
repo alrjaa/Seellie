@@ -303,7 +303,10 @@ export const en: TranslationTree = {
     exit: 'Log out',
     closeMenu: 'Close menu',
     accountMenu: 'Account menu',
-    accountMenuHint: 'Account paths, settings, or sign out',
+    accountMenuHint: 'Notifications, account paths, settings, or sign out',
+    accountMenuWithAlerts: 'Account menu · %{count} alert(s)',
+    notifications: 'Announcements & alerts',
+    notificationsUnread: 'Announcements & alerts (%{count})',
     enterFollower: 'Enter as follower',
     enterRole: 'Enter as %{role} now',
     enterAdmin: 'Admin sign in',
@@ -1211,7 +1214,7 @@ export const en: TranslationTree = {
       },
       freelancers: {
         title: 'Talents',
-        description: 'Search for talents and send offers',
+        description: 'Search for players and send offers',
       },
       messages: {
         title: 'Messages',
@@ -1386,7 +1389,7 @@ export const en: TranslationTree = {
     },
     freelancers: {
       title: 'Talents',
-      subtitle: 'Search for talents and send join offers to teams',
+      subtitle: 'Search for players and send join offers to teams',
       empty: 'No talents',
       regIdLine: 'Registration ID: %{id}',
       sendOffer: 'Send offer',
