@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,9 +9,46 @@ import {
   StackTopChrome,
   stackTopChromePad,
 } from '@/components/layout/StackTopChrome';
-import { Button, Card, Muted, Subtitle, Title } from '@/components/ui';
+import { Button, Card, Muted, Subtitle } from '@/components/ui';
 import { cairoText } from '@/theme/fonts';
 import { getSeellieStory } from '@/content/seellie-story';
+
+/** أزرق بارز لكلمة «لي» في قصة الهوية */
+const LI_BLUE = '#2563EB';
+
+const LI_MARK = /\[\[لي\]\]/g;
+
+function renderMarkedText(
+  text: string,
+  baseStyle: object[],
+  keyPrefix: string
+): ReactNode {
+  const parts = text.split(LI_MARK);
+  if (parts.length === 1) {
+    return text;
+  }
+  const nodes: ReactNode[] = [];
+  parts.forEach((part, i) => {
+    if (part) {
+      nodes.push(
+        <Text key={`${keyPrefix}-t-${i}`} style={baseStyle}>
+          {part}
+        </Text>
+      );
+    }
+    if (i < parts.length - 1) {
+      nodes.push(
+        <Text
+          key={`${keyPrefix}-li-${i}`}
+          style={[...baseStyle, styles.liWord]}
+        >
+          لي
+        </Text>
+      );
+    }
+  });
+  return nodes;
+}
 
 /**
  * قصة هوية Seellie — بالعربية أو الإنجليزية حسب لغة التطبيق.
@@ -28,6 +65,11 @@ export default function AboutSeellieScreen() {
   );
   const textAlign = isRTL ? ('right' as const) : ('left' as const);
   const writingDirection = isRTL ? ('rtl' as const) : ('ltr' as const);
+  const baseText = {
+    color: theme.colors.text,
+    textAlign,
+    writingDirection,
+  } as const;
 
   return (
     <View style={styles.root}>
@@ -46,7 +88,23 @@ export default function AboutSeellieScreen() {
         >
           {story.brand}
         </Text>
-        <Title style={{ textAlign, writingDirection }}>{story.tagline}</Title>
+        <Text
+          style={[
+            styles.tagline,
+            cairoText('extraBold'),
+            { color: theme.colors.text, textAlign, writingDirection },
+          ]}
+        >
+          {renderMarkedText(
+            story.tagline,
+            [
+              styles.tagline,
+              cairoText('extraBold'),
+              { color: theme.colors.text, textAlign, writingDirection },
+            ],
+            'tag'
+          )}
+        </Text>
         <Muted style={{ textAlign, writingDirection }}>{story.subtitle}</Muted>
 
         {story.blocks.map((block, index) => (
@@ -59,17 +117,13 @@ export default function AboutSeellieScreen() {
             {block.paragraphs.map((paragraph, pIndex) => (
               <Text
                 key={`p-${index}-${pIndex}`}
-                style={[
-                  styles.paragraph,
-                  cairoText('regular'),
-                  {
-                    color: theme.colors.text,
-                    textAlign,
-                    writingDirection,
-                  },
-                ]}
+                style={[styles.paragraph, cairoText('regular'), baseText]}
               >
-                {paragraph}
+                {renderMarkedText(
+                  paragraph,
+                  [styles.paragraph, cairoText('regular'), baseText],
+                  `p-${index}-${pIndex}`
+                )}
               </Text>
             ))}
           </Card>
@@ -97,7 +151,19 @@ export default function AboutSeellieScreen() {
                 },
               ]}
             >
-              {line}
+              {renderMarkedText(
+                line,
+                [
+                  index === 0 ? styles.closingBrand : styles.closingLine,
+                  cairoText(index === 0 ? 'extraBold' : 'semiBold'),
+                  {
+                    color: theme.colors.accent,
+                    textAlign: 'center' as const,
+                    writingDirection,
+                  },
+                ],
+                `close-${index}`
+              )}
             </Text>
           ))}
         </Card>
@@ -119,11 +185,19 @@ const styles = StyleSheet.create({
     fontSize: 28,
     letterSpacing: 0.4,
   },
+  tagline: {
+    fontSize: 22,
+    lineHeight: 32,
+  },
   card: { gap: 10 },
   paragraph: {
     fontSize: 15,
     lineHeight: 26,
     fontWeight: '500',
+  },
+  liWord: {
+    color: LI_BLUE,
+    fontWeight: '800',
   },
   closingCard: {
     gap: 8,

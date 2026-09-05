@@ -19,7 +19,7 @@ export type SeellieStory = {
 
 export const SEELLIE_STORY_AR: SeellieStory = {
   brand: 'Seellie',
-  tagline: 'انظر لي',
+  tagline: 'انظر [[لي]]',
   subtitle: 'لكل اسم حكاية...',
   blocks: [
     {
@@ -27,11 +27,11 @@ export const SEELLIE_STORY_AR: SeellieStory = {
         'وبعض الأسماء لا تُختار لتكون مجرد اسم، بل لتختصر فكرة، وتحمل رسالة، وتعبّر عن حلم.',
         'Seellie واحدة من هذه الأسماء.',
         'في اسم Seellie فكرة بسيطة:',
-        'See — انظر، شاهد.\nلي — لي.',
-        'وعندما اجتمعت الكلمتان، ظهرت الفكرة التي وُلدت منها هوية Seellie:',
-        'انظر لي.',
-        'ليست مجرد عبارة.\nإنها دعوة.',
-        'دعوة لكل لاعب لديه شيء يريد أن يقدمه.\nلكل موهبة لم تحصل بعد على فرصتها.\nلكل شخص يقول في داخله:\nأنا أستطيع... فقط أريد أن يراني أحد.',
+        'See — انظر، شاهد.',
+        '[[لي]] — تعني [[لي]] كتطبيق يقدم لك معلومة في نفس الوقت، ويقدم لك موهبة، ويقدم لك تنافسًا بين الفرق، ويقدم لك المتعة لتنظر إليها. وتعني [[لي]] كلاعب، كموهبة، كفريق، كحكم، كمنظم مسابقات، كدوري قائم، كمنافسة قوية. وتعني [[لي]] كمحلل وناقد.',
+        'Seellie لا تقول فقط: «انظر [[لي]]».\nبل تقول أيضًا: «هذا لك.»',
+        'لك ما تبحث عنه.\nلك ما تريد أن تراه.\nلك ما تريد أن تتابعه.\nولك مكانك في عالم الرياضة.',
+        'وعندما اجتمعت الكلمتان، ظهرت الفكرة التي وُلدت منها هوية Seellie.',
       ],
     },
     {
@@ -147,13 +147,13 @@ export const SEELLIE_STORY_AR: SeellieStory = {
   ],
   closing: [
     'Seellie',
-    'انظر لي... ربما أكون الموهبة التي تبحث عنها.',
+    'انظر [[لي]]... ربما أكون الموهبة التي تبحث عنها.',
   ],
 };
 
 export const SEELLIE_STORY_EN: SeellieStory = {
   brand: 'Seellie',
-  tagline: 'See me',
+  tagline: 'See [[لي]]',
   subtitle: 'Every name has a story...',
   blocks: [
     {
@@ -161,11 +161,11 @@ export const SEELLIE_STORY_EN: SeellieStory = {
         'And some names are not chosen to be just a name — they are chosen to hold an idea, carry a message, and express a dream.',
         'Seellie is one of those names.',
         'In the name Seellie there is a simple idea:',
-        'See — look, watch.\nلي (li) — me.',
-        'When the two came together, the idea that shaped Seellie’s identity appeared:',
-        'See me.',
-        'It is not just a phrase.\nIt is an invitation.',
-        'An invitation to every player who has something to offer.\nTo every talent that has not yet found its chance.\nTo everyone who says inside:\nI can... I just want someone to see me.',
+        'See — look, watch.',
+        '[[لي]] — means [[لي]] as an app that gives you information in the moment, offers you talent, brings you competition between teams, and gives you the joy of watching it. And [[لي]] means for you as a player, as a talent, as a team, as a referee, as a competition organizer, as an active league, as strong rivalry. And [[لي]] means for you as an analyst and critic.',
+        'Seellie does not only say: “See [[لي]].”\nIt also says: “This is for you.”',
+        'For you — what you are looking for.\nFor you — what you want to see.\nFor you — what you want to follow.\nAnd for you — your place in the world of sport.',
+        'When the two words came together, the idea that shaped Seellie’s identity was born.',
       ],
     },
     {
@@ -281,7 +281,7 @@ export const SEELLIE_STORY_EN: SeellieStory = {
   ],
   closing: [
     'Seellie',
-    'See me... I may be the talent you are looking for.',
+    'See [[لي]]... I may be the talent you are looking for.',
   ],
 };
 
