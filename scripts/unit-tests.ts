@@ -160,8 +160,6 @@ test('social counts', () => {
     personalityPhotos: [],
     permissions: {
       canComment: true,
-      canUseVoice: true,
-      canNominateToPersonality: false,
       canCreateContent: false,
     },
     analysisContent: [],

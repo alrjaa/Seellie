@@ -397,9 +397,7 @@ function friendStub(input: {
     avatar: input.avatar,
     permissions: {
       canComment: true,
-      canUseVoice: true,
       canCreateContent: false,
-      canNominateToPersonality: false,
     },
     posts: [],
     media: { photos: [], videos: [] },

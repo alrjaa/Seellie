@@ -1971,10 +1971,6 @@ export const ar = {
         title: 'طلبات المحللين',
         description: 'اعتماد المحللين وإرسال رمز الفريد',
       },
-      'quick-comments': {
-        title: 'أرشيف التعليقات',
-        description: 'سجل تعليقات قديمة (تم استبدال الدردشة بالساحات)',
-      },
       ads: {
         title: 'إعلانات مدمجة',
         description: 'إعلانات تظهر بنفس شكل المقاطع داخل المحتوى',
@@ -2224,7 +2220,6 @@ export const ar = {
       referees: 'الحكام',
       messages: 'الرسائل',
       comments: 'التعليقات',
-      quickChat: 'الدردشة السريعة',
       totalFollows: 'إجمالي المتابعات',
       totalLikes: 'إجمالي الإعجابات',
       pendingOffers: 'عروض معلّقة',
@@ -2513,14 +2508,6 @@ export const ar = {
       paid: 'مدفوعة',
       draft: 'مسودة',
       amountCurrency: '%{amount} ر.س',
-    },
-    quickComments: {
-      title: 'التعليقات السريعة',
-      subtitle: 'مراقبة وحذف محتوى الدردشة السريعة',
-      empty: 'لا توجد تعليقات سريعة',
-      emptyDesc: 'ستظهر هنا عند إضافة محتوى من المتابعين.',
-      deleteConfirm: 'حذف هذا التعليق السريع؟',
-      deleted: 'تم حذف التعليق السريع',
     },
     messages: {
       subtitle: 'اضغط الرسالة لتحديدها كمقروءة',

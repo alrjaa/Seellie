@@ -167,7 +167,6 @@ import {
   initialCompetitionRequests,
   initialGiftTransactions,
   initialOffers,
-  initialQuickComments,
   initialMessages,
   initialReferees,
   initialSupporters,
@@ -595,7 +594,6 @@ export interface TournamentContextType {
   competitions: Competition[];
   competitionRequests: CompetitionRequest[];
   comments: Comment[];
-  quickComments: Comment[];
   messages: Message[];
   referees: Referee[];
   offers: Offer[];
@@ -670,8 +668,6 @@ export interface TournamentContextType {
   /** حذف المكرر بالاسم مع الإبقاء على سجل واحد وربطه بالمسابقات */
   dedupeRefereesByName: () => number;
   markMessageAsRead: (messageId: string) => void;
-  deleteQuickComment: (commentId: string, successMessage?: string) => void;
-  addQuickComment: (text: string) => void;
   addComment: (
     text: string,
     audioUrl?: string,
@@ -963,12 +959,12 @@ export interface TournamentContextType {
 /** Core tournament state + stable actions (excludes high-churn live feeds). */
 export type TournamentCoreContextType = Omit<
   TournamentContextType,
-  'messages' | 'shareCards' | 'comments' | 'quickComments'
+  'messages' | 'shareCards' | 'comments'
 >;
 
 type TournamentLiveContextType = Pick<
   TournamentContextType,
-  'messages' | 'shareCards' | 'comments' | 'quickComments'
+  'messages' | 'shareCards' | 'comments'
 >;
 
 const TournamentCoreContext = createContext<
@@ -1020,9 +1016,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   >(() => withLocalizedSeed(initialCompetitionRequests));
   const [comments, setComments] = useState<Comment[]>(() =>
     withLocalizedSeed(initialComments)
-  );
-  const [quickComments, setQuickComments] = useState<Comment[]>(() =>
-    withLocalizedSeed(initialQuickComments)
   );
   const [messages, setMessages] = useState<Message[]>(() =>
     withLocalizedSeed(initialMessages)
@@ -1950,8 +1943,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         status: 'active',
         permissions: {
           canComment: true,
-          canUseVoice: true,
-          canNominateToPersonality: false,
           canCreateContent: false,
         },
         handle: allocateUniqueHandle(
@@ -3181,42 +3172,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     },
     [currentUser, toast, addNotification, t]
   );
-  const deleteQuickComment = useCallback(
-    (commentId: string, successMessage?: string) => {
-      setQuickComments((prev) => prev.filter((c) => c.id !== commentId));
-      if (successMessage) {
-        toast({ title: t('toasts.t014_3569a8'), description: successMessage });
-      }
-    },
-    [toast]
-  );
-
-  const addQuickComment = useCallback(
-    (text: string) => {
-      if (!currentUser || !text.trim()) return;
-      if (currentUser.role !== 'follower') {
-        toast({
-          variant: 'destructive',
-          title: t('toasts.t017_85dc34'),
-          description: t('toasts.t082_9502f6'),
-        });
-        return;
-      }
-      const comment: Comment = {
-        id: createId(),
-        text: text.trim(),
-        authorId: currentUser.id,
-        authorName: currentUser.name,
-        authorAvatar: currentUser.avatar || '',
-        timestamp: new Date(),
-        likes: [],
-        replies: [],
-        status: 'active',
-      };
-      setQuickComments((prev) => [...prev, comment]);
-    },
-    [currentUser, toast]
-  );
 
   const addComment = useCallback(
     async (
@@ -3373,7 +3328,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           };
         });
       setComments(toggle);
-      setQuickComments(toggle);
       setCompetitions((prev) => {
         const next = prev.map((comp) => ({
           ...comp,
@@ -6855,8 +6809,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     deleteReferee,
     dedupeRefereesByName,
     markMessageAsRead,
-    deleteQuickComment,
-    addQuickComment,
     addComment,
     toggleCommentLike,
     updateDiscussionStatus,
@@ -6943,9 +6895,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       messages,
       shareCards,
       comments,
-      quickComments,
     }),
-    [messages, shareCards, comments, quickComments]
+    [messages, shareCards, comments]
   );
 
   const coreValue = useMemo(

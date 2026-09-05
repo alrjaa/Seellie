@@ -1576,10 +1576,6 @@ export const en: TranslationTree = {
         title: 'Analyst requests',
         description: 'Approve analysts and send Unique access code',
       },
-      'quick-comments': {
-        title: 'Comment archive',
-        description: 'Legacy comments log (chat replaced by forums)',
-      },
       ads: {
         title: 'In-feed ads',
         description: 'Native ads that appear as clips inside the feed',
@@ -1826,7 +1822,6 @@ export const en: TranslationTree = {
       referees: 'Referees',
       messages: 'Messages',
       comments: 'Comments',
-      quickChat: 'Quick chat',
       totalFollows: 'Total follows',
       totalLikes: 'Total likes',
       pendingOffers: 'Pending offers',
@@ -2085,14 +2080,6 @@ export const en: TranslationTree = {
       paid: 'Paid',
       draft: 'Draft',
       amountCurrency: '%{amount} SAR',
-    },
-    quickComments: {
-      title: 'Quick comments',
-      subtitle: 'Monitor and delete quick chat content',
-      empty: 'No quick comments',
-      emptyDesc: 'Content will appear here when followers add it.',
-      deleteConfirm: 'Delete this quick comment?',
-      deleted: 'Quick comment deleted',
     },
     messages: {
       subtitle: 'Tap a message to mark it as read',

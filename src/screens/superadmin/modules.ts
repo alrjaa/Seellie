@@ -66,12 +66,6 @@ export const ADMIN_MODULES: AdminModule[] = [
     group: 'content',
   },
   {
-    key: 'quick-comments',
-    href: adminPath('quick-comments'),
-    icon: 'archive',
-    group: 'content',
-  },
-  {
     key: 'ads',
     href: adminPath('ads'),
     icon: 'film',
@@ -81,6 +75,12 @@ export const ADMIN_MODULES: AdminModule[] = [
     key: 'support',
     href: adminPath('support'),
     icon: 'gift',
+    group: 'finance',
+  },
+  {
+    key: 'commerce-monitor',
+    href: adminPath('commerce-monitor'),
+    icon: 'wallet',
     group: 'finance',
   },
   {

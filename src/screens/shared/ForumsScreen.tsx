@@ -152,7 +152,6 @@ const CommentCard = memo(function CommentCard({
 export default function ForumsScreen() {
   const {
     comments,
-    quickComments,
     currentUser,
     loading,
     addComment,
@@ -201,7 +200,7 @@ export default function ForumsScreen() {
   );
   const discussions = useMemo(() => {
     const byId = new Map<string, Comment>();
-    [...comments, ...quickComments].forEach((c) => {
+    comments.forEach((c) => {
       if (c.status === 'blocked' || c.status === 'suspended') return;
       byId.set(c.id, c);
     });
@@ -209,7 +208,7 @@ export default function ForumsScreen() {
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
-  }, [comments, quickComments]);
+  }, [comments]);
 
   const accountVideos = useMemo(
     () => currentUser?.media?.videos || [],

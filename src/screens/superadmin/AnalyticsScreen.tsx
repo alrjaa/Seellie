@@ -13,7 +13,6 @@ export default function AnalyticsScreen() {
     competitions,
     messages,
     referees,
-    quickComments,
     comments,
     offers,
     giftTransactions,
@@ -76,10 +75,6 @@ export default function AnalyticsScreen() {
         { label: t('superadmin.analytics.messages'), value: messages.length },
         { label: t('superadmin.analytics.comments'), value: comments.length },
         {
-          label: t('superadmin.analytics.quickChat'),
-          value: quickComments.length,
-        },
-        {
           label: t('superadmin.analytics.totalFollows'),
           value: totalFollows,
         },
@@ -100,7 +95,6 @@ export default function AnalyticsScreen() {
     competitions,
     messages,
     referees,
-    quickComments,
     comments,
     offers,
     giftTransactions,

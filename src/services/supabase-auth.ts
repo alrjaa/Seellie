@@ -39,8 +39,6 @@ export type ProfileRow = {
 function defaultPermissions(role: UserRole): User['permissions'] {
   return {
     canComment: true,
-    canUseVoice: true,
-    canNominateToPersonality: role === 'freelancer' || role === 'follower',
     // نشر الفريد للمحللين المعتمدين فقط — لا يُفعَّل افتراضياً لكل متابع
     canCreateContent: false,
   };

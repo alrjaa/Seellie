@@ -274,7 +274,6 @@ export default function GeneralFeedScreen() {
     users,
     competitions,
     comments,
-    quickComments,
     currentUser,
     toggleCommentLike,
     togglePostLike,
@@ -600,26 +599,6 @@ export default function GeneralFeedScreen() {
       });
     });
 
-    // نقاشات سريعة (أرشيف الدردشة السابق) تظهر مع الساحة
-    (quickComments || []).forEach((c) => {
-      if (c.status === 'blocked' || c.status === 'suspended') return;
-      const author = users.find((u) => u.id === c.authorId);
-      items.push({
-        id: `discussion-${c.id}`,
-        type: 'discussion',
-        authorId: c.authorId,
-        authorName: c.authorName,
-        authorHandle: author?.handle,
-        authorAvatar: c.authorAvatar,
-        text: c.text,
-        likes: c.likes,
-        timestamp: new Date(c.timestamp),
-        subtitle: t('screens.quickDiscuss'),
-        locationCity: author?.city,
-        locationRegion: author?.region,
-      });
-    });
-
     return items.sort(
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
@@ -628,7 +607,7 @@ export default function GeneralFeedScreen() {
       console.warn('[GeneralScreen] feed build failed', error);
       return [];
     }
-  }, [users, competitions, comments, quickComments, t]);
+  }, [users, competitions, comments, t]);
 
   const filtered = useMemo(() => {
     switch (filter) {

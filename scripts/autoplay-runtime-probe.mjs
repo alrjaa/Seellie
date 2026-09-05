@@ -62,9 +62,7 @@ const SEED_USER = {
   avatar: 'https://placehold.co/100x100.png',
   permissions: {
     canComment: true,
-    canUseVoice: true,
     canCreateContent: false,
-    canNominateToPersonality: false,
   },
   posts: [],
   media: { photos: [], videos: [] },

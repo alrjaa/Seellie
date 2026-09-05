@@ -84,8 +84,6 @@ export interface User {
   joinConditions?: string;
   permissions: {
       canComment: boolean;
-      canUseVoice: boolean;
-      canNominateToPersonality: boolean;
       canCreateContent: boolean;
   };
   /** طلب / اعتماد المحلل لنشر المحتوى في الفريد */
@@ -407,10 +405,10 @@ export const initialDynamicFloatingIcons: DynamicFloatingIcon[] = [];
 export const initialPlayerProfileHeaderBg = 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4';
 
 export const initialUsers: User[] = [
-    { id: 'organizer-1', handle: '@organizer1', name: 'منظم بطولة الأبطال', email: 'organizer1@test.com', passwordHash: 'password123', role: 'organizer', status: 'active', visibleId: 'ORG-1001', country: 'المملكة العربية السعودية', region: 'منطقة الرياض', city: 'الرياض', street: '1234 طريق الملك فهد', houseNumber: "25", mobile: '0501234567', age: 35, avatar: 'https://placehold.co/100x100.png', bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`, permissions: { canComment: true, canUseVoice: true, canCreateContent: false, canNominateToPersonality: false }, analysisContent: [], posts: [], media: { photos: [], videos: [] }, personalityPhotos: [], comments: [] },
-    { id: 'organizer-2', handle: '@organizer2', name: 'منظم دوري النجوم', email: 'organizer2@test.com', passwordHash: 'password123', role: 'organizer', status: 'active', visibleId: 'ORG-1002', country: 'المملكة العربية السعودية', region: 'منطقة مكة المكرمة', city: 'جدة', street: '5678 طريق الأمير محمد', houseNumber: "10", mobile: '0502345678', age: 42, avatar: 'https://placehold.co/100x100.png', bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`, permissions: { canComment: true, canUseVoice: true, canCreateContent: false, canNominateToPersonality: false }, analysisContent: [], posts: [], media: { photos: [], videos: [] }, personalityPhotos: [], comments: [] },
-    { id: 'organizer-3', handle: '@organizer3', name: 'منظم كأس التحدي', email: 'organizer3@test.com', passwordHash: 'password123', role: 'organizer', status: 'warned', visibleId: 'ORG-1003', country: 'المملكة العربية السعودية', region: 'المنطقة الشرقية', city: 'الدمام', street: '9101 شارع العليا', houseNumber: "7", mobile: '0503456789', age: 29, avatar: 'https://placehold.co/100x100.png', bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`, permissions: { canComment: true, canUseVoice: true, canCreateContent: false, canNominateToPersonality: false }, analysisContent: [], posts: [], media: { photos: [], videos: [] }, personalityPhotos: [], comments: [] },
-    { id: 'organizer-4', handle: '@organizer4', name: 'منظم بطولة المستقبل', email: 'organizer4@test.com', passwordHash: 'password123', role: 'organizer', status: 'suspended', visibleId: 'ORG-1004', country: 'المملكة العربية السعودية', region: 'منطقة عسير', city: 'أبها', street: '1122 طريق المطار', houseNumber: "15", mobile: '0504567890', age: 38, avatar: 'https://placehold.co/100x100.png', bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`, permissions: { canComment: false, canUseVoice: false, canCreateContent: false, canNominateToPersonality: false }, analysisContent: [], posts: [], media: { photos: [], videos: [] }, personalityPhotos: [], comments: [] },
+    { id: 'organizer-1', handle: '@organizer1', name: 'منظم بطولة الأبطال', email: 'organizer1@test.com', passwordHash: 'password123', role: 'organizer', status: 'active', visibleId: 'ORG-1001', country: 'المملكة العربية السعودية', region: 'منطقة الرياض', city: 'الرياض', street: '1234 طريق الملك فهد', houseNumber: "25", mobile: '0501234567', age: 35, avatar: 'https://placehold.co/100x100.png', bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`, permissions: { canComment: true, canCreateContent: false }, analysisContent: [], posts: [], media: { photos: [], videos: [] }, personalityPhotos: [], comments: [] },
+    { id: 'organizer-2', handle: '@organizer2', name: 'منظم دوري النجوم', email: 'organizer2@test.com', passwordHash: 'password123', role: 'organizer', status: 'active', visibleId: 'ORG-1002', country: 'المملكة العربية السعودية', region: 'منطقة مكة المكرمة', city: 'جدة', street: '5678 طريق الأمير محمد', houseNumber: "10", mobile: '0502345678', age: 42, avatar: 'https://placehold.co/100x100.png', bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`, permissions: { canComment: true, canCreateContent: false }, analysisContent: [], posts: [], media: { photos: [], videos: [] }, personalityPhotos: [], comments: [] },
+    { id: 'organizer-3', handle: '@organizer3', name: 'منظم كأس التحدي', email: 'organizer3@test.com', passwordHash: 'password123', role: 'organizer', status: 'warned', visibleId: 'ORG-1003', country: 'المملكة العربية السعودية', region: 'المنطقة الشرقية', city: 'الدمام', street: '9101 شارع العليا', houseNumber: "7", mobile: '0503456789', age: 29, avatar: 'https://placehold.co/100x100.png', bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`, permissions: { canComment: true, canCreateContent: false }, analysisContent: [], posts: [], media: { photos: [], videos: [] }, personalityPhotos: [], comments: [] },
+    { id: 'organizer-4', handle: '@organizer4', name: 'منظم بطولة المستقبل', email: 'organizer4@test.com', passwordHash: 'password123', role: 'organizer', status: 'suspended', visibleId: 'ORG-1004', country: 'المملكة العربية السعودية', region: 'منطقة عسير', city: 'أبها', street: '1122 طريق المطار', houseNumber: "15", mobile: '0504567890', age: 38, avatar: 'https://placehold.co/100x100.png', bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`, permissions: { canComment: false, canCreateContent: false }, analysisContent: [], posts: [], media: { photos: [], videos: [] }, personalityPhotos: [], comments: [] },
     { 
         id: 'follower-1', 
         name: 'متابع شغوف', 
@@ -426,7 +424,7 @@ export const initialUsers: User[] = [
         city: 'القاهرة', 
         mobile: '01001234567', 
         bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`, 
-        permissions: { canComment: true, canUseVoice: true, canCreateContent: false, canNominateToPersonality: false },
+        permissions: { canComment: true, canCreateContent: false },
         posts: [],
         media: { photos: [], videos: [] },
         personalityPhotos: [],
@@ -479,7 +477,7 @@ export const initialUsers: User[] = [
         city: 'الرياض',
         mobile: '0502000002',
         bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`,
-        permissions: { canComment: true, canUseVoice: true, canCreateContent: false, canNominateToPersonality: true },
+        permissions: { canComment: true, canCreateContent: false },
         posts: [],
         media: { photos: [], videos: [] },
         personalityPhotos: [],
@@ -501,7 +499,7 @@ export const initialUsers: User[] = [
         city: 'الكويت',
         mobile: '0503000003',
         bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`,
-        permissions: { canComment: true, canUseVoice: true, canCreateContent: false, canNominateToPersonality: false },
+        permissions: { canComment: true, canCreateContent: false },
         posts: [],
         media: { photos: [], videos: [] },
         personalityPhotos: [],
@@ -523,7 +521,7 @@ export const initialUsers: User[] = [
         city: 'جدة',
         mobile: '0504000004',
         bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`,
-        permissions: { canComment: true, canUseVoice: true, canCreateContent: false, canNominateToPersonality: true },
+        permissions: { canComment: true, canCreateContent: false },
         posts: [],
         media: { photos: [], videos: [] },
         personalityPhotos: [],
@@ -545,14 +543,14 @@ export const initialUsers: User[] = [
         city: 'المحرق',
         mobile: '0505000005',
         bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`,
-        permissions: { canComment: true, canUseVoice: false, canCreateContent: false, canNominateToPersonality: false },
+        permissions: { canComment: true, canCreateContent: false },
         posts: [],
         media: { photos: [], videos: [] },
         personalityPhotos: [],
         comments: [],
         analysisContent: [],
     },
-    { id: 'freelancer-1', name: 'موهبة', email: 'freelancer@test.com', passwordHash: 'password123', role: 'freelancer', status: 'active', handle: '@freelancer', visibleId: 'FLR-1001', avatar: 'https://placehold.co/100x100.png', country: 'الإمارات العربية المتحدة', region: 'دبي', city: 'دبي', mobile: '0509876543', bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`, bio: 'لاعب وسط مهاجم، أبحث عن فرصة لإثبات مهاراتي. أتميز بالتسديد القوي والرؤية الممتازة للملعب.', posts: [{ id: 'post-1', text: 'جاهز للتحدي القادم!', timestamp: new Date(), likes: [] }], media: { photos: [{id: 'freelancer-1-photo-1', url: 'https://placehold.co/400x300.png', likes: [], comments: []}], videos: [{id: 'freelancer-1-video-1', url: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4', likes: ['user-1', 'user-2'], comments: []}] }, personalityPhotos: ['https://placehold.co/400x300.png'], participationHistoryText: ' - لعب في دوري الهواة بالرياض 2023\n - شارك في بطولة الشركات لكرة القدم 2022', permissions: { canComment: true, canUseVoice: true, canNominateToPersonality: true, canCreateContent: false }, analysisContent: [], comments: [] },
+    { id: 'freelancer-1', name: 'موهبة', email: 'freelancer@test.com', passwordHash: 'password123', role: 'freelancer', status: 'active', handle: '@freelancer', visibleId: 'FLR-1001', avatar: 'https://placehold.co/100x100.png', country: 'الإمارات العربية المتحدة', region: 'دبي', city: 'دبي', mobile: '0509876543', bankAccountNumber: `SA${Math.floor(1000000000000000000000 + Math.random() * 9000000000000000000000)}`, bio: 'لاعب وسط مهاجم، أبحث عن فرصة لإثبات مهاراتي. أتميز بالتسديد القوي والرؤية الممتازة للملعب.', posts: [{ id: 'post-1', text: 'جاهز للتحدي القادم!', timestamp: new Date(), likes: [] }], media: { photos: [{id: 'freelancer-1-photo-1', url: 'https://placehold.co/400x300.png', likes: [], comments: []}], videos: [{id: 'freelancer-1-video-1', url: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4', likes: ['user-1', 'user-2'], comments: []}] }, personalityPhotos: ['https://placehold.co/400x300.png'], participationHistoryText: ' - لعب في دوري الهواة بالرياض 2023\n - شارك في بطولة الشركات لكرة القدم 2022', permissions: { canComment: true, canCreateContent: false }, analysisContent: [], comments: [] },
 ];
 
 export const initialReferees: Referee[] = [
@@ -826,78 +824,6 @@ export const initialComments: Comment[] = [
         replies: [],
         likes: ['follower-2'],
     },
-];
-export const initialQuickComments: Comment[] = [
-  {
-    id: 'qc-1',
-    authorId: 'follower-2',
-    authorName: 'سارة المشجع',
-    authorAvatar: 'https://placehold.co/100x100/22c55e/ffffff.png?text=س',
-    text: 'مرحباً بالجميع في مجموعة متابعي Seellie 👋 من يتابع مباراة اليوم؟',
-    timestamp: new Date(Date.now() - 90 * 60 * 1000),
-    replies: [],
-    likes: ['follower-1', 'follower-3'],
-  },
-  {
-    id: 'qc-2',
-    authorId: 'follower-3',
-    authorName: 'أحمد المتابع',
-    authorAvatar: 'https://placehold.co/100x100/3b82f6/ffffff.png?text=أ',
-    text: 'أهلاً سارة! أنا متحمس لمباراة النسور والصقور الليلة.',
-    timestamp: new Date(Date.now() - 75 * 60 * 1000),
-    replies: [],
-    likes: ['follower-2'],
-  },
-  {
-    id: 'qc-3',
-    authorId: 'follower-4',
-    authorName: 'نورة الرياضية',
-    authorAvatar: 'https://placehold.co/100x100/f59e0b/ffffff.png?text=ن',
-    text: 'من برأيكم أفضل لاعب في البطولة حتى الآن؟',
-    timestamp: new Date(Date.now() - 60 * 60 * 1000),
-    replies: [],
-    likes: ['follower-1', 'follower-5'],
-  },
-  {
-    id: 'qc-4',
-    authorId: 'follower-5',
-    authorName: 'خالد المشجع',
-    authorAvatar: 'https://placehold.co/100x100/ef4444/ffffff.png?text=خ',
-    text: 'أعتقد حارس النسور يستحق الإشادة. تصدياته كانت رائعة.',
-    timestamp: new Date(Date.now() - 45 * 60 * 1000),
-    replies: [],
-    likes: ['follower-4', 'follower-3'],
-  },
-  {
-    id: 'qc-5',
-    authorId: 'follower-1',
-    authorName: 'متابع شغوف',
-    authorAvatar: 'https://placehold.co/100x100.png',
-    text: 'اتفق مع خالد. ومن يتابع التحليلات الجديدة في قسم عام؟',
-    timestamp: new Date(Date.now() - 30 * 60 * 1000),
-    replies: [],
-    likes: ['follower-2'],
-  },
-  {
-    id: 'qc-6',
-    authorId: 'follower-2',
-    authorName: 'سارة المشجع',
-    authorAvatar: 'https://placehold.co/100x100/22c55e/ffffff.png?text=س',
-    text: '@أحمد المتابع هل ستكتب تقييماً بعد المباراة؟',
-    timestamp: new Date(Date.now() - 15 * 60 * 1000),
-    replies: [],
-    likes: [],
-  },
-  {
-    id: 'qc-7',
-    authorId: 'follower-3',
-    authorName: 'أحمد المتابع',
-    authorAvatar: 'https://placehold.co/100x100/3b82f6/ffffff.png?text=أ',
-    text: 'أكيد سارة! سأنشر رأيي هنا مباشرة بعد الصافرة النهائية.',
-    timestamp: new Date(Date.now() - 5 * 60 * 1000),
-    replies: [],
-    likes: ['follower-2', 'follower-4'],
-  },
 ];
 export const initialMessages: Message[] = [];
 export const initialSupporters: Supporter[] = [];

@@ -144,16 +144,16 @@ export default function AdminConsoleLayout() {
           />
           <Stack.Screen name="analysts" options={{ title: t('menu.unique') }} />
           <Stack.Screen
-            name="quick-comments"
-            options={{ title: t('menu.forums') }}
-          />
-          <Stack.Screen
             name="ads"
             options={{ title: t('superadmin.modules.ads.title') }}
           />
           <Stack.Screen
             name="support"
             options={{ title: t('home.certificates') }}
+          />
+          <Stack.Screen
+            name="commerce-monitor"
+            options={{ title: t('superadmin.modules.commerce-monitor.title') }}
           />
           <Stack.Screen name="invoices" options={{ title: t('nav.invoices') }} />
           <Stack.Screen

@@ -257,7 +257,6 @@ export default function FollowerLayout() {
               ),
             }}
           />
-          <Tabs.Screen name="chat" options={{ href: null }} />
           <Tabs.Screen
             name="matches/index"
             options={{ href: null, title: t('screens.matches') }}
