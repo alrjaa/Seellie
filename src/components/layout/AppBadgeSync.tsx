@@ -6,7 +6,7 @@ import { setAppIconBadgeCount, rememberAppDocumentTitle } from '@/utils/app-badg
 
 /** يزامن شارة أيقونة التطبيق مع إجمالي غير المقروء (بدون تغيير عنوان التبويب). */
 export function AppBadgeSync() {
-  const { currentUser, messages } = useTournament();
+  const { currentUser, messages, shareCards } = useTournament();
   const { unreadPrivateCount } = usePrivateSpaceContext();
   const { unreadCountFor } = useNotifications();
 
@@ -15,9 +15,18 @@ export function AppBadgeSync() {
     const inbox = messages.filter(
       (m) => m.recipientId === currentUser.id && !m.read
     ).length;
+    const shares = shareCards.filter(
+      (c) => c.recipientId === currentUser.id && !c.read
+    ).length;
     const notifs = unreadCountFor(currentUser.id);
-    return inbox + unreadPrivateCount + notifs;
-  }, [currentUser?.id, messages, unreadCountFor, unreadPrivateCount]);
+    return inbox + shares + unreadPrivateCount + notifs;
+  }, [
+    currentUser?.id,
+    messages,
+    shareCards,
+    unreadCountFor,
+    unreadPrivateCount,
+  ]);
 
   useEffect(() => {
     rememberAppDocumentTitle('Seellie');

@@ -15,6 +15,7 @@ import { useTournament } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { useNotifications } from '@/providers/NotificationsProvider';
+import { usePrivateSpaceContext } from '@/providers/PrivateSpaceProvider';
 import { headerSafeTop } from '@/theme/navigation';
 import {
   getSecondaryRole,
@@ -55,6 +56,23 @@ function defaultSettingsHref(
   }
 }
 
+function messagesHref(activeRole: string | undefined): string {
+  switch (activeRole) {
+    case 'organizer':
+      return '/(organizer)/messages';
+    case 'freelancer':
+      return '/(freelancer)/messages';
+    case 'superadmin':
+      return '/admin/messages';
+    default:
+      return '/(follower)/messages';
+  }
+}
+
+function formatBadgeCount(count: number): string {
+  return count > 99 ? '99+' : String(count);
+}
+
 /**
  * قائمة الحساب المنسدلة: مسارات الحساب + دخول المشرف + إعدادات + خروج.
  */
@@ -65,8 +83,16 @@ function AccountMenuButtonComponent({
   size = 32,
   compact,
 }: Props) {
-  const { currentUser, logout, switchActiveRole, featureFlags } = useTournament();
-  const { unreadCountFor, forUser } = useNotifications();
+  const {
+    currentUser,
+    logout,
+    switchActiveRole,
+    featureFlags,
+    messages,
+    shareCards,
+  } = useTournament();
+  const { unreadCountFor } = useNotifications();
+  const { unreadPrivateCount } = usePrivateSpaceContext();
   const theme = useAppTheme();
   const { t, isRTL } = useTranslation();
   const router = useRouter();
@@ -78,16 +104,32 @@ function AccountMenuButtonComponent({
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
 
-  const unreadNotifs = unreadCountFor(currentUser?.id);
-  const unreadAlerts = useMemo(
+  const activeRole = currentUser?.activeRole || currentUser?.role;
+  const userId = currentUser?.id;
+
+  const unreadNotifs = unreadCountFor(userId);
+  const unreadMessages = useMemo(
     () =>
-      forUser(currentUser?.id).filter(
-        (n) => !n.read && n.kind === 'announcement'
-      ).length,
-    [forUser, currentUser?.id]
+      userId
+        ? messages.filter((m) => m.recipientId === userId && !m.read).length
+        : 0,
+    [messages, userId]
   );
-  /** شارة الزر: أولوية لإعلام المسابقة، وإلا أي إشعار غير مقروء */
-  const badgeCount = unreadAlerts > 0 ? unreadAlerts : unreadNotifs;
+  const unreadShares = useMemo(
+    () =>
+      userId
+        ? shareCards.filter((c) => c.recipientId === userId && !c.read).length
+        : 0,
+    [shareCards, userId]
+  );
+  const unreadPrivate =
+    activeRole === 'follower' || activeRole === 'freelancer'
+      ? unreadPrivateCount
+      : 0;
+
+  /** إجمالي التنبيهات على زر الحساب — نفس منطق شارة التطبيق */
+  const badgeCount =
+    unreadNotifs + unreadMessages + unreadShares + unreadPrivate;
 
   const pathsHref = useMemo(() => {
     if (settingsHref) return settingsHref;
@@ -126,6 +168,23 @@ function AccountMenuButtonComponent({
   const goNotifications = useCallback(() => {
     setOpen(false);
     router.push('/notifications' as any);
+  }, [router]);
+
+  const goMessages = useCallback(() => {
+    setOpen(false);
+    router.push(
+      messagesHref(currentUser?.activeRole || currentUser?.role) as any
+    );
+  }, [router, currentUser?.activeRole, currentUser?.role]);
+
+  const goShares = useCallback(() => {
+    setOpen(false);
+    router.push('/share-cards' as any);
+  }, [router]);
+
+  const goPrivate = useCallback(() => {
+    setOpen(false);
+    router.push('/(follower)/private' as any);
   }, [router]);
 
   const onLogout = useCallback(() => {
@@ -230,7 +289,7 @@ function AccountMenuButtonComponent({
                 ]}
               >
                 <Text style={[styles.alertCountText, { color: '#FFFFFF' }]}>
-                  {badgeCount > 99 ? '99+' : String(badgeCount)}
+                  {formatBadgeCount(badgeCount)}
                 </Text>
               </View>
             ) : null}
@@ -541,7 +600,7 @@ function AccountMenuButtonComponent({
                 <Ionicons
                   name={
                     unreadNotifs > 0
-                      ? 'mail-unread-outline'
+                      ? 'notifications'
                       : 'notifications-outline'
                   }
                   size={20}
@@ -562,11 +621,165 @@ function AccountMenuButtonComponent({
                     ]}
                   >
                     <Text style={[styles.alertCountText, { color: '#FFFFFF' }]}>
-                      {unreadNotifs > 99 ? '99+' : String(unreadNotifs)}
+                      {formatBadgeCount(unreadNotifs)}
                     </Text>
                   </View>
                 ) : null}
               </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  unreadMessages > 0
+                    ? t('menu.messagesUnread', { count: unreadMessages })
+                    : t('menu.messages')
+                }
+                onPress={goMessages}
+                style={({ pressed }) => [
+                  styles.item,
+                  {
+                    backgroundColor: pressed
+                      ? theme.colors.accentSoft
+                      : 'transparent',
+                    flexDirection: rowDir,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={unreadMessages > 0 ? 'mail-unread' : 'mail-outline'}
+                  size={20}
+                  color={theme.colors.accent}
+                />
+                <Text
+                  style={[styles.itemLabel, { color: theme.colors.text }, textStart]}
+                >
+                  {unreadMessages > 0
+                    ? t('menu.messagesUnread', { count: unreadMessages })
+                    : t('menu.messages')}
+                </Text>
+                {unreadMessages > 0 ? (
+                  <View
+                    style={[
+                      styles.menuUnreadPill,
+                      { backgroundColor: theme.colors.danger },
+                    ]}
+                  >
+                    <Text style={[styles.alertCountText, { color: '#FFFFFF' }]}>
+                      {formatBadgeCount(unreadMessages)}
+                    </Text>
+                  </View>
+                ) : null}
+              </Pressable>
+
+              {activeRole !== 'superadmin' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    unreadShares > 0
+                      ? t('menu.sharesUnread', { count: unreadShares })
+                      : t('menu.sharesInbox')
+                  }
+                  onPress={goShares}
+                  style={({ pressed }) => [
+                    styles.item,
+                    {
+                      backgroundColor: pressed
+                        ? theme.colors.accentSoft
+                        : 'transparent',
+                      flexDirection: rowDir,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={
+                      unreadShares > 0
+                        ? 'share-social'
+                        : 'share-social-outline'
+                    }
+                    size={20}
+                    color={theme.colors.accent}
+                  />
+                  <Text
+                    style={[
+                      styles.itemLabel,
+                      { color: theme.colors.text },
+                      textStart,
+                    ]}
+                  >
+                    {unreadShares > 0
+                      ? t('menu.sharesUnread', { count: unreadShares })
+                      : t('menu.sharesInbox')}
+                  </Text>
+                  {unreadShares > 0 ? (
+                    <View
+                      style={[
+                        styles.menuUnreadPill,
+                        { backgroundColor: theme.colors.danger },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.alertCountText, { color: '#FFFFFF' }]}
+                      >
+                        {formatBadgeCount(unreadShares)}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+              ) : null}
+
+              {activeRole === 'follower' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    unreadPrivate > 0
+                      ? t('menu.privateUnread', { count: unreadPrivate })
+                      : t('menu.private')
+                  }
+                  onPress={goPrivate}
+                  style={({ pressed }) => [
+                    styles.item,
+                    {
+                      backgroundColor: pressed
+                        ? theme.colors.accentSoft
+                        : 'transparent',
+                      flexDirection: rowDir,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={
+                      unreadPrivate > 0 ? 'chatbubbles' : 'chatbubbles-outline'
+                    }
+                    size={20}
+                    color={theme.colors.accent}
+                  />
+                  <Text
+                    style={[
+                      styles.itemLabel,
+                      { color: theme.colors.text },
+                      textStart,
+                    ]}
+                  >
+                    {unreadPrivate > 0
+                      ? t('menu.privateUnread', { count: unreadPrivate })
+                      : t('menu.private')}
+                  </Text>
+                  {unreadPrivate > 0 ? (
+                    <View
+                      style={[
+                        styles.menuUnreadPill,
+                        { backgroundColor: theme.colors.danger },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.alertCountText, { color: '#FFFFFF' }]}
+                      >
+                        {formatBadgeCount(unreadPrivate)}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+              ) : null}
 
               <Pressable
                 accessibilityRole="button"
