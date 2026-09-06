@@ -1,10 +1,12 @@
 -- Seellie · P0 Profiles SELECT lockdown (Audit 2026-09-06 / FIX-01)
--- Apply once in Supabase SQL Editor (test project).
+-- Apply once on staging/test project (sjfkdipgvivomllpfnkt).
 -- Goal: authenticated users cannot read other users' email/mobile from public.profiles.
 -- Public discovery continues via profiles_catalog (no email/mobile).
 
--- 1) Catalog view — safe columns only (SECURITY DEFINER owner bypasses RLS on base table)
-create or replace view public.profiles_catalog
+-- 1) Recreate catalog view (DROP required: column order/name cannot change via CREATE OR REPLACE)
+drop view if exists public.profiles_catalog cascade;
+
+create view public.profiles_catalog
 with (security_invoker = false)
 as
 select
@@ -46,9 +48,7 @@ create policy "profiles_select_own_or_admin"
     or public.is_app_superadmin()
   );
 
--- 3) Verification helpers (run after apply)
--- Expect: non-admin JWT selecting profiles.email for others → 0 rows / RLS deny
--- Expect: select from profiles_catalog → rows without email/mobile columns
+-- 3) Verification
 select
   pol.polname as policy,
   rel.relname as table_name

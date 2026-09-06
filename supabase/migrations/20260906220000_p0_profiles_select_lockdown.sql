@@ -1,7 +1,8 @@
--- Seellie · P0 Profiles SELECT lockdown (Audit 2026-09-06 / FIX-01)
--- Same contents as supabase/P0-PROFILES-SELECT-LOCKDOWN.sql
+-- Mirror of supabase/P0-PROFILES-SELECT-LOCKDOWN.sql
 
-create or replace view public.profiles_catalog
+drop view if exists public.profiles_catalog cascade;
+
+create view public.profiles_catalog
 with (security_invoker = false)
 as
 select
