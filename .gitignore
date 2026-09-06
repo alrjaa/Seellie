@@ -54,3 +54,4 @@ _local_wip/
 
 # Supabase CLI local link temp
 supabase/.temp/
+.env.e2e.local

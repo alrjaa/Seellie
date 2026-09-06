@@ -5,6 +5,7 @@
  * Authenticated role flows run only when E2E_* credentials are provided.
  *
  * Note: Expo/RN Web renders TextInput as role=textbox (not always <input>).
+ * Superadmin must use /admin (not app /login).
  */
 import { test, expect, type Page } from '@playwright/test';
 
@@ -15,8 +16,8 @@ async function expectAppShell(page: Page) {
   await expect(page.locator('body')).toBeVisible();
 }
 
-async function waitForLoginForm(page: Page) {
-  await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded' });
+async function waitForLoginForm(page: Page, path = '/login') {
+  await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
   await expect(
     page.getByRole('textbox', { name: /البريد|email/i }).first()
   ).toBeVisible({ timeout: 20_000 });
@@ -28,23 +29,34 @@ async function waitForLoginForm(page: Page) {
 async function loginWithEmail(
   page: Page,
   email: string,
-  password: string
+  password: string,
+  opts?: { path?: string; successPathIncludes?: string }
 ): Promise<boolean> {
-  await waitForLoginForm(page);
-  const emailInput = page
-    .getByRole('textbox', { name: /البريد|email/i })
-    .first();
-  const passwordInput = page
+  const path = opts?.path || '/login';
+  await waitForLoginForm(page, path);
+  await page.getByRole('textbox', { name: /البريد|email/i }).first().fill(email);
+  await page
     .getByRole('textbox', { name: /كلمة المرور|password/i })
-    .first();
-  await emailInput.fill(email);
-  await passwordInput.fill(password);
+    .first()
+    .fill(password);
   await page
     .getByRole('button', { name: /^دخول$|^Sign in$|^Log in$/i })
     .first()
     .click();
-  await page.waitForTimeout(2500);
-  return !page.url().includes('/login');
+  await page.waitForTimeout(3500);
+  const url = page.url();
+  if (opts?.successPathIncludes) {
+    return url.includes(opts.successPathIncludes);
+  }
+  return (
+    !url.endsWith(path) &&
+    !url.includes(`${path}?`) &&
+    (url.includes('/home') ||
+      url.includes('/follower') ||
+      url.includes('/organizer') ||
+      url.includes('/freelancer') ||
+      !url.includes('/login'))
+  );
 }
 
 test.describe('P2 FIX-16 critical flows (unauthenticated)', () => {
@@ -89,9 +101,14 @@ test.describe('P2 FIX-16 multi-role (credentials optional)', () => {
     const email = process.env.E2E_ADMIN_EMAIL;
     const password = process.env.E2E_ADMIN_PASSWORD;
     test.skip(!email || !password, 'E2E_ADMIN_* not set');
-    const ok = await loginWithEmail(page, email!, password!);
+    const ok = await loginWithEmail(page, email!, password!, {
+      path: '/admin',
+      successPathIncludes: '/admin',
+    });
     expect(ok).toBeTruthy();
-    await page.goto(BASE + '/admin', { waitUntil: 'domcontentloaded' });
+    if (!page.url().includes('/admin/home')) {
+      await page.goto(BASE + '/admin/home', { waitUntil: 'domcontentloaded' });
+    }
     await expect(page.locator('body')).toBeVisible();
   });
 });
