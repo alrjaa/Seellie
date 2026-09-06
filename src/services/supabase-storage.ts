@@ -71,18 +71,24 @@ export async function uploadAppMedia(
       return null;
     }
 
-    const contentType =
-      blob.type && blob.type !== 'application/octet-stream'
-        ? blob.type
-        : kind === 'video'
-          ? 'video/mp4'
-          : 'image/jpeg';
+    const rawType = (blob.type || '').trim().toLowerCase();
+    if (!rawType || rawType === 'application/octet-stream') {
+      console.warn('[supabase] upload refused: missing/ambiguous mime', rawType);
+      return null;
+    }
+
+    const contentType = rawType;
 
     const mimeOk =
       (kind === 'photo' &&
-        (contentType.startsWith('image/') || !blob.type)) ||
+        (contentType === 'image/jpeg' ||
+          contentType === 'image/jpg' ||
+          contentType === 'image/png' ||
+          contentType === 'image/webp')) ||
       (kind === 'video' &&
-        (contentType.startsWith('video/') || !blob.type));
+        (contentType === 'video/mp4' ||
+          contentType === 'video/webm' ||
+          contentType === 'video/quicktime'));
     if (!mimeOk) {
       console.warn('[supabase] upload refused: mime', contentType);
       return null;

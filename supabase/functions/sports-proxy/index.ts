@@ -50,19 +50,39 @@ const TTL_MS = {
   fixtureDetail: 45 * 1000,
 };
 
-const corsHeaders: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+const ALLOWED_ORIGINS = new Set([
+  'https://www.seellie.com',
+  'https://seellie.com',
+  'https://ads.seellie.com',
+  'https://admin.seellie.com',
+  'http://localhost:8081',
+  'http://127.0.0.1:8081',
+  'http://localhost:19006',
+]);
+
+/** P1 FIX-06: reflect allowlisted Origin only (no *) */
+function buildCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') || '';
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Headers':
+      'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    Vary: 'Origin',
+  };
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+  }
+  return headers;
+}
+
+let requestCors: Record<string, string> = {};
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
-      ...corsHeaders,
+      ...requestCors,
     },
   });
 }
@@ -1283,8 +1303,9 @@ async function buildTopScorersFromStore(
 }
 
 serve(async (req) => {
+  requestCors = buildCorsHeaders(req);
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: requestCors });
   }
   if (req.method !== 'POST') return safeError('method_not_allowed', 405);
 

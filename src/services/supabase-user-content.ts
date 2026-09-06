@@ -241,28 +241,14 @@ export async function upsertUserContentCloud(
     return { ok: true };
   }
 
-  // مشرف يعدّل محللاً / إعجاب على منشور غيرك — عبر RPC (نفّذ CONTENT-CLOUD-RPC.sql)
+  // مشرف يعدّل محللاً / إعجاب على منشور غيرك — عبر RPC فقط (P1 FIX-12: no fail-open fallback)
   const { error: rpcError } = await sb.rpc('replace_profile_content', {
     p_id: user.id,
     p_content: content,
   });
   if (rpcError) {
-    // احتياطي: سياسة profiles_update_admin إن وُجدت
-    const { error } = await sb
-      .from('profiles')
-      .update({
-        content,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', user.id);
-    if (error) {
-      console.warn(
-        '[content] upsert cross-user',
-        rpcError.message,
-        error.message
-      );
-      return { ok: false, error: rpcError.message || error.message };
-    }
+    console.warn('[content] upsert cross-user rpc failed', rpcError.message);
+    return { ok: false, error: rpcError.message };
   }
   return { ok: true };
 }
