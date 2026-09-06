@@ -31,7 +31,7 @@
 - `supabase/functions/sports-proxy/index.ts`, `send-email/index.ts` — CORS allowlist (see exception)
 - `app.config.ts` — version bump
 - `.gitignore`, `tsconfig.json`
-- Commerce modules restored for tsc (pre-existing `main` imports) — see exceptions
+- (not in PR) local commerce WIP left untracked — see exceptions
 
 ## Security before / after
 
