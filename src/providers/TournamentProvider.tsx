@@ -35,6 +35,11 @@ import {
   hashPassword,
   verifyPassword,
 } from '@/utils/password';
+import { allowLocalDemoAuth } from '@/utils/demo-auth';
+import {
+  sanitizeSeedUserForRuntime,
+  sanitizeUserForPersistence,
+} from '@/utils/user-persistence';
 import {
   ROSTER_PLACEHOLDER_EMAIL_DOMAIN,
   ROSTER_USERS_STORAGE_KEY,
@@ -420,15 +425,14 @@ const APP_LOGO_KEY = 'seellie.appLogo.v3';
 const APP_NAME_KEY = 'seellie.appName';
 const SUPPORT_LEVELS_KEY = 'seellie.supportLevels.v3';
 
-/** FIX-01: لا تُخزَّن accessCode ولا كلمات مرور سحابية في الجلسة المحلية */
+/** P0 FIX-03/04: لا تُخزَّن accessCode ولا كلمات مرور قابلة للتحقق محلياً للحسابات السحابية/المنشورة */
 function sanitizeUserSecrets(user: User): User {
   const analyst = user.analyst
     ? stripAnalystAccessCode({ ...user.analyst })
     : user.analyst;
-  if (isUuid(user.id)) {
-    return { ...user, analyst, passwordHash: 'supabase' };
-  }
-  return analyst === user.analyst ? user : { ...user, analyst };
+  const withAnalyst =
+    analyst === user.analyst ? user : { ...user, analyst };
+  return sanitizeUserForPersistence(withAnalyst);
 }
 
 function normalizeSupportLevels(levels: SupportLevel[]): SupportLevel[] {
@@ -1004,10 +1008,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     seedSocialRelations(
       withLocalizedSeed(initialUsers).map((u) =>
         ensureSocialLists(
-          normalizeUserRoles({
-            ...u,
-            passwordHash: ensurePasswordHashed(u.passwordHash),
-          })
+          normalizeUserRoles(
+            sanitizeSeedUserForRuntime({
+              ...u,
+              passwordHash: allowLocalDemoAuth()
+                ? ensurePasswordHashed(u.passwordHash)
+                : 'supabase',
+            })
+          )
         )
       )
     )
@@ -1315,15 +1323,18 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         );
         const merged =
           i18n.locale === 'en' ? localizeContentTree(mergedRaw) : mergedRaw;
-        setCurrentUser(merged);
-        void setJson(USER_STORAGE_KEY, merged);
+        const safeMerged = sanitizeUserSecrets(merged);
+        setCurrentUser(safeMerged);
+        void setJson(USER_STORAGE_KEY, safeMerged);
         setUsers((prev) => {
-          if (prev.some((u) => u.id === merged.id)) {
+          if (prev.some((u) => u.id === safeMerged.id)) {
             return prev.map((u) =>
-              u.id === merged.id ? normalizeUserRoles({ ...u, ...merged }) : u
+              u.id === safeMerged.id
+                ? normalizeUserRoles({ ...u, ...safeMerged })
+                : u
             );
           }
-          return [...prev, merged];
+          return [...prev, safeMerged];
         });
       } catch (error) {
         console.warn('session restore failed', error);
@@ -1595,7 +1606,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       if (idx < 0) return [merged, ...prev];
       return prev.map((u) => (u.id === merged.id ? merged : u));
     });
-    void setJson(USER_STORAGE_KEY, merged);
+    void setJson(USER_STORAGE_KEY, sanitizeUserSecrets(merged));
     return true;
   }, []);
 
@@ -1811,7 +1822,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             }
             return [...prev, normalizedUser];
           });
-          void setJson(USER_STORAGE_KEY, normalizedUser);
+          void setJson(USER_STORAGE_KEY, sanitizeUserSecrets(normalizedUser));
           // F12-P2-04: inbox REST once via messages/share-cards effects (no duplicate here)
           toast({
             variant: 'success',
@@ -1870,10 +1881,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           return false;
         }
 
-        // إنتاج: لا تسمح بالحسابات التجريبية المحلية عندما السحابة مهيأة
-        const allowLocalDemo =
-          typeof __DEV__ !== 'undefined' && __DEV__ === true;
-        if (!allowLocalDemo) {
+        // P0 FIX-02: published builds never fall back to local seed passwords
+        if (!allowLocalDemoAuth()) {
           toast({
             variant: 'destructive',
             title: t('toasts.t003_7a384c'),
@@ -1891,7 +1900,18 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      // 2) حسابات تجريبية محلية (fallback للتطبيق فقط — ليس للمشرف)
+      // 2) حسابات تجريبية محلية — DEV / EXPO_PUBLIC_ALLOW_DEMO_AUTH=true فقط
+      if (!allowLocalDemoAuth()) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t003_7a384c'),
+          description: isSupabaseConfigured()
+            ? supabaseAuthError || t('auth.adminCloudLoginFailedTitle')
+            : t('auth.adminSupabaseMissingDesc'),
+        });
+        return false;
+      }
+
       if (isLegacyLocalDemoAdmin({ email: normalized })) {
         toast({
           variant: 'destructive',
@@ -1911,10 +1931,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           });
           return false;
         }
-        const withHashed = {
-          ...user,
-          passwordHash: ensurePasswordHashed(user.passwordHash),
-        };
+        const withHashed = allowLocalDemoAuth()
+          ? {
+              ...user,
+              passwordHash: ensurePasswordHashed(user.passwordHash),
+            }
+          : { ...user, passwordHash: 'supabase' as const };
         const normalizedUser = ensureSocialLists(normalizeUserRoles(withHashed));
         const isAdmin = normalizedUser.role === 'superadmin';
 
@@ -1927,15 +1949,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           return false;
         }
 
-        setCurrentUser(normalizedUser);
+        const safeUser = sanitizeUserSecrets(normalizedUser);
+        setCurrentUser(safeUser);
         setUsers((prev) =>
           prev.map((u) =>
-            u.id === normalizedUser.id
-              ? { ...u, passwordHash: normalizedUser.passwordHash }
+            u.id === safeUser.id
+              ? { ...u, passwordHash: safeUser.passwordHash }
               : u
           )
         );
-        void setJson(USER_STORAGE_KEY, normalizedUser);
+        void setJson(USER_STORAGE_KEY, safeUser);
         toast({
           variant: 'success',
           title: t('toasts.t002_202a45'),
@@ -2026,6 +2049,18 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
+      // P0 FIX-02: no local seed signup on published builds
+      if (!allowLocalDemoAuth()) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t004_8fdbe1'),
+          description: isSupabaseConfigured()
+            ? t('toasts.signupCloudFailed')
+            : t('auth.adminSupabaseMissingDesc'),
+        });
+        return false;
+      }
+
       if (users.some((u) => normalizeEmail(u.email) === email)) {
         toast({
           variant: 'destructive',
@@ -2059,8 +2094,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         analysisContent: [],
         comments: [],
       };
-      const newUser = normalizeUserRoles(
-        ensureAccountIdentity(draft, users)
+      const newUser = sanitizeUserSecrets(
+        normalizeUserRoles(ensureAccountIdentity(draft, users))
       );
       setUsers((prev) => [...prev, newUser]);
       setCurrentUser(newUser);
@@ -2265,7 +2300,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       successMessage?: string,
       options?: { notifyReason?: string }
     ) => {
-      const normalized = normalizeUserRoles(updatedUser);
+      const normalized = sanitizeUserSecrets(normalizeUserRoles(updatedUser));
       setUsers((prev) =>
         prev.map((u) => (u.id === normalized.id ? normalized : u))
       );
@@ -2276,7 +2311,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       // احتفظ بإيميل/كلمة مرور الحسابات التجريبية المحلية فقط — لا كلمات مرور سحابية
       void (async () => {
-        if (isUuid(normalized.id) || normalized.passwordHash === 'supabase') {
+        if (
+          !allowLocalDemoAuth() ||
+          isUuid(normalized.id) ||
+          normalized.passwordHash === 'supabase'
+        ) {
           return;
         }
         const prev =
@@ -6382,10 +6421,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           });
           return false;
         }
-        const updated = {
+        const updated = sanitizeUserSecrets({
           ...currentUser,
           passwordHash: 'supabase' as const,
-        };
+        });
         setUsers((prev) =>
           prev.map((u) => (u.id === updated.id ? updated : u))
         );
@@ -6393,6 +6432,15 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         void setJson(USER_STORAGE_KEY, updated);
         toast({ variant: 'success', title: t('toasts.t070_104895') });
         return true;
+      }
+
+      if (!allowLocalDemoAuth()) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t068_1ed93e'),
+          description: t('auth.adminSupabaseMissingDesc'),
+        });
+        return false;
       }
 
       if (!verifyPassword(currentPassword, currentUser.passwordHash)) {
@@ -6403,16 +6451,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      const updated = {
+      const updated = sanitizeUserSecrets({
         ...currentUser,
         passwordHash: hashPassword(nextPassword),
-      };
+      });
       setUsers((prev) =>
         prev.map((u) => (u.id === updated.id ? updated : u))
       );
       setCurrentUser(updated);
       void setJson(USER_STORAGE_KEY, updated);
       void (async () => {
+        if (!allowLocalDemoAuth()) return;
         const prev =
           (await getJson<Record<string, UserCredentialOverride>>(
             USER_CREDENTIAL_OVERRIDES_KEY
@@ -6433,9 +6482,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   );
 
   const persistCurrentUser = useCallback((updated: User) => {
-    setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
-    setCurrentUser(updated);
-    void setJson(USER_STORAGE_KEY, updated);
+    const safe = sanitizeUserSecrets(updated);
+    setUsers((prev) => prev.map((u) => (u.id === safe.id ? safe : u)));
+    setCurrentUser(safe);
+    void setJson(USER_STORAGE_KEY, safe);
     if (isUuid(updated.id) && isSupabaseConfigured()) {
       void upsertUserContentCloud(updated);
     }
