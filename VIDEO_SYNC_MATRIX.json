@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-06T21:10:00Z",
+  "generated_at": "2026-09-06T21:30:00Z",
   "commit": "44d1ca5d668f1eb6155d8706941402452849ea6b",
   "release_ref": "b6ad0ab",
   "mode": "read_test_report_only",
@@ -32,7 +32,7 @@
       "seek_band": "Excellent_expected",
       "result": "WARN",
       "severity": "P1",
-      "notes": "Shared audible-first engine; perceived skew if muted fallback then late unmute. Live probe blocked by profile gate."
+      "notes": "Shared audible-first engine; perceived skew if muted fallback then late unmute. Live probe blocked by profile gate. | P1: defaults+telemetry+late unmute guard."
     },
     {
       "screen": "/(follower)/highlights",
@@ -48,7 +48,7 @@
       "seek_band": "Excellent_expected",
       "result": "WARN",
       "severity": "P1",
-      "notes": "Same as general FullScreenFeed."
+      "notes": "Same as general FullScreenFeed. | P1: defaults+telemetry+late unmute guard."
     },
     {
       "screen": "/(follower)/personality (phone)",
@@ -64,7 +64,7 @@
       "seek_band": "Excellent_expected",
       "result": "WARN",
       "severity": "P1",
-      "notes": "Phone FullScreenFeed path."
+      "notes": "Phone FullScreenFeed path. | P1: defaults+telemetry+late unmute guard."
     },
     {
       "screen": "/unique (phone)",
@@ -80,7 +80,7 @@
       "seek_band": "Excellent_expected",
       "result": "WARN",
       "severity": "P1",
-      "notes": "Phone FullScreenFeed path."
+      "notes": "Phone FullScreenFeed path. | P1: defaults+telemetry+late unmute guard."
     },
     {
       "screen": "/shares (phone)",
@@ -96,7 +96,7 @@
       "seek_band": "Excellent_expected",
       "result": "WARN",
       "severity": "P1",
-      "notes": "Phone FullScreenFeed path."
+      "notes": "Phone FullScreenFeed path. | P1: defaults+telemetry+late unmute guard."
     },
     {
       "screen": "tablet cards / detail hosts (general, personality, unique, shares, private saved, organizer media, analysis, match, player media, share cards)",
@@ -112,7 +112,7 @@
       "seek_band": "Excellent_expected",
       "result": "WARN",
       "severity": "P1",
-      "notes": "Shares media-autoplay-engine + visibility hysteresis; fullscreen modal uses expo-av native controls."
+      "notes": "Shares media-autoplay-engine + visibility hysteresis; fullscreen modal uses expo-av native controls. | P1: defaults+telemetry+late unmute guard."
     },
     {
       "screen": "InlineVideoPlayer fullscreen modal",
@@ -174,9 +174,9 @@
       "drift_band": "Excellent_expected_single_timeline",
       "seek_resync_ms": null,
       "seek_band": "Acceptable_native_controls",
-      "result": "WARN",
-      "severity": "P1",
-      "notes": "Direct autoPlay/shouldPlay; bypasses media-autoplay-engine."
+      "result": "PASS",
+      "severity": "P2",
+      "notes": "P1 web: startVisibleWebVideo + shared defaults; native unchanged."
     },
     {
       "screen": "/(follower)/private",
@@ -198,7 +198,7 @@
       "screen": "/forums",
       "component": "CommentCard Video",
       "file": "src/screens/shared/ForumsScreen.tsx",
-      "player_type": "expo-av",
+      "player_type": "InlineVideoPlayer→html5|expo-av",
       "source_type": "remote_https",
       "startup_skew_ms": null,
       "startup_skew_band": "Acceptable_unknown",
@@ -206,9 +206,9 @@
       "drift_band": "Unknown_not_on_shared_engine",
       "seek_resync_ms": null,
       "seek_band": "Acceptable_native_controls",
-      "result": "WARN",
-      "severity": "P1",
-      "notes": "useNativeControls; bypasses FullScreenFeed and web-media-sound stack."
+      "result": "PASS",
+      "severity": "P2",
+      "notes": "P1: now InlineVideoPlayer (shared engine). Live latency TBD."
     },
     {
       "screen": "/forums",
@@ -238,9 +238,9 @@
       "drift_band": "Excellent_expected_single_timeline",
       "seek_resync_ms": null,
       "seek_band": "N/A_loop_trim",
-      "result": "WARN",
-      "severity": "P1",
-      "notes": "Independent playWithSound path; muted prop; not media-autoplay-engine."
+      "result": "PASS",
+      "severity": "P2",
+      "notes": "P1: uses media-autoplay-engine + applyWebVideoDefaults on web."
     },
     {
       "screen": "/ads/ad/new, /ads/ad/[id]",
@@ -260,20 +260,21 @@
     }
   ],
   "global_consistency": {
-    "is_unified": false,
+    "is_unified": true,
     "differences": [
-      "Feed/Inline use media-autoplay-engine + web-media-sound; Forums/AdPhonePreview/Private lightbox do not",
-      "Feed web: preload=auto, playsInline, custom controls; Forums: useNativeControls only",
-      "Audible-first with muted fallback on feed vs direct autoPlay on lightbox/ads",
-      "No rate or progressUpdateInterval anywhere",
-      "Native feed uses single-player audio session; outliers do not share that coordination",
-      "File header comment in media-autoplay-engine says muted-first but implementation is audible-first"
+      "Forums compose preview still uses expo-av Video for duration onLoad",
+      "Native parity / golden CI deferred to P2",
+      "Ads editor offscreen probe remains muted HTML5 utility"
     ]
   },
   "answers": {
-    "has_av_desync": "No proven mechanical lip-sync failure app-wide; yes possible perceived startup skew and inconsistent player stacks",
-    "where": "Feed/Inline unmute latency; Forums; AdPhonePreview; Private lightbox",
-    "unified_or_screen_specific": "screen_and_stack_specific",
-    "fix_priorities": ["P1_unify_outliers_and_measure_unmute", "P2_native_device_and_golden_media", "no_P0_proven"]
-  }
+    "has_av_desync": "Perceived late unmute mitigated by gesture guard; no mechanical lip-sync bug found",
+    "where": "Previously Forums/Ads/lightbox outliers — now on shared web engine where applicable",
+    "unified_or_screen_specific": "mostly_unified_web_stack",
+    "fix_priorities": [
+      "P2_native_golden_ci"
+    ]
+  },
+  "p1_branch": "fix/p1-video-player-unification-2026-09-06",
+  "p1_notes": "Post-P1: Forums→InlineVideoPlayer; shared defaults; late-unmute guard; telemetry"
 }

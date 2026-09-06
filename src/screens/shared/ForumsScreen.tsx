@@ -40,6 +40,7 @@ import { formatArabicDate, formatArabicTime } from '@/utils';
 import { useListChrome } from '@/hooks/useListChrome';
 import { useSaveToPrivateSpace } from '@/hooks/useSaveToPrivateSpace';
 import { MediaUploadSpecs } from '@/components/media/MediaUploadSpecs';
+import { InlineVideoPlayer } from '@/components/media/InlineVideoPlayer';
 import {
   FORUM_VIDEO_MAX_SEC,
   isForumVideoWithinLimit,
@@ -67,14 +68,6 @@ const CommentCard = memo(function CommentCard({
   const theme = useAppTheme();
   const { t } = useTranslation();
   const lastTapRef = React.useRef(0);
-  const feedVideoRef = useRef<VideoType | null>(null);
-
-  useEffect(() => {
-    return () => {
-      void feedVideoRef.current?.pauseAsync().catch(() => undefined);
-      void feedVideoRef.current?.unloadAsync().catch(() => undefined);
-    };
-  }, [item.videoUrl]);
 
   const onPressCard = useCallback(() => {
     const now = Date.now();
@@ -129,14 +122,7 @@ const CommentCard = memo(function CommentCard({
         ) : null}
         {item.videoUrl ? (
           <View style={styles.mediaWrap}>
-            <Video
-              ref={feedVideoRef}
-              source={{ uri: item.videoUrl }}
-              style={styles.video}
-              useNativeControls
-              resizeMode={ResizeMode.CONTAIN}
-              isLooping={false}
-            />
+            <InlineVideoPlayer uri={item.videoUrl} height={220} />
             <View style={styles.mediaShare}>
               <TinyShareButton onPress={onShare} />
             </View>

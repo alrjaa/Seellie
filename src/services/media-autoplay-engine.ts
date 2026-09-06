@@ -1,7 +1,17 @@
 /**
- * Central muted-first autoplay policy for web video elements.
+ * Central autoplay policy for web video elements (audible-first → muted fallback).
  * General + Highlights (FullScreenFeed) and inline players share this logic.
  */
+
+import { VIDEO_PLAYER_DEFAULTS } from '@/services/video-player-defaults';
+import {
+  getMutedFallbackAgeMs,
+  markMutedFallback,
+  markPlayStarted,
+  markPlayingAfterStart,
+  markUnmuteLatency,
+  recordVideoMetric,
+} from '@/services/video-playback-telemetry';
 
 export type PlayableVideo = {
   muted: boolean;
@@ -93,22 +103,33 @@ export async function attemptMutedAutoplay(
  */
 export async function attemptAudibleAutoplay(
   el: PlayableVideo,
-  guard?: AutoplayGuard
+  guard?: AutoplayGuard,
+  surface = 'web'
 ): Promise<AudibleAutoplayResult> {
-  el.volume = 1;
+  markPlayStarted(el as object);
+  el.volume = VIDEO_PLAYER_DEFAULTS.volume;
   el.muted = false;
   el.defaultMuted = false;
   try {
     await el.play();
     if (isStale(guard)) return 'aborted';
     if (el.paused) return 'failed';
-    return el.muted ? 'playing_muted' : 'playing_audible';
+    markPlayingAfterStart(el as object, surface);
+    if (el.muted) {
+      markMutedFallback(el as object, surface);
+      return 'playing_muted';
+    }
+    return 'playing_audible';
   } catch (error) {
     if (isStale(guard)) return 'aborted';
     const kind = classifyPlayError(error);
     if (kind === 'media') return 'failed';
     const muted = await attemptMutedAutoplay(el, guard);
-    if (muted === 'playing') return 'playing_muted';
+    if (muted === 'playing') {
+      markMutedFallback(el as object, surface);
+      markPlayingAfterStart(el as object, surface);
+      return 'playing_muted';
+    }
     if (muted === 'policy_blocked') return 'policy_blocked';
     if (muted === 'aborted') return 'aborted';
     return 'failed';
@@ -131,28 +152,46 @@ function invokePlay(el: PlayableVideo): void {
 /** After real user activation — unmute without stopping playback when possible. */
 export function attemptUnmuteWhilePlaying(
   el: PlayableVideo,
-  options?: UnmuteOptions
+  options?: UnmuteOptions,
+  surface = 'web'
 ): UnmuteResult {
   const inGesture = options?.inGesture === true;
 
+  // P1: block surprising late auto-unmute after long muted playback without a gesture.
+  if (!inGesture) {
+    const age = getMutedFallbackAgeMs(el as object);
+    if (
+      age != null &&
+      age >= VIDEO_PLAYER_DEFAULTS.lateUnmuteGuardMs &&
+      !el.paused
+    ) {
+      recordVideoMetric('late_unmute_blocked', age, surface);
+      return 'muted_still_playing';
+    }
+  }
+
   if (el.paused) {
     if (!inGesture) return 'not_playing';
-    el.volume = 1;
+    el.volume = VIDEO_PLAYER_DEFAULTS.volume;
     el.muted = false;
     el.defaultMuted = false;
     invokePlay(el);
     if (el.paused) return 'not_playing';
+    if (!el.muted) markUnmuteLatency(el as object, surface);
     return el.muted ? 'muted_still_playing' : 'unmuted';
   }
 
-  el.volume = 1;
+  el.volume = VIDEO_PLAYER_DEFAULTS.volume;
   try {
     el.muted = false;
     el.defaultMuted = false;
     if (el.paused) {
       if (inGesture) {
         invokePlay(el);
-        if (!el.paused && !el.muted) return 'unmuted';
+        if (!el.paused && !el.muted) {
+          markUnmuteLatency(el as object, surface);
+          return 'unmuted';
+        }
         if (!el.paused) return 'muted_still_playing';
       }
       el.muted = true;
@@ -160,6 +199,7 @@ export function attemptUnmuteWhilePlaying(
       invokePlay(el);
       return 'muted_still_playing';
     }
+    markUnmuteLatency(el as object, surface);
     return 'unmuted';
   } catch {
     el.muted = true;

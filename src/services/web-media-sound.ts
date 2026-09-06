@@ -21,9 +21,10 @@ export function nextWebSoundSession(
 }
 
 export async function startVisibleWebVideo(
-  el: PlayableVideo
+  el: PlayableVideo,
+  surface = 'inline'
 ): Promise<'playing' | 'policy_blocked' | 'aborted' | 'failed'> {
-  const result = await attemptAudibleAutoplay(el);
+  const result = await attemptAudibleAutoplay(el, undefined, surface);
   if (result === 'playing_audible' || result === 'playing_muted') return 'playing';
   return result;
 }
@@ -35,9 +36,10 @@ export function promoteWebVideoSound(el: PlayableVideo): 'unmuted' | 'muted' {
 
 export function attachSoundToPlayingVideo(
   el: PlayableVideo,
-  options?: { inGesture?: boolean }
+  options?: { inGesture?: boolean },
+  surface = 'web'
 ): 'unmuted' | 'muted' {
-  const result = attemptUnmuteWhilePlaying(el, options);
+  const result = attemptUnmuteWhilePlaying(el, options, surface);
   if (result === 'unmuted') return 'unmuted';
   return 'muted';
 }
