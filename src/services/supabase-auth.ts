@@ -109,6 +109,42 @@ export const PROFILE_PUBLIC_COLUMNS = PROFILE_OWNER_COLUMNS;
 export async function fetchProfile(userId: string): Promise<User | null> {
   const sb = getSupabase();
   if (!sb) return null;
+
+  const { data: sessionData } = await sb.auth.getSession();
+  const selfId = sessionData.session?.user?.id;
+
+  // P0 FIX-01: other users → catalog (no email/mobile) unless caller is superadmin.
+  if (selfId && selfId !== userId) {
+    let isAdmin = false;
+    const { data: meRow } = await sb
+      .from('profiles')
+      .select('role,roles,active_role')
+      .eq('id', selfId)
+      .maybeSingle();
+    const roles = Array.isArray(meRow?.roles) ? meRow!.roles : [];
+    isAdmin =
+      meRow?.role === 'superadmin' ||
+      meRow?.active_role === 'superadmin' ||
+      roles.includes('superadmin');
+
+    if (isAdmin) {
+      const { data, error } = await sb
+        .from('profiles')
+        .select(PROFILE_OWNER_COLUMNS)
+        .eq('id', userId)
+        .maybeSingle();
+      if (!error && data) return profileToUser(data as ProfileRow);
+    }
+
+    const { data: catalog, error: catalogError } = await sb
+      .from('profiles_catalog')
+      .select(PROFILE_CATALOG_COLUMNS)
+      .eq('id', userId)
+      .maybeSingle();
+    if (catalogError || !catalog) return null;
+    return profileToUser(catalog as ProfileRow);
+  }
+
   const { data, error } = await sb
     .from('profiles')
     .select(PROFILE_OWNER_COLUMNS)
@@ -153,20 +189,58 @@ export async function fetchAllProfilesResult(): Promise<FetchProfilesResult> {
   const catalog = ((data || []) as ProfileRow[])
     .map(parseProfileRow)
     .filter((u): u is User => !!u);
-  const { data: privileged } = await sb
+
+  // P0 FIX-01: never bulk-select email/mobile unless caller is superadmin.
+  // Before SQL lockdown this already stops client-side mass PII fetch.
+  // After lockdown, RLS also enforces own-row/admin-only on profiles.
+  const { data: sessionData } = await sb.auth.getSession();
+  const selfId = sessionData.session?.user?.id;
+  if (!selfId) {
+    return { users: catalog, ok: true };
+  }
+
+  const { data: meRow } = await sb
+    .from('profiles')
+    .select('id,role,roles,active_role')
+    .eq('id', selfId)
+    .maybeSingle();
+  const roles = Array.isArray(meRow?.roles) ? meRow!.roles : [];
+  const isAdmin =
+    meRow?.role === 'superadmin' ||
+    meRow?.active_role === 'superadmin' ||
+    roles.includes('superadmin');
+
+  if (isAdmin) {
+    const { data: privileged } = await sb
+      .from('profiles')
+      .select(PROFILE_OWNER_COLUMNS)
+      .limit(500);
+    if (privileged?.length) {
+      return {
+        users: mergeUsersPreferCloud(
+          catalog,
+          (privileged as ProfileRow[])
+            .map(parseProfileRow)
+            .filter((u): u is User => !!u)
+        ),
+        ok: true,
+      };
+    }
+  }
+
+  const { data: selfRow } = await sb
     .from('profiles')
     .select(PROFILE_OWNER_COLUMNS)
-    .limit(500);
-  if (privileged?.length) {
-    return {
-      users: mergeUsersPreferCloud(
-        catalog,
-        (privileged as ProfileRow[])
-          .map(parseProfileRow)
-          .filter((u): u is User => !!u)
-      ),
-      ok: true,
-    };
+    .eq('id', selfId)
+    .maybeSingle();
+  if (selfRow) {
+    const selfUser = parseProfileRow(selfRow as ProfileRow);
+    if (selfUser) {
+      return {
+        users: mergeUsersPreferCloud(catalog, [selfUser]),
+        ok: true,
+      };
+    }
   }
   return { users: catalog, ok: true };
 }
