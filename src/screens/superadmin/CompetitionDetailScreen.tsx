@@ -736,6 +736,11 @@ export default function CompetitionDetailScreen() {
             )}
 
             <Subtitle>{t('organizer.competitionManage.addStaff')}</Subtitle>
+            <Muted>
+              {t('organizer.competitionManage.rosterAccountRequiredTitle')}
+              {' — '}
+              {t('organizer.competitionManage.rosterAccountRequiredStaff')}
+            </Muted>
             <Input
               label={t('organizer.competitionManage.staffName')}
               value={staffName}
@@ -763,19 +768,36 @@ export default function CompetitionDetailScreen() {
             <Button
               label={t('superadmin.actions.add')}
               onPress={() => {
-                if (
-                  addStaffToCompetition(competition.id, {
-                    name: staffName,
-                    role: staffRole,
-                    mobile: staffMobile,
-                    avatar: staffAvatar,
-                  })
-                ) {
-                  setStaffName('');
-                  setStaffRole('');
-                  setStaffMobile('');
-                  setStaffAvatar(undefined);
-                }
+                void (async () => {
+                  if (!staffName.trim() || !staffRole.trim()) return;
+                  const ok = await confirmDestructive({
+                    title: t(
+                      'organizer.competitionManage.rosterAccountConfirmTitle'
+                    ),
+                    message: t(
+                      'organizer.competitionManage.rosterAccountRequiredStaff'
+                    ),
+                    cancelLabel: t('common.cancel'),
+                    confirmLabel: t(
+                      'organizer.competitionManage.rosterAccountConfirmContinue'
+                    ),
+                    destructive: false,
+                  });
+                  if (!ok) return;
+                  if (
+                    addStaffToCompetition(competition.id, {
+                      name: staffName,
+                      role: staffRole,
+                      mobile: staffMobile,
+                      avatar: staffAvatar,
+                    })
+                  ) {
+                    setStaffName('');
+                    setStaffRole('');
+                    setStaffMobile('');
+                    setStaffAvatar(undefined);
+                  }
+                })();
               }}
             />
           </Card>
@@ -1320,6 +1342,11 @@ export default function CompetitionDetailScreen() {
 
           <Card style={styles.card}>
             <Subtitle>{t('superadmin.competitionDetail.addReferee')}</Subtitle>
+            <Muted>
+              {t('organizer.competitionManage.rosterAccountRequiredTitle')}
+              {' — '}
+              {t('organizer.competitionManage.rosterAccountRequiredReferee')}
+            </Muted>
             {availableRefs.length === 0 ? (
               <Muted>{t('superadmin.competitionDetail.noAvailableReferees')}</Muted>
             ) : (
@@ -1339,15 +1366,31 @@ export default function CompetitionDetailScreen() {
                       </Muted>
                     </View>
                     <Pressable
-                      onPress={() =>
-                        assignRefereeToCompetition(
-                          competition.id,
-                          ref.id,
-                          t('superadmin.competitionDetail.addedReferee', {
-                            name: ref.name,
-                          })
-                        )
-                      }
+                      onPress={() => {
+                        void (async () => {
+                          const ok = await confirmDestructive({
+                            title: t(
+                              'organizer.competitionManage.rosterAccountConfirmTitle'
+                            ),
+                            message: t(
+                              'organizer.competitionManage.rosterAccountRequiredReferee'
+                            ),
+                            cancelLabel: t('common.cancel'),
+                            confirmLabel: t(
+                              'organizer.competitionManage.rosterAccountConfirmContinue'
+                            ),
+                            destructive: false,
+                          });
+                          if (!ok) return;
+                          assignRefereeToCompetition(
+                            competition.id,
+                            ref.id,
+                            t('superadmin.competitionDetail.addedReferee', {
+                              name: ref.name,
+                            })
+                          );
+                        })();
+                      }}
                     >
                       <Text
                         style={{

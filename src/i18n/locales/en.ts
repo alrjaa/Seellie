@@ -1422,6 +1422,17 @@ export const en: TranslationTree = {
       addPlayerSection: 'Add player to team',
       rosterAccountHint:
         'A follower account is created from available details; missing fields use non-real defaults so photo and alerts stay linked.',
+      rosterAccountRequiredTitle: 'Follower account required',
+      rosterAccountRequiredTeam:
+        'App rule: any player, staff member, or coach registered later on this team must have a Seellie follower account (for photo, details, and alerts).',
+      rosterAccountRequiredPlayer:
+        'App rule: a player may only be registered if they have a follower account. If none matches, temporary non-real defaults are created — prefer entering their real email or mobile.',
+      rosterAccountRequiredStaff:
+        'App rule: all team management and coaches must have a follower account before registration so they receive alerts and their photo/details can be linked.',
+      rosterAccountRequiredReferee:
+        'App rule: any referee registered or assigned to the competition must have a follower account so photo, details, and notifications stay linked.',
+      rosterAccountConfirmTitle: 'Confirm follower-account rule',
+      rosterAccountConfirmContinue: 'Continue with this rule',
       selectTeamFirst: 'Select a team from the list above first',
       selectedTeam: 'Selected team: %{name}',
       playerName: 'Player name',
