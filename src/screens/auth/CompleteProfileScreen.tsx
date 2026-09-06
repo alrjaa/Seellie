@@ -12,6 +12,10 @@ import { cairoText } from '@/theme/fonts';
 
 /**
  * إكمال بيانات الحساب الإلزامية قبل الدخول لوظائف التطبيق.
+ *
+ * قسم الإشعارات هنا = إشعارات اكتشاف من التطبيق فقط
+ * (محتوى جديد / أحداث / مسابقات جديدة) — بلا أي صلة
+ * بإشعارات المنظمين أو اللاعبين أو المتابعين أو الإعلام التنظيمي.
  */
 export default function CompleteProfileScreen() {
   const { currentUser, updateUser, loading, routeForRole, logout } =

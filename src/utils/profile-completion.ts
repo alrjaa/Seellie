@@ -7,6 +7,16 @@ function digits(mobile?: string) {
   return (mobile || '').replace(/\D/g, '');
 }
 
+/**
+ * إكمال الملف الإلزامي قبل وظائف التطبيق.
+ *
+ * ملاحظة مهمة عن notificationsConsent:
+ * المقصود موافقة/رفض إشعارات الاكتشاف التي يرسلها التطبيق للمتابع
+ * عند ظهور محتوى أو حدث أو مسابقة جديدة فقط.
+ * لا تُستخدم أبداً لبوابة إشعارات المنظمين أو اللاعبين أو المتابعين
+ * أو الإعلام التنظيمي داخل المسابقة.
+ */
+
 /** هل أكمل المستخدم البيانات الإلزامية قبل استخدام وظائف التطبيق */
 export function isAppProfileComplete(
   user: User | null | undefined
@@ -62,4 +72,18 @@ export function missingAppProfileFields(
     missing.push('notifications');
   }
   return missing;
+}
+
+/**
+ * هل يوافق المتابع على إشعارات الاكتشاف من التطبيق
+ * (محتوى/أحداث/مسابقات جديدة فقط)؟
+ *
+ * ممنوع استخدام هذه الدالة لفلترة:
+ * - إعلام/تنبيه المنظمين للمشاركين
+ * - رسائل أو تنبيهات اللاعبين/المتابعين/المنظمين
+ */
+export function wantsDiscoveryNotifications(
+  user: User | null | undefined
+): boolean {
+  return user?.notificationsConsent === true;
 }

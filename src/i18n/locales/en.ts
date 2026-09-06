@@ -134,11 +134,11 @@ export const en: TranslationTree = {
     addressHint:
       'Country, region, and city are used to show local competitions in your city.',
     legalSection: 'Policy consent',
-    notificationsSection: 'App notifications',
+    notificationsSection: 'New-event notifications',
     notificationsHint:
-      'Choose to accept or refuse notifications. You can change this later.',
-    notificationsAccept: 'Accept notifications',
-    notificationsRefuse: 'Refuse notifications',
+      'These are alerts the app sends you only when new content, events, or competitions appear. They are unrelated to organizer, player, or follower notifications, and unrelated to competition operational alerts.',
+    notificationsAccept: 'Accept new-event notifications',
+    notificationsRefuse: 'Refuse new-event notifications',
     accept: 'Accept',
     accepted: 'Accepted',
     continue: 'Save and continue',
@@ -152,7 +152,7 @@ export const en: TranslationTree = {
     errCity: 'Enter your city',
     errPrivacy: 'You must accept the privacy policy',
     errTerms: 'You must accept the terms of use',
-    errNotifications: 'Choose accept or refuse for notifications',
+    errNotifications: 'Choose accept or refuse for new-event notifications',
   },
   settings: {
     title: 'Settings',

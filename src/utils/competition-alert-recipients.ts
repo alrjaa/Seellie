@@ -18,6 +18,10 @@ export type CompetitionAlertAudience = {
 /**
  * جمهور «الإعلام والتنبيه»: إدارة الفرق + طاقم المسابقة + اللاعبون + الحكام
  * المرتبطون بحسابات متابع.
+ *
+ * مهم: لا تفلتر هذه القائمة بـ notificationsConsent / wantsDiscoveryNotifications —
+ * تلك الموافقة خاصة بإشعارات اكتشاف التطبيق (محتوى/أحداث/مسابقات جديدة) فقط،
+ * وليست لها علاقة بإعلام المنظمين التشغيلي.
  */
 export function resolveCompetitionAlertAudience(
   competition: Competition | undefined,
