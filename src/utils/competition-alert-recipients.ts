@@ -5,7 +5,7 @@ import type {
   TeamOfficial,
   User,
 } from '@/data/initial-data';
-import { normalizeEmail } from '@/utils';
+import { matchFollowerUser } from '@/utils/roster-follower-account';
 
 export type CompetitionAlertAudience = {
   managers: number;
@@ -15,52 +15,9 @@ export type CompetitionAlertAudience = {
   linkedUserIds: string[];
 };
 
-function normMobile(mobile?: string) {
-  return (mobile || '').replace(/\D/g, '');
-}
-
-function normName(name?: string) {
-  return (name || '').trim().toLowerCase();
-}
-
-function matchUser(
-  users: User[],
-  candidate: { id?: string; email?: string; mobile?: string; name?: string }
-): User | undefined {
-  if (candidate.id) {
-    const byId = users.find((u) => u.id === candidate.id);
-    if (byId) return byId;
-  }
-  const email = candidate.email ? normalizeEmail(candidate.email) : '';
-  if (email) {
-    const byEmail = users.find((u) => normalizeEmail(u.email) === email);
-    if (byEmail) return byEmail;
-  }
-  const mobile = normMobile(candidate.mobile);
-  if (mobile.length >= 8) {
-    const byMobile = users.find((u) => normMobile(u.mobile) === mobile);
-    if (byMobile) return byMobile;
-  }
-  const name = normName(candidate.name);
-  if (name) {
-    const byName = users.find((u) => normName(u.name) === name);
-    if (byName) return byName;
-  }
-  return undefined;
-}
-
-function isTeamManagerOfficial(official: TeamOfficial) {
-  return (
-    official.role === 'مدير الفريق' ||
-    official.role === 'مساعد مدير الفريق' ||
-    official.role === 'مدرب' ||
-    official.role === 'مساعد مدرب'
-  );
-}
-
 /**
- * جمهور «الإعلام والتنبيه»: مدراء/مدربو الفرق + اللاعبون + الحكام
- * المعيّنون في المسابقة فقط — بلا علاقة ببوابة الإعلانات التجارية.
+ * جمهور «الإعلام والتنبيه»: إدارة الفرق + طاقم المسابقة + اللاعبون + الحكام
+ * المرتبطون بحسابات متابع.
  */
 export function resolveCompetitionAlertAudience(
   competition: Competition | undefined,
@@ -76,28 +33,45 @@ export function resolveCompetitionAlertAudience(
   let managers = 0;
   let players = 0;
 
+  const linkPerson = (candidate: {
+    id?: string;
+    email?: string;
+    mobile?: string;
+    name?: string;
+  }) => {
+    const user = matchFollowerUser(users, candidate);
+    if (user && user.id !== excludeUserId) linked.add(user.id);
+  };
+
   for (const team of competition.teams || []) {
     for (const official of team.officials || []) {
-      if (!isTeamManagerOfficial(official)) continue;
       managers += 1;
-      const user = matchUser(users, {
+      linkPerson({
         id: official.id,
         email: official.email,
         mobile: official.mobile,
         name: official.name,
       });
-      if (user && user.id !== excludeUserId) linked.add(user.id);
     }
     for (const player of team.players || []) {
       players += 1;
-      const user = matchUser(users, {
+      linkPerson({
         id: player.id,
         email: player.email,
         mobile: player.mobile,
         name: player.name,
       });
-      if (user && user.id !== excludeUserId) linked.add(user.id);
     }
+  }
+
+  for (const staff of competition.staff || []) {
+    managers += 1;
+    linkPerson({
+      id: staff.id,
+      email: staff.email,
+      mobile: staff.mobile,
+      name: staff.name,
+    });
   }
 
   const assignedRefs = (competition.refereeIds || [])
@@ -105,12 +79,12 @@ export function resolveCompetitionAlertAudience(
     .filter((r): r is Referee => !!r);
 
   for (const ref of assignedRefs) {
-    const user = matchUser(users, {
+    linkPerson({
       id: ref.id,
+      email: ref.email,
       mobile: ref.mobile,
       name: ref.name,
     });
-    if (user && user.id !== excludeUserId) linked.add(user.id);
   }
 
   return {
@@ -127,5 +101,14 @@ export function describePlayerForMatch(player: Player) {
     email: player.email,
     mobile: player.mobile,
     name: player.name,
+  };
+}
+
+export function describeOfficialForMatch(official: TeamOfficial) {
+  return {
+    id: official.id,
+    email: official.email,
+    mobile: official.mobile,
+    name: official.name,
   };
 }

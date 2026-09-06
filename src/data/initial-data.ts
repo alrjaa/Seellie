@@ -164,6 +164,7 @@ export interface Referee {
     address?: string;
     city?: string;
     mobile?: string;
+    email?: string;
     role: 'حكم ساحة' | 'رجل خط' | 'مراقب';
 }
 
@@ -229,6 +230,7 @@ export interface CompetitionStaff {
   name: string;
   role: string;
   mobile?: string;
+  email?: string;
   avatar?: string;
 }
 

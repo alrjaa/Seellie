@@ -112,12 +112,15 @@ export default function CompetitionManageScreen() {
   const [editCompetitionName, setEditCompetitionName] = useState('');
   const [editTeamName, setEditTeamName] = useState('');
   const [playerName, setPlayerName] = useState('');
+  const [playerEmail, setPlayerEmail] = useState('');
+  const [playerMobile, setPlayerMobile] = useState('');
   const [jersey, setJersey] = useState('');
   const [position, setPosition] = useState<Player['position']>('وسط');
   const [playerAvatar, setPlayerAvatar] = useState<string | undefined>();
   const [staffName, setStaffName] = useState('');
   const [staffRole, setStaffRole] = useState('');
   const [staffMobile, setStaffMobile] = useState('');
+  const [staffEmail, setStaffEmail] = useState('');
   const [staffAvatar, setStaffAvatar] = useState<string | undefined>();
   const [refereeName, setRefereeName] = useState('');
   const [refereeRole, setRefereeRole] =
@@ -678,6 +681,7 @@ export default function CompetitionManageScreen() {
 
       <Card style={styles.card}>
         <Subtitle>{t('organizer.competitionManage.addPlayerSection')}</Subtitle>
+        <Muted>{t('organizer.competitionManage.rosterAccountHint')}</Muted>
         {!selectedTeamId ? (
           <Muted>{t('organizer.competitionManage.selectTeamFirst')}</Muted>
         ) : (
@@ -693,6 +697,19 @@ export default function CompetitionManageScreen() {
               label={t('organizer.competitionManage.playerName')}
               value={playerName}
               onChangeText={setPlayerName}
+            />
+            <Input
+              label={t('organizer.competitionManage.playerEmailOptional')}
+              value={playerEmail}
+              onChangeText={setPlayerEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <Input
+              label={t('organizer.competitionManage.playerMobileOptional')}
+              value={playerMobile}
+              onChangeText={setPlayerMobile}
+              keyboardType="phone-pad"
             />
             <Input
               label={t('organizer.competitionManage.jerseyNumber')}
@@ -730,10 +747,14 @@ export default function CompetitionManageScreen() {
                     jerseyNumber: Number(jersey),
                     position,
                     avatar: playerAvatar,
+                    email: playerEmail.trim() || undefined,
+                    mobile: playerMobile.trim() || undefined,
                   },
                   t('organizer.competitionManage.playerAdded')
                 );
                 setPlayerName('');
+                setPlayerEmail('');
+                setPlayerMobile('');
                 setJersey('');
                 setPlayerAvatar(undefined);
               }}
@@ -1144,6 +1165,7 @@ export default function CompetitionManageScreen() {
         )}
 
         <Subtitle>{t('organizer.competitionManage.addStaff')}</Subtitle>
+        <Muted>{t('organizer.competitionManage.rosterAccountHint')}</Muted>
         <Input
           label={t('organizer.competitionManage.staffName')}
           value={staffName}
@@ -1163,6 +1185,13 @@ export default function CompetitionManageScreen() {
           placeholder={t('organizer.competitionManage.staffRolePlaceholder')}
         />
         <Input
+          label={t('organizer.competitionManage.staffEmailOptional')}
+          value={staffEmail}
+          onChangeText={setStaffEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+        <Input
           label={t('organizer.competitionManage.staffMobile')}
           value={staffMobile}
           onChangeText={setStaffMobile}
@@ -1176,12 +1205,15 @@ export default function CompetitionManageScreen() {
                 name: staffName,
                 role: staffRole,
                 mobile: staffMobile,
+                email: staffEmail.trim() || undefined,
                 avatar: staffAvatar,
+                teamId: selectedTeamId || undefined,
               })
             ) {
               setStaffName('');
               setStaffRole('');
               setStaffMobile('');
+              setStaffEmail('');
               setStaffAvatar(undefined);
             }
           }}
@@ -1260,6 +1292,7 @@ export default function CompetitionManageScreen() {
         )}
 
         <Subtitle>{t('organizer.competitionManage.addRefereeSection')}</Subtitle>
+        <Muted>{t('organizer.competitionManage.rosterAccountHint')}</Muted>
         {availableRefs.length === 0 ? (
           <Muted>{t('organizer.competitionManage.noAvailableReferees')}</Muted>
         ) : (
