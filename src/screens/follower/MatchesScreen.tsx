@@ -2,7 +2,7 @@ import React, { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
-  useTournament,
+  useTournamentCore,
   type Competition,
   type Match,
 } from '@/providers/TournamentProvider';
@@ -110,7 +110,7 @@ const MatchCard = memo(function MatchCard({ item }: { item: MatchRow }) {
 });
 
 export default function MatchesScreen() {
-  const { competitions, currentUser } = useTournament();
+  const { competitions, currentUser } = useTournamentCore();
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const listChrome = useListChrome();

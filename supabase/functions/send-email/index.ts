@@ -14,11 +14,30 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
-const cors = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type',
-};
+const ALLOWED_ORIGINS = new Set([
+  'https://www.seellie.com',
+  'https://seellie.com',
+  'https://ads.seellie.com',
+  'https://admin.seellie.com',
+  'http://localhost:8081',
+  'http://127.0.0.1:8081',
+  'http://localhost:19006',
+]);
+
+function buildCors(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') || '';
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Headers':
+      'authorization, x-client-info, apikey, content-type',
+    Vary: 'Origin',
+  };
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+  }
+  return headers;
+}
+
+let requestCors: Record<string, string> = {};
 
 type Body = {
   type?: string;
@@ -54,8 +73,9 @@ function codesEqual(a: string, b: string): boolean {
 }
 
 serve(async (req) => {
+  requestCors = buildCors(req);
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: cors });
+    return new Response('ok', { headers: requestCors });
   }
 
   try {
@@ -192,7 +212,7 @@ serve(async (req) => {
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json', ...cors },
+    headers: { 'Content-Type': 'application/json', ...requestCors },
   });
 }
 

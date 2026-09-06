@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
-  useTournament,
+  useTournamentCore,
   type Competition,
 } from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
@@ -97,7 +97,8 @@ const CompetitionCard = memo(function CompetitionCard({
 });
 
 export default function CompetitionsScreen() {
-  const { competitions, currentUser, togglePinnedCompetition } = useTournament();
+  const { competitions, currentUser, togglePinnedCompetition } =
+    useTournamentCore();
   const { t, language } = useTranslation();
   const router = useRouter();
   const [query, setQuery] = useState('');

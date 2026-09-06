@@ -41,12 +41,9 @@ export function getSupabase(): SupabaseClient | null {
         storage: AsyncStorage,
         autoRefreshToken: true,
         persistSession: true,
-        // على الويب فقط: قراءة ?code= / #access_token من رابط الاستعادة
-        // على الموبايل نستهلك الرابط يدوياً عبر AuthDeepLinkHandler
+        // P2 FIX-05: PKCE on all platforms (recovery uses OTP / code exchange, not implicit hash).
         detectSessionInUrl: Platform.OS === 'web',
-        // الويب: implicit حتى تعمل روابط «Send password recovery» من لوحة Supabase
-        // (بدون code_verifier). الموبايل يبقى PKCE.
-        flowType: Platform.OS === 'web' ? 'implicit' : 'pkce',
+        flowType: 'pkce',
       },
     });
   }

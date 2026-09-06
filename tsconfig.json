@@ -21,6 +21,8 @@
     "supabase/functions/**",
     "node_modules",
     "dist",
-    "web-build"
+    "web-build",
+    "_local_wip/**",
+    "e2e/**"
   ]
 }
