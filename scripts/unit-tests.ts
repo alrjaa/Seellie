@@ -79,6 +79,11 @@ import {
   VIDEO_PLAYER_DEFAULTS,
 } from '../src/services/video-player-defaults';
 import {
+  evaluateGates,
+  DEFAULT_THRESHOLDS,
+} from '../src/services/video-quality-gates';
+import { createVideoQualityEvent } from '../src/services/video-quality-schema';
+import {
   isNativePlaybackMediaFailure,
   shouldAttemptNativeFeedAutoplay,
   hasPendingNativeAutoplayRequest,
@@ -976,6 +981,39 @@ test('applyWebVideoDefaults sets shared playsInline/preload', () => {
   assert.equal(el.loop, true);
   assert.equal(el.controls, false);
   assert.equal(el.muted, false);
+});
+
+test('video quality gates pass synthetic golden and fail over SLO', () => {
+  const ok = evaluateGates({
+    platform: 'synthetic',
+    startup_skew_ms_p95: 95,
+    unmute_latency_ms_median: 80,
+    drift_ms_after_5min: 25,
+    rebuffer_ratio: 0.04,
+  });
+  assert.equal(ok.ok, true);
+  const bad = evaluateGates({
+    platform: 'web',
+    startup_skew_ms_p95: DEFAULT_THRESHOLDS.startup_skew_ms_p95 + 1,
+    unmute_latency_ms_median: 10,
+    drift_ms_after_5min: 0,
+    rebuffer_ratio: 0,
+  });
+  assert.equal(bad.ok, false);
+  assert.ok(bad.failures.some((f) => f.includes('startup_skew')));
+});
+
+test('video quality event schema is JSON-serializable', () => {
+  const ev = createVideoQualityEvent({
+    name: 'video_unmute',
+    platform: 'web',
+    surface: 'inline',
+    value_ms: 90,
+    ok: true,
+  });
+  const round = JSON.parse(JSON.stringify(ev));
+  assert.equal(round.name, 'video_unmute');
+  assert.equal(round.value_ms, 90);
 });
 
 console.log('All tests passed.');
