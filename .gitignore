@@ -48,6 +48,7 @@ yarn-error.*
 test-results/
 playwright-report/
 e2e-results.json
+e2e/golden/media/
 
 # Local unfinished WIP (not part of P2)
 _local_wip/

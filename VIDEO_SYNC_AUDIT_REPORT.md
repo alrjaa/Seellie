@@ -7,6 +7,18 @@
 
 ---
 
+## Post-P2 update (2026-09-06)
+
+Branch `fix/p2-video-reliability-hardening-2026-09-06` adds:
+
+- Golden media catalog + CI gate script (`npm run test:video-gates`)
+- Native parity Maestro stubs (`e2e/native/`)
+- Video quality event schema for dashboards
+
+**Still open:** live native device matrix and production feed unmute latency medians (requires completed E2E profile + device CI). See `VIDEO_P2_HARDENING_REPORT.md`.
+
+---
+
 ## Executive Summary
 
 | Question | Answer |

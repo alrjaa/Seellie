@@ -1,0 +1,8 @@
+{
+  "platform": "synthetic",
+  "startup_skew_ms_p95": 95,
+  "unmute_latency_ms_median": 80,
+  "drift_ms_after_5min": 25,
+  "rebuffer_ratio": 0.04,
+  "notes": "Placeholder golden metrics for CI until live feed probe is unblocked. Replace with measured medians from web/native runs."
+}
