@@ -38,6 +38,7 @@ import {
   Title,
 } from '@/components/ui';
 import { formatVenueAddress } from '@/utils/competition';
+import { resolveFollowerByIdentifier } from '@/utils/roster-follower-account';
 
 function RosterAccountNotice({
   messageKey,
@@ -115,8 +116,8 @@ export default function CompetitionManageScreen() {
   const { t } = useTranslation();
   const {
     competitions,
-    currentUser,
     users,
+    currentUser,
     referees,
     addTeam,
     renameCompetition,
@@ -148,23 +149,14 @@ export default function CompetitionManageScreen() {
   const [teamLogo, setTeamLogo] = useState<string | undefined>();
   const [editCompetitionName, setEditCompetitionName] = useState('');
   const [editTeamName, setEditTeamName] = useState('');
-  const [playerName, setPlayerName] = useState('');
-  const [playerEmail, setPlayerEmail] = useState('');
-  const [playerMobile, setPlayerMobile] = useState('');
+  const [playerIdentifier, setPlayerIdentifier] = useState('');
   const [jersey, setJersey] = useState('');
   const [position, setPosition] = useState<Player['position']>('وسط');
-  const [playerAvatar, setPlayerAvatar] = useState<string | undefined>();
-  const [staffName, setStaffName] = useState('');
+  const [staffIdentifier, setStaffIdentifier] = useState('');
   const [staffRole, setStaffRole] = useState('');
-  const [staffMobile, setStaffMobile] = useState('');
-  const [staffEmail, setStaffEmail] = useState('');
-  const [staffAvatar, setStaffAvatar] = useState<string | undefined>();
-  const [refereeName, setRefereeName] = useState('');
+  const [refereeIdentifier, setRefereeIdentifier] = useState('');
   const [refereeRole, setRefereeRole] =
     useState<Referee['role']>('حكم ساحة');
-  const [refereeMobile, setRefereeMobile] = useState('');
-  const [refereeCity, setRefereeCity] = useState('');
-  const [refereeAvatar, setRefereeAvatar] = useState<string | undefined>();
   const [avatarEdit, setAvatarEdit] = useState<
     | {
         kind: 'player' | 'staff' | 'referee';
@@ -199,7 +191,21 @@ export default function CompetitionManageScreen() {
     setEditTeamName(team?.name || '');
   }, [competition, selectedTeamId]);
 
+  const playerAccountPreview = useMemo(
+    () => resolveFollowerByIdentifier(users, playerIdentifier),
+    [users, playerIdentifier]
+  );
+  const staffAccountPreview = useMemo(
+    () => resolveFollowerByIdentifier(users, staffIdentifier),
+    [users, staffIdentifier]
+  );
+  const refereeAccountPreview = useMemo(
+    () => resolveFollowerByIdentifier(users, refereeIdentifier),
+    [users, refereeIdentifier]
+  );
+
   const assignedRefs = useMemo(
+
     () =>
       uniqueRefereesByName(
         referees.filter((r) => competition?.refereeIds.includes(r.id))
@@ -552,18 +558,32 @@ export default function CompetitionManageScreen() {
           {t('organizer.competitionManage.registerRefereeSection')}
         </Subtitle>
         <RosterAccountNotice messageKey="rosterAccountRequiredReferee" />
+        <Muted>{t('organizer.competitionManage.rosterLookupHint')}</Muted>
         <Input
-          label={t('organizer.competitionManage.refereeName')}
-          value={refereeName}
-          onChangeText={setRefereeName}
+          label={t('organizer.competitionManage.accountIdentifier')}
+          value={refereeIdentifier}
+          onChangeText={setRefereeIdentifier}
+          placeholder={t('organizer.competitionManage.accountIdentifierPlaceholder')}
+          autoCapitalize="none"
         />
-        <EntityAvatarField
-          value={refereeAvatar}
-          name={refereeName || '?'}
-          folder="referees"
-          onChange={setRefereeAvatar}
-          compact
-        />
+        {refereeAccountPreview ? (
+          <View style={styles.accountPreview}>
+            <Avatar uri={refereeAccountPreview.avatar} name={refereeAccountPreview.name} size={40} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.value, { color: theme.colors.text }]}>
+                {refereeAccountPreview.name}
+              </Text>
+              <Muted>
+                {refereeAccountPreview.handle}
+                {refereeAccountPreview.visibleId
+                  ? ` · ${refereeAccountPreview.visibleId}`
+                  : ''}
+              </Muted>
+            </View>
+          </View>
+        ) : refereeIdentifier.trim() ? (
+          <Muted>{t('organizer.competitionManage.rosterAccountLookupEmpty')}</Muted>
+        ) : null}
         <Muted>{t('organizer.competitionManage.refereeRole')}</Muted>
         <View style={styles.chips}>
           {REFEREE_ROLE_OPTIONS.map((option) => (
@@ -577,22 +597,11 @@ export default function CompetitionManageScreen() {
             />
           ))}
         </View>
-        <Input
-          label={t('organizer.competitionManage.refereeMobile')}
-          value={refereeMobile}
-          onChangeText={setRefereeMobile}
-          keyboardType="phone-pad"
-        />
-        <Input
-          label={t('organizer.competitionManage.refereeCity')}
-          value={refereeCity}
-          onChangeText={setRefereeCity}
-        />
         <Button
           label={t('organizer.competitionManage.registerReferee')}
           onPress={() => {
             void (async () => {
-              if (!refereeName.trim()) return;
+              if (!refereeIdentifier.trim()) return;
               const ok = await confirmDestructive({
                 title: t('organizer.competitionManage.rosterAccountConfirmTitle'),
                 message: t(
@@ -607,17 +616,11 @@ export default function CompetitionManageScreen() {
               if (!ok) return;
               if (
                 registerRefereeForCompetition(competition.id, {
-                  name: refereeName,
+                  identifier: refereeIdentifier.trim(),
                   role: refereeRole,
-                  mobile: refereeMobile,
-                  city: refereeCity,
-                  avatar: refereeAvatar,
                 })
               ) {
-                setRefereeName('');
-                setRefereeMobile('');
-                setRefereeCity('');
-                setRefereeAvatar(undefined);
+                setRefereeIdentifier('');
                 setRefereeRole('حكم ساحة');
               }
             })();
@@ -750,7 +753,7 @@ export default function CompetitionManageScreen() {
       <Card style={styles.card}>
         <Subtitle>{t('organizer.competitionManage.addPlayerSection')}</Subtitle>
         <RosterAccountNotice messageKey="rosterAccountRequiredPlayer" />
-        <Muted>{t('organizer.competitionManage.rosterAccountHint')}</Muted>
+        <Muted>{t('organizer.competitionManage.rosterLookupHint')}</Muted>
         {!selectedTeamId ? (
           <Muted>{t('organizer.competitionManage.selectTeamFirst')}</Muted>
         ) : (
@@ -763,23 +766,36 @@ export default function CompetitionManageScreen() {
               })}
             </Muted>
             <Input
-              label={t('organizer.competitionManage.playerName')}
-              value={playerName}
-              onChangeText={setPlayerName}
-            />
-            <Input
-              label={t('organizer.competitionManage.playerEmailOptional')}
-              value={playerEmail}
-              onChangeText={setPlayerEmail}
-              keyboardType="email-address"
+              label={t('organizer.competitionManage.accountIdentifier')}
+              value={playerIdentifier}
+              onChangeText={setPlayerIdentifier}
+              placeholder={t('organizer.competitionManage.accountIdentifierPlaceholder')}
               autoCapitalize="none"
             />
-            <Input
-              label={t('organizer.competitionManage.playerMobileOptional')}
-              value={playerMobile}
-              onChangeText={setPlayerMobile}
-              keyboardType="phone-pad"
-            />
+            {playerAccountPreview ? (
+              <View style={styles.accountPreview}>
+                <Avatar
+                  uri={playerAccountPreview.avatar}
+                  name={playerAccountPreview.name}
+                  size={40}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.value, { color: theme.colors.text }]}>
+                    {playerAccountPreview.name}
+                  </Text>
+                  <Muted>
+                    {playerAccountPreview.handle}
+                    {playerAccountPreview.visibleId
+                      ? ` · ${playerAccountPreview.visibleId}`
+                      : ''}
+                  </Muted>
+                </View>
+              </View>
+            ) : playerIdentifier.trim() ? (
+              <Muted>
+                {t('organizer.competitionManage.rosterAccountLookupEmpty')}
+              </Muted>
+            ) : null}
             <Input
               label={t('organizer.competitionManage.jerseyNumber')}
               value={jersey}
@@ -797,18 +813,12 @@ export default function CompetitionManageScreen() {
                 />
               ))}
             </View>
-            <EntityAvatarField
-              value={playerAvatar}
-              name={playerName || '?'}
-              folder="players"
-              onChange={setPlayerAvatar}
-              compact
-            />
             <Button
               label={t('organizer.competitionManage.addPlayer')}
               onPress={() => {
                 void (async () => {
-                  if (!playerName.trim() || !jersey || !selectedTeamId) return;
+                  if (!playerIdentifier.trim() || !jersey || !selectedTeamId)
+                    return;
                   const ok = await confirmDestructive({
                     title: t(
                       'organizer.competitionManage.rosterAccountConfirmTitle'
@@ -823,24 +833,21 @@ export default function CompetitionManageScreen() {
                     destructive: false,
                   });
                   if (!ok) return;
-                  addPlayerToTeam(
-                    competition.id,
-                    selectedTeamId,
-                    {
-                      name: playerName.trim(),
-                      jerseyNumber: Number(jersey),
-                      position,
-                      avatar: playerAvatar,
-                      email: playerEmail.trim() || undefined,
-                      mobile: playerMobile.trim() || undefined,
-                    },
-                    t('organizer.competitionManage.playerAdded')
-                  );
-                  setPlayerName('');
-                  setPlayerEmail('');
-                  setPlayerMobile('');
-                  setJersey('');
-                  setPlayerAvatar(undefined);
+                  if (
+                    addPlayerToTeam(
+                      competition.id,
+                      selectedTeamId,
+                      {
+                        identifier: playerIdentifier.trim(),
+                        jerseyNumber: Number(jersey),
+                        position,
+                      },
+                      t('organizer.competitionManage.playerAdded')
+                    )
+                  ) {
+                    setPlayerIdentifier('');
+                    setJersey('');
+                  }
                 })();
               }}
             />
@@ -1251,43 +1258,47 @@ export default function CompetitionManageScreen() {
 
         <Subtitle>{t('organizer.competitionManage.addStaff')}</Subtitle>
         <RosterAccountNotice messageKey="rosterAccountRequiredStaff" />
-        <Muted>{t('organizer.competitionManage.rosterAccountHint')}</Muted>
+        <Muted>{t('organizer.competitionManage.rosterLookupHint')}</Muted>
         <Input
-          label={t('organizer.competitionManage.staffName')}
-          value={staffName}
-          onChangeText={setStaffName}
+          label={t('organizer.competitionManage.accountIdentifier')}
+          value={staffIdentifier}
+          onChangeText={setStaffIdentifier}
+          placeholder={t('organizer.competitionManage.accountIdentifierPlaceholder')}
+          autoCapitalize="none"
         />
-        <EntityAvatarField
-          value={staffAvatar}
-          name={staffName || '?'}
-          folder="staff"
-          onChange={setStaffAvatar}
-          compact
-        />
+        {staffAccountPreview ? (
+          <View style={styles.accountPreview}>
+            <Avatar
+              uri={staffAccountPreview.avatar}
+              name={staffAccountPreview.name}
+              size={40}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.value, { color: theme.colors.text }]}>
+                {staffAccountPreview.name}
+              </Text>
+              <Muted>
+                {staffAccountPreview.handle}
+                {staffAccountPreview.visibleId
+                  ? ` · ${staffAccountPreview.visibleId}`
+                  : ''}
+              </Muted>
+            </View>
+          </View>
+        ) : staffIdentifier.trim() ? (
+          <Muted>{t('organizer.competitionManage.rosterAccountLookupEmpty')}</Muted>
+        ) : null}
         <Input
           label={t('organizer.competitionManage.staffRole')}
           value={staffRole}
           onChangeText={setStaffRole}
           placeholder={t('organizer.competitionManage.staffRolePlaceholder')}
         />
-        <Input
-          label={t('organizer.competitionManage.staffEmailOptional')}
-          value={staffEmail}
-          onChangeText={setStaffEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-        <Input
-          label={t('organizer.competitionManage.staffMobile')}
-          value={staffMobile}
-          onChangeText={setStaffMobile}
-          keyboardType="phone-pad"
-        />
         <Button
           label={t('superadmin.actions.add')}
           onPress={() => {
             void (async () => {
-              if (!staffName.trim() || !staffRole.trim()) return;
+              if (!staffIdentifier.trim() || !staffRole.trim()) return;
               const ok = await confirmDestructive({
                 title: t(
                   'organizer.competitionManage.rosterAccountConfirmTitle'
@@ -1304,19 +1315,13 @@ export default function CompetitionManageScreen() {
               if (!ok) return;
               if (
                 addStaffToCompetition(competition.id, {
-                  name: staffName,
+                  identifier: staffIdentifier.trim(),
                   role: staffRole,
-                  mobile: staffMobile,
-                  email: staffEmail.trim() || undefined,
-                  avatar: staffAvatar,
                   teamId: selectedTeamId || undefined,
                 })
               ) {
-                setStaffName('');
+                setStaffIdentifier('');
                 setStaffRole('');
-                setStaffMobile('');
-                setStaffEmail('');
-                setStaffAvatar(undefined);
               }
             })();
           }}
@@ -1603,6 +1608,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 8,
+  },
+  accountPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
   },
   rosterNotice: {
     borderWidth: 1,

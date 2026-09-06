@@ -54,12 +54,9 @@ export default function OrganizerRefereesScreen() {
   }, [competitions, currentUser]);
 
   const [competitionId, setCompetitionId] = useState<string | null>(null);
-  const [refereeName, setRefereeName] = useState('');
+  const [refereeIdentifier, setRefereeIdentifier] = useState('');
   const [refereeRole, setRefereeRole] =
     useState<Referee['role']>('حكم ساحة');
-  const [refereeMobile, setRefereeMobile] = useState('');
-  const [refereeCity, setRefereeCity] = useState('');
-  const [refereeAvatar, setRefereeAvatar] = useState<string | undefined>();
   const [avatarEdit, setAvatarEdit] = useState<{
     id: string;
     name: string;
@@ -116,18 +113,15 @@ export default function OrganizerRefereesScreen() {
 
       <Card style={styles.card}>
         <Subtitle>{t('organizer.competitionManage.registerRefereeSection')}</Subtitle>
+        <Muted>{t('organizer.competitionManage.rosterLookupHint')}</Muted>
         <Input
-          label={t('organizer.competitionManage.refereeName')}
-          value={refereeName}
-          onChangeText={setRefereeName}
-          placeholder={t('organizer.referees.namePlaceholder')}
-        />
-        <EntityAvatarField
-          value={refereeAvatar}
-          name={refereeName || '?'}
-          folder="referees"
-          onChange={setRefereeAvatar}
-          compact
+          label={t('organizer.competitionManage.accountIdentifier')}
+          value={refereeIdentifier}
+          onChangeText={setRefereeIdentifier}
+          placeholder={t(
+            'organizer.competitionManage.accountIdentifierPlaceholder'
+          )}
+          autoCapitalize="none"
         />
         <Muted>{t('organizer.competitionManage.refereeRole')}</Muted>
         <View style={styles.chips}>
@@ -142,34 +136,17 @@ export default function OrganizerRefereesScreen() {
             />
           ))}
         </View>
-        <Input
-          label={t('organizer.competitionManage.refereeMobile')}
-          value={refereeMobile}
-          onChangeText={setRefereeMobile}
-          keyboardType="phone-pad"
-        />
-        <Input
-          label={t('organizer.competitionManage.refereeCity')}
-          value={refereeCity}
-          onChangeText={setRefereeCity}
-        />
         <Button
           label={t('organizer.competitionManage.registerReferee')}
           onPress={() => {
-            if (!competitionId) return;
+            if (!competitionId || !refereeIdentifier.trim()) return;
             if (
               registerRefereeForCompetition(competitionId, {
-                name: refereeName,
+                identifier: refereeIdentifier.trim(),
                 role: refereeRole,
-                mobile: refereeMobile,
-                city: refereeCity,
-                avatar: refereeAvatar,
               })
             ) {
-              setRefereeName('');
-              setRefereeMobile('');
-              setRefereeCity('');
-              setRefereeAvatar(undefined);
+              setRefereeIdentifier('');
               setRefereeRole('حكم ساحة');
             }
           }}

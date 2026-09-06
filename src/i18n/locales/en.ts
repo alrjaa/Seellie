@@ -1421,16 +1421,24 @@ export const en: TranslationTree = {
       staffRemoved: 'Removed %{name}',
       addPlayerSection: 'Add player to team',
       rosterAccountHint:
-        'A follower account is created from available details; missing fields use non-real defaults so photo and alerts stay linked.',
+        'Enter the follower’s email, @handle, registration code, or mobile; photo and details load automatically.',
+      rosterLookupHint:
+        'One field only: email, handle, code, or mobile — no manual name or photo entry.',
+      accountIdentifier: 'Email / handle / code / mobile',
+      accountIdentifierPlaceholder: 'e.g. user@mail.com, @handle, FOL-1001, or 05xxxxxxxx',
+      rosterAccountLookupEmpty: 'No matching follower account — they must sign up as a follower first.',
+      rosterAccountNotFound:
+        'No follower account found for that email, handle, code, or mobile. Ask them to create a follower account first.',
+      rosterAlreadyOnTeam: '%{name} is already on this team.',
       rosterAccountRequiredTitle: 'Follower account required',
       rosterAccountRequiredTeam:
-        'App rule: any player, staff member, or coach registered later on this team must have a Seellie follower account (for photo, details, and alerts).',
+        'When adding players or staff later, enter only their email, handle, code, or mobile to load details from their follower account.',
       rosterAccountRequiredPlayer:
-        'App rule: a player may only be registered if they have a follower account. If none matches, temporary non-real defaults are created — prefer entering their real email or mobile.',
+        'App rule: register a player with email, handle, code, or mobile only; name and photo load from the follower account.',
       rosterAccountRequiredStaff:
-        'App rule: all team management and coaches must have a follower account before registration so they receive alerts and their photo/details can be linked.',
+        'App rule: register staff/coaches with email, handle, code, or mobile only; details and photo load from the follower account.',
       rosterAccountRequiredReferee:
-        'App rule: any referee registered or assigned to the competition must have a follower account so photo, details, and notifications stay linked.',
+        'App rule: register a referee with email, handle, code, or mobile only; details and photo load from the follower account.',
       rosterAccountConfirmTitle: 'Confirm follower-account rule',
       rosterAccountConfirmContinue: 'Continue with this rule',
       selectTeamFirst: 'Select a team from the list above first',

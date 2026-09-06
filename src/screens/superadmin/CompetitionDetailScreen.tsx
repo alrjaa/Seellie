@@ -739,31 +739,22 @@ export default function CompetitionDetailScreen() {
             <Muted>
               {t('organizer.competitionManage.rosterAccountRequiredTitle')}
               {' — '}
-              {t('organizer.competitionManage.rosterAccountRequiredStaff')}
+              {t('organizer.competitionManage.rosterLookupHint')}
             </Muted>
             <Input
-              label={t('organizer.competitionManage.staffName')}
+              label={t('organizer.competitionManage.accountIdentifier')}
               value={staffName}
               onChangeText={setStaffName}
-            />
-            <EntityAvatarField
-              value={staffAvatar}
-              name={staffName || '?'}
-              folder="staff"
-              onChange={setStaffAvatar}
-              compact
+              placeholder={t(
+                'organizer.competitionManage.accountIdentifierPlaceholder'
+              )}
+              autoCapitalize="none"
             />
             <Input
               label={t('organizer.competitionManage.staffRole')}
               value={staffRole}
               onChangeText={setStaffRole}
               placeholder={t('organizer.competitionManage.staffRolePlaceholder')}
-            />
-            <Input
-              label={t('organizer.competitionManage.staffMobile')}
-              value={staffMobile}
-              onChangeText={setStaffMobile}
-              keyboardType="phone-pad"
             />
             <Button
               label={t('superadmin.actions.add')}
@@ -786,10 +777,8 @@ export default function CompetitionDetailScreen() {
                   if (!ok) return;
                   if (
                     addStaffToCompetition(competition.id, {
-                      name: staffName,
+                      identifier: staffName.trim(),
                       role: staffRole,
-                      mobile: staffMobile,
-                      avatar: staffAvatar,
                     })
                   ) {
                     setStaffName('');

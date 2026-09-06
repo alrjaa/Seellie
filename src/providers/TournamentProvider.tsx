@@ -40,6 +40,7 @@ import {
   ROSTER_USERS_STORAGE_KEY,
   findOrCreateFollowerAccount,
   linkRosterToFollowerAccounts,
+  resolveFollowerByIdentifier,
 } from '@/utils/roster-follower-account';
 import { isSupabaseConfigured } from '@/services/supabase';
 import {
@@ -662,11 +663,8 @@ export interface TournamentContextType {
   registerRefereeForCompetition: (
     competitionId: string,
     data: {
-      name: string;
+      identifier: string;
       role: Referee['role'];
-      mobile?: string;
-      city?: string;
-      avatar?: string;
     },
     successMessage?: string
   ) => boolean;
@@ -847,15 +845,13 @@ export interface TournamentContextType {
     competitionId: string,
     teamId: string,
     playerData: {
-      name: string;
+      /** إيميل أو @معرف أو كود تسجيل أو جوال لحساب متابع موجود */
+      identifier: string;
       jerseyNumber: number;
       position: Player['position'];
-      avatar?: string;
-      email?: string;
-      mobile?: string;
     },
     successMessage?: string
-  ) => void;
+  ) => boolean;
   updatePlayerAvatar: (
     competitionId: string,
     teamId: string,
@@ -866,11 +862,8 @@ export interface TournamentContextType {
   addStaffToCompetition: (
     competitionId: string,
     staffData: {
-      name: string;
+      identifier: string;
       role: string;
-      mobile?: string;
-      email?: string;
-      avatar?: string;
       teamId?: string;
     },
     successMessage?: string
@@ -1126,6 +1119,26 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     void setJson(ROSTER_USERS_STORAGE_KEY, roster);
   }, []);
 
+  const resolveRosterFollowerAccount = useCallback(
+    (identifier: string): User | null => {
+      const account = resolveFollowerByIdentifier(
+        usersRef.current,
+        identifier
+      );
+      if (!account) {
+        toast({
+          variant: 'destructive',
+          title: t('organizer.competitionManage.rosterAccountRequiredTitle'),
+          description: t('organizer.competitionManage.rosterAccountNotFound'),
+        });
+        return null;
+      }
+      return account;
+    },
+    [toast, t]
+  );
+
+  /** ترحيل البيانات القديمة فقط — ليس لمسار التسجيل الجديد */
   const ensureRosterFollower = useCallback(
     (input: {
       name: string;
@@ -2548,25 +2561,15 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     (
       competitionId: string,
       data: {
-        name: string;
+        identifier: string;
         role: Referee['role'];
-        mobile?: string;
-        city?: string;
-        avatar?: string;
       },
       successMessage?: string
     ) => {
-      const name = data.name.trim();
-      if (!name) {
-        toast({
-          variant: 'destructive',
-          title: t('toasts.t045_e1da8e'),
-          description: t('toasts.refereeFieldsRequired'),
-        });
-        return false;
-      }
+      const account = resolveRosterFollowerAccount(data.identifier);
+      if (!account) return false;
 
-      const existing = findRefereeByName(referees, name);
+      const existing = referees.find((r) => r.id === account.id);
       if (existing) {
         const competition = competitions.find((c) => c.id === competitionId);
         if (competition?.refereeIds.includes(existing.id)) {
@@ -2579,40 +2582,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           });
           return false;
         }
-        toast({
-          variant: 'destructive',
-          title: t('toasts.t045_e1da8e'),
-          description: t('toasts.refereeNameExists', { name: existing.name }),
-        });
-        return false;
-      }
-
-      let found = false;
-      const account = ensureRosterFollower({
-        name,
-        mobile: data.mobile,
-        avatar: data.avatar,
-        city: data.city,
-      });
-      if (referees.some((r) => r.id === account.id)) {
-        const competition = competitions.find((c) => c.id === competitionId);
-        if (competition?.refereeIds.includes(account.id)) {
-          toast({
-            variant: 'destructive',
-            title: t('toasts.t045_e1da8e'),
-            description: t('toasts.refereeAlreadyOnCompetition', {
-              name: account.name,
-            }),
-          });
-          return false;
-        }
+        let found = false;
         setCompetitions((prev) => {
           const next = prev.map((c) => {
             if (c.id !== competitionId) return c;
             found = true;
             return {
               ...c,
-              refereeIds: [...new Set([...c.refereeIds, account.id])],
+              refereeIds: [...new Set([...c.refereeIds, existing.id])],
             };
           });
           if (found) void syncCompetitions(next);
@@ -2625,27 +2602,27 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             description:
               successMessage ||
               t('organizer.competitionManage.refereeRegistered', {
-                name: account.name,
+                name: existing.name,
               }),
           });
         }
         return found;
       }
+
+      let found = false;
       const referee: Referee = {
         id: account.id,
         name: account.name,
         role: data.role,
-        mobile: account.mobile || data.mobile?.trim() || undefined,
+        mobile: account.mobile,
         email: account.email,
-        city: account.city || data.city?.trim() || undefined,
-        avatar: account.avatar || data.avatar?.trim() || undefined,
+        city: account.city,
+        avatar: account.avatar,
         rating: 5,
         status: 'active',
       };
       setReferees((prev) => {
-        if (findRefereeByName(prev, name) || prev.some((r) => r.id === account.id)) {
-          return prev;
-        }
+        if (prev.some((r) => r.id === account.id)) return prev;
         const next = [...prev, referee];
         void (async () => {
           await setJson(REFEREES_STORAGE_KEY, next);
@@ -2690,7 +2667,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [referees, competitions, toast, t, syncCompetitions, ensureRosterFollower]
+    [
+      referees,
+      competitions,
+      toast,
+      t,
+      syncCompetitions,
+      resolveRosterFollowerAccount,
+    ]
   );
 
   const updateReferee = useCallback(
@@ -4728,25 +4712,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       competitionId: string,
       teamId: string,
       playerData: {
-        name: string;
+        identifier: string;
         jerseyNumber: number;
         position: Player['position'];
-        avatar?: string;
-        email?: string;
-        mobile?: string;
       },
       successMessage?: string
     ) => {
-      const name = playerData.name.trim();
-      if (!name) return;
+      const account = resolveRosterFollowerAccount(playerData.identifier);
+      if (!account) return false;
       let jerseyTaken = false;
       let added = false;
-      const account = ensureRosterFollower({
-        name,
-        email: playerData.email,
-        mobile: playerData.mobile,
-        avatar: playerData.avatar,
-      });
+      let alreadyOnTeam = false;
       setCompetitions((prev) => {
         const next = prev.map((c) => {
           if (c.id !== competitionId) return c;
@@ -4762,13 +4738,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
                 jerseyTaken = true;
                 return team;
               }
-              if (
-                team.players.some(
-                  (p) =>
-                    p.id === account.id ||
-                    p.name.trim().toLowerCase() === name.toLowerCase()
-                )
-              ) {
+              if (team.players.some((p) => p.id === account.id)) {
+                alreadyOnTeam = true;
                 return team;
               }
               added = true;
@@ -4786,7 +4757,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
                     position: playerData.position,
                     teamId,
                     status: 'active' as const,
-                    avatar: account.avatar || playerData.avatar?.trim() || undefined,
+                    avatar: account.avatar,
                     email: account.email,
                     mobile: account.mobile,
                     media: { photos: [], videos: [] },
@@ -4808,7 +4779,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             number: playerData.jerseyNumber,
           }),
         });
-        return;
+        return false;
+      }
+      if (alreadyOnTeam) {
+        toast({
+          variant: 'destructive',
+          title: t('toasts.t045_e1da8e'),
+          description: t('organizer.competitionManage.rosterAlreadyOnTeam', {
+            name: account.name,
+          }),
+        });
+        return false;
       }
       if (successMessage && added) {
         toast({
@@ -4817,26 +4798,23 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           description: successMessage,
         });
       }
+      return added;
     },
-    [toast, t, ensureRosterFollower, syncCompetitions]
+    [toast, t, resolveRosterFollowerAccount, syncCompetitions]
   );
 
   const addStaffToCompetition = useCallback(
     (
       competitionId: string,
       staffData: {
-        name: string;
+        identifier: string;
         role: string;
-        mobile?: string;
-        email?: string;
-        avatar?: string;
         teamId?: string;
       },
       successMessage?: string
     ) => {
-      const name = staffData.name.trim();
       const role = staffData.role.trim();
-      if (!name || !role) {
+      if (!role) {
         toast({
           variant: 'destructive',
           title: t('toasts.t045_e1da8e'),
@@ -4844,12 +4822,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         });
         return false;
       }
-      const account = ensureRosterFollower({
-        name,
-        email: staffData.email,
-        mobile: staffData.mobile,
-        avatar: staffData.avatar,
-      });
+      const account = resolveRosterFollowerAccount(staffData.identifier);
+      if (!account) return false;
       const officialRoles: TeamOfficial['role'][] = [
         'مدرب',
         'مساعد مدرب',
@@ -4870,9 +4844,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             id: account.id,
             name: account.name,
             role,
-            mobile: account.mobile || staffData.mobile?.trim() || undefined,
+            mobile: account.mobile,
             email: account.email,
-            avatar: account.avatar || staffData.avatar?.trim() || undefined,
+            avatar: account.avatar,
           };
           let teams = c.teams;
           if (staffData.teamId && asOfficialRole) {
@@ -4899,7 +4873,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           return {
             ...c,
             teams,
-            staff: [...(c.staff || []).filter((s) => s.id !== account.id), staffEntry],
+            staff: [
+              ...(c.staff || []).filter((s) => s.id !== account.id),
+              staffEntry,
+            ],
           };
         });
         if (found) void syncCompetitions(next);
@@ -4913,7 +4890,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [toast, t, ensureRosterFollower, syncCompetitions]
+    [toast, t, resolveRosterFollowerAccount, syncCompetitions]
   );
 
   const updatePlayerAvatar = useCallback(

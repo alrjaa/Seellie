@@ -2,6 +2,7 @@ import type { Competition, Referee, User } from '@/data/initial-data';
 import {
   allocateUniqueHandle,
   ensureAccountIdentity,
+  normalizeHandle,
 } from '@/utils/account';
 import { createId } from '@/utils/id';
 import { hashPassword } from '@/utils/password';
@@ -19,6 +20,86 @@ export const ROSTER_PLACEHOLDER_EMAIL_DOMAIN = 'roster.seellie.local';
 export const ROSTER_PLACEHOLDER_MOBILE = '0500000000';
 
 export const ROSTER_USERS_STORAGE_KEY = 'tajjd.roster.followerAccounts';
+
+function looksLikeEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function looksLikeRegistrationCode(value: string): boolean {
+  return /^[A-Z]{2,4}-\d{3,}$/i.test(value.trim());
+}
+
+function looksLikeMobile(value: string): boolean {
+  const digits = (value || '').replace(/\D/g, '');
+  return digits.length >= 8 && digits.length <= 15;
+}
+
+/**
+ * جلب حساب متابع موجود فقط عبر:
+ * الإيميل · المعرف (@handle) · كود التسجيل (FOL-…) · رقم الجوال
+ * لا يُنشئ حساباً جديداً.
+ */
+export function resolveFollowerByIdentifier(
+  users: User[],
+  raw: string
+): User | undefined {
+  const q = (raw || '').trim();
+  if (!q) return undefined;
+
+  if (looksLikeEmail(q)) {
+    const email = normalizeEmail(q);
+    return users.find((u) => normalizeEmail(u.email) === email);
+  }
+
+  if (q.startsWith('@')) {
+    const handle = normalizeHandle(q);
+    const byHandle = users.find(
+      (u) => normalizeHandle(u.handle || '') === handle
+    );
+    if (byHandle) return byHandle;
+  }
+
+  if (looksLikeRegistrationCode(q)) {
+    const code = q.toUpperCase();
+    const byCode = users.find(
+      (u) => (u.visibleId || '').trim().toUpperCase() === code
+    );
+    if (byCode) return byCode;
+  }
+
+  if (looksLikeMobile(q)) {
+    const mobile = (q || '').replace(/\D/g, '');
+    const byMobile = users.find(
+      (u) => (u.mobile || '').replace(/\D/g, '') === mobile
+    );
+    if (byMobile) return byMobile;
+  }
+
+  const upper = q.toUpperCase();
+  const byVisible = users.find(
+    (u) => (u.visibleId || '').trim().toUpperCase() === upper
+  );
+  if (byVisible) return byVisible;
+
+  const handle = normalizeHandle(q.startsWith('@') ? q : `@${q}`);
+  const byHandle = users.find(
+    (u) => normalizeHandle(u.handle || '') === handle
+  );
+  if (byHandle) return byHandle;
+
+  if (q.includes('@')) {
+    const email = normalizeEmail(q);
+    const byEmail = users.find((u) => normalizeEmail(u.email) === email);
+    if (byEmail) return byEmail;
+  }
+
+  const mobile = (q || '').replace(/\D/g, '');
+  if (mobile.length >= 8) {
+    return users.find((u) => (u.mobile || '').replace(/\D/g, '') === mobile);
+  }
+
+  return undefined;
+}
 
 export type RosterPersonInput = {
   name: string;
@@ -114,8 +195,7 @@ function uniquePlaceholderEmail(name: string, users: User[]): string {
 }
 
 /**
- * إيجاد حساب متابع أو إنشاؤه من بيانات التشكيلة.
- * النواقص تُملأ بقيم افتراضية وهمية (ليست حقيقية).
+ * إيجاد/إنشاء لحسابات الترحيل فقط — التسجيل الجديد عبر resolveFollowerByIdentifier.
  */
 export function findOrCreateFollowerAccount(
   users: User[],

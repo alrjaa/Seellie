@@ -4,7 +4,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Seellie',
   slug: 'seellie-native',
-  version: '1.0.174',
+  version: '1.0.175',
   orientation: 'default',
   icon: './assets/icon.png',
   scheme: 'seellie',
@@ -38,7 +38,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       backgroundColor: '#0d1a26',
     },
     package: 'com.seellie.app',
-    versionCode: 172,
+    versionCode: 173,
   },
   androidStatusBar: {
     translucent: true,
