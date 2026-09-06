@@ -125,6 +125,35 @@ export const en: TranslationTree = {
     resetSuccess: 'Password updated. Please sign in.',
     backToLogin: 'Back to sign in',
   },
+  onboarding: {
+    title: 'Complete your profile',
+    subtitle:
+      'Before using the app you must enter required details and accept the policies.',
+    personalSection: 'Personal details',
+    addressSection: 'Address',
+    addressHint:
+      'Country, region, and city are used to show local competitions in your city.',
+    legalSection: 'Policy consent',
+    notificationsSection: 'App notifications',
+    notificationsHint:
+      'Choose to accept or refuse notifications. You can change this later.',
+    notificationsAccept: 'Accept notifications',
+    notificationsRefuse: 'Refuse notifications',
+    accept: 'Accept',
+    accepted: 'Accepted',
+    continue: 'Save and continue',
+    saved: 'Profile saved',
+    mobilePlaceholder: 'e.g. 05xxxxxxxx',
+    errName: 'Enter a valid name (at least 2 characters)',
+    errEmail: 'Enter a valid email address',
+    errMobile: 'Enter a valid mobile number',
+    errCountry: 'Enter your country',
+    errRegion: 'Enter your region',
+    errCity: 'Enter your city',
+    errPrivacy: 'You must accept the privacy policy',
+    errTerms: 'You must accept the terms of use',
+    errNotifications: 'Choose accept or refuse for notifications',
+  },
   settings: {
     title: 'Settings',
     subtitle: 'Account paths & appearance',
@@ -2513,6 +2542,7 @@ export const en: TranslationTree = {
     regIdLine: 'Registration ID: %{id}',
     emailLine: 'Email: %{email}',
     bio: 'Bio',
+    mobile: 'Mobile number',
     saveChanges: 'Save changes',
     addressTitle: 'Your address for local content',
     addressDesc:

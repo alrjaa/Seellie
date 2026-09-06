@@ -10,6 +10,10 @@ import {
 } from '@/services/pending-auth-url';
 import { ADMIN_HOME, ADMIN_LOGIN, isAdminHostname } from '@/utils/admin-portal';
 import { ADS_PORTAL_HOME, isAdsHostname } from '@/utils/ads-portal';
+import {
+  COMPLETE_PROFILE_HREF,
+  isAppProfileComplete,
+} from '@/utils/profile-completion';
 
 export default function Index() {
   const { currentUser, loading, routeForRole } = useTournament();
@@ -59,6 +63,9 @@ export default function Index() {
   }
 
   if (currentUser) {
+    if (!isAppProfileComplete(currentUser)) {
+      return <Redirect href={COMPLETE_PROFILE_HREF as any} />;
+    }
     return (
       <Redirect
         href={

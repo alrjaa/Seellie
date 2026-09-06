@@ -56,8 +56,20 @@ export function seedSocialRelations(users: User[]): User[] {
   const map = new Map<string, MutableUser>();
   for (const u of users) {
     const base = ensureSocialLists(u);
+    const seededLegal =
+      base.privacyAcceptedAt && base.termsAcceptedAt
+        ? {}
+        : {
+            privacyAcceptedAt: base.privacyAcceptedAt || new Date('2024-01-01'),
+            termsAcceptedAt: base.termsAcceptedAt || new Date('2024-01-01'),
+            notificationsConsent:
+              typeof base.notificationsConsent === 'boolean'
+                ? base.notificationsConsent
+                : true,
+          };
     map.set(u.id, {
       ...base,
+      ...seededLegal,
       followers: [...(base.followers || [])],
       following: [...(base.following || [])],
     });

@@ -24,6 +24,10 @@ import {
   subscribePrivateChatComposerFocus,
 } from '@/services/private-chat-focus';
 import { usePrivateSpace } from '@/hooks/usePrivateSpace';
+import {
+  COMPLETE_PROFILE_HREF,
+  isAppProfileComplete,
+} from '@/utils/profile-completion';
 
 export default function FollowerLayout() {
   const { currentUser, loading, routeForRole, messages, featureFlags } =
@@ -151,6 +155,9 @@ export default function FollowerLayout() {
   const active = currentUser.activeRole || currentUser.role;
   if (active !== 'follower') {
     return <Redirect href={routeForRole(active) as any} />;
+  }
+  if (!isAppProfileComplete(currentUser)) {
+    return <Redirect href={COMPLETE_PROFILE_HREF as any} />;
   }
 
   return (

@@ -22,6 +22,9 @@ export type UserContentPayload = {
   region?: string;
   country?: string;
   mobile?: string;
+  privacyAcceptedAt?: string | Date;
+  termsAcceptedAt?: string | Date;
+  notificationsConsent?: boolean;
 };
 
 /**
@@ -143,6 +146,16 @@ export function applyContentPayload(
       region: content.region ?? user.region,
       country: content.country ?? user.country,
       mobile: content.mobile ?? user.mobile,
+      privacyAcceptedAt: content.privacyAcceptedAt
+        ? new Date(content.privacyAcceptedAt as Date | string)
+        : user.privacyAcceptedAt,
+      termsAcceptedAt: content.termsAcceptedAt
+        ? new Date(content.termsAcceptedAt as Date | string)
+        : user.termsAcceptedAt,
+      notificationsConsent:
+        typeof content.notificationsConsent === 'boolean'
+          ? content.notificationsConsent
+          : user.notificationsConsent,
     };
   } catch (error) {
     console.warn('[content] applyContentPayload failed; keeping local user', error);
@@ -168,6 +181,17 @@ export function userToContentPayload(user: User): UserContentPayload {
     region: user.region,
     country: user.country,
     mobile: user.mobile,
+    privacyAcceptedAt: user.privacyAcceptedAt
+      ? user.privacyAcceptedAt instanceof Date
+        ? user.privacyAcceptedAt.toISOString()
+        : String(user.privacyAcceptedAt)
+      : undefined,
+    termsAcceptedAt: user.termsAcceptedAt
+      ? user.termsAcceptedAt instanceof Date
+        ? user.termsAcceptedAt.toISOString()
+        : String(user.termsAcceptedAt)
+      : undefined,
+    notificationsConsent: user.notificationsConsent,
   };
 }
 

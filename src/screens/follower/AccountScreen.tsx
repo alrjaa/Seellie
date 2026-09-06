@@ -20,6 +20,7 @@ export default function AccountScreen() {
   const [country, setCountry] = useState(currentUser?.country || '');
   const [region, setRegion] = useState(currentUser?.region || '');
   const [city, setCity] = useState(currentUser?.city || '');
+  const [mobile, setMobile] = useState(currentUser?.mobile || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [nextPassword, setNextPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -35,6 +36,7 @@ export default function AccountScreen() {
         country: country.trim() || undefined,
         region: region.trim() || undefined,
         city: city.trim() || undefined,
+        mobile: mobile.trim() || undefined,
       },
       t('account.profileUpdated')
     );
@@ -72,6 +74,12 @@ export default function AccountScreen() {
           label={t('settings.name')}
           value={name}
           onChangeText={setName}
+        />
+        <Input
+          label={t('account.mobile')}
+          value={mobile}
+          onChangeText={setMobile}
+          keyboardType="phone-pad"
         />
         <Input
           label={t('account.bio')}

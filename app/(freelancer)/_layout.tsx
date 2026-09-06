@@ -19,6 +19,10 @@ import {
   tabBarChromeStyle,
   transparentHeaderOptions,
 } from '@/theme/navigation';
+import {
+  COMPLETE_PROFILE_HREF,
+  isAppProfileComplete,
+} from '@/utils/profile-completion';
 
 export default function FreelancerLayout() {
   const { currentUser, loading, routeForRole, messages } = useTournament();
@@ -71,6 +75,9 @@ export default function FreelancerLayout() {
   const active = currentUser.activeRole || currentUser.role;
   if (active !== 'freelancer') {
     return <Redirect href={routeForRole(active) as any} />;
+  }
+  if (!isAppProfileComplete(currentUser)) {
+    return <Redirect href={COMPLETE_PROFILE_HREF as any} />;
   }
 
   return (

@@ -34,6 +34,7 @@ import { Avatar } from '@/components/ui';
 import { cairoText } from '@/theme/fonts';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ensureSocialLists } from '@/utils/social-stats';
+import { isAppProfileComplete } from '@/utils/profile-completion';
 import type { FabIconConfig } from '@/types/fab-icons';
 
 function isHttpMedia(url?: string) {
@@ -300,6 +301,7 @@ function FloatingActionMenuComponent() {
     (pathname.includes('/private') || pathname.includes('(follower)/private'));
 
   if (!currentUser) return null;
+  if (!isAppProfileComplete(currentUser)) return null;
   if (!isFollowerLike && actions.length === 0) return null;
   if (desktop) return null;
   if (suppressed) return null;

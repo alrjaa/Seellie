@@ -126,6 +126,35 @@ export const ar = {
     resetSuccess: 'تم تحديث كلمة المرور. سجّل الدخول.',
     backToLogin: 'العودة لتسجيل الدخول',
   },
+  onboarding: {
+    title: 'أكمل بيانات حسابك',
+    subtitle:
+      'قبل استخدام التطبيق يجب إدخال البيانات الضرورية والموافقة على السياسات.',
+    personalSection: 'البيانات الشخصية',
+    addressSection: 'العنوان',
+    addressHint:
+      'الدولة والمنطقة والمدينة تُستخدم لعرض المسابقات المحلية في مدينتك.',
+    legalSection: 'الموافقة على السياسات',
+    notificationsSection: 'إشعارات التطبيق',
+    notificationsHint:
+      'اختر الموافقة أو الرفض لإرسال إشعارات إليك. يمكنك تغيير ذلك لاحقاً.',
+    notificationsAccept: 'أوافق على الإشعارات',
+    notificationsRefuse: 'أرفض الإشعارات',
+    accept: 'موافقة',
+    accepted: 'تمت الموافقة',
+    continue: 'حفظ والمتابعة',
+    saved: 'تم حفظ بيانات الحساب',
+    mobilePlaceholder: 'مثال: 05xxxxxxxx',
+    errName: 'أدخل اسماً صالحاً (حرفان على الأقل)',
+    errEmail: 'أدخل بريداً إلكترونياً صالحاً',
+    errMobile: 'أدخل رقم جوال صالحاً',
+    errCountry: 'أدخل الدولة',
+    errRegion: 'أدخل المنطقة',
+    errCity: 'أدخل المدينة',
+    errPrivacy: 'يجب الموافقة على سياسة الخصوصية',
+    errTerms: 'يجب الموافقة على شروط الاستخدام',
+    errNotifications: 'اختر الموافقة أو الرفض للإشعارات',
+  },
   settings: {
     title: 'الإعدادات',
     subtitle: 'مسارات الحساب والمظهر',
@@ -1818,6 +1847,7 @@ export const ar = {
     regIdLine: 'رقم التسجيل: %{id}',
     emailLine: 'البريد: %{email}',
     bio: 'نبذة',
+    mobile: 'رقم الجوال',
     saveChanges: 'حفظ التغييرات',
     addressTitle: 'عنوانك للمحتوى المحلي',
     addressDesc:

@@ -19,6 +19,10 @@ import {
   tabBarChromeStyle,
   transparentHeaderOptions,
 } from '@/theme/navigation';
+import {
+  COMPLETE_PROFILE_HREF,
+  isAppProfileComplete,
+} from '@/utils/profile-completion';
 
 export default function OrganizerLayout() {
   const { currentUser, loading, routeForRole, messages } = useTournament();
@@ -96,6 +100,9 @@ export default function OrganizerLayout() {
   const active = currentUser.activeRole || currentUser.role;
   if (active !== 'organizer') {
     return <Redirect href={routeForRole(active) as any} />;
+  }
+  if (!isAppProfileComplete(currentUser)) {
+    return <Redirect href={COMPLETE_PROFILE_HREF as any} />;
   }
 
   return (

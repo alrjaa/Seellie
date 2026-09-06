@@ -27,6 +27,10 @@ import { DEFAULT_LOGO, DEFAULT_LOGO_MODULE } from '@/theme/brand';
 import { cairoText } from '@/theme/fonts';
 import Constants from 'expo-constants';
 import { ADMIN_LOGIN, isAdminHostname } from '@/utils/admin-portal';
+import {
+  COMPLETE_PROFILE_HREF,
+  isAppProfileComplete,
+} from '@/utils/profile-completion';
 
 function webBuildLabel(): string {
   const extra = Constants.expoConfig?.extra as { buildId?: string } | undefined;
@@ -106,6 +110,9 @@ export default function LoginScreen() {
   }
 
   if (currentUser) {
+    if (!isAppProfileComplete(currentUser)) {
+      return <Redirect href={COMPLETE_PROFILE_HREF as any} />;
+    }
     return (
       <Redirect
         href={

@@ -18,6 +18,7 @@ import { useTranslation } from '@/providers/LanguageProvider';
 import { OfflineBanner } from '@/components/feedback/OfflineBanner';
 import { FloatingActionMenu } from '@/components/layout/FloatingActionMenu';
 import { AuthDeepLinkHandler } from '@/components/auth/AuthDeepLinkHandler';
+import { ProfileCompletionGuard } from '@/components/auth/ProfileCompletionGuard';
 import {
   applyGlobalCairoFonts,
   cairoFontMap,
@@ -67,6 +68,7 @@ function RootNavigator() {
     >
       <OfflineBanner />
       <StatusBar style={theme.isDark ? 'light' : 'dark'} translucent />
+      <ProfileCompletionGuard />
       <View style={[layoutDirectionStyle(isRTL), { flex: 1 }]}>
         <Stack
           screenOptions={{
@@ -83,6 +85,15 @@ function RootNavigator() {
           <Stack.Screen name="(follower)" />
           <Stack.Screen name="(organizer)" />
           <Stack.Screen name="(freelancer)" />
+          <Stack.Screen
+            name="complete-profile"
+            options={{
+              headerShown: false,
+              title: '',
+              gestureEnabled: false,
+              ...header,
+            }}
+          />
           <Stack.Screen
             name="forums"
             options={{

@@ -71,6 +71,15 @@ export interface User {
   mobile?: string;
   age?: number;
   bankAccountNumber?: string;
+  /** موافقة سياسة الخصوصية (إلزامية قبل استخدام التطبيق) */
+  privacyAcceptedAt?: Date | string;
+  /** موافقة شروط الاستخدام (إلزامية قبل استخدام التطبيق) */
+  termsAcceptedAt?: Date | string;
+  /**
+   * موافقة استلام الإشعارات:
+   * true = موافق · false = رافض · undefined = لم يُجَب بعد
+   */
+  notificationsConsent?: boolean;
   // Freelancer specific fields
   bio?: string;
   posts: { id: string; text: string; timestamp: Date; likes: string[] }[];
