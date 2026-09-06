@@ -2,7 +2,10 @@ import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useTournament } from '@/providers/TournamentProvider';
+import {
+  useTournamentCore,
+  useTournamentLive,
+} from '@/providers/TournamentProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useTranslation } from '@/providers/LanguageProvider';
 import { LoadingState } from '@/components/feedback/LoadingState';
@@ -134,10 +137,10 @@ export default function OrganizerHomeScreen() {
     loading,
     competitions,
     users,
-    messages,
     offers,
     routeForRole,
-  } = useTournament();
+  } = useTournamentCore();
+  const { messages } = useTournamentLive();
   const router = useRouter();
   const { t } = useTranslation();
 

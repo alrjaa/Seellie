@@ -2228,8 +2228,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         if (!okCloud) {
           toast({
             variant: 'destructive',
-            title: 'تعذّر حفظ الدور في السحابة',
-            description: 'تحقق من الاتصال وأعد المحاولة.',
+            title: t('toasts.roleElevationDeniedTitle'),
+            description: t('toasts.roleElevationDeniedDesc'),
           });
           return false;
         }
@@ -2254,7 +2254,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }, 0);
       return true;
     },
-    [currentUser, toast, router, routeForRole, switchActiveRole]
+    [currentUser, toast, router, routeForRole, switchActiveRole, t]
   );
 
   const logout = useCallback(

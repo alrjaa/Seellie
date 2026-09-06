@@ -92,6 +92,7 @@ export function RolePathCard() {
       {canChoose ? (
         <View style={{ gap: 12 }}>
           <Muted>{t('paths.chooseOne')}</Muted>
+          <Muted>{t('paths.adminGrantRequired')}</Muted>
 
           <View style={styles.pathBlock}>
             <Button
