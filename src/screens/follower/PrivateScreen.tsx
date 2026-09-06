@@ -35,6 +35,10 @@ import { LoadingState } from '@/components/feedback/LoadingState';
 import { confirmDestructive } from '@/utils/confirm';
 import { InlineVideoPlayer } from '@/components/media/InlineVideoPlayer';
 import {
+  startVisibleWebVideo,
+} from '@/services/web-media-sound';
+import { applyWebVideoDefaults } from '@/services/video-player-defaults';
+import {
   Avatar,
   Button,
   Card,
@@ -320,7 +324,12 @@ const ChatMediaLightbox = memo(function ChatMediaLightbox({
               ref: (node: HTMLVideoElement | null) => {
                 htmlRef.current = node;
                 if (node) {
-                  void node.play().catch(() => undefined);
+                  applyWebVideoDefaults(node, {
+                    controls: true,
+                    loop: false,
+                    muted: false,
+                  });
+                  void startVisibleWebVideo(node, 'private-lightbox');
                 }
               },
               src: uri,

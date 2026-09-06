@@ -79,6 +79,7 @@ import {
 import {
   attemptAudibleAutoplay,
 } from '@/services/media-autoplay-engine';
+import { applyWebVideoDefaults } from '@/services/video-player-defaults';
 import { noteWebFeedScrollGesture } from '@/services/media-user-activation';
 import { useNativeFeedVideoAutoplay } from '@/hooks/useNativeFeedVideoAutoplay';
 import { ReasonModal } from '@/components/feedback/ReasonModal';
@@ -498,10 +499,14 @@ const Slide = memo(function Slide({
           });
         }
         if (playGenRef.current !== gen || !activeRef.current) return;
-        return attemptAudibleAutoplay(el, {
-          generation: gen,
-          getGeneration: () => playGenRef.current,
-        });
+        return attemptAudibleAutoplay(
+          el,
+          {
+            generation: gen,
+            getGeneration: () => playGenRef.current,
+          },
+          'fullscreen-feed'
+        );
       };
       void run().then((result) => {
         if (!result) return;
@@ -549,11 +554,7 @@ const Slide = memo(function Slide({
       if (item.mediaUrl && node.getAttribute('src') !== item.mediaUrl) {
         node.src = item.mediaUrl;
       }
-      node.muted = false;
-      node.defaultMuted = false;
-      node.volume = 1;
-      node.playsInline = true;
-      node.loop = true;
+      applyWebVideoDefaults(node, { loop: true, controls: false, muted: false });
       if (!activeRef.current) {
         node.pause();
       }

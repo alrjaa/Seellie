@@ -3,6 +3,12 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { cairoText } from '@/theme/fonts';
+import {
+  attemptAudibleAutoplay,
+  attemptMutedAutoplay,
+  attemptUnmuteWhilePlaying,
+} from '@/services/media-autoplay-engine';
+import { applyWebVideoDefaults } from '@/services/video-player-defaults';
 
 type Props = {
   videoUri?: string;
@@ -40,15 +46,26 @@ function AdPhonePreviewComponent({
   const playWithSound = useCallback(async () => {
     const el = htmlRef.current;
     if (Platform.OS === 'web' && el) {
-      el.muted = !!muted;
-      el.volume = 1;
-      el.defaultMuted = !!muted;
-      try {
-        await el.play();
-        setBlocked(false);
-      } catch {
-        if (!muted) setBlocked(true);
+      applyWebVideoDefaults(el, {
+        controls: false,
+        loop: true,
+        muted: !!muted,
+      });
+      if (muted) {
+        const r = await attemptMutedAutoplay(el);
+        setBlocked(r !== 'playing');
+        return;
       }
+      const result = await attemptAudibleAutoplay(el, undefined, 'ad-preview');
+      if (result === 'playing_audible') {
+        setBlocked(false);
+        return;
+      }
+      if (result === 'playing_muted') {
+        setBlocked(true);
+        return;
+      }
+      setBlocked(true);
       return;
     }
     const native = videoRef.current;
@@ -87,8 +104,15 @@ function AdPhonePreviewComponent({
   const onPreviewPress = () => {
     const el = htmlRef.current;
     if (el) {
-      el.muted = false;
-      el.volume = 1;
+      const result = attemptUnmuteWhilePlaying(
+        el,
+        { inGesture: true },
+        'ad-preview'
+      );
+      if (result === 'unmuted') {
+        setBlocked(false);
+        return;
+      }
     }
     setBlocked(false);
     void playWithSound();
@@ -110,7 +134,16 @@ function AdPhonePreviewComponent({
         {videoUri ? (
           Platform.OS === 'web' ? (
             React.createElement('video', {
-              ref: htmlRef,
+              ref: (node: HTMLVideoElement | null) => {
+                htmlRef.current = node;
+                if (node) {
+                  applyWebVideoDefaults(node, {
+                    controls: false,
+                    loop: true,
+                    muted: !!muted,
+                  });
+                }
+              },
               src: videoUri,
               poster: posterUri || undefined,
               muted: !!muted,

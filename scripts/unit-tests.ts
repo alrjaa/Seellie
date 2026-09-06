@@ -68,6 +68,17 @@ import {
   isRealMediaFailure,
 } from '../src/services/media-autoplay-engine';
 import {
+  clearVideoMetrics,
+  getVideoMetricSamples,
+  markMutedFallback,
+  summarizeVideoMetrics,
+  __testBackdateMutedFallback,
+} from '../src/services/video-playback-telemetry';
+import {
+  applyWebVideoDefaults,
+  VIDEO_PLAYER_DEFAULTS,
+} from '../src/services/video-player-defaults';
+import {
   isNativePlaybackMediaFailure,
   shouldAttemptNativeFeedAutoplay,
   hasPendingNativeAutoplayRequest,
@@ -898,6 +909,73 @@ test('isIncomingMessageUnread ignores outgoing and respects lastReadAt', () => {
     isIncomingMessageUnread({ ...msg, fromMe: true }, undefined),
     false
   );
+});
+
+test('video telemetry records muted fallback and unmute latency', async () => {
+  clearVideoMetrics();
+  const el = {
+    muted: false,
+    defaultMuted: false,
+    volume: 1,
+    paused: true,
+    play: async () => {
+      if (!el.muted) {
+        throw Object.assign(new Error('not allowed'), { name: 'NotAllowedError' });
+      }
+      el.paused = false;
+    },
+  };
+  assert.equal(await attemptAudibleAutoplay(el, undefined, 'unit'), 'playing_muted');
+  assert.ok(getVideoMetricSamples().some((s) => s.name === 'muted_fallback'));
+  el.muted = true;
+  assert.equal(
+    attemptUnmuteWhilePlaying(el, { inGesture: true }, 'unit'),
+    'unmuted'
+  );
+  assert.equal(summarizeVideoMetrics('unmute_latency_ms').count >= 1, true);
+});
+
+test('late unmute without gesture is blocked after muted fallback ages', () => {
+  clearVideoMetrics();
+  const el = {
+    muted: true,
+    defaultMuted: true,
+    volume: 1,
+    paused: false,
+    play: () => undefined,
+  };
+  markMutedFallback(el, 'unit');
+  __testBackdateMutedFallback(el, VIDEO_PLAYER_DEFAULTS.lateUnmuteGuardMs + 50);
+  assert.equal(attemptUnmuteWhilePlaying(el), 'muted_still_playing');
+  assert.equal(el.muted, true);
+  assert.ok(getVideoMetricSamples().some((s) => s.name === 'late_unmute_blocked'));
+  assert.equal(
+    attemptUnmuteWhilePlaying(el, { inGesture: true }, 'unit'),
+    'unmuted'
+  );
+  assert.equal(el.muted, false);
+});
+
+test('applyWebVideoDefaults sets shared playsInline/preload', () => {
+  const el = {
+    playsInline: false,
+    preload: 'none',
+    volume: 0,
+    loop: false,
+    controls: true,
+    muted: true,
+    defaultMuted: true,
+    setAttribute() {
+      /* no-op */
+    },
+  } as unknown as HTMLVideoElement;
+  applyWebVideoDefaults(el, { loop: true, controls: false, muted: false });
+  assert.equal(el.playsInline, true);
+  assert.equal(el.preload, 'auto');
+  assert.equal(el.volume, 1);
+  assert.equal(el.loop, true);
+  assert.equal(el.controls, false);
+  assert.equal(el.muted, false);
 });
 
 console.log('All tests passed.');

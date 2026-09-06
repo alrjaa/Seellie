@@ -37,7 +37,14 @@ import {
   subscribeWebMediaSound,
   unregisterActiveWebVideo,
 } from '@/services/web-media-sound';
-import { isRealMediaFailure } from '@/services/media-autoplay-engine';
+import {
+  isRealMediaFailure,
+} from '@/services/media-autoplay-engine';
+import { applyWebVideoDefaults } from '@/services/video-player-defaults';
+import {
+  markWaiting,
+  markPlayingAfterWait,
+} from '@/services/video-playback-telemetry';
 import {
   INLINE_VISIBILITY_PLAY_RATIO,
   INLINE_VISIBILITY_STOP_RATIO,
@@ -200,11 +207,11 @@ function InlineVideoPlayerComponent({
 
       htmlRef.current = node;
       node.onerror = () => markPlaybackFailed();
-      node.playsInline = true;
-      node.loop = true;
-      node.muted = false;
-      node.defaultMuted = false;
-      node.volume = 1;
+      applyWebVideoDefaults(node, { loop: true, controls: false, muted: false });
+      node.addEventListener('waiting', () => markWaiting(node));
+      node.addEventListener('playing', () =>
+        markPlayingAfterWait(node, 'inline')
+      );
       setupWebObserver(node);
     },
     [markPlaybackFailed, setupWebObserver]
