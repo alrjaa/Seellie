@@ -16,13 +16,19 @@ async function expectAppShell(page: Page) {
   await expect(page.locator('body')).toBeVisible();
 }
 
+function submitButtonName(path: string) {
+  return path.startsWith('/admin')
+    ? /دخول المشرف|Admin sign in|Sign in/i
+    : /^دخول$|^Sign in$|^Log in$/i;
+}
+
 async function waitForLoginForm(page: Page, path = '/login') {
   await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
   await expect(
     page.getByRole('textbox', { name: /البريد|email/i }).first()
   ).toBeVisible({ timeout: 20_000 });
   await expect(
-    page.getByRole('button', { name: /^دخول$|^Sign in$|^Log in$/i }).first()
+    page.getByRole('button', { name: submitButtonName(path) }).first()
   ).toBeVisible({ timeout: 10_000 });
 }
 
@@ -40,13 +46,13 @@ async function loginWithEmail(
     .first()
     .fill(password);
   await page
-    .getByRole('button', { name: /^دخول$|^Sign in$|^Log in$/i })
+    .getByRole('button', { name: submitButtonName(path) })
     .first()
     .click();
-  await page.waitForTimeout(3500);
+  await page.waitForTimeout(4000);
   const url = page.url();
   if (opts?.successPathIncludes) {
-    return url.includes(opts.successPathIncludes);
+    return url.includes(opts.successPathIncludes) && !url.match(/\/admin\/?$/);
   }
   return (
     !url.endsWith(path) &&
