@@ -627,6 +627,19 @@ test('muted autoplay reports a stuck paused video instead of a false playing', a
   assert.equal(el.paused, true);
 });
 
+type MockActiveVideo = {
+  muted: boolean;
+  defaultMuted: boolean;
+  volume: number;
+  paused: boolean;
+  play: () => void;
+};
+
+/** Registers a mock video as the active web video (satisfies PlayableVideo; only element identity is stored). */
+function registerMockActiveVideo(el: MockActiveVideo): void {
+  registerActiveWebVideo(el as unknown as HTMLVideoElement, () => false);
+}
+
 test('first user gesture promotes the active video to audible', () => {
   resetWebMediaSoundForTests();
   const el = {
@@ -638,7 +651,7 @@ test('first user gesture promotes the active video to audible', () => {
       el.paused = false;
     },
   };
-  registerActiveWebVideo(el as unknown as HTMLVideoElement, () => false);
+  registerMockActiveVideo(el);
   assert.equal(isWebMediaSoundUnlocked(), false);
   applyWebMediaSoundFromGesture();
   assert.equal(isWebMediaSoundUnlocked(), true);
@@ -659,7 +672,7 @@ test('first user gesture restarts a paused active video with sound', () => {
       el.paused = false;
     },
   };
-  registerActiveWebVideo(el as unknown as HTMLVideoElement, () => false);
+  registerMockActiveVideo(el);
   applyWebMediaSoundFromGesture();
   assert.equal(el.paused, false);
   assert.equal(el.muted, false);
@@ -689,7 +702,7 @@ test('user gesture never pauses a video still blocked from sound', () => {
       if (muted) paused = false;
     },
   };
-  registerActiveWebVideo(el as unknown as HTMLVideoElement, () => false);
+  registerMockActiveVideo(el);
   applyWebMediaSoundFromGesture();
   // Fallback must keep the video moving muted — never a paused frame.
   assert.equal(el.muted, true);

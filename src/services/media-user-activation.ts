@@ -21,6 +21,7 @@ export function installMediaUserActivation(): () => void {
     return () => undefined;
   }
   installed = true;
+  const wheelOptions = { capture: true, passive: true } as const;
   window.addEventListener('pointerdown', onUserActivation, true);
   window.addEventListener('touchstart', onUserActivation, {
     capture: true,
@@ -29,15 +30,12 @@ export function installMediaUserActivation(): () => void {
   window.addEventListener('keydown', onUserActivation, true);
   // Mouse wheel scrolling is a real gesture too — unlock sound on desktop
   // even outside the fullscreen feed (inline players, page scroll).
-  window.addEventListener('wheel', onUserActivation, {
-    capture: true,
-    passive: true,
-  });
+  window.addEventListener('wheel', onUserActivation, wheelOptions);
   return () => {
     window.removeEventListener('pointerdown', onUserActivation, true);
     window.removeEventListener('touchstart', onUserActivation, true);
     window.removeEventListener('keydown', onUserActivation, true);
-    window.removeEventListener('wheel', onUserActivation, true);
+    window.removeEventListener('wheel', onUserActivation, wheelOptions);
     installed = false;
   };
 }
