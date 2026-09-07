@@ -57,7 +57,11 @@ import {
 import { createKeyedChannelHub } from '../src/services/app-blob-realtime-hub';
 import {
   attachSoundToPlayingVideo,
+  applyWebMediaSoundFromGesture,
+  isWebMediaSoundUnlocked,
   nextWebSoundSession,
+  registerActiveWebVideo,
+  resetWebMediaSoundForTests,
   startVisibleWebVideo,
 } from '../src/services/web-media-sound';
 import {
@@ -567,6 +571,144 @@ test('startVisibleWebVideo uses audible-first path', async () => {
   };
   assert.equal(await startVisibleWebVideo(el), 'playing');
   assert.equal(el.muted, false);
+});
+
+test('startVisibleWebVideo starts muted playback without a click when policy blocks sound', async () => {
+  const el = {
+    muted: false,
+    defaultMuted: false,
+    volume: 1,
+    paused: true,
+    play: async () => {
+      if (!el.muted) {
+        throw Object.assign(new Error('not allowed'), { name: 'NotAllowedError' });
+      }
+      el.paused = false;
+    },
+  };
+  assert.equal(await startVisibleWebVideo(el), 'playing');
+  // Video must be moving (not paused) even though the browser blocked audible autoplay.
+  assert.equal(el.muted, true);
+  assert.equal(el.paused, false);
+});
+
+test('audible autoplay falls back to muted when browser keeps unmuted video paused', async () => {
+  const plays: boolean[] = [];
+  const el = {
+    muted: false,
+    defaultMuted: false,
+    volume: 1,
+    paused: true,
+    play: async () => {
+      plays.push(el.muted);
+      // Simulates a browser that resolves play() but keeps a non-muted video paused.
+      if (!el.muted) return;
+      el.paused = false;
+    },
+  };
+  assert.equal(await attemptAudibleAutoplay(el), 'playing_muted');
+  assert.equal(el.muted, true);
+  assert.equal(el.paused, false);
+  assert.deepEqual(plays, [false, true]);
+});
+
+test('muted autoplay reports a stuck paused video instead of a false playing', async () => {
+  const el = {
+    muted: false,
+    defaultMuted: false,
+    volume: 1,
+    paused: true,
+    play: async () => {
+      /* browser keeps the element paused even when muted */
+    },
+  };
+  assert.equal(await attemptMutedAutoplay(el), 'failed');
+  assert.equal(el.muted, true);
+  assert.equal(el.paused, true);
+});
+
+type MockActiveVideo = {
+  muted: boolean;
+  defaultMuted: boolean;
+  volume: number;
+  paused: boolean;
+  play: () => void;
+};
+
+/** Registers a mock video as the active web video (satisfies PlayableVideo; only element identity is stored). */
+function registerMockActiveVideo(el: MockActiveVideo): void {
+  registerActiveWebVideo(el as unknown as HTMLVideoElement, () => false);
+}
+
+test('first user gesture promotes the active video to audible', () => {
+  resetWebMediaSoundForTests();
+  const el = {
+    muted: true,
+    defaultMuted: true,
+    volume: 1,
+    paused: false,
+    play() {
+      el.paused = false;
+    },
+  };
+  registerMockActiveVideo(el);
+  assert.equal(isWebMediaSoundUnlocked(), false);
+  applyWebMediaSoundFromGesture();
+  assert.equal(isWebMediaSoundUnlocked(), true);
+  assert.equal(el.muted, false);
+  assert.equal(el.defaultMuted, false);
+  assert.equal(el.paused, false);
+  resetWebMediaSoundForTests();
+});
+
+test('first user gesture restarts a paused active video with sound', () => {
+  resetWebMediaSoundForTests();
+  const el = {
+    muted: true,
+    defaultMuted: true,
+    volume: 0,
+    paused: true,
+    play() {
+      el.paused = false;
+    },
+  };
+  registerMockActiveVideo(el);
+  applyWebMediaSoundFromGesture();
+  assert.equal(el.paused, false);
+  assert.equal(el.muted, false);
+  assert.equal(el.volume, 1);
+  resetWebMediaSoundForTests();
+});
+
+test('user gesture never pauses a video still blocked from sound', () => {
+  resetWebMediaSoundForTests();
+  let muted = true;
+  let paused = false;
+  const el = {
+    volume: 1,
+    defaultMuted: true,
+    get muted() {
+      return muted;
+    },
+    set muted(value: boolean) {
+      muted = value;
+      // Browser still refuses audible playback: unmuting force-pauses the element.
+      if (value === false) paused = true;
+    },
+    get paused() {
+      return paused;
+    },
+    play() {
+      if (muted) paused = false;
+    },
+  };
+  registerMockActiveVideo(el);
+  applyWebMediaSoundFromGesture();
+  // Fallback must keep the video moving muted — never a paused frame.
+  assert.equal(el.muted, true);
+  assert.equal(el.paused, false);
+  assert.equal(isWebMediaSoundUnlocked(), true);
+  resetWebMediaSoundForTests();
 });
 
 test('attach sound never leaves a playing video paused', () => {

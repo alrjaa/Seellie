@@ -70,7 +70,6 @@ import { NATIVE_AD_HOOK_MS, extractNativeAdId } from '@/services/native-ads';
 import type { NativeAdPlacement } from '@/services/native-ads';
 import { queueAdEvent } from '@/services/ad-events';
 import {
-  isWebMediaSoundUnlocked,
   promoteWebVideoSound,
   registerActiveWebVideo,
   subscribeWebMediaSound,
@@ -530,11 +529,8 @@ const Slide = memo(function Slide({
           result === 'playing_audible' ||
           result === 'playing_muted'
         ) {
-          if (isWebMediaSoundUnlocked()) {
-            promoteWebVideoSound(el);
-          } else if (result === 'playing_audible') {
-            promoteWebVideoSound(el);
-          }
+          // Re-promote sound on the active video (no-op while sound stays locked).
+          promoteWebVideoSound(el);
           trackVideoStart();
         }
       });
