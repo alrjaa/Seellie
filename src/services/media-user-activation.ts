@@ -1,5 +1,5 @@
 /**
- * Real user-gesture unlock for web media sound (pointer / touch / key).
+ * Real user-gesture unlock for web media sound (pointer / touch / key / wheel).
  * Does not synthesize clicks — browser policy compliant.
  */
 import { applyWebMediaSoundFromGesture } from '@/services/web-media-sound';
@@ -27,10 +27,17 @@ export function installMediaUserActivation(): () => void {
     passive: true,
   });
   window.addEventListener('keydown', onUserActivation, true);
+  // Mouse wheel scrolling is a real gesture too — unlock sound on desktop
+  // even outside the fullscreen feed (inline players, page scroll).
+  window.addEventListener('wheel', onUserActivation, {
+    capture: true,
+    passive: true,
+  });
   return () => {
     window.removeEventListener('pointerdown', onUserActivation, true);
     window.removeEventListener('touchstart', onUserActivation, true);
     window.removeEventListener('keydown', onUserActivation, true);
+    window.removeEventListener('wheel', onUserActivation, true);
     installed = false;
   };
 }

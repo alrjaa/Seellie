@@ -87,6 +87,8 @@ export async function attemptMutedAutoplay(
   try {
     await el.play();
     if (isStale(guard)) return 'aborted';
+    // Muted play is expected to actually start — never report a paused video as playing.
+    if (el.paused) return 'failed';
     return 'playing';
   } catch (error) {
     if (isStale(guard)) return 'aborted';
@@ -95,6 +97,26 @@ export async function attemptMutedAutoplay(
     if (kind === 'abort') return 'aborted';
     return 'failed';
   }
+}
+
+/**
+ * Shared: after a muted fallback, keep the video moving so startup stays smooth.
+ * Returns the terminal audible-autoplay result.
+ */
+async function finishWithMutedFallback(
+  el: PlayableVideo,
+  guard: AutoplayGuard | undefined,
+  surface: string
+): Promise<AudibleAutoplayResult> {
+  const muted = await attemptMutedAutoplay(el, guard);
+  if (muted === 'playing') {
+    markMutedFallback(el as object, surface);
+    markPlayingAfterStart(el as object, surface);
+    return 'playing_muted';
+  }
+  if (muted === 'policy_blocked') return 'policy_blocked';
+  if (muted === 'aborted') return 'aborted';
+  return 'failed';
 }
 
 /**
@@ -113,7 +135,11 @@ export async function attemptAudibleAutoplay(
   try {
     await el.play();
     if (isStale(guard)) return 'aborted';
-    if (el.paused) return 'failed';
+    if (el.paused) {
+      // Browser resolved play() but kept a non-muted video paused (silent policy
+      // block): fall back to muted instead of leaving a stuck frame on screen.
+      return finishWithMutedFallback(el, guard, surface);
+    }
     markPlayingAfterStart(el as object, surface);
     if (el.muted) {
       markMutedFallback(el as object, surface);
@@ -124,15 +150,7 @@ export async function attemptAudibleAutoplay(
     if (isStale(guard)) return 'aborted';
     const kind = classifyPlayError(error);
     if (kind === 'media') return 'failed';
-    const muted = await attemptMutedAutoplay(el, guard);
-    if (muted === 'playing') {
-      markMutedFallback(el as object, surface);
-      markPlayingAfterStart(el as object, surface);
-      return 'playing_muted';
-    }
-    if (muted === 'policy_blocked') return 'policy_blocked';
-    if (muted === 'aborted') return 'aborted';
-    return 'failed';
+    return finishWithMutedFallback(el, guard, surface);
   }
 }
 

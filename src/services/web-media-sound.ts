@@ -24,6 +24,7 @@ export async function startVisibleWebVideo(
   el: PlayableVideo,
   surface = 'inline'
 ): Promise<'playing' | 'policy_blocked' | 'aborted' | 'failed'> {
+  // Audible-first; the engine keeps the video moving muted when policy blocks sound.
   const result = await attemptAudibleAutoplay(el, undefined, surface);
   if (result === 'playing_audible' || result === 'playing_muted') return 'playing';
   return result;
@@ -49,25 +50,9 @@ export function applyWebMediaSoundFromGesture(): void {
   markWebMediaSoundUnlocked();
   const current = getActiveWebVideo();
   if (!current || current.userPaused()) return;
-  const el = current.el;
-  if (el.paused) {
-    el.volume = 1;
-    el.muted = false;
-    el.defaultMuted = false;
-    try {
-      const result = el.play();
-      if (result && typeof (result as Promise<void>).then === 'function') {
-        void (result as Promise<void>).catch(() => undefined);
-      }
-    } catch {
-      /* fall through to attach */
-    }
-    if (!el.paused) {
-      attachSoundToPlayingVideo(el, { inGesture: true });
-    }
-    return;
-  }
-  attachSoundToPlayingVideo(el, { inGesture: true });
+  // Engine owns gesture unmute: promotes to audible without pausing playback,
+  // and replays muted (never a stuck frame) if the unmute is still blocked.
+  attemptUnmuteWhilePlaying(current.el, { inGesture: true }, 'web-gesture');
 }
 
 type ActiveWebVideo = {
